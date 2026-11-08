@@ -1,19 +1,19 @@
-# 🏗 AI Cut 架构速查
+# 🏗 AI Cut 아키텍처 빠른 참조
 
-## 数据流
+## 데이터 흐름
 
 ```
 ┌──────────┐    ┌──────────┐    ┌──────────┐    ┌──────────┐
 │ Script   │ →  │ Shot[]   │ →  │ Asset[]  │ →  │Timeline[]│
-│ (文案)   │    │ (分镜)   │    │ (素材)   │    │ (剪辑)   │
+│ (대본)   │    │ (콘티)   │    │ (자료)   │    │ (편집)   │
 └──────────┘    └──────────┘    └──────────┘    └──────────┘
-   LLM拆分       AI 配图/视频       IndexedDB        FFmpeg 导出
+   LLM 분할       AI 이미지/영상       IndexedDB        FFmpeg 내보내기
 ```
 
-每个 Shot 通过 `imageAssetId` / `videoAssetId` 关联到 Asset；
-每个 TimelineClip 通过 `shotId` 反向找到对应的 Shot 和 Asset。
+각 Shot은 `imageAssetId` / `videoAssetId`를 통해 Asset에 연결됩니다.
+각 TimelineClip은 `shotId`를 통해 해당 Shot과 Asset을 역으로 찾습니다.
 
-## 模块依赖
+## 모듈 의존성
 
 ```
 views/  →  stores/  →  services/  →  external (AI / FFmpeg / IDB)
@@ -21,38 +21,38 @@ views/  →  stores/  →  services/  →  external (AI / FFmpeg / IDB)
                               types/
 ```
 
-- `views/` 只调 store 和 service
-- `stores/` 是状态层（Pinia），自动持久化
-- `services/` 是业务逻辑
-- `types/` 是纯类型，无运行时
+- `views/`는 store와 service만 호출합니다.
+- `stores/`는 상태 계층(Pinia)이며, 자동으로 영구 저장합니다.
+- `services/`는 비즈니스 로직입니다.
+- `types/`는 순수 타입만 포함하며, 런타임 코드는 없습니다.
 
-## AI 服务切换
+## AI 서비스 전환
 
-`src/services/ai/runtime.ts` 的 `getAIMode()` 当前固定返回 `real`（真实 API）。
-代码里仍保留 mock 实现便于本地开发，但产品默认不会进入演示模式。
+`src/services/ai/runtime.ts`의 `getAIMode()`는 현재 항상 `real`(실제 API)을 반환합니다.
+로컬 개발을 위해 코드에 mock 구현을 남겨 두었지만, 제품은 기본적으로 데모 모드로 진입하지 않습니다.
 
-每个 AI service 文件结构相同：
+각 AI service 파일의 구조는 동일합니다.
 ```
 xxx.ts:
-  - realXxx(): 真实实现
-  - generateXxx(input, onProgress?): 入口，自动选 real/mock
+  - realXxx(): 실제 구현
+  - generateXxx(input, onProgress?): 진입점, real/mock 자동 선택
 ```
 
-## FFmpeg 流程
+## FFmpeg 처리 흐름
 
 ```
-[素材 blob] → writeFile(虚拟 FS)
-             → exec(转码/拼接/转场)
-             → exec(烧字幕)
-             → exec(混 BGM)
-             → exec(转最终格式)
+[자료 blob] → writeFile(가상 FS)
+             → exec(트랜스코딩/이어 붙이기/장면 전환)
+             → exec(자막 입히기)
+             → exec(BGM 믹싱)
+             → exec(최종 형식 변환)
              → readFile → Blob → download
 ```
 
-## 持久化
+## 영구 저장
 
 ```
-Pinia store 变更
+Pinia store 변경
    ↓
 watch (deep)
    ↓
@@ -60,32 +60,32 @@ saveProject() / saveAsset()
    ↓
 IndexedDB (idb.ts)
    ↓
-自动 reload UI
+자동 reload UI
 ```
 
-## 路由
+## 라우팅
 
 ```
-/                  HomeView         项目列表
-/script            ScriptView       1. 文案
-/storyboard        StoryboardView   2. 分镜
-/images            ImagesView       3. AI 配图
-/videos            VideosView       4. AI 视频
-/edit              EditView         5. 剪辑
-/caption           CaptionView      6. 字幕
-/export            ExportView       7. 导出
-/settings          SettingsView     设置
+/                  HomeView         프로젝트 목록
+/script            ScriptView       1. 대본
+/storyboard        StoryboardView   2. 콘티
+/images            ImagesView       3. AI 이미지
+/videos            VideosView       4. AI 영상
+/edit              EditView         5. 편집
+/caption           CaptionView      6. 자막
+/export            ExportView       7. 내보내기
+/settings          SettingsView     설정
 ```
 
-侧栏 StepNav 根据当前 route 高亮，根据项目状态显示 ✓。
+사이드바의 StepNav는 현재 route에 따라 강조 표시되며, 프로젝트 상태에 따라 ✓를 표시합니다.
 
-## 主题系统
+## 테마 시스템
 
-所有颜色 / 间距 / 圆角在 `src/style.css` 的 `:root`。
-改一个变量全站生效。
+모든 색상 / 간격 / 모서리 반경은 `src/style.css`의 `:root`에 정의되어 있습니다.
+변수 하나를 바꾸면 사이트 전체에 적용됩니다.
 
-## 关键约束
+## 주요 제약 사항
 
-- **FFmpeg 必须 COOP/COEP**：vite.config.ts 里已加 headers
-- **IndexedDB 是异步**：所有 IDB 操作都是 Promise
-- **跨域隔离**：SharedArrayBuffer 需要 `crossOriginIsolated`
+- **FFmpeg에는 COOP/COEP가 필수**: vite.config.ts에 headers가 이미 추가되어 있습니다.
+- **IndexedDB는 비동기 방식**: 모든 IDB 작업은 Promise입니다.
+- **교차 출처 격리**: SharedArrayBuffer에는 `crossOriginIsolated`가 필요합니다.
