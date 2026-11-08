@@ -118,7 +118,7 @@ node scripts/download-ffmpeg-core.cjs
 
 # 중국 본토 미러
 node scripts/download-ffmpeg-core.cjs --source=npmmirror
-``
+```
 
 개발 환경 실행:
 
