@@ -66,9 +66,9 @@ async function saveManifest(dir: string, list: Asset[]) {
 }
 
 export async function saveProject(project: Project): Promise<void> {
-  if (!isDesktop()) throw new Error('fs backend 仅桌面端')
+  if (!isDesktop()) throw new Error('파일 시스템 저장소는 데스크톱 앱에서 사용할 수 있습니다.')
   const dir = project.folderPath || activeDir
-  if (!dir) throw new Error('项目没有文件夹路径')
+  if (!dir) throw new Error('프로젝트 폴더 경로가 없습니다.')
   const jsonPath = await desktop().join(dir, 'project.json')
   const plain = toPlain(project)
   await desktop().writeText(jsonPath, JSON.stringify(plain, null, 2))
@@ -128,7 +128,7 @@ let saveAssetChain: Promise<void> = Promise.resolve()
 export async function saveAsset(asset: Asset, blob: Blob, thumbBlob?: Blob): Promise<void> {
   const run = async () => {
     const dir = activeDir
-    if (!dir) throw new Error('没有打开的项目目录，无法存素材')
+    if (!dir) throw new Error('열려 있는 프로젝트 폴더가 없어 자료를 저장할 수 없습니다.')
     const ext = extOf(asset)
     const rel = `assets/${kindFolder(asset.kind)}/${asset.id}.${ext}`
     const abs = await desktop().join(dir, rel)
