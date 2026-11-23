@@ -84,7 +84,7 @@ export async function addComfyUiProfiles(input: ComfyQuickAddInput): Promise<Com
   const baseUrl = normalizeComfyBaseUrl(input.baseUrl)
   const notes: string[] = []
   if (!baseUrl) {
-    return { ok: false, baseUrl: '', notes: ['请填写 ComfyUI 地址，例如 http://127.0.0.1:8188'] }
+    return { ok: false, baseUrl: '', notes: ['ComfyUI 주소를 입력하세요. 예를 들어 http://127.0.0.1:8188을 사용할 수 있습니다.'] }
   }
 
   const kinds = input.kinds?.length ? input.kinds : (['image', 'video'] as ComfyQuickKind[])
@@ -98,7 +98,7 @@ export async function addComfyUiProfiles(input: ComfyQuickAddInput): Promise<Com
   if (kinds.includes('image')) {
     const name = uniqueProfileName(
       settings.config.images.map((p) => p.name),
-      `ComfyUI 生图 (${label})`
+      `ComfyUI 이미지 생성 (${label})`
     )
     imageId = settings.addImage({
       name,
@@ -110,13 +110,13 @@ export async function addComfyUiProfiles(input: ComfyQuickAddInput): Promise<Com
       adapter
     })
     if (select) settings.selectImage(imageId)
-    notes.push(`已添加生图接入「${name}」`)
+    notes.push(`이미지 생성 연결 ‘${name}’을 추가했습니다.`)
   }
 
   if (kinds.includes('video')) {
     const name = uniqueProfileName(
       settings.config.videos.map((p) => p.name),
-      `ComfyUI 视频 (${label})`
+      `ComfyUI 영상 (${label})`
     )
     videoId = settings.addVideo({
       name,
@@ -129,11 +129,11 @@ export async function addComfyUiProfiles(input: ComfyQuickAddInput): Promise<Com
       adapter
     })
     if (select) settings.selectVideo(videoId)
-    notes.push(`已添加视频接入「${name}」`)
+    notes.push(`영상 연결 ‘${name}’을 추가했습니다.`)
   }
 
   notes.push(
-    '出图/出视频前请在「适配器 → workflowTemplate」粘贴 Comfy「Save (API Format)」导出的 JSON，然后让助手分析出输入映射（提示词 / 参考图写到哪个节点）。'
+    '이미지나 영상 생성 전에 ‘어댑터 → workflowTemplate’에 ComfyUI Save (API Format)으로 내보낸 JSON을 붙여 넣으세요. 도우미로 프롬프트와 참조 이미지의 입력 노드를 분석하세요.'
   )
 
   let test: ComfyQuickAddResult['test']
@@ -149,7 +149,7 @@ export async function addComfyUiProfiles(input: ComfyQuickAddInput): Promise<Com
     }
     const result = await testEndpointConnection(probeKind, ep)
     test = result
-    notes.push(result.ok ? `连通测试通过：${result.detail}` : `连通测试失败：${result.detail}`)
+    notes.push(result.ok ? `연결 테스트 통과 ${result.detail}` : `연결 테스트 실패 ${result.detail}`)
   }
 
   return {
