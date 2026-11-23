@@ -2374,5 +2374,10 @@ export default {
     "checkKeyProp": "校验关键道具图文件...",
     "checkScene": "校验场景图片文件...",
     "aborted": "任务已取消"
+  },
+  "scriptContinuation": {
+    "empty": "续写没有返回内容",
+    "noNewScenes": "续写没有新增场次。请写明方向，例如「再写两场，写父亲回家之后」。",
+    "heading": "场景{number}｜续写"
   }
 }

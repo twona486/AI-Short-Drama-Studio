@@ -2374,5 +2374,10 @@ export default {
     "checkKeyProp": "주요 소품 이미지 파일을 확인하고 있어요…",
     "checkScene": "장면 이미지 파일을 확인하고 있어요…",
     "aborted": "작업을 취소했어요."
+  },
+  "scriptContinuation": {
+    "empty": "이어 쓰기 결과가 비어 있어요.",
+    "noNewScenes": "이어 쓴 대본에 새 장면이 없어요. '아버지가 집에 돌아온 뒤 장면을 두 개 더 써 줘'처럼 방향을 적어 주세요.",
+    "heading": "장면 {number}｜이어 쓰기"
   }
 }
