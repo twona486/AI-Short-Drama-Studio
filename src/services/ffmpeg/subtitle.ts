@@ -320,7 +320,7 @@ export async function renderCaptionPng(
   canvas.width = width
   canvas.height = height
   const ctx = canvas.getContext('2d')
-  if (!ctx) throw new Error('无法创建字幕画布')
+  if (!ctx) throw new Error('자막 캔버스를 만들 수 없습니다.')
   ctx.clearRect(0, 0, width, height)
 
   const fontSize = Math.max(18, Math.round(height * style.fontSizeRatio))
