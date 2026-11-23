@@ -1,5 +1,5 @@
 /**
- * 이미지→영상画布：按用户原文扩写节点提示词，补画面层次，不另起故事，不改格式。
+ * 원문의 이야기와 형식을 유지하며 이미지→영상 노드의 화면 묘사를 보완한다.
  */
 import { callLLM, getAIMode } from './client'
 import { parseJsonRobust, stripModelWrappers } from '@/utils/jsonRepair'
@@ -36,7 +36,7 @@ function unique(items: string[]): string[] {
   return out
 }
 
-/** 原文里必须原样留下的标题、节拍和指代。 */
+/** 그대로 유지해야 하는 원문의 제목, 구간 및 참조 */
 export function extractFormatAnchors(text: string): string[] {
   const t = String(text || '')
   const anchors: string[] = []
