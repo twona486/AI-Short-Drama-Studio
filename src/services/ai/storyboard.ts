@@ -380,41 +380,41 @@ function buildStylePriorityBlock(input: StoryboardInput): string {
   const mediumPhrase = extractUserMediumPhrase(input.topic, input.content, ...(input.keywords ?? []))
 
   if (mediumPhrase) {
-    return `【사용자 지정 그림체 필수 적용】
-사용자가 그림체를 지정했습니다. 화면에 실제로 보이는 물건을 묘사하면서 그림체를 표현하세요. 기법만 설명하는 문단은 만들지 마세요.
+    return `[Use the user's specified style]
+The user supplied a visual style. Show it through visible objects instead of a separate technical paragraph.
 
-사용자가 지정한 그림체 원문(본문에서 한 번 언급) 「${mediumPhrase}」
+User-supplied style wording (mention it once): 「${mediumPhrase}」
 
-사용자 주제와 그림체 원문
+Original topic and style
 """
 ${userAuth}
 """
 
-모든 visualPrompt는 샷 연출에 맞춰 작성하세요.
-1. 바닥, 건축물, 물, 식물, 하늘, 소품 등 화면에서 보이는 모든 것을 가까운 곳부터 먼 곳까지 쓰세요.
-2. 물결, 바람, 옷자락, 연기와 먼지의 움직임을 쓰세요. 움직이지 않으면 정지 상태를 명시하세요.
-3. 빛이 어디에서 오고 그림자가 어디에 드리우는지 쓰세요.
-4. 인물의 옷, 손발, 방향, 손에 든 구체적인 물건과 이 순간 하는 동작을 쓰세요.
-5. ‘${mediumPhrase}’을 본문에서 자연스럽게 한 번 언급하고 기법은 실물 묘사에 녹이세요. ‘${mediumPhrase}’로 시작해 인물의 위치만 나열하거나 끝에 상투적인 그림체 문장을 붙이지 마세요.
+Write every visualPrompt as filmable shot description in English.
+1. Describe visible ground, buildings, water, plants, sky, and props from near to far.
+2. Show movement in water, wind, fabric, smoke, and dust. Explicitly describe stillness when appropriate.
+3. State where light comes from and where the shadows fall.
+4. Specify the person's clothes, hands and feet, orientation, objects in hand, and present action.
+5. Mention ${mediumPhrase} naturally once and attach techniques to visible objects. Do not start with just ${mediumPhrase} and a blocking list or end with generic style boilerplate.
 ${
   look.matched
-    ? `6. 이 표현 매체로 실제 물건을 묘사할 때 다음 사항을 지키세요. ${VISUAL_STYLE_GUIDE[look.matched].mustInclude}。${VISUAL_STYLE_GUIDE[look.matched].avoid}`
-    : `6. ‘${mediumPhrase}’ 자체의 재료와 질감에 맞춰 물건을 묘사하고 화면 드롭다운의 그림체는 적용하지 마세요.`
+    ? `6. Follow these requirements when depicting physical objects in this medium: ${VISUAL_STYLE_GUIDE[look.matched].mustInclude}。${VISUAL_STYLE_GUIDE[look.matched].avoid}`
+    : `6. Describe objects with the materials and texture of ${mediumPhrase}. Do not impose the dropdown's style.`
 }`
   }
 
   if (userAuth) {
-    return `【사용자 지정 그림체 적용】
-사용자 주제 원문(분위기를 유지하며 특정 매체는 지정되지 않음)
+    return `[Follow the user's look]
+Original topic: preserve its mood; no medium was specified.
 """
 ${userAuth}
 """
 
-화면 표현 매체는 드롭다운의 그림체를 따르세요(현재 ${styleLabel(input.style)} / ${input.style}）：
+Use the dropdown medium (current selection: ${styleLabel(input.style)} / ${input.style}）：
 ${fallback}`
   }
 
-  return `【그림체 지침】주제에 그림체가 없으면 드롭다운의 스타일을 따르세요.
+  return `[Visual style] Use the dropdown style when the premise does not specify one.
 ${fallback}`
 }
 
@@ -633,7 +633,7 @@ async function repairStoryboardOnce(
     messages: [
       {
         role: 'system',
-          content: `${importedDirectorPrefix()}당신은 숏폼 영상의 책임 편집자입니다. 이전 초안이 검수를 통과하지 못했습니다. JSON을 다시 추출하고 아래 문제를 모두 해결한 뒤 제출하세요.${durationBlock}사용자가 언급하지 않은 제품, 인물, 숫자나 사실을 추가하지 마세요. 요청 범위 안에서 이미 등장하거나 분명히 암시된 사건의 과정만 보완하세요. 범위 밖의 결과를 이어 쓰지 마세요.\n${extractHint}\n${NARRATIVE_CONTINUITY_RULES}\n${SPEAKER_STAGING_RULES}\n주요 사건의 과정이 누락됐거나 앞뒤 샷이 끊기는 경우 해당 구간의 샷을 나누거나 삽입하거나 재배치할 수 있습니다. 이번 회차 범위 안에서 보이는 과정과 반응을 보완하세요. 관련 부분만 수정하고 검수를 통과한 샷은 원래 의미를 유지하세요. 사용자가 긴장을 남기는 지점에서 멈추라고 하면 거기서 끝내세요. 완결을 만들려고 이후 사건을 쓰지 마세요. 새 샷마다 continuity를 ‘이전 샷의 분명한 끝 상태를 이어받음 → 현재 샷에서 보이는 변화 → 다음 샷으로 이어지는 분명한 끝 상태’ 형식으로 완전하게 작성하세요.\n샷마다 내용을 담은 서로 다른 3–8자의 title을 쓰세요. 모두 ‘샷’으로 쓰지 마세요. 사용자 원문을 의미 단위로 voiceover에 배분하고 기본 audioMode는 h3-dialogue로 설정하세요. 원문에 내레이션이라고 명시된 경우에만 h3-voiceover를 쓰세요. 샷마다 대사 한 마디를 기계적으로 배정하지 마세요. 같은 인물이 같은 의도로 이어 말하는 짧은 대사 2–4개는 7–10초 샷 하나에 우선 합치고 짧은 반응과 전환에는 한 마디만 둡니다. 전체 글자 수는 duration*4를 넘지 마세요. 화자를 식별하도록 voiceover의 ‘캐릭터 이름：대사’ 형식을 유지하세요. H3로 전송할 때 이름 접두사는 자동으로 제거됩니다.\n대사가 있는 샷의 화면 크기는 동작, 공간 관계, 환경 정보, 감정의 리듬을 먼저 따져 정하세요. 표정이 이야기의 핵심이고 환경을 보여 줄 필요가 없으면 가까이 잡을 수 있습니다. 물건 건네기, 다툼, 질문과 답변, 인물 간 거리, 환경의 압박이나 집단 반응이 중요하면 중경 또는 두 사람이나 여러 사람이 보이는 구도를 사용하세요. 모든 발화를 클로즈업으로 처리하지 마세요. 화자와 다른 사람의 반응을 명확히 쓰고 모두 동시에 입을 열지 않게 하세요.\nWrite visualPrompt in English for the image generation model. Describe a visible still frame, including the setting, clothing, and light source. Preserve requested Korean text verbatim.\n${videoPerformanceSpec(getVideoPromptStyle())}\nKeep the image and video prompts distinct. Write h3Aesthetic in English with concrete material, lighting, color, and photographic texture, without a tag list. Write titles and user-facing descriptions in Korean (한국어).\n완전하고 유효한 JSON만 출력하세요.`
+          content: `${importedDirectorPrefix()}You are the supervising editor for the short film. The previous JSON failed review. Re-extract it and fix all listed issues before returning it.${durationBlock} Do not add products, characters, numbers, or facts the user did not mention. Restore only processes already shown or clearly implied within this request. Do not write consequences beyond its boundary.\n${extractHint}\n${NARRATIVE_CONTINUITY_RULES}\n${SPEAKER_STAGING_RULES}\nWhen a major event has been compressed away or adjacent shots do not connect, split, insert, or reorder shots near the gap to show the missing process and reactions within the episode. Keep unrelated shots and the user's suspenseful stopping point. Each added shot needs continuity in the form of a specific preceding ending → visible change → specific state for the next shot.\nUse a distinct 3–8-character title per shot, never a generic "Shot". Divide original text by meaning across voiceover. Default to h3-dialogue and use h3-voiceover only for explicit narration. Keep 2–4 consecutive short lines of one intent together in a 7–10-second shot where possible. Reserve a single line for short reactions or transitions. Do not exceed duration*4 characters. Use "Character name: line" for speaker identification; H3 removes the prefix.\nChoose framing based on action, spatial relations, setting, and emotion. Use close framing when the expression matters and the environment can be omitted. Use medium or group framing for handoffs, arguments, questions and answers, interpersonal distance, environmental pressure, or group reactions. Do not make every speaker a close-up; identify the one speaker and others' reactions.\nWrite user-facing titles, descriptions, and newly authored dialogue in Korean (한국어). Write visualPrompt, videoPrompt, and h3Aesthetic in English for generation. Preserve supplied lines and explicitly requested Korean on-screen text. Make visualPrompt a visible still frame with setting, clothing, and light, and keep it distinct from videoPrompt. h3Aesthetic covers material, lighting, color, and cinematography, without tag lists.\n${videoPerformanceSpec(getVideoPromptStyle())}\nReturn one complete, valid JSON object.`
       },
       {
         role: 'user',
@@ -2984,7 +2984,7 @@ async function fillPlayBibleIfThin(
       messages: [
         {
           role: 'system',
-          content: `당신은 영상 시나리오 작가입니다. 기존 초고에서 빠진 이야기의 동력, 설정 또는 대사를 아래 요구사항에 따라 보완하세요. 캐릭터 소개, 갈등 구조, 상대역이나 가족이 등장하는 장면을 추가하고 실제로 말할 수 있는 화면 속 대사(**캐릭터 이름：**「대사 원문」)를 작성할 수 있습니다. 기존에 잘 작성된 장면은 가능한 한 원문을 유지하세요. 절정만 남은 초고에는 빠진 갈등과 핵심 인물을 복원하세요. 대사가 없는 초고에는 서로 알아보기, 대치, 질문과 답변을 주고받는 대사를 보완하세요. 배경에 이름만 한 줄 넣거나 성인이 된 인물의 내레이션으로 바꾸지 마세요.${PLAY_MARKDOWN_SPEC}\nJSON만 출력하세요. {"playMarkdown":"..."}`
+          content: `You are a screenwriter. Fill the listed gaps in the draft's story engine, setting, or dialogue. You may add character profiles, the central conflict, scenes with the opponent or family, and speakable on-screen dialogue in the format **캐릭터 이름：**「대사 원문」. Preserve existing scenes that work. Restore omitted conflict and key people when the draft contains only a climax. Add spoken exchanges for recognition, confrontation, and questions or answers when the draft is silent. Do not merely add a name to the background or replace on-screen dialogue with older-character narration. Write the script and new lines in Korean (한국어).${PLAY_MARKDOWN_SPEC}\nReturn JSON only: {"playMarkdown":"..."}`
         },
         {
           role: 'user',
