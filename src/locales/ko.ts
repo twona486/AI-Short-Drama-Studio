@@ -2369,6 +2369,15 @@ export default {
     "loadFailed": "{source}에서 FFmpeg 코어를 불러오지 못했어요({error}).\nCDN의 CORP 헤더, Worker 파일, WASM MIME 유형을 확인해 주세요.\n코어 파일을 public/ffmpeg/에 다운로드해서 로컬 파일을 쓸 수 있어요."
   },
   "canvasRunner": {
+    "characterViewsLabel": "4면 설정 이미지 · {name}",
+    "propViewsLabel": "소품 다각도 이미지 · {name}",
+    "assetLabel": "에셋 이미지 · {name}",
+    "sceneAnchorLabel": "장면 기준 이미지 · {name}",
+    "keyPropLabel": "주요 소품 · {name}",
+    "subjectsAdded": "캐릭터 {characters}명과 소품 {props}개를 캔버스에 추가했어요.",
+    "scenesAdded": "장면 {count}개를 캔버스에 추가했어요.",
+    "partialShotsAdded": "스토리보드 그룹을 캔버스에 추가했어요({current}/{total}, 샷 {count}개).",
+    "shotsAdded": "스토리보드 샷 {count}개를 캔버스에 추가했어요.",
     "shotNumber": "샷 {number}",
     "panelLabel": "스토리 개요판 · {shot}",
     "imageLabel": "샷 이미지 · {shot}",

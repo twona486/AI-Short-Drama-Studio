@@ -2369,6 +2369,15 @@ export default {
     "loadFailed": "FFmpeg core 加载失败（{source}）：{error}\n可能原因：\n1) COEP=require-corp 阻止了无 CORP 头的 CDN 资源\n2) Worker 文件加载失败\n3) WASM MIME 类型不匹配\n推荐：把 core 文件下载到 public/ffmpeg/ 目录使用本地源。"
   },
   "canvasRunner": {
+    "characterViewsLabel": "四视图「{name}」",
+    "propViewsLabel": "道具多角度「{name}」",
+    "assetLabel": "资产图「{name}」",
+    "sceneAnchorLabel": "场景锚点「{name}」",
+    "keyPropLabel": "关键道具「{name}」",
+    "subjectsAdded": "✓ 人物已上画布（{characters} 个，道具 {props} 个），本步完成",
+    "scenesAdded": "✓ 场景已上画布（{count} 个），本步完成",
+    "partialShotsAdded": "✓ 分镜小组 {current}/{total} 已上画布（累计 {count} 镜）",
+    "shotsAdded": "✓ 分镜已上画布（{count} 镜），本步完成",
     "shotNumber": "第{number}镜",
     "panelLabel": "故事看板 {shot}",
     "imageLabel": "分镜配图 {shot}",

@@ -216,15 +216,15 @@ function nodeActivityLabel(node: CanvasNode, p: NonNullable<ReturnType<typeof us
     case 'script':
       return translate('canvasRunner.writeScript')
     case 'subject':
-      return `四视图「${subjects.find((s) => s.id === node.data.subjectId)?.name || translate('canvasRunner.character')}」`
+      return translate('canvasRunner.characterViewsLabel', { name: subjects.find((s) => s.id === node.data.subjectId)?.name || translate('canvasRunner.character') })
     case 'prop':
-      return `道具多角度「${(p.props ?? []).find((item) => item.id === node.data.propId)?.name || translate('canvasRunner.prop')}」`
+      return translate('canvasRunner.propViewsLabel', { name: (p.props ?? []).find((item) => item.id === node.data.propId)?.name || translate('canvasRunner.prop') })
     case 'subjectProps':
-      return `资产图「${subjects.find((s) => s.id === node.data.subjectId)?.name || translate('canvasRunner.character')}」`
+      return translate('canvasRunner.assetLabel', { name: subjects.find((s) => s.id === node.data.subjectId)?.name || translate('canvasRunner.character') })
     case 'scene':
-      return `场景锚点「${scenes.find((s) => s.id === node.data.sceneId)?.name || translate('canvasRunner.scene')}」`
+      return translate('canvasRunner.sceneAnchorLabel', { name: scenes.find((s) => s.id === node.data.sceneId)?.name || translate('canvasRunner.scene') })
     case 'sceneProps':
-      return `关键道具「${scenes.find((s) => s.id === node.data.sceneId)?.name || translate('canvasRunner.scene')}」`
+      return translate('canvasRunner.keyPropLabel', { name: scenes.find((s) => s.id === node.data.sceneId)?.name || translate('canvasRunner.scene') })
     case 'shotBoard':
       return translate('canvasRunner.panelLabel', { shot: shotNo(node.data.shotId) })
     case 'shotImage':
@@ -2116,12 +2116,12 @@ export async function runExtractStoryboard(
     project.setCanvas(rebuildCanvasGraph(project.current, true))
     const landed =
       done === 'subjects'
-        ? `✓ 人物已上画布（${project.current.subjects?.length || 0} 个，道具 ${project.current.props?.length || 0} 个），本步完成`
+        ? translate('canvasRunner.subjectsAdded', { characters: project.current.subjects?.length || 0, props: project.current.props?.length || 0 })
         : done === 'scenes'
-          ? `✓ 场景已上画布（${project.current.scenes?.length || 0} 个），本步完成`
+          ? translate('canvasRunner.scenesAdded', { count: project.current.scenes?.length || 0 })
           : meta?.partial
-            ? `✓ 分镜小组 ${meta.completed || 0}/${meta.total || 0} 已上画布（累计 ${project.current.shots.length} 镜）`
-            : `✓ 分镜已上画布（${project.current.shots.length} 镜），本步完成`
+            ? translate('canvasRunner.partialShotsAdded', { current: meta.completed || 0, total: meta.total || 0, count: project.current.shots.length })
+            : translate('canvasRunner.shotsAdded', { count: project.current.shots.length })
     onProgress?.(landed)
     await project.save()
   }
