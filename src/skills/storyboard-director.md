@@ -1,85 +1,81 @@
 ---
 name: storyboard-director
-description: 아이디어를 완전한 대본으로 작성하고 대본에서 캐릭터, 장면, 스토리보드 노드를 추출한다. 사용자가 대본을 쓰거나 고치거나, 샷을 나누거나, 노드를 추출해 달라고 할 때 사용한다.
-triggers: 分镜,拆镜,编剧,故事板,文案,脚本,口播,重写,剧本,镜头,提炼,续写,接着写,스토리보드,샷 나누기,시나리오,스토리보드 이미지,원고,스크립트,내레이션,다시 쓰기,대본,샷,추출,이어 쓰기,계속 써
+description: Develop a full script, then extract character, location, and storyboard nodes. Use for writing, revising, or breaking down scripts and extracting nodes.
+triggers: 分镜,拆镜,编剧,故事板,文案,脚本,口播,重写,剧本,镜头,提炼,续写,接着写,스토리보드,샷 나누기,시나리오,스토리보드 이미지,원고,스크립트,내레이션,다시 쓰기,대본,샷,추출,이어 쓰기,계속 써,storyboard,shot breakdown,script,extract nodes
 ---
 
-# 대본과 스토리보드의 두 단계
+# Script and storyboard production
 
-**첫 단계에서는 전체 대본만 작성한다. 캐릭터, 장면, 스토리보드 노드를 만들지 않는다.**
-**둘째 단계에서 대본을 바탕으로 subjects / scenes / shots를 추출한다.**
+**Step 1 creates the complete script only. Do not create character, location, or storyboard nodes.**
+**Step 2 extracts subjects / scenes / shots from the script.**
 
-## 첫 단계 — 전체 대본
+## Step 1: Complete script
 
-사용자가 주제 또는 초고를 주면 사람이 읽고 고칠 수 있으며 이후 샷으로 나눌 수 있는 Markdown 대본을 작성한다. 본문과 대사는 한국어로 쓰고 아래 파싱용 제목과 구분자는 그대로 사용한다.
+Turn the user's premise or draft into editable, readable, filmable Markdown. Write the title, headings, body, character descriptions, and dialogue in Korean (한국어).
 
-내레이션, 화면, 소리, 길이로 나눈 짧은 영상용 4칸 표는 **금지**한다. 그런 방식에는 배경, 캐릭터 설정, 환경이 빠져 이후 스토리보드 제작에서 추측해야 한다.
+Never use a four-cell table of narration, picture, sound, and duration. Include background, characters, and environments so the subsequent storyboard is grounded.
 
-반드시 다음 순서를 따른다.
+Use this order:
 
-1. **제목과 유형 / 시간 / 장소 / 권장 길이**
-2. **이야기 배경(`## 故事背景`)**. 한 문장 이야기, 갈등 구조, 발단부터 결말까지의 전체 줄거리를 쓴다. 사용자가 특정 부분만 요청한 경우를 제외하고 어느 프레임에서 시작한다고 쓰며 절정만 잘라 내지 않는다.
-3. **캐릭터(`## 人物`)**. 이야기를 움직이는 주인공, 상대역, 부모, 멘토를 모두 기록한다. 사망한 인물도 외모나 유품을 기준으로 기록한다. 각각 신분, 외모, 성격과 말투, 욕망, 두려움, 관계, 변화, AI 시각 기준, 장면 간 상태를 쓴다. 화면 가운데에 설 인물만 쓰지 않는다.
-4. **환경과 장면(`## 环境与场景`)**. 장소마다 인물이 없는 공간, 바닥, 날씨, 빛, 시대와 도시의 질감을 쓴다.
-5. **촬영 원칙(`## 拍摄原则`)**. 촬영에서 제외할 내용과 선의가 행동으로 드러나는 방식을 정한다.
-6. **개별 장면**. `## 场景一｜제목` 형식을 쓴다. 각 장면의 인물과 장면별 과제(목표, 장애물, 결과)를 명확히 한다. 눈에 보이는 행동을 현재형으로 쓰고 필요하면 ■ 기호를 쓴다. 대사는 **실제로 말할 수 있는 원문**을 `**캐릭터 이름：**`과 「대사 원문」 형태로 쓴다. 몽타주의 각 항목은 보이는 화면이어야 한다.
-7. **감정선**과 **시각 및 소리의 기조**
+1. **Title, genre, time, location, and suggested duration**
+2. **Story background (`## 이야기 배경`)**: one-sentence premise, opposition and escalation, and a complete synopsis through the ending. Do not reduce a complete story to the climax unless the user requests that excerpt.
+3. **Characters (`## 캐릭터`)**: record everyone who drives the story, including protagonist, opponent, parents, and mentors. Include deceased characters and use appearance, keepsakes, or other visible anchors. Each profile needs identity, appearance, personality and voice, desire, fear, relationships, arc, visual anchors, and cross-scene state. Include more than the people standing at the center of the shot.
+4. **Environment and locations (`## 환경과 장면`)**: for each location describe the empty space, ground, weather, light, and period or city texture.
+5. **Filming principles (`## 촬영 원칙`)**: identify exclusions and how acts of kindness are shown.
+6. **Scenes**: use `## 장면 N｜제목`. Name the present characters and give each scene an objective, obstacle, and outcome. Write visible action in the present tense, optionally prefixed by ■. Write speakable dialogue as `**캐릭터 이름：**` followed by 「대사 원문」. Make every montage beat observable.
+7. **Chapter emotional arc** and **visual and sound tone**.
 
-상품 판매나 내레이션의 경우에도 캐릭터에 진행자와 제품을, 환경에 촬영 장소를 넣는다. 내레이션 원문은 대사에 넣되, 어디에 있고 무엇을 보며 손에 무엇을 들고 있는지 장면에 명확히 쓴다.
+For sales and presenter-led narration, include the host and product in characters and the setting in environments. Put the exact spoken narration in dialogue. Show where the person is, where they look, and what they hold.
 
-- 내레이션이나 대사는 바로 읽어도 자연스러워야 한다. 홍보 책자나 무성 영화 자막처럼 쓰지 말고 현장에서 사람이 말하는 것처럼 쓴다.
-- 한 장면에 대사 한 마디를 기계적으로 배정하지 않는다. 같은 인물과 같은 의도를 가진 짧은 연속 대사 2–4개는 같은 장면에 담는다. 인물이 소통하는 장면에는 대사를 주고받아야 한다.
-- 절제한다는 이유로 대사를 줄이지 않는다. 서로 알아보기, 이름 부르기, 대치, 만류, 질문과 답변, 작별을 무언극으로 쓰지 않는다. 성인이 된 인물의 내레이션으로 이야기 배경을 요약하지 않는다.
-- 말하는 샷의 크기는 화면의 느낌, 동작, 공간 관계, 감정의 리듬에 맞춰 고른다. 모든 대사를 클로즈업으로 처리하지 않는다.
-- 금지 표현은 赋能, 沉浸式, 质感拉满, cinematic, aesthetic이다.
-- 캐릭터는 길에서 마주칠 법한 인물로 쓴다. 장면은 저녁 몇 시인지, 어디인지, 무엇이 길을 막는지 구체적으로 쓴다.
-- 이야기에 필요한 장면을 모두 쓴다. 단편은 압축할 수 있지만 상대역, 핵심 가족, 갈등 구조를 빼지 않는다. 설화나 IP를 각색할 때 절정의 3–5장면으로 줄이지 않는다. 영화 챕터는 필요한 장면과 몽타주를 모두 쓰고 짧은 영상 분량으로 줄이지 않는다.
-- 이번 요청이 전체 이야기, 첫 회차, 한 클립, 예고편, 특정 긴장 지점 중 어디까지인지 먼저 확정한다. 사용자가 완전한 단편이나 각색을 요청하면 이야기의 핵심 인물과 갈등을 모두 쓰고 완결감을 만들기 위해 재회나 절정만 다룬 짧은 이야기로 자르지 않는다. 특정 부분만 명시적으로 요청했을 때만 그 부분을 쓴다. 완결을 만들려고 다음 회차를 덧붙이거나 사용자가 멈추라고 한 지점의 결과를 앞서 밝히지 않는다.
-- 핵심 사건의 전후만 쓰지 않는다. 장소, 시대, 정체성, 관계 또는 신체 상태가 급변하면 이번 요청이 정한 경계 안에서 필요한 계기, 과정, 충격, 반응을 쓴다. 긴장을 위해 인과관계 중간에 멈출 수 있지만 이미 보여 준 두 박자 사이의 원인과 결과를 잇는 연결은 생략하지 않는다.
-- 시간이나 공간을 넘어가는 사건, 사고, 변신, 비밀 발견, 재회, 배신, 전투 발발 등이 이번 회차의 볼거리라면 중요도에 맞는 화면과 시간을 배정한다. 사용자가 배경으로만 쓰거나 생략하라고 명시한 경우는 그 요구를 따른다.
-- 설명 대사에는 현재 이야기 안에서 말할 계기가 필요하다. 사용자가 설명, 회고 또는 이미 정해진 관계로 시작하라고 명시하면 앞 이야기를 보충하지 않는다. 완성 후 ‘이전 장면의 마지막 상태 → 다음 장면의 시작 상태’를 장면마다 확인한다.
+- Write lines people can speak naturally. Avoid brochure copy and silent-film captions.
+- Keep 2–4 consecutive short lines with the same speaker and intent together. Interactions need spoken exchanges; do not force one line per scene.
+- Restraint means avoiding slogans and maxims. Include visible exchanges for recognition, calling someone's name, confrontation, persuasion, questions, and farewells. Do not recap the backstory through narration by an older version of a character.
+- Choose framing from action, spatial relationships, and emotion rather than making every speaker a close-up.
+- Avoid vague promotional expressions such as 赋能, 沉浸式, 质感拉满, cinematic, and aesthetic.
+- Write people as recognizable individuals and locations as concrete places at definite times, including physical obstacles.
+- Cover the number of scenes the story needs. Compress a short film without losing the opponent, key family, and central conflict. Do not reduce a folk tale or adaptation to a 3–5-scene climax. Use all the scenes and montage beats needed for a film chapter.
+- Pin down the requested boundaries: full story, first episode, excerpt, trailer, or suspense point. A complete short film or adaptation must retain its core characters and conflicts. Only excerpt when asked. Do not add a later episode or reveal an outcome where the user requested a suspenseful stop.
+- Do not skip from before to after a central event. For major changes in place, era, identity, relationships, or physical state, show the trigger, process, impact, and reaction necessary within the requested boundary. You may stop at a suspense point but must bridge two shown beats causally.
+- Give central time travel, accidents, transformations, discoveries, reunions, betrayals, or battle outbreaks enough screen time. Treat them only as background or omit them when expressly requested.
+- Give explanatory lines a local story trigger. If the user asks to begin with explanation, recap, or an established relationship, do not add prior events. Check each prior ending against the next opening.
 
-`generate_play`를 사용한다. 작성이 끝나면 반드시 멈추고 노드를 추출할지 묻는다.
-‘이어 써’, ‘계속 써’, ‘두 장면 더 써’에는 `continue_play`를 쓴다. 기존 장면은 그대로 두고 뒤에만 덧붙인다.
-현재 대본과 무관한 새 이야기를 들려주면 `seed_script`에 최근 대화의 원문을 넣은 뒤 `generate_play`를 실행한다. 이전 대본을 초안으로 삼지 않는다.
+Use `generate_play`, stop after writing, and ask whether to extract nodes. For continuation, use `continue_play` and append without rewriting existing scenes. If the user begins an unrelated story, seed it with `seed_script` using the original recent text, then use `generate_play`. Do not reuse the old script as a draft.
 
-## 이어 쓰기
+## Continuation
 
-전체 대본이 이미 있으면 이어 쓸 수 있다.
+Continue only after a complete script exists.
 
-- 기존 이야기 배경, 인물, 환경, 각 장면의 본문을 한 문장도 바꾸지 않는다.
-- 마지막 장면 뒤에서 `## 场景N｜제목`으로 새 장면을 이어 쓴다.
-- 새 인물과 장소는 캐릭터 및 환경과 장면 섹션에 보완한다.
-- 기본적으로 2–3장면을 더 쓴다. 사용자가 방향을 지정하면 거기에 맞춘다.
-- 이전에 노드를 추출했다면 ‘스토리보드 키프레임’ 그룹에서 다시 추출하라고 알려 준다.
+- Preserve existing background, characters, environments, and scene text verbatim.
+- Append after the last scene with `## 장면 N｜제목`.
+- Add new characters and places to their sections.
+- Default to 2–3 additional scenes unless the user provides direction.
+- If nodes already exist, tell the user to re-extract them from the storyboard keyframe group.
 
-## 둘째 단계 — 노드 추출
+## Step 2: Extract nodes
 
-왼쪽에 대본이 있고 사용자가 ‘계속’ 또는 ‘노드 추출’이라고 해야 `extract_cast`를 실행한다. 도구는 현재 단계만 수행하고 즉시 저장한다. 처음에는 캐릭터, 두 번째는 장면, 세 번째는 스토리보드를 추출한다. 각 단계 후 멈춘다. 병렬로 실행하거나 세 단계를 하나의 작업으로 묶지 않는다.
+When a script exists on the left and the user asks to continue or extract, use `extract_cast`. It saves one stage at a time: characters first, locations second, storyboard third. Stop after each stage. Do not parallelize or bundle the three stages.
 
-- 대본의 캐릭터, 장소, 개별 장면을 충실히 따른다. 캐릭터 섹션의 ### 항목마다 사망한 아버지와 현장에 오지 않은 상대역을 포함해 기록을 만든다. 사망한 인물은 유품, 초상화, 회상으로 화면에 넣고 살아 있는 상대역에는 대치나 눈에 보이는 압박을 담은 샷이 필요하다. 외모와 환경 묘사는 대본의 설정 섹션을 따르고 행인을 임의로 만들지 않는다.
-- 내레이션 원문을 보존한다. 대본의 `**캐릭터 이름：**「대사」`를 해당 샷의 voiceover에 그대로 넣는다. 성인이 된 인물의 내레이션으로 바꾸거나 동작으로 대신한다는 이유로 비우지 않는다. visualPrompt는 대본에 따라 그릴 수 있는 정지 화면을 중국어로 묘사한다.
-- videoPrompt는 해당 장면의 **영상 연출 타임라인**으로 작성한다. 중국어로 0초부터 샷이 끝날 때까지 이야기 박자에 맞춰 2–5개 구간을 쓴다. 구간마다 시작 상태, 누가 무엇을 보고 무엇을 하는지, 누가 무슨 말을 하는지, 나머지 인물의 배치와 반응, 감정 변화, 카메라 방향과 도착점을 쓴다. 시선은 장면 속 사람이나 물건으로 향하게 하고 이유 없이 카메라를 보지 않는다. 몽타주는 눈에 보이는 연속 동작으로 쓰며 ‘시간이 흘렀다’라고 적지 않는다. 성인이 된 인물의 내레이션은 화면 밖 음성이다. visualPrompt를 복사하거나 기계적으로 같은 길이로 나눠 상투적인 문장을 채우거나 앞뒤 샷의 줄거리를 끌어 넣지 않는다. 대본의 촬영 원칙과 제외 항목은 해당 샷에 반영한다.
+- Follow the script's characters, locations, and scenes. Create a record for every ### under characters, including deceased parents and absent opponents. Use a keepsake, portrait, or flashback for the deceased and a confrontation or visible pressure for a living opponent. Do not add passersby or invent appearances or environments.
+- Preserve original spoken lines in each matching shot's voiceover. Do not replace them with older-character narration or empty them in favor of action. Write the still-frame visualPrompt in English for the image model.
+- Write videoPrompt as English generation direction covering zero through the end in 2–5 real story beats. In each range describe the initial state, what is seen and done, who speaks, how others are placed and react, emotional changes, and camera motion and endpoint. Keep Korean dialogue or explicitly requested Korean on-screen text verbatim. Give actors in-scene eyelines and describe montage as visible action. Do not copy visualPrompt, divide time equally, insert neighboring action, or ignore the script's exclusions. Older-character narration is off screen.
 
-## 샷 작성 방식 — 둘째 단계에만 적용
+## Shot fields
 
-촬영 담당자와 배우가 바로 이해할 수 있는 말로 쓴다.
+- **title**: distinct 3–8-character Korean (한국어) title suitable for a slate.
+- **purpose**: retain the existing category values `钩子 / 说明 / 反应 / 揭示 / 收口`.
+- **shotSize**: state framing and its reason.
+- **blocking / eyeline**: locate every person and give body direction and eyeline. A speaker can be behind others; foreground characters can look back or sideways.
+- **voiceover**: use "Character name: line". Keep 2–4 consecutive short phrases with the same intent together. H3 strips the speaker prefix. Leave empty if there is no dialogue.
+- **audioDescription**: audible sounds in the scene.
+- **duration**: integer seconds from 5 to 10; vary across the film.
+- **cameraMovement**: one of push / pull / pan / tilt / static / orbit per shot.
+- **visualPrompt**: English still-frame prompt with near, underfoot, surrounding, and far details, visible action, and light.
+- **videoPrompt**: 2–5 beat-based ranges with action, expression, original lines, other people's blocking and reaction, one motivated camera move, and its endpoint. Avoid posing at the lens, ending with a generic eyeline instruction, or dividing equally.
+- **Dialogue framing**: a close-up is optional. The speaker need not face the camera or occupy the center. Establish who speaks, turns sideways, or looks back.
+- **Speaker clarity**: the speaker's mouth is visible from front, side, or background. Foreground listeners keep their mouths closed and look at the speaker or the indicated object.
+- **Exchanges**: dialogue in one space can stay in one shot. For H3 use internal `[Shot 1]/[Shot 2]/[Shot 3]` beats, one `<d>` tag per line. Consecutive short lines from one speaker may stay in one shot.
+- **Continuity**: previous shot's concrete ending → current visible change → concrete state for the next shot. Match positions, poses, orientation, props, injuries, emotion, and what people know.
 
-- **title**은 현장 기록판에 적을 수 있도록 3–8자로 쓴다.
-- **purpose** 값은 `钩子 / 说明 / 反应 / 揭示 / 收口` 중 하나다.
-- **shotSize**에는 화면을 멀리 또는 가까이 잡는 이유를 쓴다.
-- **blocking / eyeline**에는 인물별 앞뒤 위치, 몸 방향, 보는 대상을 쓴다. 화자는 뒤에 있어도 된다. 앞쪽 인물은 고개를 돌리거나 옆으로 향해 화자를 본다.
-- **voiceover**는 「캐릭터 이름：대사」로 쓴다. 표현 의도가 같으면 짧은 대사 2–4개를 한 샷에 우선 담는다. H3 생성 시 캐릭터 이름 접두사는 자동으로 제거된다. 내레이션이 없으면 비운다.
-- **audioDescription**에는 현장에서 들을 수 있는 소리를 쓴다.
-- **duration**은 5–10초 사이의 정수로 쓰고 전체 샷에 같은 길이를 쓰지 않는다.
-- **cameraMovement**는 push / pull / pan / tilt / static / orbit 중 샷별 하나다.
-- **visualPrompt**에는 앞쪽, 발밑, 주변, 멀리 보이는 상황을 쓰며 움직임과 빛을 담는다. **샷 이미지**에 사용할 중국어 정지 프레임 프롬프트다.
-- **videoPrompt**는 0초부터 끝까지 실제 박자에 따라 2–5개 구간으로 나눈다. 각 구간에 행동하는 인물, 동작과 표정, 화자와 대사 원문, 나머지 인물의 위치·시선·반응, 타당한 카메라 움직임 하나와 도착점을 쓴다. 단체 사진처럼 카메라를 보게 하거나 ‘카메라를 보지 않는다’만 덧붙이거나 기계적으로 등분하지 않는다.
-- **대사 구도**에서 클로즈업은 선택 사항이다. 화자는 카메라를 정면으로 보거나 화면 중앙에 설 필요가 없다. 여러 인물이 함께 잡히면 누가 말하고, 누가 옆을 향하고, 누가 고개를 돌리는지 명시한다.
-- **화자 표시**가 분명해야 한다. 말하는 인물의 입은 알아볼 수 있어야 하며 뒤쪽이나 옆쪽에 있어도 된다. 앞쪽 인물은 입을 다물고 화자나 화자가 가리킨 물건을 본다.
-- **대사 주고받기**가 같은 공간에서 이어지면 한 샷에 담을 수 있다. H3에는 내부 `[Shot 1]/[Shot 2]/[Shot 3]`으로 발화 박자를 나누고 각 문장에 `<d>` 태그 하나를 쓴다. 같은 사람의 연속된 짧은 대사 2–4개도 한 샷에 담을 수 있다.
-- **샷 간 연결**을 위해 continuity를 ‘이전 샷의 구체적인 마지막 상태를 받음 → 현재 샷에서 보이는 변화 → 다음 샷으로 이어지는 구체적인 마지막 상태’로 쓴다. 인접 샷의 위치, 자세, 몸 방향, 소품, 부상, 감정, 이미 알려진 정보가 이어져야 한다.
+## Visual style
 
-## 그림체
-
-사용자가 주제에서 원하는 느낌을 말하면 그 표현을 따른다. 그림체는 다리, 물, 옷 같은 대상에 적용하고 기법을 설명하는 상투적인 문구만 나열하지 않는다.
+Follow the user's description of the desired look. Express it in visible bridges, water, and clothes instead of a separate block of technique jargon.
