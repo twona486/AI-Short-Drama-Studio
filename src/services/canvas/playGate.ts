@@ -20,11 +20,13 @@ export function needsPlayReview(p: Project | null | undefined): boolean {
 }
 
 export function isFullPipelineRequest(text: string) {
-  return /全部做完|全部生成|都生成|全做|一口气|整条流水线|从头到尾|缺的都补|全流程|完整流程|全套|전체\s*과정/.test(text)
+  return /全部做完|全部生成|都生成|全做|一口气|整条流水线|从头到尾|缺的都补|全流程|完整流程|全套|전체\s*과정/.test(text) ||
+    /^전체\s*워크플로(?:를?\s*(?:진행해|실행해)(?:\s*줘)?)?[.!。！]*$/.test(text.trim())
 }
 
 export function isApprovePlayRequest(text: string) {
-  return /确认剧本|验收通过|确认通过|剧本没问题|通过验收|验收了/.test(text)
+  return /确认剧本|验收通过|确认通过|剧本没问题|通过验收|验收了/.test(text) ||
+    /^(?:검수\s*통과|대본\s*승인)[.!。！]*$/.test(text.trim())
 }
 
 export const DOWNSTREAM_TOOLS = new Set([
