@@ -1,6 +1,6 @@
 /**
- * 自建 ComfyUI 一键接入：只填 baseUrl，写入生图 / 视频 profile（comfyui-prompt）。
- * 真正出图/出视频仍需用户在适配器里粘贴 workflowTemplate。
+ * baseUrl만으로 자체 호스팅 ComfyUI 이미지 및 영상 연결을 추가한다.
+ * 실제 생성에는 어댑터에서 workflowTemplate을 등록해야 한다.
  */
 
 import {
@@ -14,11 +14,11 @@ export type ComfyQuickKind = 'image' | 'video'
 export interface ComfyQuickAddInput {
   baseUrl: string
   apiKey?: string
-  /** 默认同时加生图 + 视频 */
+  /** 기본적으로 이미지 생성과 영상 생성 연결을 함께 추가한다. */
   kinds?: ComfyQuickKind[]
-  /** 添加后设为当前选中，默认 true */
+  /** 추가한 연결을 선택 상태로 만든다. 기본값은 true다. */
   select?: boolean
-  /** 可选连通探测 */
+  /** 선택적으로 연결을 확인한다. */
   test?: boolean
 }
 
@@ -36,7 +36,7 @@ export function normalizeComfyBaseUrl(raw: string): string {
   if (!u) return ''
   if (!/^https?:\/\//i.test(u)) u = `http://${u}`
   u = u.replace(/\/+$/, '')
-  // 去掉误粘的 Comfy 路径
+  // 잘못 붙여 넣은 ComfyUI 경로를 제거한다.
   u = u
     .replace(/\/prompt$/i, '')
     .replace(/\/system_stats$/i, '')
@@ -78,7 +78,7 @@ function hostLabel(baseUrl: string): string {
   }
 }
 
-/** 写入本机设置：生图 / 视频 ComfyUI profile */
+/** 로컬 설정에 이미지 및 영상 ComfyUI 연결을 저장한다. */
 export async function addComfyUiProfiles(input: ComfyQuickAddInput): Promise<ComfyQuickAddResult> {
   const settings = useSettingsStore()
   const baseUrl = normalizeComfyBaseUrl(input.baseUrl)
@@ -162,7 +162,7 @@ export async function addComfyUiProfiles(input: ComfyQuickAddInput): Promise<Com
   }
 }
 
-/** 从用户一句话里抽 Comfy 地址 */
+/** 사용자 요청에서 ComfyUI 주소를 추출한다. */
 export function extractComfyMention(text: string): { baseUrl: string; apiKey: string } | null {
   const t = String(text || '')
   const urlMatch =
@@ -178,9 +178,9 @@ export function extractComfyMention(text: string): { baseUrl: string; apiKey: st
     /comfy\s*ui|comfyui|自建\s*comfy|本地\s*comfy|我的\s*comfy|图生视频.*本机|本机.*出图/i.test(t) ||
     (/在\s*.+/.test(t) && /8188|localhost|127\.0\.0\.1/i.test(t))
   const bareShort = t.trim().length < 160 && /^(https?:\/\/)?[\w.:\[\]\/]+$/i.test(t.trim())
-  // 明确提到 Comfy，或地址像本机/8188，或用户只丢了一个短地址
+  // ComfyUI를 언급했거나 로컬 및 8188 주소 또는 짧은 단독 주소인 경우를 고려한다.
   if (!mentionsComfy && !looksLikeComfyUrl(baseUrl) && !bareShort) return null
-  // 短地址但完全不像本地/Comfy（例如官方 https://api.openai.com）则跳过
+  // 짧더라도 로컬이나 ComfyUI 주소가 아닌 경우 건너뛴다.
   if (!mentionsComfy && !looksLikeComfyUrl(baseUrl) && bareShort) {
     try {
       const host = new URL(baseUrl).hostname.toLowerCase()
