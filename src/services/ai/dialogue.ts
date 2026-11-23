@@ -4,7 +4,7 @@
  */
 
 const SPEAKER_RE = /^(旁白|画外音|解说|主持人|人声|台词|对白|내레이션|화면 밖 음성|해설|진행자|대사|narrator|voiceover)$/i
-const NAME_RE = /^(?:[\u3400-\u9fff]{1,6}(?:说|问|答)?|[가-힣]{1,8})$/
+const NAME_RE = /^(?:[\u3400-\u9fff]{1,6}(?:说|问|答)?|[가-힣]{1,8}(?: [가-힣]{1,8})?)$/
 const KOREAN_STAGE_LABEL = /^(?:장면|샷|샷 크기|장소|효과음|인물 배치|시선|소품|현장음|그림체|길이|현장 기록|화면|동작|카메라 움직임|구도|환경|조명|비고|설명)$/
 const DIRECTION_RE =
   /景别|镜头|站位|中景|近景|特写|全景|远景|推近|拉远|横摇|运镜|机位|构图|画面中|四宫|六格|分镜|过肩|正反打|视线|承接上一镜|本镜可见|留给下一镜|画风|质感|噪点|武侠|场记|时长轴|参考图|人设|首帧|摄像机|情感镜头|integrated_multimodal|overall_soundscape|Camera language|Performance direction|non_diegetic/
