@@ -100,7 +100,7 @@ function mockExpand(input: OptimizeNodePromptInput): OptimizeNodePromptResult {
   const base = input.currentPrompt.trim()
   if (!base) {
     return {
-      prompt: input.kind === 'video' ? '一条连续镜头。写清谁在做什么、光从哪来。' : '一张能看清主体和光线的静帧。',
+      prompt: input.kind === 'video' ? 'One continuous shot. Specify who does what and where the light comes from.' : 'A still frame with clearly visible subjects and lighting.',
       note: '데모 모드입니다. 원문이 비어 있어 임시 문구를 넣었습니다.'
     }
   }
@@ -124,7 +124,7 @@ function formatRules(input: OptimizeNodePromptInput, current: string): string {
 Task type: ${kindLabel}.
 Required format rules
 - ${anchorLine}
-- Preserve the names and order of headings, sections, [Shot], 图1=, and ranges such as 0.00-2.00.
+- Preserve the names and order of headings, sections, [Shot], legacy numbered picture labels, and ranges such as 0.00-2.00.
 - Do not convert free-form prose to six sections, delete or combine existing sections, or rename them.
 - Within existing sections, make eyebrows, eyes, mouth, hands, body, light, materials, and sound more concrete.
 - Preserve dialogue, names, wardrobe, scene constraints, and reference image identifiers.
