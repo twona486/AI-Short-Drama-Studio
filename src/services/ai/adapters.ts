@@ -273,7 +273,7 @@ export async function providerHttp(
   if (preferProxy) {
     const api = desktop()
     if (typeof api.autodlFetch !== 'function') {
-      throw new Error('请完全退出并重启剧流 Studio（桌面端需要更新后的请求通道）')
+      throw new Error('剧流 Studio를 완전히 종료하고 다시 시작하세요. 데스크톱 앱에 업데이트된 요청 경로가 필요합니다.')
     }
     const headers = init.headers || {}
     const auth =
@@ -338,7 +338,7 @@ export async function providerHttp(
         try {
           return JSON.parse(text || '{}')
         } catch {
-          throw new Error(`响应不是 JSON：${text.slice(0, 120)}`)
+          throw new Error(`응답이 JSON 형식이 아닙니다. ${text.slice(0, 120)}`)
         }
       },
       blob: async () => new Blob([bytes], { type: resp.headers.get('content-type') || 'application/octet-stream' })
@@ -389,7 +389,7 @@ async function mediaFromValue(
   const value = picked.trim()
   if (value.startsWith('data:')) {
     const m = value.match(/^data:([^;]+);base64,(.+)$/i)
-    if (!m) throw new Error('data URI 无法解析')
+    if (!m) throw new Error('데이터 URI를 해석할 수 없습니다.')
     const bin = atob(m[2].replace(/\s/g, ''))
     const arr = new Uint8Array(bin.length)
     for (let i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i)
@@ -397,7 +397,7 @@ async function mediaFromValue(
   }
   if (/^https?:\/\//i.test(value)) {
     const r = await fetch(value, { signal })
-    if (!r.ok) throw new Error(`下载结果失败 ${r.status}`)
+    if (!r.ok) throw new Error(`결과를 다운로드하지 못했습니다. ${r.status}`)
     const blob = await r.blob()
     return { blob, mimeType: blob.type || fallbackMime }
   }
@@ -544,7 +544,7 @@ export async function httpCustomMediaGenerate(opts: {
     ...(adapter.headers || {})
   }
   const body = requestBodyForProvider(opts.baseUrl, adapter, kind, opts.model, opts.prompt, opts.extraBody)
-  opts.onProgress?.('提交自定义接口…')
+  opts.onProgress?.('사용자 지정 API에 제출하는 중…')
   const res = await providerHttp(url, {
     method: 'POST',
     headers,
@@ -555,9 +555,9 @@ export async function httpCustomMediaGenerate(opts: {
   if (!res.ok) {
     const text = await res.text()
     const hint = res.status === 401 && usesApimartProtocol(url, adapter)
-      ? '\n鉴权头必须是 “Bearer ” 加密钥，中间要有空格。请确认这条接入的前缀是 Bearer，而不是和密钥粘在一起。'
+      ? '\n인증 헤더는 Bearer 뒤에 공백을 두고 키를 붙여야 합니다. 연결의 접두사와 키 사이에 공백이 있는지 확인하세요.'
       : ''
-    throw new Error(`[${kind}] 自定义接口失败 ${res.status}\n请求地址：${url}\n${text.slice(0, 500)}${hint}`)
+    throw new Error(`[${kind}] 사용자 지정 API 요청에 실패했습니다. ${res.status}\n요청 주소 ${url}\n${text.slice(0, 500)}${hint}`)
   }
   let data = await res.json()
 
@@ -566,7 +566,7 @@ export async function httpCustomMediaGenerate(opts: {
     const taskId = extractTaskId(data, adapter)
     if (!taskId) {
       throw new Error(
-        `[${kind}] 已配置轮询但提交响应里没有任务 ID。请设置 adapter.taskIdJsonPath。片段：${JSON.stringify(data).slice(0, 240)}`
+        `[${kind}] 상태 조회를 설정했지만 제출 응답에 작업 ID가 없습니다. adapter.taskIdJsonPath를 설정하세요. 응답 일부 ${JSON.stringify(data).slice(0, 240)}`
       )
     }
     const started = Date.now()
@@ -577,7 +577,7 @@ export async function httpCustomMediaGenerate(opts: {
       const pollUrl = /^https?:\/\//i.test(pollTpl)
         ? pollTpl.replace(/\{id\}/g, encodeURIComponent(taskId))
         : joinUrl(opts.baseUrl, pollTpl.replace(/\{id\}/g, encodeURIComponent(taskId)))
-      opts.onProgress?.('轮询任务状态…')
+      opts.onProgress?.('작업 상태를 조회하는 중…')
       const poll = await providerHttp(pollUrl, {
         method: 'GET',
         headers: {
@@ -590,7 +590,7 @@ export async function httpCustomMediaGenerate(opts: {
       })
       if (!poll.ok) {
         if (poll.status === 401 || poll.status === 403) {
-          throw new Error(`[${kind}] 查询任务被拒绝 ${poll.status}\n请求地址：${pollUrl}\n${(await poll.text()).slice(0, 400)}`)
+          throw new Error(`[${kind}] 작업 조회가 거부됐습니다. ${poll.status}\n요청 주소 ${pollUrl}\n${(await poll.text()).slice(0, 400)}`)
         }
         continue
       }
@@ -605,7 +605,7 @@ export async function httpCustomMediaGenerate(opts: {
           data?.error?.message ||
           data?.message ||
           statusRaw
-        throw new Error(`[${kind}] 任务失败：${String(message).slice(0, 300)}`)
+        throw new Error(`[${kind}] 작업에 실패했습니다. ${String(message).slice(0, 300)}`)
       }
       const waiting = /^(pending|processing|submitted|queued|running|in_progress)$/.test(status)
       if (waiting) continue
@@ -615,10 +615,10 @@ export async function httpCustomMediaGenerate(opts: {
       const media = await mediaFromUnknown(picked, opts.signal, fallbackMime)
       if (media) return media
       if (/^(completed|success|succeeded|succeed)$/.test(status)) {
-        throw new Error(`[${kind}] 任务已完成，但响应里没有媒体地址。片段：${JSON.stringify(data).slice(0, 240)}`)
+        throw new Error(`[${kind}] 작업이 완료됐지만 응답에 미디어 주소가 없습니다. 응답 일부 ${JSON.stringify(data).slice(0, 240)}`)
       }
     }
-    throw new Error(`[${kind}] 自定义接口轮询超时`)
+    throw new Error(`[${kind}] 사용자 지정 API 상태 조회 시간이 초과됐습니다.`)
   }
 
   const picked =
@@ -629,7 +629,7 @@ export async function httpCustomMediaGenerate(opts: {
   const media = await mediaFromUnknown(picked, opts.signal, fallbackMime)
   if (media) return media
   throw new Error(
-    `[${kind}] 自定义接口未解析到媒体。请设置 adapter.resultJsonPath。片段：${JSON.stringify(data).slice(0, 240)}`
+    `[${kind}] 사용자 지정 API 응답에서 미디어를 찾지 못했습니다. adapter.resultJsonPath를 설정하세요. 응답 일부 ${JSON.stringify(data).slice(0, 240)}`
   )
 }
 
@@ -658,7 +658,7 @@ function bytesToBase64(bytes: Uint8Array): string {
 
 function dataUrlToBytes(dataUrl: string): { bytes: Uint8Array; mime: string } {
   const m = /^data:([^;,]+)?(;base64)?,/i.exec(dataUrl)
-  if (!m) throw new Error('不是 data URL，无法上传')
+  if (!m) throw new Error('데이터 URL이 아니므로 업로드할 수 없습니다.')
   const head = m[0]
   const mime = m[1] || 'image/png'
   if (m[2]) {
@@ -722,7 +722,7 @@ async function uploadComfyMedia(opts: {
   const { bytes, mime } = dataUrlToBytes(opts.dataUrl)
   const name = `aicust-${Date.now().toString(36)}.${extOfMime(mime)}`
   const { bodyBase64, contentType } = buildMultipart({ overwrite: 'true' }, { name, mime, bytes }, 'image')
-  opts.onProgress?.('上传参考图到 ComfyUI…')
+  opts.onProgress?.('ComfyUI에 참조 이미지를 업로드하는 중…')
   const res = await providerHttp(joinUrl(trimSlash(opts.baseUrl), '/upload/image'), {
     method: 'POST',
     headers: buildAuthHeader(opts.apiKey || '', {
@@ -735,7 +735,7 @@ async function uploadComfyMedia(opts: {
     timeoutMs: 120_000
   })
   const text = await res.text()
-  if (!res.ok) throw new Error(`[comfyui] 上传素材失败 ${res.status} ${text.slice(0, 160)}`)
+  if (!res.ok) throw new Error(`[comfyui] 자료 업로드에 실패했습니다. ${res.status} ${text.slice(0, 160)}`)
   let json: any = {}
   try {
     json = JSON.parse(text || '{}')
@@ -743,7 +743,7 @@ async function uploadComfyMedia(opts: {
     /* 某些网关返回纯文本文件名 */
   }
   const filename = String(json.name || json.filename || text.trim().split('\n')[0] || '').replace(/^"|"$/g, '')
-  if (!filename) throw new Error(`[comfyui] 上传成功但未返回文件名：${text.slice(0, 160)}`)
+  if (!filename) throw new Error(`[comfyui] 업로드는 완료됐지만 파일 이름을 반환하지 않았습니다. ${text.slice(0, 160)}`)
   return filename
 }
 
@@ -797,7 +797,7 @@ export async function comfyPromptGenerate(opts: {
 
   if (!adapter.workflowTemplate?.trim()) {
     throw new Error(
-      '[comfyui] 缺少 adapter.workflowTemplate。请在设置页「适配器」粘贴 Comfy API 格式工作流 JSON，并让助手分析出输入映射。应用不会提供假装可用的默认工作流。'
+      '[comfyui] adapter.workflowTemplate이 없습니다. 설정의 ‘어댑터’에 Comfy API 형식의 워크플로 JSON을 붙여 넣고 도우미로 입력 매핑을 분석하세요.'
     )
   }
   // 老模板带 {{prompt}} 占位：先按占位替换（image 用上传后的文件名，data URL 对 Comfy 无效）
@@ -816,7 +816,7 @@ export async function comfyPromptGenerate(opts: {
           onProgress: opts.onProgress
         })
       } catch (e: any) {
-        throw new Error(`[comfyui] 参考图上传失败：${e?.message || e}`)
+        throw new Error(`[comfyui] 참조 이미지 업로드에 실패했습니다. ${e?.message || e}`)
       }
     }
     payload = fillWorkflowTemplate(adapter.workflowTemplate, {
@@ -866,7 +866,7 @@ export async function comfyPromptGenerate(opts: {
       })
     } catch (e: any) {
       throw new Error(
-        `[comfyui] ${COMFY_ROLE_LABEL[b.role]}上传失败：${e?.message || e}。该工作流需要先把素材传到 Comfy 的 input 目录。`
+        `[comfyui] ${COMFY_ROLE_LABEL[b.role]} 업로드에 실패했습니다. ${e?.message || e} 이 워크플로는 먼저 ComfyUI의 input 디렉터리에 자료를 업로드해야 합니다.`
       )
     }
   }
@@ -888,14 +888,14 @@ export async function comfyPromptGenerate(opts: {
   if (!writes.length) {
     const miss = missingRoles(inputMap)
     throw new Error(
-      `[comfyui] 工作流没有接到任何本次输入（${skipped.slice(0, 2).join('；') || '映射为空'}）。` +
-        `${miss.includes('prompt') ? '映射里没有正向提示词节点，' : ''}` +
-        '请在接入里点「用助手分析工作流」重新生成输入映射。'
+      `[comfyui] 이번 실행의 입력이 워크플로에 전달되지 않았습니다(${skipped.slice(0, 2).join('；') || '매핑이 비어 있음'}). ` +
+        `${miss.includes('prompt') ? '매핑에 긍정 프롬프트 노드가 없습니다. ' : ''}` +
+        '연결의 ‘도우미로 워크플로 분석’을 눌러 입력 매핑을 다시 만드세요.'
     )
   }
-  opts.onProgress?.(`已注入：${writes.slice(0, 3).join('、')}`)
+  opts.onProgress?.(`입력 전달 완료 ${writes.slice(0, 3).join('、')}`)
 
-  opts.onProgress?.('提交 ComfyUI 队列…')
+  opts.onProgress?.('ComfyUI 대기열에 제출하는 중…')
   const submitUrl = joinUrl(base, submitPath)
   const submit = await providerHttp(submitUrl, {
     method: 'POST',
@@ -906,14 +906,14 @@ export async function comfyPromptGenerate(opts: {
   })
   if (!submit.ok) {
     throw new Error(
-      `[comfyui] 提交失败 ${submit.status} ${await submit.text()}\n若是自建 ComfyUI，请在接入里填写 adapter.workflowTemplate（完整 /prompt JSON）。`
+      `[comfyui] 제출에 실패했습니다. ${submit.status} ${await submit.text()}\n자체 호스팅 ComfyUI라면 연결의 adapter.workflowTemplate에 /prompt JSON 전문을 입력하세요.`
     )
   }
   const submitJson = await submit.json()
   const promptId =
     String(submitJson.prompt_id || submitJson.promptId || submitJson.task_id || getByJsonPath(submitJson, 'data.prompt_id') || '').trim()
   if (!promptId) {
-    throw new Error(`[comfyui] 提交成功但没有 prompt_id：${JSON.stringify(submitJson).slice(0, 200)}`)
+    throw new Error(`[comfyui] 제출은 완료됐지만 prompt_id가 없습니다. ${JSON.stringify(submitJson).slice(0, 200)}`)
   }
 
   const started = Date.now()
@@ -935,7 +935,7 @@ export async function comfyPromptGenerate(opts: {
 
     const statusStr = String(entry?.status?.status_str || entry?.status || '').toLowerCase()
     if (/error|fail/.test(statusStr)) {
-      throw new Error(`[comfyui] 任务失败：${JSON.stringify(entry.status || entry).slice(0, 240)}`)
+      throw new Error(`[comfyui] 작업에 실패했습니다. ${JSON.stringify(entry.status || entry).slice(0, 240)}`)
     }
 
     const outputs = entry.outputs || entry
@@ -970,7 +970,7 @@ export async function comfyPromptGenerate(opts: {
         signal: opts.signal,
         timeoutMs: 180_000
       })
-      if (!r.ok) throw new Error(`[comfyui] 下载失败 ${r.status}`)
+      if (!r.ok) throw new Error(`[comfyui] 다운로드에 실패했습니다. ${r.status}`)
       const blob = await r.blob()
       return {
         blob,
@@ -985,7 +985,7 @@ export async function comfyPromptGenerate(opts: {
         type: fileMeta.type || 'output'
       })
       const viewUrl = `${base}/view?${q.toString()}`
-      opts.onProgress?.('下载 ComfyUI 输出…')
+      opts.onProgress?.('ComfyUI 결과를 다운로드하는 중…')
       const view = await providerHttp(viewUrl, {
         method: 'GET',
         headers: buildAuthHeader(opts.apiKey || '', adapter),
@@ -993,7 +993,7 @@ export async function comfyPromptGenerate(opts: {
         timeoutMs: 180_000
       })
       if (!view.ok) {
-        throw new Error(`[comfyui] /view 失败 ${view.status}`)
+        throw new Error(`[comfyui]  /view 요청에 실패했습니다. ${view.status}`)
       }
       const blob = await view.blob()
       const name = fileMeta.filename.toLowerCase()
@@ -1008,9 +1008,9 @@ export async function comfyPromptGenerate(opts: {
               : 'image/png')
       return { blob, mimeType: mime }
     }
-    opts.onProgress?.('ComfyUI 生成中…')
+    opts.onProgress?.('ComfyUI에서 생성하는 중…')
   }
-  throw new Error('[comfyui] 等待结果超时')
+  throw new Error('[comfyui] 결과를 기다리는 시간이 초과됐습니다.')
 }
 
 export interface ConnectionTestResult {
@@ -1024,7 +1024,7 @@ export async function testEndpointConnection(
   ep: EndpointLike
 ): Promise<ConnectionTestResult> {
   const base = trimSlash(ep.baseUrl || '')
-  if (!base) return { ok: false, detail: '缺少接口地址' }
+  if (!base) return { ok: false, detail: 'API 주소가 없습니다.' }
 
   try {
     if (kind === 'llm' || kind === 'vision') {
@@ -1037,9 +1037,9 @@ export async function testEndpointConnection(
           headers: { Accept: 'application/json', ...auth },
           signal: timeoutSignal(12_000)
         })
-        if (r.ok) return { ok: true, detail: `连通正常（GET ${modelsUrl} → ${r.status}）` }
+        if (r.ok) return { ok: true, detail: `연결 확인（GET ${modelsUrl} → ${r.status}）` }
         if (r.status === 401 || r.status === 403) {
-          return { ok: false, detail: `地址可达但鉴权失败（${r.status}）` }
+          return { ok: false, detail: `주소에는 연결할 수 있지만 인증에 실패했습니다.（${r.status}）` }
         }
       } catch {
         /* CORS / 网络：桌面端改走 llmFetch */
@@ -1048,7 +1048,7 @@ export async function testEndpointConnection(
       if (isDesktop()) {
         const api = desktop()
         if (typeof api.llmFetch !== 'function') {
-          return { ok: false, detail: '桌面端缺少 llmFetch，请重启应用' }
+          return { ok: false, detail: '데스크톱 앱에 llmFetch가 없습니다. 앱을 다시 시작하세요.' }
         }
         try {
           const modelsRes = await api.llmFetch({
@@ -1058,7 +1058,7 @@ export async function testEndpointConnection(
             timeoutMs: 15_000
           })
           if (modelsRes.ok) {
-            return { ok: true, detail: `连通正常（GET /models → ${modelsRes.status}，经桌面通道探测 /models）` }
+            return { ok: true, detail: `연결 확인（GET /models → ${modelsRes.status}，데스크톱 경로에서 /models를 확인）` }
           }
         } catch {
           /* 旧主进程可能仍只允许 chat/completions，继续下面探测 */
@@ -1076,16 +1076,16 @@ export async function testEndpointConnection(
             }),
             timeoutMs: 25_000
           })
-          if (res.ok) return { ok: true, detail: `连通正常（POST chat/completions → ${res.status}，经桌面通道）` }
+          if (res.ok) return { ok: true, detail: `연결 확인（POST chat/completions → ${res.status}，데스크톱 경로）` }
           return {
             ok: false,
-            detail: `chat/completions 返回 ${res.status} ${String(res.text || '').slice(0, 160)}`
+            detail: `chat/completions 응답 ${res.status} ${String(res.text || '').slice(0, 160)}`
           }
         } catch (e: any) {
-          return { ok: false, detail: `桌面通道探测失败：${e?.message || e}` }
+          return { ok: false, detail: `데스크톱 경로 확인에 실패했습니다. ${e?.message || e}` }
         }
       }
-      return { ok: false, detail: `无法访问 ${modelsUrl}（可能被 CORS 拦截）。桌面端请用安装版以走主进程通道。` }
+      return { ok: false, detail: `${modelsUrl}에 접근할 수 없습니다. CORS에 의해 차단됐을 수 있습니다. 메인 프로세스 경로를 사용하려면 설치된 데스크톱 앱을 사용하세요.` }
     }
 
     if (kind === 'image') {
@@ -1118,15 +1118,15 @@ export async function testEndpointConnection(
               return {
                 ok: res.ok || res.status === 401 || res.status === 403,
                 detail: res.ok
-                  ? `连通正常（GET ${u} → ${res.status}）`
-                  : `地址可达但鉴权失败（${res.status}），请检查 Token`
+                  ? `연결 확인（GET ${u} → ${res.status}）`
+                  : `주소에는 연결할 수 있지만 인증에 실패했습니다.（${res.status}） 토큰을 확인하세요.`
               }
             }
           } catch {
             /* try next */
           }
         }
-        return { ok: false, detail: 'ComfyUI 探测失败：无法访问 system_stats / 根路径' }
+        return { ok: false, detail: 'ComfyUI 연결 확인에 실패했습니다. system_stats 또는 루트 경로에 접근할 수 없습니다.' }
       }
       const url = `${base}/models`
       try {
@@ -1137,17 +1137,17 @@ export async function testEndpointConnection(
           },
           signal: timeoutSignal(15_000)
         })
-        if (r.ok) return { ok: true, detail: `连通正常（GET ${url} → ${r.status}）` }
+        if (r.ok) return { ok: true, detail: `연결 확인（GET ${url} → ${r.status}）` }
         if (r.status === 401 || r.status === 403) {
-          return { ok: false, detail: `地址可达但鉴权失败（${r.status}）` }
+          return { ok: false, detail: `주소에는 연결할 수 있지만 인증에 실패했습니다.（${r.status}）` }
         }
         // 有的中转没有 /models，再试 OPTIONS/HEAD generations 不划算；当作「可能可用」
         return {
           ok: r.status < 500,
-          detail: `/models 返回 ${r.status}，若接口无模型列表可忽略，直接试出图`
+          detail: `/models 응답 ${r.status}. API에 모델 목록이 없으면 이 응답을 무시하고 이미지 생성을 시도할 수 있습니다.`
         }
       } catch (e: any) {
-        return { ok: false, detail: `探测失败：${e?.message || e}` }
+        return { ok: false, detail: `연결 확인에 실패했습니다. ${e?.message || e}` }
       }
     }
 
@@ -1162,13 +1162,13 @@ export async function testEndpointConnection(
           },
           timeoutMs: 15_000
         })
-        if (res.ok) return { ok: true, detail: `连通正常（GET /system_stats → ${res.status}）` }
-        return { ok: false, detail: `/system_stats 返回 ${res.status} ${await res.text().then((t) => t.slice(0, 120))}` }
+        if (res.ok) return { ok: true, detail: `연결 확인（GET /system_stats → ${res.status}）` }
+        return { ok: false, detail: `/system_stats 응답 ${res.status} ${await res.text().then((t) => t.slice(0, 120))}` }
       }
       // AutoDL 风格：用带鉴权的轻量请求；无公开 health 时验证 URL + Token 非空
-      if (!ep.apiKey?.trim()) return { ok: false, detail: '缺少 AutoDL Token / API Key' }
+      if (!ep.apiKey?.trim()) return { ok: false, detail: 'AutoDL 토큰 또는 API 키가 없습니다.' }
       if (!ep.workflowId?.trim() && adapterType === 'comfyui-workflow') {
-        return { ok: false, detail: '缺少工作流 ID（workflowId）' }
+        return { ok: false, detail: '워크플로 ID(workflowId)가 없습니다.' }
       }
       const root = isAutodlHost(base)
         ? `${trimSlash(base.replace(/\/api\/v1$/i, ''))}/api/v1/comfyui`
@@ -1185,28 +1185,28 @@ export async function testEndpointConnection(
           },
           timeoutMs: 15_000
         })
-        if (res.ok) return { ok: true, detail: `连通正常（${res.status}）` }
+        if (res.ok) return { ok: true, detail: `연결 확인（${res.status}）` }
         if (res.status === 401 || res.status === 403 || res.status === 404) {
           return {
             ok: true,
-            detail: `地址与鉴权通道可达（${res.status}）。AutoDL 若无 system_stats 属正常，配置已足够发起工作流。`
+            detail: `주소와 인증 경로에 연결할 수 있습니다(${res.status}). AutoDL에 system_stats가 없을 수 있으며 현재 설정으로 워크플로를 제출할 수 있습니다.`
           }
         }
-        return { ok: false, detail: `探测返回 ${res.status}` }
+        return { ok: false, detail: `연결 확인 응답 ${res.status}` }
       } catch (e: any) {
         return {
           ok: Boolean(ep.apiKey && base),
-          detail: `无法完成 HTTP 探测（${e?.message || e}）。已检查到地址与 Token 字段齐全。`
+          detail: `HTTP 연결 확인을 완료하지 못했습니다(${e?.message || e}). 주소와 토큰이 입력된 것을 확인했습니다.`
         }
       }
     }
 
     if (kind === 'tts' || kind === 'music') {
-      if (!ep.apiKey?.trim()) return { ok: false, detail: '缺少 API Key' }
-      return { ok: true, detail: '已检查地址与 Key 字段（该类型无统一廉价探测端点）' }
+      if (!ep.apiKey?.trim()) return { ok: false, detail: 'API 키가 없습니다.' }
+      return { ok: true, detail: '주소와 API 키 필드를 확인했습니다. 이 유형에는 공통으로 쓸 수 있는 간단한 연결 확인 엔드포인트가 없습니다.' }
     }
 
-    return { ok: false, detail: `不支持的类型 ${kind}` }
+    return { ok: false, detail: `지원하지 않는 유형 ${kind}` }
   } catch (e: any) {
     return { ok: false, detail: e?.message || String(e) }
   }
