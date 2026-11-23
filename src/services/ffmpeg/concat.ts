@@ -45,7 +45,7 @@ export async function concatVideos(
 
   const active = segments.filter((s) => s.enabled !== false && s.duration > 0)
   if (active.length === 0) {
-    throw new Error('没有可拼接的片段')
+    throw new Error('이어 붙일 클립이 없습니다.')
   }
 
   // 1) 每个片段转成统一规格
