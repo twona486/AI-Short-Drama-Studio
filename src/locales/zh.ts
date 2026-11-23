@@ -2303,5 +2303,32 @@ export default {
     "pollResult": "· 提交后轮询 /api/workflow/result 取图",
     "secondsMaximum": "秒 · 最多",
     "textToImage": "文生图"
+  },
+  "ffmpegExport": {
+    "prepare": "准备素材...",
+    "joinClips": "拼接片段...",
+    "noCaptions": "没有字幕文本，已跳过烧录",
+    "addMusic": "铺整片背景音乐...",
+    "mixMusic": "混合 BGM",
+    "convertMp4": "转 MP4",
+    "mux": "封装视频",
+    "overlayCaptions": "把字幕叠到视频上...",
+    "burnCaptions": "烧录字幕",
+    "imageToVideo": "图片转视频",
+    "silentTranscode": "视频转码（静音）",
+    "join": "拼接",
+    "ambientTranscode": "视频转码（保留原声）",
+    "transition": "转场",
+    "mixNarration": "叠口播",
+    "webmFallback": "WebM/VP9 不可用，改为 MP4 并保留音轨",
+    "emptyPng": "字幕 PNG 为空，跳过 overlay",
+    "missingCaptionText": "已勾选烧录字幕，但没有任何字幕文本（分镜口播/SRT 为空）",
+    "convertAmbient": "[{current}/{total}] 转换片段（保留环境音）...",
+    "convertWithoutMusic": "[{current}/{total}] 转换片段（去掉原片配乐）...",
+    "addNarration": "[{current}/{total}] 叠口播人声...",
+    "burnCount": "烧录 {count} 条字幕...",
+    "finalFormat": "转最终格式 {format}...",
+    "convertFormat": "转 {format}",
+    "drawCaptions": "绘制字幕 {current}/{total}..."
   }
 }

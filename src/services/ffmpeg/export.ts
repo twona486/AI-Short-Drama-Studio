@@ -9,6 +9,7 @@
  * - 每个阶段有详细 log 和明确错误信息
  */
 
+import { t } from "@/i18n"
 import { getFFmpeg, writeFile, readFile, toBlob, clearFS } from './client'
 import { renderCaptionPng, type SubtitleCue } from './subtitle'
 import type { CaptionStyle, TimelineClip, TransitionType } from '@/types'
@@ -82,8 +83,8 @@ export async function exportVideo(input: ExportInput): Promise<Blob> {
 
   try {
     await clearFS(ffmpeg)
-    log(`开始导出: ${format.toUpperCase()} ${width}×${height}@${input.fps}fps`)
-    input.onProgress?.('准备素材...')
+    log(`Export started: ${format.toUpperCase()} ${width}×${height}@${input.fps}fps`)
+    input.onProgress?.(t('ffmpegExport.prepare'))
 
     const enabled = input.timeline.filter((c) => c.enabled)
     const totalDur = enabled.reduce((s, c) => s + Math.max(0.1, c.duration), 0)
@@ -97,7 +98,7 @@ export async function exportVideo(input: ExportInput): Promise<Blob> {
       const clip = enabled[i]
       const media = input.mediaMap.get(clip.shotId)
       if (!media) {
-        console.warn(`[export] clip ${clip.id} 没有媒体，跳过`)
+        console.warn(`[export] clip ${clip.id} has no media; skipping`)
         continue
       }
 
@@ -106,7 +107,7 @@ export async function exportVideo(input: ExportInput): Promise<Blob> {
       let outName = `clip_${i}.mp4`
       await writeFile(ffmpeg, inName, media.blob)
       log(
-        `[${i}] 写入 ${inName} (${(media.blob.size / 1024 / 1024).toFixed(2)} MB, ${media.blob.type || media.kind})`
+        `[${i}] Writing ${inName} (${(media.blob.size / 1024 / 1024).toFixed(2)} MB, ${media.blob.type || media.kind})`
       )
 
       const duration = Math.max(0.1, clip.duration)
@@ -122,8 +123,8 @@ export async function exportVideo(input: ExportInput): Promise<Blob> {
 
       input.onProgress?.(
         keepAmbient
-          ? `[${i + 1}/${enabled.length}] 转换片段（保留环境音）...`
-          : `[${i + 1}/${enabled.length}] 转换片段（去掉原片配乐）...`
+          ? t('ffmpegExport.convertAmbient', { current: i + 1, total: enabled.length })
+          : t('ffmpegExport.convertWithoutMusic', { current: i + 1, total: enabled.length })
       )
       await transcodeClip(ffmpeg, {
         kind: media.kind,
@@ -137,7 +138,7 @@ export async function exportVideo(input: ExportInput): Promise<Blob> {
         volume: ambientVol,
         keepAmbient
       })
-      log(`[${i}] ✓ 转码完成 → ${outName}${keepAmbient ? '（含环境音）' : ''}`)
+      log(`[${i}] ✓ Transcoded → ${outName}${keepAmbient ? ' (with ambient audio)' : ''}`)
 
       try {
         await ffmpeg.deleteFile(inName)
@@ -147,7 +148,7 @@ export async function exportVideo(input: ExportInput): Promise<Blob> {
 
       const voBlob = input.voiceoverAudioMap?.get(clip.shotId)
       if (voBlob && voBlob.size > 200) {
-        input.onProgress?.(`[${i + 1}/${enabled.length}] 叠口播人声...`)
+        input.onProgress?.(t('ffmpegExport.addNarration', { current: i + 1, total: enabled.length }))
         const mixedName = `clip_${i}_vo.mp4`
         try {
           await mixVoiceover(
@@ -166,9 +167,9 @@ export async function exportVideo(input: ExportInput): Promise<Blob> {
             /* ignore */
           }
           outName = mixedName
-          log(`[${i}] ✓ 已叠口播${keepAmbient ? '（保留环境音）' : ''}`)
+          log(`[${i}] ✓ Mixed narration${keepAmbient ? ' (with ambient audio)' : ''}`)
         } catch (e) {
-          log(`[${i}] 叠口播失败，保留原片段音频：${errorMessage(e)}`)
+          log(`[${i}] Narration mix failed; keeping source audio: ${errorMessage(e)}`)
         }
       }
 
@@ -206,13 +207,13 @@ export async function exportVideo(input: ExportInput): Promise<Blob> {
       throw new Error('타임라인에 내보낼 자료가 없습니다.')
     }
 
-    log(`✓ 准备 concat list:\n${concatLines.join('\n')}`)
+    log(`✓ Prepared concat list:\n${concatLines.join('\n')}`)
     await writeFile(ffmpeg, 'list.txt', concatLines.join('\n'))
 
     const concatName = 'concated.mp4'
-    input.onProgress?.('拼接片段...')
+    input.onProgress?.(t('ffmpegExport.joinClips'))
     await concatClips(ffmpeg, concatName)
-    log(`✓ concat 完成 → ${concatName}`)
+    log(`✓ Concatenated → ${concatName}`)
 
     let finalName = concatName
     const captionCues: Array<SubtitleCue & { style?: Partial<CaptionStyle> }> = (
@@ -221,7 +222,7 @@ export async function exportVideo(input: ExportInput): Promise<Blob> {
         : cues
     ).filter((c) => c.text.trim())
     if (input.burnCaptions && captionCues.length > 0) {
-      input.onProgress?.(`烧录 ${captionCues.length} 条字幕...`)
+      input.onProgress?.(t('ffmpegExport.burnCount', { count: captionCues.length }))
       finalName = await burnCaptionsOverlay(
         ffmpeg,
         concatName,
@@ -237,17 +238,17 @@ export async function exportVideo(input: ExportInput): Promise<Blob> {
         },
         input.onProgress
       )
-      log(`✓ 字幕烧录完成（${captionCues.length} 条）`)
+      log(`✓ Burned ${captionCues.length} subtitle cues`)
     } else if (input.burnCaptions) {
-      log('已勾选烧录字幕，但没有任何字幕文本（分镜口播/SRT 为空）')
-      input.onProgress?.('没有字幕文本，已跳过烧录')
+      log(t('ffmpegExport.missingCaptionText'))
+      input.onProgress?.(t('ffmpegExport.noCaptions'))
     }
 
     if (input.bgm) {
       const bgmName = 'bgm.' + guessExt(input.bgm.type, 'audio')
       await writeFile(ffmpeg, bgmName, input.bgm)
       const withBGM = 'with_bgm.mp4'
-      input.onProgress?.('铺整片背景音乐...')
+      input.onProgress?.(t('ffmpegExport.addMusic'))
       const speechVol = 1
       const bgmVol = input.bgmVolume ?? 0.22
       const bgmStart = Math.max(0, input.bgmStartTime || 0)
@@ -285,14 +286,14 @@ export async function exportVideo(input: ExportInput): Promise<Blob> {
           '-y',
           withBGM
         ],
-        '混合 BGM'
+        t('ffmpegExport.mixMusic')
       )
       finalName = withBGM
     }
 
     const outName = `final.${format}`
     if (finalName !== outName) {
-      input.onProgress?.(`转最终格式 ${format}...`)
+      input.onProgress?.(t('ffmpegExport.finalFormat', { format: format }))
       if (format === 'webm') {
         try {
           await safeExec(
@@ -309,29 +310,29 @@ export async function exportVideo(input: ExportInput): Promise<Blob> {
               '-y',
               outName
             ],
-            `转 ${format}`
+            t('ffmpegExport.convertFormat', { format: format })
           )
         } catch {
-          log('WebM/VP9 不可用，改为 MP4 并保留音轨')
+          log(t('ffmpegExport.webmFallback'))
           await safeExec(
             ffmpeg,
             ['-i', finalName, '-c', 'copy', '-y', 'final.mp4'],
-            '转 MP4'
+            t('ffmpegExport.convertMp4')
           )
           const data = await readFile(ffmpeg, 'final.mp4')
           return toBlob(data, 'video/mp4')
         }
       } else {
-        await safeExec(ffmpeg, ['-i', finalName, '-c', 'copy', '-y', outName], '封装视频')
+        await safeExec(ffmpeg, ['-i', finalName, '-c', 'copy', '-y', outName], t('ffmpegExport.mux'))
       }
     }
 
     const data = await readFile(ffmpeg, outName)
     const blob = toBlob(data, mimeType)
-    log(`✓ 导出完成: ${(blob.size / 1024 / 1024).toFixed(2)} MB`)
+    log(`✓ Exported: ${(blob.size / 1024 / 1024).toFixed(2)} MB`)
     return blob
   } catch (e) {
-    const ctx = `\n\n[最近 FFmpeg 日志]\n${recentLog.slice(-20).join('\n') || '(无)'}`
+    const ctx = `\n\n[Recent FFmpeg log]\n${recentLog.slice(-20).join('\n') || '(none)'}`
     throw wrapError(e, ctx)
   } finally {
     ffmpeg.off('log', logHandler)
@@ -364,7 +365,7 @@ async function burnCaptionsOverlay(
   for (let i = 0; i < cues.length; i++) {
     const text = cues[i].text.trim()
     if (!text) continue
-    onProgress?.(`绘制字幕 ${layers.length + 1}/${cues.length}...`)
+    onProgress?.(t('ffmpegExport.drawCaptions', { current: layers.length + 1, total: cues.length }))
     const cueStyle = { ...style, ...(cues[i].style || {}) }
     const png = await renderCaptionPng(text, cueStyle, width, height, captionBg, highlight)
     if (!png.size) continue
@@ -374,7 +375,7 @@ async function burnCaptionsOverlay(
   }
 
   if (layers.length === 0) {
-    log('字幕 PNG 为空，跳过 overlay')
+    log(t('ffmpegExport.emptyPng'))
     return videoName
   }
 
@@ -389,7 +390,7 @@ async function burnCaptionsOverlay(
   })
   filters.push(`[vcap]format=yuv420p[vout]`)
 
-  onProgress?.('把字幕叠到视频上...')
+  onProgress?.(t('ffmpegExport.overlayCaptions'))
   const overlayBase = [
     '-i',
     videoName,
@@ -414,7 +415,7 @@ async function burnCaptionsOverlay(
     await safeExec(
       ffmpeg,
       [...overlayBase, '-c:a', 'aac', '-ar', '44100', '-ac', '2', '-y', outName],
-      '烧录字幕'
+      t('ffmpegExport.burnCaptions')
     )
   }
   return outName
@@ -546,7 +547,7 @@ async function transcodeClip(
         '1:a:0',
         ...encodeArgs(outName, true)
       ],
-      '图片转视频'
+      t('ffmpegExport.imageToVideo')
     )
     return
   }
@@ -555,24 +556,24 @@ async function transcodeClip(
   // 音轨不能 -c copy：按时长裁切 AAC 会切到帧中间，拼起来几秒后就是电流声。
   if (opts.speed === 1 && (keepAmbient || volume > 0.01)) {
     if (await remuxNormalizeAudio(ffmpeg, inName, outName, duration, sourceIn, volume)) {
-      log('  画面直通，音轨已重采样为 AAC 44100 立体声')
+      log('  Copied video and resampled audio to AAC 44100 Hz stereo')
       return
     }
-    log('  直通失败，改为单次转码并保留原声')
+    log('  Stream copy failed; transcoding once with source audio')
     try {
       await encodeKeepAudio(ffmpeg, inName, outName, duration, sourceIn, videoFilter, volume)
       return
     } catch (e) {
       if (!isOom(e)) throw e
-      log(`  转码内存不足，再试直通：${errorMessage(e)}`)
+      log(`  Transcoding ran out of memory; retrying stream copy: ${errorMessage(e)}`)
       if (await remuxNormalizeAudio(ffmpeg, inName, outName, duration, sourceIn, volume)) return
       throw e
     }
   }
 
-  log(`  使用静音轨（已关闭保留环境音）`)
+  log(`  Using a silent track (ambient audio is disabled)`)
   if (opts.speed === 1 && (await remuxVideoWithSilence(ffmpeg, inName, outName, duration, sourceIn))) {
-    log('  画面直通 + 静音音轨，未重编码画面')
+    log('  Copied video and added a silent audio track')
     return
   }
   await safeExec(
@@ -595,7 +596,7 @@ async function transcodeClip(
       '1:a:0',
       ...encodeArgs(outName, true)
     ],
-    '视频转码（静音）'
+    t('ffmpegExport.silentTranscode')
   )
 }
 
@@ -681,14 +682,14 @@ async function concatClips(
     concatName
   ])
   if (copyCode === 0) {
-    log('  拼接：画面直通，音轨统一重编码')
+    log('  Concatenating with video stream copy and uniform audio encoding')
     return
   }
-  log('  拼接直通失败，改为整段重编码')
+  log('  Concat stream copy failed; re-encoding the full sequence')
   await safeExec(
     ffmpeg,
     ['-f', 'concat', '-safe', '0', '-i', 'list.txt', ...encodeArgs(concatName, true)],
-    '拼接'
+    t('ffmpegExport.join')
   )
 }
 
@@ -759,7 +760,7 @@ async function encodeKeepAudio(
       '0:a:0',
       ...encodeArgs(outName, true)
     ],
-    '视频转码（保留原声）'
+    t('ffmpegExport.ambientTranscode')
   )
 }
 
@@ -827,10 +828,10 @@ async function applyTransition(
         '-y',
         output
       ],
-      '转场'
+      t('ffmpegExport.transition')
     )
   } else {
-    await safeExec(ffmpeg, ['-i', input, '-c', 'copy', '-y', output], '转场')
+    await safeExec(ffmpeg, ['-i', input, '-c', 'copy', '-y', output], t('ffmpegExport.transition'))
   }
 }
 
@@ -891,7 +892,7 @@ async function mixVoiceover(
       '-y',
       outName
     ],
-    '叠口播'
+    t('ffmpegExport.mixNarration')
   )
 }
 

@@ -2303,5 +2303,32 @@ export default {
     "pollResult": "· 요청 후 /api/workflow/result를 조회해 이미지 가져오기",
     "secondsMaximum": "초 · 최대",
     "textToImage": "텍스트→이미지"
+  },
+  "ffmpegExport": {
+    "prepare": "소재를 준비하고 있어요…",
+    "joinClips": "클립을 이어 붙이고 있어요…",
+    "noCaptions": "자막 텍스트가 없어 영상에 자막을 합성하지 않았어요.",
+    "addMusic": "영상 전체에 배경음악을 추가하고 있어요…",
+    "mixMusic": "배경음악 믹싱",
+    "convertMp4": "MP4 변환",
+    "mux": "영상 컨테이너 변환",
+    "overlayCaptions": "영상에 자막을 합성하고 있어요…",
+    "burnCaptions": "자막 합성",
+    "imageToVideo": "이미지→영상 변환",
+    "silentTranscode": "영상 변환(무음)",
+    "join": "클립 이어 붙이기",
+    "ambientTranscode": "영상 변환(원본 소리 유지)",
+    "transition": "장면 전환",
+    "mixNarration": "내레이션 합성",
+    "webmFallback": "WebM/VP9를 사용할 수 없어 오디오를 유지한 채 MP4로 변환해요.",
+    "emptyPng": "자막 PNG가 비어 있어 합성을 건너뛰었어요.",
+    "missingCaptionText": "자막 합성을 선택했지만 자막 텍스트가 없어요(스토리보드 내레이션과 SRT 확인).",
+    "convertAmbient": "[{current}/{total}] 클립을 변환하고 있어요(환경음 유지)…",
+    "convertWithoutMusic": "[{current}/{total}] 클립을 변환하고 있어요(원본 배경음악 제거)…",
+    "addNarration": "[{current}/{total}] 내레이션을 합성하고 있어요…",
+    "burnCount": "자막 {count}개를 합성하고 있어요…",
+    "finalFormat": "최종 형식 {format}(으)로 변환하고 있어요…",
+    "convertFormat": "{format} 변환",
+    "drawCaptions": "자막을 그리고 있어요({current}/{total})…"
   }
 }
