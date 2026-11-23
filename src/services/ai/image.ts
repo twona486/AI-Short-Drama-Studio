@@ -1,12 +1,12 @@
 /**
- * AI 图片生成（OpenAI 兼容 Images API）
+ * OpenAI 호환 Images API를 이용한 AI 이미지 생성
  *
- * 统一：
+ * 이미지 생성 및 편집 요청 형식
  *   POST /images/generations
- *   - 文生图：不传 image
- *   - 单图/多图编辑：传 image[]（URL 或 data:image/...;base64,...）+ sequential_image_generation:"disabled"
+ *   텍스트→이미지에서는 image를 생략한다.
+ *   이미지 편집에서는 URL 또는 데이터 URL을 image 배열에 넣고 sequential_image_generation을 disabled로 설정한다.
  *
- * 响应优先 b64_json（纯 base64，无 data: 前缀），兼容 url
+ * 응답은 접두사 없는 b64_json을 우선하며 URL도 지원한다.
  */
 
 import { getAIMode } from './client'
@@ -32,16 +32,16 @@ export interface ImageGenInput {
   style: VisualStyle
   width: number
   height: number
-  /** 比例标签（'16:9' / '9:16' 等），写到 prompt 最前面 */
+  /** 프롬프트 앞에 16:9나 9:16 같은 화면 비율 태그를 붙인다. */
   aspectRatio?: AspectRatio
   n?: number
-  /** 参考图（图生图/多图融合），最多 10 张；本项目通常 1–3 张人设/场景 */
+  /** 이미지 편집 및 합성에 참조를 최대 10장 제공한다. 일반적으로 캐릭터와 장면 이미지 1~3장을 쓴다. */
   referenceImages?: Blob[]
-  /** 每张参考图的语义（会写进 prompt，告诉模型第几张是什么） */
+  /** 참조마다 프롬프트에 넣을 역할 설명 */
   referenceLabels?: string[]
-  /** 覆盖设置页作图模型，例如视频复刻用 gpt-image-1 */
+  /** 설정의 이미지 모델을 재정의한다. 예를 들어 영상 재현은 gpt-image-1을 사용한다. */
   model?: string
-  /** 文档列出的出图档位：1k / 2k / 4k */
+  /** 서비스가 허용하는 1k, 2k, 4k 출력 옵션 */
   resolution?: string
   signal?: AbortSignal
 }
@@ -127,7 +127,7 @@ function withGptImageQuality(prompt: string, model: string): string {
   return `${base} ${GPT_IMAGE_QUALITY_SUFFIX}`
 }
 
-/** 把图片 API 响应统一转成 Blob（优先 b64_json） */
+/** 이미지 API 응답을 Blob으로 변환한다. b64_json을 우선 사용한다. */
 async function imageResponseToBlob(
   data: any,
   apiKey?: string,
@@ -138,13 +138,13 @@ async function imageResponseToBlob(
     throw new Error('이미지 API 응답에 data[0]이 없습니다.')
   }
 
-  // 情况 1：b64_json（Seedream / 兼容接口常用）
+  // Seedream과 호환 공급자의 b64_json 응답을 처리한다.
   if (item.b64_json) {
     const raw = String(item.b64_json).replace(/\s/g, '')
     const bytes = atob(raw)
     const arr = new Uint8Array(bytes.length)
     for (let i = 0; i < bytes.length; i++) arr[i] = bytes.charCodeAt(i)
-    // 4.5/4.0 仅 jpeg；5.0 可能 png。按魔数判断更稳
+    // 4.5와 4.0은 JPEG를 반환하지만 5.0은 PNG도 가능하므로 파일 서명을 검사한다.
     const mime =
       arr[0] === 0x89 && arr[1] === 0x50
         ? 'image/png'
@@ -154,7 +154,7 @@ async function imageResponseToBlob(
     return { blob: new Blob([arr], { type: mime }), mimeType: mime }
   }
 
-  // 情况 2：url
+  // URL 응답을 처리한다.
   if (item.url) {
     const r = await fetch(item.url, {
       headers: apiKey ? { Authorization: `Bearer ${apiKey}` } : undefined,
@@ -165,7 +165,7 @@ async function imageResponseToBlob(
     return { blob, mimeType: blob.type || 'image/jpeg' }
   }
 
-  // 情况 3：外层 b64_json
+  // 최상위 b64_json 응답을 처리한다.
   if (data.b64_json) {
     const bytes = atob(String(data.b64_json).replace(/\s/g, ''))
     const arr = new Uint8Array(bytes.length)
@@ -179,9 +179,9 @@ async function imageResponseToBlob(
 }
 
 /**
- * Seedream size：预设档位或精确 WxH
- * seedream-4.5 实测精确像素下限约 3686400（≈1920²），低于此会 400。
- * 总像素还需 ≤ 4096×4096，宽高比 ∈ [1/16, 16]
+ * Seedream 크기는 프리셋 또는 정확한 너비와 높이로 지정한다.
+ * seedream-4.5에서 정확한 크기의 최소값은 약 3,686,400픽셀이다.
+ * 전체 픽셀 수는 최대 4096×4096이며 화면 비율은 1:16에서 16:1 사이다.
  */
 const SEEDREAM_MIN_PIXELS = 3_686_400
 const SEEDREAM_MAX_PIXELS = 4096 * 4096
@@ -215,7 +215,7 @@ function scaleToPixelBudget(
 }
 
 function pickSeedreamSize(ar?: AspectRatio, w?: number, h?: number): string {
-  // 有项目宽高：按比例抬到 Seedream 下限像素
+  // 프로젝트 크기를 유지하면서 최소 픽셀 수에 맞게 확대한다.
   if (w && h && w > 0 && h > 0) {
     const { width, height } = scaleToPixelBudget(
       w,
@@ -227,7 +227,7 @@ function pickSeedreamSize(ar?: AspectRatio, w?: number, h?: number): string {
     if (ratio >= 1 / 16 && ratio <= 16) return `${width}x${height}`
   }
 
-  // 按比例给一组已满足下限的常用尺寸
+  // 화면 비율과 최소 픽셀 수를 만족하는 일반 크기를 사용한다.
   switch (ar) {
     case '16:9':
       return '2560x1440'
@@ -244,7 +244,7 @@ function pickSeedreamSize(ar?: AspectRatio, w?: number, h?: number): string {
   }
 }
 
-/** 旧 OpenAI / gpt-image size（兜底） */
+/** 이전 OpenAI 호환 및 gpt-image 크기의 대체값 */
 function pickLegacySize(ar?: AspectRatio, w?: number, h?: number): string {
   if (ar === '16:9') return '1792x1024'
   if (ar === '9:16') return '1024x1792'
@@ -268,7 +268,7 @@ function blobToDataUri(blob: Blob): Promise<string> {
   })
 }
 
-/** 把较大参考图压成 JPEG data URI，减小请求体 */
+/** 큰 참조를 JPEG 데이터 URI로 압축해 요청 크기를 줄인다. */
 async function blobToChatImageDataUri(
   blob: Blob,
   maxEdge = 1536,
@@ -300,7 +300,7 @@ function buildPrompt(input: ImageGenInput, _withRefs: boolean): string {
   return withGptImageQuality(input.prompt, model)
 }
 
-/** Seedream：统一走 /images/generations，优先返回 b64_json */
+/** Seedream은 /images/generations를 호출하고 b64_json을 우선 요청한다. */
 async function realSeedream(input: ImageGenInput): Promise<ImageGenOutput> {
   const { baseUrl, apiKey, model } = imageConfig(input.model)
   if (!baseUrl || !apiKey) {
@@ -352,7 +352,7 @@ async function realSeedream(input: ImageGenInput): Promise<ImageGenOutput> {
   return { blob, mimeType, prompt: input.prompt }
 }
 
-/** 旧 gpt-image 等：文生图 */
+/** 이전 gpt-image 텍스트→이미지 경로 */
 async function realLegacyGenerate(input: ImageGenInput): Promise<ImageGenOutput> {
   const { baseUrl, apiKey, model } = imageConfig(input.model)
   if (!baseUrl || !apiKey) {
@@ -385,7 +385,7 @@ async function realLegacyGenerate(input: ImageGenInput): Promise<ImageGenOutput>
   return { blob, mimeType, prompt: input.prompt }
 }
 
-/** 旧 gpt-image：/images/edits multipart */
+/** 이전 gpt-image 편집의 멀티파트 경로 */
 async function realLegacyEdit(input: ImageGenInput): Promise<ImageGenOutput> {
   const { baseUrl, apiKey, model } = imageConfig(input.model)
   if (!baseUrl || !apiKey) {
@@ -429,7 +429,7 @@ async function realLegacyEdit(input: ImageGenInput): Promise<ImageGenOutput> {
   return { blob, mimeType, prompt: input.prompt }
 }
 
-/** Zealman 镜像文生图：POST {base}/api/workflow/generate，轮询 /api/workflow/result。地址完全以用户配置为准。 */
+/** Zealman 이미지 요청은 설정된 주소의 /api/workflow/generate로 제출하고 /api/workflow/result로 조회한다. */
 async function realZealmanImage(
   input: ImageGenInput,
   onProgress?: (msg: string) => void
@@ -464,7 +464,7 @@ async function realZealmanImage(
     )
   let response = await postSubmit(submitUrl)
   let text = await response.text()
-  // 部分 Zealman/Nginx 部署对结尾斜杠采用严格路由；405 时换一种形式重试一次。
+  // 일부 Zealman 및 Nginx 환경은 끝 슬래시를 구분해 405이면 다른 형식으로 한 번 재시도한다.
   if (response.status === 405) {
     response = await postSubmit(`${submitUrl}/`)
     text = await response.text()
@@ -589,7 +589,7 @@ export async function generateImage(
   return { blob, mimeType: 'image/png', prompt: input.prompt }
 }
 
-/** mock 模式：把参考图拼到一起 + 加滤镜 */
+/** 데모에서는 참조 이미지를 합치고 필터를 적용한다. */
 async function generateMockWithReferences(
   input: ImageGenInput
 ): Promise<ImageGenOutput> {
