@@ -119,9 +119,9 @@ function shouldRetryHttp(status: number): boolean {
 function llmHttpError(status: number, detail: string, baseUrl: string, provider?: string): Error {
   let host = baseUrl
   try { host = new URL(baseUrl).host } catch { /* keep configured URL */ }
-  const source = provider === 'vision' ? '视觉模型' : '语言模型'
+  const source = provider === 'vision' ? '비전 모델' : '언어 모델'
   if (status === 401) {
-    return new Error(`[${source}] 401 鉴权失败（${host}）：当前 API Key 无效、已过期，或不属于这个接口地址。${detail ? `\n${detail}` : ''}`)
+    return new Error(`[${source}] 인증에 실패했어요(401, ${host}). API 키가 유효하거나 만료되지 않았는지, 이 주소에서 발급한 키인지 확인해 주세요.${detail ? `\n${detail}` : ''}`)
   }
   return new Error(`[LLM] ${status} ${detail}`)
 }
@@ -129,17 +129,17 @@ function llmHttpError(status: number, detail: string, baseUrl: string, provider?
 function friendlyNetworkError(e: unknown): Error {
   const msg = e instanceof Error ? e.message : String(e ?? '')
   if (/连不上语言模型/.test(msg)) return e instanceof Error ? e : new Error(msg)
-  return new Error('连不上语言模型（网络中断或被页面拦截）。请检查网络后点右侧重试。')
+  return new Error('언어 모델에 연결하지 못했어요. 네트워크와 브라우저 설정을 확인한 뒤 다시 시도해 주세요.')
 }
 
 async function withAbort<T>(promise: Promise<T>, signal: AbortSignal): Promise<T> {
-  if (signal.aborted) throw new DOMException('任务已取消', 'AbortError')
+  if (signal.aborted) throw new DOMException('작업을 취소했어요.', 'AbortError')
   let onAbort: (() => void) | undefined
   try {
     return await Promise.race([
       promise,
       new Promise<never>((_, reject) => {
-        onAbort = () => reject(new DOMException('任务已取消', 'AbortError'))
+        onAbort = () => reject(new DOMException('작업을 취소했어요.', 'AbortError'))
         signal.addEventListener('abort', onAbort, { once: true })
       })
     ])
@@ -262,7 +262,7 @@ export async function callLLM(req: LLMRequest): Promise<LLMResponse> {
       }
       await abortableDelay(700 * (attempt + 1), signal)
     }
-    throw last instanceof Error ? last : new Error(String(last ?? '语言模型请求失败'))
+    throw last instanceof Error ? last : new Error(String(last ?? '언어 모델 요청에 실패했어요.'))
   }
 
   try {
@@ -283,7 +283,7 @@ export async function callLLM(req: LLMRequest): Promise<LLMResponse> {
       /Unexpected item type in content|does not support.*image|image.*not supported/i.test(errText)
     ) {
       throw new Error(
-        `当前视觉模型不支持看图。请到设置页把「视觉理解」换成能看图的模型。`
+        `현재 비전 모델은 이미지 입력을 지원하지 않아요. 설정에서 이미지 입력을 지원하는 모델을 선택해 주세요.`
       )
     }
     if (!ok && body.thinking && /thinking|unknown|unexpected|extra|invalid/i.test(errText)) {
@@ -316,7 +316,7 @@ export async function callLLM(req: LLMRequest): Promise<LLMResponse> {
             {
               role: 'user',
               content:
-                '上一次只写了思考过程，没有 JSON。现在从第一个字符开始只输出一个 JSON 对象，禁止解释、禁止思考过程。必须以 { 开头、以 } 结尾。'
+                'The previous response contained reasoning without JSON. Return only one JSON object with no explanation or reasoning. Start with { and end with }.'
             }
           ]
         }
