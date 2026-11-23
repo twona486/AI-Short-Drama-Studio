@@ -89,16 +89,17 @@ const CAMERA_EN: Record<NonNullable<Shot['cameraMovement']>, string> = {
 export function detectDialogueLanguage(text: string): string {
   const value = text.trim()
   if (/[぀-ヿ]/.test(value)) return 'Japanese'
-  if (/[가-힯]/.test(value)) return 'Korean'
+  if (/[가-힣]/.test(value)) return 'Korean'
   if (/[㐀-鿿]/.test(value)) return 'Chinese'
   return 'English'
 }
 
-/** 台词/旁白只允许进这个标签；中文原词固定 [Chinese]。 */
+/** Keep Korean dialogue in its own language tag and preserve the existing Chinese format. */
 export function h3SpokenTag(spoken: string): string {
   const line = sanitizeDialogue(spoken)
   if (!line) return ''
-  return `<d>[Chinese] ${line}</d>`
+  const language = detectDialogueLanguage(line) === 'Korean' ? 'Korean' : 'Chinese'
+  return `<d>[${language}] ${line}</d>`
 }
 
 export function isOfficialH3Prompt(text: string): boolean {
@@ -210,6 +211,7 @@ function looksLikeSpokenDialogue(text: string): boolean {
   if (/图\s*\d+|Camera language|Performance direction|时长|画风|场记|integrated_multimodal|Reference pictures/i.test(line)) {
     return false
   }
+  if (detectDialogueLanguage(line) === 'Korean') return true
   if (line.length <= 4 && !/[。！？!?，、]/.test(line)) return false
   return /[\u3400-\u9fff]/.test(line)
 }
@@ -234,6 +236,7 @@ export function sanitizeDTagContents(text: string): string {
       const line = sanitizeDialogue(inner)
       if (!line) return ''
       const meta = String(bracket || '').trim()
+      if (detectDialogueLanguage(line) === 'Korean') return `<d>[Korean] ${line}</d>`
       if (/^\[Chinese\b/i.test(meta) && /,/.test(meta)) return `<d>${meta} ${line}</d>`
       return `<d>[Chinese] ${line}</d>`
     })
@@ -1348,7 +1351,7 @@ function dialogueCuesForPrompt(input: H3PromptInput): DialogueCue[] {
   const raw = `${input.voiceover || ''}\n${input.prompt || ''}`
   return wanted.map((text) => {
     const escaped = escapeRegExp(text)
-    const name = `(?:「([^」]{1,24})」|([\\u3400-\\u9fffA-Za-z][\\u3400-\\u9fffA-Za-z0-9 _-]{0,12})(?:[（(][^）)\\n]{0,16}[）)])?)`
+    const name = `(?:「([^」]{1,24})」|([\\u3400-\\u9fff가-힣A-Za-z][\\u3400-\\u9fff가-힣A-Za-z0-9 _-]{0,12})(?:[（(][^）)\\n]{0,16}[）)])?)`
     const tagged = raw.match(
       new RegExp(`${name}\\s*(?:说|说道|问|喊|叫|答|says?y?|asks?|shouts?|replies?)?\\s*[：:]?\\s*(?:<d>\\s*\\[[^\\]]*\\]\\s*)?${escaped}`, 'i')
     )
@@ -1395,11 +1398,11 @@ export function validateH3Prompt(prompt: string, expectedDialogue?: string): H3P
   const issues: string[] = []
   const hasI2va = /integrated_multimodal_description\s*:/i.test(prompt)
   const hasR2va = /subject_definitions\s*:/i.test(prompt) && /detailed_description\s*:/i.test(prompt)
-  if (!hasI2va && !hasR2va) issues.push('缺少 detailed_description 或 integrated_multimodal_description')
+  if (!hasI2va && !hasR2va) issues.push('detailed_description 또는 integrated_multimodal_description이 없습니다.')
   if (hasR2va) {
-    if (!/summary\s*:/i.test(prompt)) issues.push('Ref2VA 缺少 summary')
-    if (!/retention_analysis\s*:/i.test(prompt)) issues.push('Ref2VA 缺少 retention_analysis')
-    if (!/\[reference generation\]/i.test(prompt)) issues.push('summary 必须以 [reference generation] 开头')
+    if (!/summary\s*:/i.test(prompt)) issues.push('Ref2VA에 summary가 없습니다.')
+    if (!/retention_analysis\s*:/i.test(prompt)) issues.push('Ref2VA에 retention_analysis가 없습니다.')
+    if (!/\[reference generation\]/i.test(prompt)) issues.push('summary는 [reference generation]으로 시작해야 합니다.')
   }
   if (
     hasI2va &&
@@ -1410,51 +1413,53 @@ export function validateH3Prompt(prompt: string, expectedDialogue?: string): H3P
     !/Identity reference only, not the first frame/i.test(prompt) &&
     !/图\s*1\s*[/：:=是]/i.test(prompt)
   ) {
-    issues.push('I2VA 缺少首帧对齐句：For the target video, at 0.00 seconds into the target video, <Picture 1> (from [Shot 1]) is fully referenced.')
+    issues.push('I2VA에 시작 프레임 정렬 문장이 없습니다. For the target video, at 0.00 seconds into the target video, <Picture 1> (from [Shot 1]) is fully referenced.')
   }
-  if (!/overall_soundscape\s*:/i.test(prompt)) issues.push('缺少 overall_soundscape')
-  if (!/non_diegetic_music\s*:/i.test(prompt)) issues.push('缺少 non_diegetic_music')
+  if (!/overall_soundscape\s*:/i.test(prompt)) issues.push('overall_soundscape가 없습니다.')
+  if (!/non_diegetic_music\s*:/i.test(prompt)) issues.push('non_diegetic_music이 없습니다.')
   if (isLifelessH3Prompt(prompt)) {
-    issues.push('镜头稿仍是机械时间槽或存在静态/运镜冲突，缺少由剧情动作驱动的镜头语言')
+    issues.push('샷이 기계적으로 등분됐거나 카메라 고정과 움직임이 충돌합니다. 이야기 속 동작에 맞게 샷을 구성하세요.')
   }
-  if (!/\[Shot\s*1\]/i.test(prompt)) issues.push('正文必须以 [Shot 1] 开镜，且第一镜不加时间戳')
+  if (!/\[Shot\s*1\]/i.test(prompt)) issues.push('본문은 [Shot 1]로 시작하고 첫 샷에는 타임스탬프를 넣지 마세요.')
   if (/\[Shot\s*1\][^\n]*At\s+\d{2}:\d{2}/i.test(prompt)) {
-    issues.push('[Shot 1] 不得加时间戳；后续镜才写 [Shot 2] At 00:03.000')
+    issues.push('[Shot 1]에는 타임스탬프를 넣지 마세요. 이후 샷부터 [Shot 2] At 00:03.000 형식을 사용하세요.')
   }
   if (/from\s+\d+(?:\.\d+)?s?\s+to\s+\d+(?:\.\d+)?s/i.test(prompt)) {
-    issues.push('H3 正文不要写 From 0.00s to …；用连续叙事写开幅、动作起幅、发展和收住')
+    issues.push('H3 본문에서 From 0.00s to … 형식을 사용하지 마세요. 첫 화면, 동작의 시작과 전개, 마무리를 이어서 쓰세요.')
   }
   if (/【环境光影】|【画面演进】|【角色声音签名】/.test(prompt)) {
-    issues.push('混入了中文分区，H3 不认这套格式')
+    issues.push('H3가 인식하지 못하는 중국어 섹션이 들어 있습니다.')
   }
-  if (/\bThis shot is\s*\./i.test(prompt)) issues.push('镜头标题形成残句 This shot is.')
-  if (/\bLocation facts\s*:/i.test(prompt)) issues.push('场景资料被重复追加为 Location facts')
+  if (/\bThis shot is\s*\./i.test(prompt)) issues.push('샷 제목이 불완전한 문장인 This shot is.로 남았습니다.')
+  if (/\bLocation facts\s*:/i.test(prompt)) issues.push('장면 정보가 Location facts에 중복으로 추가됐습니다.')
   if (/(?:台词|对白|旁白|口播)\s*[：:]\s*[^：:\n]{0,16}\s*[：:]\s*(?:$|\n|Location facts)/i.test(prompt)) {
-    issues.push('正文残留空台词标签；台词只能出现在 d 标签内')
+    issues.push('본문에 빈 대사 태그가 있습니다. 대사는 d 태그 안에만 넣으세요.')
   }
 
   const expectedLines = spokenCueLines(expectedDialogue || '')
   const expectedJoined = expectedLines.join(' ') || sanitizeDialogue(expectedDialogue || '')
-  const tagged = [...prompt.matchAll(/<d>\s*\[(?:Chinese|English|Japanese|Korean)\]\s*([\s\S]*?)<\/d>/gi)].map((m) =>
-    m[1].replace(/\s+/g, ' ').trim()
-  )
+  const tagged = [...prompt.matchAll(/<d>\s*\[(Chinese|English|Japanese|Korean)(?:,[^\]]*)?\]\s*([\s\S]*?)<\/d>/gi)].map((m) => ({
+    language: m[1].toLowerCase(),
+    line: m[2].replace(/\s+/g, ' ').trim()
+  }))
   if (expectedJoined) {
-    if (!/<d>\s*\[Chinese\]/i.test(prompt) && /[㐀-鿿]/.test(expectedJoined)) {
-      issues.push('中文台词/旁白必须写成 <d>[Chinese] 原词</d>')
-    }
     const wanted = expectedLines.length ? expectedLines : [expectedJoined]
-    if (wanted.some((line) => !tagged.some((t) => t === line))) {
-      issues.push('台词必须写在 <d>[Chinese] 原词</d> 里，且与口播原文一致')
+    const hasIncorrectTag = wanted.some((line) => {
+      const language = detectDialogueLanguage(line) === 'Korean' ? 'korean' : 'chinese'
+      return !tagged.some((tag) => tag.line === line && tag.language === language)
+    })
+    if (hasIncorrectTag) {
+      issues.push('대사는 원문을 그대로 유지하고 대사 언어에 맞는 <d> 태그에 넣으세요.')
     }
-    if (tagged.some((line) => !wanted.some((e) => e === line))) {
-      issues.push('d 标签里出现了不该朗读的内容')
+    if (tagged.some((tag) => !wanted.includes(tag.line))) {
+      issues.push('d 태그에 읽지 않아야 할 내용이 들어 있습니다.')
     }
     const outsideTags = prompt.replace(/<d>\s*\[[^\]]+\]\s*[\s\S]*?<\/d>/gi, '')
     if (wanted.some((line) => line.length >= 4 && outsideTags.includes(line))) {
-      issues.push('台词原文在 d 标签外重复出现')
+      issues.push('대사 원문이 d 태그 밖에서 반복됩니다.')
     }
   } else if (tagged.length) {
-    issues.push('无对白镜头不得出现 <d> 台词标签')
+    issues.push('대사 없는 샷에는 <d> 태그를 넣지 마세요.')
   }
   return { valid: issues.length === 0, issues }
 }
@@ -1611,7 +1616,7 @@ Only one (S#) speaks at a time. Everyone else keeps their lips completely closed
 
 6) 참조 인물마다 장면에 명시된 상태를 따르세요. 살아 있는 인물, 조각상, 초상화, 반사, 그림자, 화면 밖 음성, 숨은 존재, 화면에 없는 인물을 위한 참조 중 무엇인지 구분하세요. 인물 참조가 있다고 해서 그 인물이 살아 있는 몸으로 현장에 있는 것은 아닙니다. 동작에서 변신이 명시되지 않았다면 같은 인물을 사람과 소품으로 중복 등장시키지 마세요.
 
-7) 대사는 <d> 안에만 넣으세요. 신뢰할 수 있는 각 대사를 지정된 (S#)이 자기 구간에서 한 번만 말합니다. 두 사람이 동시에 말하거나 다른 인물이 같은 대사를 반복하지 않게 하세요. 다음 형식을 정확히 사용하세요.
+7) 대사는 <d> 안에만 넣으세요. 신뢰할 수 있는 각 대사를 지정된 (S#)이 자기 구간에서 한 번만 말합니다. 두 사람이 동시에 말하거나 다른 인물이 같은 대사를 반복하지 않게 하세요. 다음 형식을 사용하고, 한국어 대사는 [Korean], 중국어 대사는 [Chinese]로 표시하세요. 대사는 번역하지 마세요.
 (S1) says: <d>[Chinese] 原词</d> Only (S1) speaks in this shot. (S2) keeps their lips completely closed and makes no voice.
 태그에는 실제 발화만 넣으세요. 현장 기록, 타임스탬프, 스타일, 이미지 라벨, 카메라 지시를 <d>에 넣지 마세요. 화자 표시가 없는 <d> 태그를 쓰지 마세요. 듣는 사람은 배치된 위치에서 입을 다뭅니다. 사용자가 시간을 명시했고 대사가 그 안에 들어가면 말이 빠르다는 이유만으로 클립을 나누지 마세요.
 
@@ -1695,7 +1700,7 @@ ${source || '(perform the beat in this location)'}`
 이전 초안은 반복 가능한 타이밍 틀을 사용했거나 카메라 고정 지시를 반복했거나 실제 사건을 보존하지 못해 생동감이 없었습니다.
 움직이는 화면 자체를 쓰세요. 화자 대응 블록과 신뢰할 수 있는 대사 원문을 보존하세요. (S1)은 클립 전체에서 첫 번째 캐릭터 이미지입니다. 원본 자료와 참조 이미지에 있는 대상만 등장시킬 수 있습니다. 인물, 동물, 사건을 추가하지 말고 관용구나 우화를 문자 그대로 구현하지 마세요. 참조 이미지와 시각 스타일을 정확하게 맞추세요. 이름을 명시한 소품, 동기 있는 카메라 변화, 관찰 가능한 연기, 환경의 반응과 눈에 보이는 최종 상태로 구체적인 인과관계를 구성하세요. 각 대사에 별도의 시간 구간을 배정하세요. 시작, 중간, 유지로 기계적으로 나누지 마세요. 조각상, 초상화, 반사, 숨은 존재, 화면 밖 인물을 살아 있는 몸으로 표현하지 마세요. 생성 모델에 전달할 동작 서술은 영어로 쓰세요. 중국어는 「이름」과 신뢰할 수 있는 <d> 대사 안에서만 허용됩니다. 중국어 장면 본문은 삭제됩니다.
 
-한 번에 한 사람만 말하게 하세요. 모든 <d> 바로 앞에 고정된 (S#)와 says/asks/replies를 붙이세요. 형식은 다음과 같습니다. (S1) says: <d>[Chinese] 原词</d> Only (S1) speaks in this shot. (S2) keeps their lips completely closed. 화자 표시 없는 <d>를 쓰지 마세요. 대사가 빠르다는 이유만으로 클립을 나누지 마세요.
+한 번에 한 사람만 말하게 하세요. 모든 <d> 바로 앞에 고정된 (S#)와 says/asks/replies를 붙이세요. 형식은 다음과 같습니다. (S1) says: <d>[Chinese] 原词</d> Only (S1) speaks in this shot. (S2) keeps their lips completely closed. 한국어 대사는 [Korean]으로 표시하고 대사 원문을 유지하세요. 화자 표시 없는 <d>를 쓰지 마세요. 대사가 빠르다는 이유만으로 클립을 나누지 마세요.
 
 프롬프트를 간결한 영화 타임라인으로 다시 구성하세요. 네 줄짜리 개요나 빽빽한 대본 문단으로 쓰지 마세요. 구간마다 촬영 가능한 문장 2–4개를 쓰고 구도나 동기가 있는 카메라 이동 한 가지, 인물의 동작과 시선, 계기에 따른 표정 변화, 듣는 인물의 배치와 반응, 대사가 있다면 그 대사를 포함하세요. 전경과 배경, 왼쪽과 오른쪽의 위치 및 카메라 축을 유지하고 아무도 렌즈를 응시하지 않게 하세요. 이야기에 필요한 소품, 조명, 환경의 움직임만 사용하세요. 모든 구간에서 눈에 보이게 사건을 진행하세요. ${durationText(resolved)}초 안에 동작이 끝난다는 전체 마무리 문장을 마지막에 한 번 쓰세요.`
           },
@@ -1762,6 +1767,6 @@ ${desc || '(empty)'}`
     if (error instanceof DOMException && error.name === 'AbortError') throw error
     if (!isLLMRequestFailure(error)) return composeH3VideoPrompt(resolved)
     const reason = error instanceof Error ? error.message : String(error || '')
-    throw new Error(`没有生成可用的电影化镜头稿：${reason || '请重试'}`)
+    throw new Error(`사용 가능한 영상 샷 프롬프트를 생성하지 못했습니다. ${reason || '请重试'}`)
   }
 }

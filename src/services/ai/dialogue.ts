@@ -3,12 +3,13 @@
  * 项目里仍保存完整原文，便于字幕和编辑器显示；仅在送入 H3/TTS 时清洗。
  */
 
-const SPEAKER_RE = /^(旁白|画外音|解说|主持人|人声|台词|对白|narrator|voiceover)$/i
-const NAME_RE = /^(?:[\u3400-\u9fff]{1,6})(?:说|问|答)?$/
+const SPEAKER_RE = /^(旁白|画外音|解说|主持人|人声|台词|对白|내레이션|화면 밖 음성|해설|진행자|대사|narrator|voiceover)$/i
+const NAME_RE = /^(?:[\u3400-\u9fff]{1,6}(?:说|问|答)?|[가-힣]{1,8})$/
+const KOREAN_STAGE_LABEL = /^(?:장면|샷|샷 크기|장소|효과음|인물 배치|시선|소품|현장음|그림체|길이|현장 기록|화면|동작|카메라 움직임|구도|환경|조명|비고|설명)$/
 const DIRECTION_RE =
   /景别|镜头|站位|中景|近景|特写|全景|远景|推近|拉远|横摇|运镜|机位|构图|画面中|四宫|六格|分镜|过肩|正反打|视线|承接上一镜|本镜可见|留给下一镜|画风|质感|噪点|武侠|场记|时长轴|参考图|人设|首帧|摄像机|情感镜头|integrated_multimodal|overall_soundscape|Camera language|Performance direction|non_diegetic/
 const PLACEHOLDER_SPEECH_RE =
-  /^(?:无|没有|暂无|空|无对白|无台词|无口播|不对白|不说话|没有台词|没有对白|none|n\/a|na|null|nil|-|—|–|\/|／)$/i
+  /^(?:无|没有|暂无|空|无对白|无台词|无口播|不对白|不说话|没有台词|没有对白|없음|대사없음|내레이션없음|none|n\/a|na|null|nil|-|—|–|\/|／)$/i
 const PERF_HINT_RE =
   /哭腔|哽咽|抽泣|颤抖|低声|轻声|小声|大声|喊道|怒吼|冷冷|喘|气音|破音|沙哑|咬牙|画外|旁白|哭着|笑着|泣|带着哭|带着笑|压着嗓|压低|OS|VO/
 const PERF_PREFIX_RE =
@@ -35,6 +36,7 @@ function clipSpokenBody(body: string): string {
 export function looksLikeShotDirection(text: string): boolean {
   const t = (text || '').trim()
   if (!t) return false
+  if (KOREAN_STAGE_LABEL.test(t.split(/[：:]/, 1)[0].trim()) && /[：:]/.test(t)) return true
   if (/^图\s*\d+\s*[/：:=是]/.test(t) || /^<Picture\s*\d+>/i.test(t)) return true
   if (/Reference pictures/i.test(t)) return true
   if (/\[\d{2}:\d{2}\.\d{3}/.test(t) || /\[Shot\s*\d+\]/i.test(t)) return true
@@ -81,7 +83,8 @@ export function spokenTextOnly(input: string): string {
         .replace(/[（(][^）)]{0,16}[）)]/g, '')
         .replace(/^[【\[(（]+|[】\])）]+$/g, '')
         .trim()
-      const stageLabel = /^(?:场景|音效|镜头|景别|时长|画风|站位|地点|道具|场记|画面|动作|运镜|机位|构图|环境|光影|备注|说明)$/.test(bare)
+      const stageLabel = KOREAN_STAGE_LABEL.test(bare) ||
+        /^(?:场景|音效|镜头|景别|时长|画风|站位|地点|道具|场记|画面|动作|运镜|机位|构图|环境|光影|备注|说明)$/.test(bare)
       const looksLikeSpeaker = !stageLabel && (SPEAKER_RE.test(bare) || NAME_RE.test(bare) || PERF_HINT_RE.test(label))
       const body = looksLikeSpeaker ? match[2].trim() : trimmed
       return isPlaceholderSpokenLine(body) ? '' : body
