@@ -1,8 +1,8 @@
 /**
- * 人设 / 场景底板提示词
+ * 캐릭터 설정 및 장면 기준 이미지 프롬프트
  *
- * 媒介跟用户原话走：点了什么画风就按什么材料画。
- * 对得上已知画种时补该画种技法；对不上也锁用户原词，不拿水墨或电影感顶替。
+ * 사용자가 요청한 매체와 화면 스타일의 재료를 사용한다.
+ * 알려진 스타일은 해당 기법으로 보완하고 그 외에는 요청한 표현을 보존한다.
  */
 
 import type { Scene, Shot, Subject, VisualStyle } from '@/types'
@@ -56,7 +56,7 @@ ${mediumLockText(resolved)}`
 const WHITE_BG_HINT = /纯白背景|#FFFFFF|无缝纯白/
 const STUDIO_BG_HINT = /浅色棚拍|中性灰|影棚背景|干净浅色|浅色干净背景/
 
-/** 角色设计图一律纯白底；旧提示词里的浅色棚拍/灰影棚改掉。 */
+/** 캐릭터 설정 이미지 배경은 순백색으로 통일한다. */
 export function ensureCharacterSheetWhiteBackground(prompt: string): string {
   const lock =
     'Use one seamless pure white background (#FFFFFF) across all four panels. Exclude gray or beige studio backdrops, gradients, floor lines, cast-shadow backdrops, scenery, furnishings, and passersby.'
@@ -71,7 +71,7 @@ export function ensureCharacterSheetWhiteBackground(prompt: string): string {
   return next.trim()
 }
 
-/** 反复入镜的同一件道具：纯白底正面、侧面、背面、细节。 */
+/** 반복 등장하는 소품의 앞면, 옆면, 뒷면과 상세를 순백색 배경에서 보여 준다. */
 export function propTurnaroundPrompt(prop: { name: string; description?: string }, look?: VisualLook): string {
   const medium = look?.medium || 'the visual style of the film'
   const whiteBg =
@@ -82,7 +82,7 @@ Show one object with consistent shape, material, colors, wear, and logos. Four p
 Appearance reference: ${prop.description || prop.name}`
 }
 
-/** 这个角色身上有哪些东西：包、证件、平板、鞋、配饰，单独一张资产图 */
+/** 가방, 신분증, 태블릿, 신발, 장신구처럼 캐릭터가 사용하는 물건을 별도 이미지로 만든다. */
 export function characterPropSheetPrompt(
   subject: Subject,
   style: VisualStyle,
@@ -103,7 +103,7 @@ Show the objects alone. Draw each one separately and completely for later storyb
 ${mediumLockText(resolved)}`
 }
 
-/** 当前场景里真正需要锁定的少量关键道具；不把普通陈设拆成资产。 */
+/** 장면에서 꼭 유지할 주요 소품만 추출하고 일반 비품은 제외한다. */
 export function scenePropSheetPrompt(
   scene: Scene,
   style: VisualStyle,
@@ -121,7 +121,7 @@ Make a production-design prop sheet. Present each object separately and complete
 ${mediumLockText(resolved)}`
 }
 
-/** 单镜故事看板：六格黑白草图，锁定同一镜头内的动作时间线。 */
+/** 한 샷의 동작을 흑백 스케치 여섯 칸으로 나눈다. */
 export function shotBoardPrompt(
   shot: Pick<
     Shot,
@@ -220,7 +220,7 @@ ${body}
 Use character design images for silhouettes, faces, and clothing, and the scene image for location, lighting, and ground. Do not invent people or places. Output this one black-and-white six-cell storyboard panel.`
 }
 
-/** 普通创作关键帧：2×2 四宫格，正好 4 格，不能多。 */
+/** 일반 키프레임은 2×2 배열의 네 칸으로 만든다. */
 export function shotKeyframePrompt(
   shot: Pick<
     Shot,
