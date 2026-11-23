@@ -2305,6 +2305,7 @@ export default {
     "textToImage": "文生图"
   },
   "ffmpegExport": {
+    "captionPngFailed": "字幕 PNG 生成失败",
     "prepare": "准备素材...",
     "joinClips": "拼接片段...",
     "noCaptions": "没有字幕文本，已跳过烧录",

@@ -2305,6 +2305,7 @@ export default {
     "textToImage": "텍스트→이미지"
   },
   "ffmpegExport": {
+    "captionPngFailed": "자막 PNG를 만들지 못했어요.",
     "prepare": "소재를 준비하고 있어요…",
     "joinClips": "클립을 이어 붙이고 있어요…",
     "noCaptions": "자막 텍스트가 없어 영상에 자막을 합성하지 않았어요.",

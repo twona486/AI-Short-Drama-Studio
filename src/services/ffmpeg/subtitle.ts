@@ -9,6 +9,7 @@
  */
 
 import type { CaptionStyle } from '@/types'
+import { t } from '@/i18n'
 
 export interface SubtitleCue {
   id: number
@@ -137,7 +138,7 @@ export function cuesToDrawTextFilter(
 }
 
 const CJK_FONT =
-  '"Microsoft YaHei", "PingFang SC", "Noto Sans SC", "Noto Sans CJK SC", "Hiragino Sans GB", sans-serif'
+  '"Apple SD Gothic Neo", "Malgun Gothic", "Noto Sans KR", "Noto Sans CJK KR", "Microsoft YaHei", "PingFang SC", "Noto Sans SC", "Noto Sans CJK SC", "Hiragino Sans GB", sans-serif'
 
 export interface CaptionHighlightOptions {
   enabled?: boolean
@@ -151,14 +152,18 @@ const EMPHASIS_WORDS = [
   '超级工厂', '产业带', '运营中心', '诚信通', '外贸版', '黑五', '圣诞',
   '出海', '合规', '现货', '利润', '增长', '机会', '资源', '流量', 'AI能力',
   '关键', '核心', '重点', '第一', '必须', '一定', '直接', '提前', '稳定出货',
-  '售后保障', '点击下方', '锁定席位', '不见不散'
+  '售后保障', '点击下方', '锁定席位', '不见不散',
+  '핵심', '중요', '성장', '기회', '수익', '필수', '예약', '혜택',
+  'essential', 'growth', 'key point', 'profit', 'opportunity', 'reserve'
 ]
 
 const HIGHLIGHT_STOP_WORDS = new Set([
   '这个', '那个', '这些', '那些', '我们', '你们', '他们', '自己', '一个', '一些',
   '就是', '还是', '已经', '现在', '今年', '这里', '这样', '那样', '如果', '因为',
   '所以', '但是', '而且', '可以', '可能', '开始', '之后', '之前', '时候', '怎么',
-  '什么', '很多', '越来越', '一下', '一条', '一波', '起来', '下来', '出来'
+  '什么', '很多', '越来越', '一下', '一条', '一波', '起来', '下来', '出来',
+  '이것', '그것', '저것', '우리', '지금', '그리고', '하지만', '그래서',
+  'a', 'an', 'the', 'and', 'this', 'that', 'there', 'with', 'they', 'have'
 ])
 
 interface HighlightCandidate {
@@ -172,12 +177,14 @@ interface HighlightCandidate {
  * 优先级：完整日期/时间与数字 → 营销实体/结论词 → 中文分词中的高信息词。
  */
 export function pickCaptionHighlights(text: string, limit = 2): string[] {
-  const source = text.replace(/\s+/g, '')
+  const source = /\p{Script=Han}/u.test(text) && !/\p{Script=Hangul}/u.test(text)
+    ? text.replace(/\s+/g, '')
+    : text.trim()
   if (source.length < 4 || limit <= 0) return []
   const candidates: HighlightCandidate[] = []
   const add = (word: string, score: number, start = source.indexOf(word)) => {
     const clean = word.replace(/^[，。！？；：、,.!?;:]+|[，。！？；：、,.!?;:]+$/g, '')
-    if (!clean || clean.length > 12 || start < 0 || HIGHLIGHT_STOP_WORDS.has(clean)) return
+    if (!clean || clean.length > 12 || start < 0 || HIGHLIGHT_STOP_WORDS.has(clean.toLowerCase())) return
     if (clean.length >= Math.max(8, Math.ceil(source.length * 0.65))) return
     candidates.push({ word: clean, score, start })
   }
@@ -187,7 +194,9 @@ export function pickCaptionHighlights(text: string, limit = 2): string[] {
     /\d{1,2}月\d{1,2}[日号]/g,
     /\d{1,2}[点时]\s*\d{0,2}分?/g,
     /\d+(?:\.\d+)?(?:%|％|万|亿|千|百|元|天|月|年|号|日|点|分|秒|个|条|家|次|倍|成|以上|以下)/g,
-    /(?:AI|AIGC|Q[1-4]|B2B|B2C|1688|Amazon|亚马逊)/gi
+    /(?:AI|AIGC|Q[1-4]|B2B|B2C|1688|Amazon|亚马逊|아마존)/gi,
+    /\d{2,4}년\s*\d{1,2}월\s*\d{1,2}일/g,
+    /\d+(?:\.\d+)?\s*(?:원|초|분|시간|일|개월|년|개|명|배|seconds?\b|minutes?\b|hours?\b|days?\b|months?\b|years?\b)/gi
   ]
   priorityPatterns.forEach((pattern, patternIndex) => {
     for (const match of source.matchAll(pattern)) {
@@ -195,11 +204,13 @@ export function pickCaptionHighlights(text: string, limit = 2): string[] {
     }
   })
 
+  const searchable = source.toLowerCase()
   EMPHASIS_WORDS.forEach((word) => {
-    let start = source.indexOf(word)
+    const term = word.toLowerCase()
+    let start = searchable.indexOf(term)
     while (start >= 0) {
-      add(word, 88 + Math.min(word.length, 8), start)
-      start = source.indexOf(word, start + word.length)
+      add(source.slice(start, start + word.length), 88 + Math.min(word.length, 8), start)
+      start = searchable.indexOf(term, start + word.length)
     }
   })
 
@@ -210,11 +221,12 @@ export function pickCaptionHighlights(text: string, limit = 2): string[] {
       }
     }).Segmenter
     if (Segmenter) {
-      const segmenter = new Segmenter('zh-CN', { granularity: 'word' })
+      const language = /\p{Script=Hangul}/u.test(source) ? 'ko' : /\p{Script=Han}/u.test(source) ? 'zh-CN' : 'en'
+      const segmenter = new Segmenter(language, { granularity: 'word' })
       for (const part of segmenter.segment(source)) {
         const word = part.segment.replace(/[，。！？；：、,.!?;:]/g, '')
         if (part.isWordLike === false || word.length < 2 || word.length > 7) continue
-        const verbBoost = /增长|提升|降低|决定|锁定|发布|成立|出海|下单|备货|发货/.test(word) ? 12 : 0
+        const verbBoost = /增长|提升|降低|决定|锁定|发布|成立|出海|下单|备货|发货|성장|향상|감소|결정|출시|주문|배송|\b(?:grow|launch|order|ship)\b/i.test(word) ? 12 : 0
         add(word, 42 + word.length * 3 + verbBoost, part.index)
       }
     }
@@ -409,7 +421,7 @@ export async function renderCaptionPng(
   })
 
   const blob = await new Promise<Blob>((resolve, reject) => {
-    canvas.toBlob((b) => (b ? resolve(b) : reject(new Error('字幕 PNG 生成失败'))), 'image/png')
+    canvas.toBlob((b) => (b ? resolve(b) : reject(new Error(t('ffmpegExport.captionPngFailed')))), 'image/png')
   })
   return blob
 }
