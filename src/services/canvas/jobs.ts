@@ -9,7 +9,7 @@ export function isNodeRunning(id: string) {
 
 export async function withNodeJob<T>(id: string, fn: () => Promise<T>): Promise<T> {
   if (runningNodeIds.value.includes(id)) {
-    throw new Error('这个节点正在生成')
+    throw new Error('이 노드에서 이미 생성하고 있습니다.')
   }
   runningNodeIds.value = [...runningNodeIds.value, id]
   try {
