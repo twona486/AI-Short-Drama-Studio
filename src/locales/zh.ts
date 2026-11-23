@@ -2369,6 +2369,7 @@ export default {
     "loadFailed": "FFmpeg core 加载失败（{source}）：{error}\n可能原因：\n1) COEP=require-corp 阻止了无 CORP 头的 CDN 资源\n2) Worker 文件加载失败\n3) WASM MIME 类型不匹配\n推荐：把 core 文件下载到 public/ffmpeg/ 目录使用本地源。"
   },
   "canvasRunner": {
+    "saveToSharedLibrary": "正在保存到共用资产库…",
     "characterViewsLabel": "四视图「{name}」",
     "propViewsLabel": "道具多角度「{name}」",
     "assetLabel": "资产图「{name}」",

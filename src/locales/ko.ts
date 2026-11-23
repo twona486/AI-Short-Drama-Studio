@@ -2369,6 +2369,7 @@ export default {
     "loadFailed": "{source}에서 FFmpeg 코어를 불러오지 못했어요({error}).\nCDN의 CORP 헤더, Worker 파일, WASM MIME 유형을 확인해 주세요.\n코어 파일을 public/ffmpeg/에 다운로드해서 로컬 파일을 쓸 수 있어요."
   },
   "canvasRunner": {
+    "saveToSharedLibrary": "공유 에셋 라이브러리에 저장하고 있어요…",
     "characterViewsLabel": "4면 설정 이미지 · {name}",
     "propViewsLabel": "소품 다각도 이미지 · {name}",
     "assetLabel": "에셋 이미지 · {name}",

@@ -303,7 +303,7 @@ async function saveGeneratedImageToSharedLibrary(
   prompt: string,
   onProgress?: (msg: string) => void
 ) {
-  onProgress?.(`保存到共用资产库 · ${category}...`)
+  onProgress?.(translate('canvasRunner.saveToSharedLibrary'))
   return useLibraryStore().addCategorized(blob, category, 'ai-generated', { filename, prompt })
 }
 
