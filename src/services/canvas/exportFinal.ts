@@ -11,9 +11,9 @@ export async function generateFinalCut(onProgress?: (msg: string) => void) {
   const project = useProjectStore()
   const assets = useAssetsStore()
   const p = project.current
-  if (!p) throw new Error('没有打开的项目')
+  if (!p) throw new Error('열려 있는 프로젝트가 없습니다.')
   if (!canBuildExport(p)) {
-    throw new Error('还没有可导出的视频或图片，请先生成分镜视频')
+    throw new Error('내보낼 영상이나 이미지가 없습니다. 먼저 스토리보드 샷 영상을 생성하세요.')
   }
 
   const { built, clips } = ensureTimelineFromShots(p)
@@ -22,7 +22,7 @@ export async function generateFinalCut(onProgress?: (msg: string) => void) {
   }
   const timeline = project.current!.timeline.filter((c) => c.enabled)
   if (!timeline.length) {
-    throw new Error('时间线为空，无法合成')
+    throw new Error('타임라인이 비어 있어 합성할 수 없습니다.')
   }
 
   onProgress?.('准备素材...')
@@ -40,7 +40,7 @@ export async function generateFinalCut(onProgress?: (msg: string) => void) {
       kind: (assets.getMeta(assetId)?.kind || (shot?.videoAssetId ? 'video' : 'image')) as 'video' | 'image'
     })
   }
-  if (mediaMap.size === 0) throw new Error('没有可用的分镜素材')
+  if (mediaMap.size === 0) throw new Error('사용 가능한 스토리보드 자료가 없습니다.')
 
   let working = timeline
   if (digitalHuman && p.speechWorkflow?.options.removePauses !== false) {
