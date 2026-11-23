@@ -960,17 +960,17 @@ export function extractSpokenFromNotes(text: string): string[] {
   if (fromTags.length) return [...new Set(fromTags)]
 
   const out = extractQuotedSpeech(raw)
-  for (const match of raw.matchAll(/(?:^|\n)\s*(?:台词|对白|口播|旁白)\s*[：:]\s*(.+)$/gm)) {
+  for (const match of raw.matchAll(/(?:^|\n)[ \t]*(?:台词|对白|口播|旁白|대사|내레이션|화면 밖 음성|dialogue|narration|voiceover)\s*[：:][ \t]*(.+)$/gim)) {
     const body = String(match[1] || '').trim()
     if (looksLikeShotDirection(body)) continue
     const line = sanitizeDialogue(body)
-    if (line && /[㐀-鿿]/.test(line) && !out.includes(line)) out.push(line)
+    if (line && !isPlaceholderSpokenLine(line) && !out.includes(line)) out.push(line)
   }
   for (const match of raw.matchAll(
-    /(?:^|\n)\s*([\u3400-\u9fff]{1,8})(?:[（(][^）)\n]{0,16}[）)])?\s*[：:]\s*([^\n]+)/g
+    /(?:^|\n)[ \t]*([\u3400-\u9fff가-힣]{1,8})(?:[（(][^）)\n]{0,16}[）)])?\s*[：:][ \t]*([^\n]+)/g
   )) {
     const label = String(match[1] || '').trim()
-    if (/^(?:场景|音效|镜头|景别|时长|画风|站位|地点|道具|场记|画面|动作|运镜|机位|构图|环境|光影|备注|说明)$/.test(label)) {
+    if (/^(?:场景|音效|镜头|景别|时长|画风|站位|地点|道具|场记|画面|动作|运镜|机位|构图|环境|光影|备注|说明|장면|효과음|샷|길이|스타일|장소|소품|현장기록|화면|동작|구도|환경|조명|비고|설명)$/.test(label)) {
       continue
     }
     const line = sanitizeDialogue(match[2] || '')
