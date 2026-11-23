@@ -80,12 +80,12 @@ export function detectWorkflowFormat(raw: unknown): ComfyWorkflowFormat {
 /** 把粘贴/导入的 JSON 规范成可提交的 workflowTemplate */
 export function parseComfyWorkflowJson(text: string): WorkflowParseResult {
   const trimmed = String(text || '').trim()
-  if (!trimmed) return { ok: false, format: 'unknown', detail: '内容为空' }
+  if (!trimmed) return { ok: false, format: 'unknown', detail: '내용이 비어 있습니다.' }
   let obj: unknown
   try {
     obj = JSON.parse(trimmed)
   } catch (e: any) {
-    return { ok: false, format: 'unknown', detail: `JSON 无效：${e?.message || e}` }
+    return { ok: false, format: 'unknown', detail: `JSON이 유효하지 않습니다. ${e?.message || e}` }
   }
   const format = detectWorkflowFormat(obj)
   if (format === 'ui') {
@@ -93,14 +93,14 @@ export function parseComfyWorkflowJson(text: string): WorkflowParseResult {
       ok: false,
       format,
       detail:
-        '这是 Comfy「界面格式」工作流（含 nodes/links），不能直接 POST /prompt。请在 Comfy 菜单选择 Save (API Format) 再粘贴。'
+        'nodes/links가 있는 ComfyUI 화면 형식이어서 /prompt에 직접 제출할 수 없습니다. ComfyUI 메뉴에서 Save (API Format)을 선택한 뒤 붙여 넣으세요.'
     }
   }
   if (format === 'unknown') {
     return {
       ok: false,
       format,
-      detail: '无法识别为 Comfy API 工作流（需要带 class_type 的节点图，或 { "prompt": { ... } }）。'
+      detail: 'Comfy API 워크플로 형식을 인식할 수 없습니다. class_type이 포함된 노드 그래프나 { "prompt": { ... } } 형식을 사용하세요.'
     }
   }
   const o = obj as Record<string, unknown>
@@ -119,7 +119,7 @@ export function parseComfyWorkflowJson(text: string): WorkflowParseResult {
     format: 'api',
     template: JSON.stringify(payload, null, 2),
     payload,
-    detail: '已识别为 API Format。请点「用助手分析工作流」，由助手确认提示词 / 参考图该接到哪个节点。',
+    detail: 'API Format으로 인식했습니다. ‘도우미로 워크플로 분석’을 눌러 프롬프트와 참조 이미지를 연결할 노드를 확인하세요.',
     bindings
   }
 }
@@ -205,7 +205,7 @@ export async function discoverComfyWorkflows(opts: {
       ok: false,
       reachable: false,
       workflows: [],
-      message: '缺少 ComfyUI 地址',
+      message: 'ComfyUI 주소가 없습니다.',
       tried
     }
   }
@@ -227,7 +227,7 @@ export async function discoverComfyWorkflows(opts: {
       ok: false,
       reachable: false,
       workflows: [],
-      message: '无法连接 ComfyUI（已试 system_stats / object_info）。请确认服务已启动且地址正确。',
+      message: 'ComfyUI에 연결하지 못했습니다(system_stats와 object_info 확인). 서비스가 실행 중이고 주소가 맞는지 확인하세요.',
       tried
     }
   }
@@ -279,7 +279,7 @@ export async function discoverComfyWorkflows(opts: {
       ok: true,
       reachable: true,
       workflows,
-      message: `已从 ComfyUI 列举到 ${workflows.length} 个工作流文件。选中后会拉取内容；请确认是 API Format。`,
+      message: `ComfyUI에서 워크플로 파일 ${workflows.length}개를 찾았습니다. 선택하면 파일 내용을 읽습니다. API Format인지 확인하세요.`,
       tried
     }
   }
@@ -289,7 +289,7 @@ export async function discoverComfyWorkflows(opts: {
     reachable: true,
     workflows: [],
     message:
-      'ComfyUI 已连通，但未能列举已保存工作流（本机 userdata/workflows 为空，或当前版本未开放列表）。请使用「粘贴 API Format JSON」「从文件导入」或填写工作流 URL。',
+      'ComfyUI에 연결했지만 저장된 워크플로 목록을 가져오지 못했습니다. userdata/workflows가 비었거나 현재 버전에서 목록을 제공하지 않을 수 있습니다. API Format JSON을 붙여 넣거나 파일에서 가져오거나 워크플로 URL을 입력하세요.',
     tried
   }
 }
@@ -316,7 +316,7 @@ export async function fetchComfyUserdataWorkflow(opts: {
 }): Promise<WorkflowParseResult> {
   const base = trimSlash(opts.baseUrl || '')
   const rel = String(opts.path || '').replace(/^\/+/, '')
-  if (!base || !rel) return { ok: false, format: 'unknown', detail: '缺少地址或路径' }
+  if (!base || !rel) return { ok: false, format: 'unknown', detail: '주소나 경로가 없습니다.' }
   const headers = authHeaders(opts.apiKey, opts.adapter)
 
   const roots = uniqStrings([opts.root || '', 'workflows', 'user/default/workflows', 'default/workflows', ''])
@@ -366,7 +366,7 @@ export async function fetchComfyUserdataWorkflow(opts: {
     const res = await tryGetJson(url, headers)
     tried.push(`${res.status || 'ERR'} ${url}`)
     if (!res.ok || res.data == null) {
-      last = `${res.status || '无响应'} ${(res.text || '').slice(0, 80)}`.trim()
+      last = `${res.status || '응답 없음'} ${(res.text || '').slice(0, 80)}`.trim()
       continue
     }
     const text = typeof res.data === 'string' ? res.data : JSON.stringify(res.data)
@@ -376,15 +376,15 @@ export async function fetchComfyUserdataWorkflow(opts: {
     ok: false,
     format: 'unknown',
     tried,
-    detail: `无法读取工作流文件「${rel}」。已试 ${tried.length} 种路径${last ? `，最后返回：${last}` : ''}。请点「查看尝试过的地址」把结果发我，或改用「粘贴 API Format JSON」/「从文件导入」。`
+    detail: `‘${rel}’ 워크플로 파일을 읽지 못했습니다. 경로 ${tried.length}개를 확인했습니다${last ? ` (마지막 응답 ${last})` : ''}. 확인한 주소와 결과를 공유하거나 API Format JSON을 붙여 넣거나 파일에서 가져오세요.`
   }
 }
 
 export async function fetchWorkflowFromUrl(url: string, apiKey?: string, adapter?: AdapterConfig): Promise<WorkflowParseResult> {
   const u = String(url || '').trim()
-  if (!/^https?:\/\//i.test(u)) return { ok: false, format: 'unknown', detail: '请填写 http(s) 工作流 URL' }
+  if (!/^https?:\/\//i.test(u)) return { ok: false, format: 'unknown', detail: 'http(s) 워크플로 URL을 입력하세요.' }
   const res = await tryGetJson(u, authHeaders(apiKey, adapter))
-  if (!res.ok) return { ok: false, format: 'unknown', detail: `下载失败 ${res.status} ${res.text || ''}` }
+  if (!res.ok) return { ok: false, format: 'unknown', detail: `다운로드에 실패했습니다. ${res.status} ${res.text || ''}` }
   const text = typeof res.data === 'string' ? res.data : JSON.stringify(res.data)
   return parseComfyWorkflowJson(text)
 }
@@ -393,7 +393,7 @@ export function readWorkflowFile(file: File): Promise<WorkflowParseResult> {
   return new Promise((resolve) => {
     const reader = new FileReader()
     reader.onload = () => resolve(parseComfyWorkflowJson(String(reader.result || '')))
-    reader.onerror = () => resolve({ ok: false, format: 'unknown', detail: '读取文件失败' })
+    reader.onerror = () => resolve({ ok: false, format: 'unknown', detail: '파일을 읽지 못했습니다.' })
     reader.readAsText(file)
   })
 }
