@@ -1,5 +1,5 @@
 /**
- * 探测视频 / 图片的元数据（浏览器原生实现，不依赖 FFmpeg）
+ * 브라우저에서 FFmpeg 없이 영상과 이미지의 메타데이터를 확인한다.
  */
 
 export interface MediaInfo {
@@ -94,7 +94,7 @@ function probeAudio(url: string): Promise<MediaInfo> {
   })
 }
 
-/** IndexedDB 里经常丢掉 MIME，浏览器会当成无法播放 */
+/** IndexedDB에서 MIME 유형이 빠지면 브라우저가 미디어 재생을 거부할 수 있다. */
 export function playableMediaBlob(
   blob: Blob,
   kind?: 'image' | 'video' | 'audio',
@@ -117,7 +117,7 @@ export function playableMediaBlob(
 function sniffContainerMime(bytes: Uint8Array, kind?: 'image' | 'video' | 'audio'): string | undefined {
   if (bytes.length < 12) return undefined
   const ascii = (n: number, m: number) => String.fromCharCode(...bytes.subarray(n, m))
-  // 图片优先识别，避免空 MIME 的 JPEG 被强制标成 video/mp4
+  // 이미지를 먼저 식별해 MIME 유형이 없는 JPEG를 MP4로 인식하지 않게 한다.
   if (bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff) return 'image/jpeg'
   if (bytes[0] === 0x89 && bytes[1] === 0x50 && bytes[2] === 0x4e && bytes[3] === 0x47)
     return 'image/png'
@@ -138,7 +138,7 @@ function sniffContainerMime(bytes: Uint8Array, kind?: 'image' | 'video' | 'audio
   return undefined
 }
 
-/** 按文件头校正 MIME，避免口播 wav 被标成 mp3 后无法试听；也避免图片被误标成视频 */
+/** 파일 헤더로 MIME 유형을 확인해 WAV와 이미지가 잘못 분류되지 않게 한다. */
 export async function ensurePlayableBlob(
   blob: Blob,
   kind?: 'image' | 'video' | 'audio',
@@ -148,7 +148,7 @@ export async function ensurePlayableBlob(
   const sniffed = sniffContainerMime(head, kind)
   if (sniffed) {
     if (kind === 'video' && sniffed.startsWith('image/')) {
-      // 留给上层抛错；这里先标回真实类型
+      // 실제 유형을 복구하고 오류 처리는 호출자에게 맡긴다.
       return blob.slice(0, blob.size, sniffed)
     }
     if (sniffed !== blob.type) return blob.slice(0, blob.size, sniffed)
@@ -203,7 +203,7 @@ function seekTo(v: HTMLVideoElement, time: number): Promise<void> {
   })
 }
 
-/** 提取视频封面帧（避开片头黑场） */
+/** 영상 도입부의 검은 화면을 피해 표지 프레임을 추출한다. */
 export async function extractVideoThumbnail(blob: Blob): Promise<Blob> {
   const typed = playableMediaBlob(blob, 'video')
   const url = URL.createObjectURL(typed)
@@ -228,7 +228,7 @@ export async function extractVideoThumbnail(blob: Blob): Promise<Blob> {
       await v.play()
       v.pause()
     } catch {
-      /* 有的浏览器不允许自动播放，继续 seek */
+      /* 자동 재생이 차단돼도 시간 위치 이동은 계속한다. */
     }
     const dur = Number.isFinite(v.duration) && v.duration > 0 ? v.duration : 1
     const candidates = [
@@ -271,7 +271,7 @@ export async function extractVideoThumbnail(blob: Blob): Promise<Blob> {
   }
 }
 
-/** 提取视频最后一帧（首尾帧连拍模式：上一镜的末帧 = 下一镜的首帧） */
+/** 영상의 끝 프레임을 추출해 다음 샷의 시작 프레임에 쓴다. */
 export async function extractVideoLastFrame(blob: Blob): Promise<Blob> {
   const typed = playableMediaBlob(blob, 'video')
   const url = URL.createObjectURL(typed)
@@ -296,13 +296,13 @@ export async function extractVideoLastFrame(blob: Blob): Promise<Blob> {
       await v.play()
       v.pause()
     } catch {
-      /* 有的浏览器不允许自动播放，继续 seek */
+      /* 자동 재생이 차단돼도 시간 위치 이동은 계속한다. */
     }
     const dur = Number.isFinite(v.duration) && v.duration > 0 ? v.duration : 1
     const canvas = document.createElement('canvas')
     const ctx = canvas.getContext('2d')
     if (!ctx) throw new Error('끝 프레임을 만들 수 없습니다.')
-    // 末帧附近可能有编码噪声，向前微退半帧并在两个采样点里取非黑的那帧。
+    // 인코딩 잡음을 피하려고 마지막 지점에서 반 프레임 앞도 확인해 검지 않은 프레임을 선택한다.
     const candidates = [Math.max(0.04, dur - 0.08), Math.max(0.04, dur - 0.25)]
     let lastJpeg: Blob | null = null
     for (const t of candidates) {
