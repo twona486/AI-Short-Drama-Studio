@@ -87,8 +87,8 @@ export function stripFrameLead(text: string): string {
 
 /** 去掉已有的「画面中：…是谁」身份段，只留下演戏叙述 */
 export function stripIdentityOpening(text: string): string {
-  let t = stripFrameLead(text)
-  if (!/^画面中[：:]/.test(t)) return t
+  const t = stripFrameLead(text)
+  if (!/^(?:画面中|화면 속|In the frame)[：:]/i.test(t)) return t
   const parts = t.split(/\n\s*\n/)
   if (parts.length >= 2) return parts.slice(1).join('\n\n').trim()
   const m = t.match(/^画面中[：:][\s\S]+?(?:是[^；;\n]{1,16}[。；;]\s*)+/)
@@ -99,7 +99,7 @@ export function stripIdentityOpening(text: string): string {
 export function normalizeIdentityLock(lock: string): string {
   let t = stripFrameLead(lock)
   if (!t) return ''
-  if (!/^画面中[：:]/.test(t)) t = `画面中：${t}`
+  if (!/^(?:画面中|화면 속|In the frame)[：:]/i.test(t)) t = `In the frame: ${t}`
   return t
 }
 
@@ -169,20 +169,20 @@ export function thisShotAction(continuity?: string): string {
   return raw
 }
 
-function cameraStoryCn(movement: Shot['cameraMovement']): string {
+function cameraDirection(movement: Shot['cameraMovement']): string {
   switch (movement) {
     case 'push':
-      return '镜头跟着他的注意慢慢推近，幅度小，结束时停住。'
+      return 'The camera slowly pushes in toward the point of focus, then holds.'
     case 'pull':
-      return '镜头从近处慢慢拉开，把环境和后来靠近的人带进画面，不要猛拉。'
+      return 'The camera pulls back slowly to reveal the surroundings and approaching people.'
     case 'pan':
-      return '镜头顺着他的视线慢慢横移，停在他看见的东西上。'
+      return 'The camera pans slowly along the eyeline and settles on what the character sees.'
     case 'tilt':
-      return '镜头顺着他抬头或低头的方向慢慢俯仰，停在结束视线。'
+      return 'The camera tilts slowly with the gaze and settles where the character looks.'
     case 'orbit':
-      return '镜头小幅度绕着他转一点，带出周围环境，不要绕出半圈。'
+      return 'The camera arcs slightly around the character to reveal the surroundings, well short of a half circle.'
     default:
-      return '机位基本不动，只随呼吸和动作有一点微晃。'
+      return 'Keep the camera nearly still, with slight motion following breathing and action.'
   }
 }
 
@@ -235,35 +235,35 @@ export function synthesizeVideoPerformance(shot: Shot): string {
     thisShotAction(shot.continuity) ||
     (shot.blocking || '').trim() ||
     (shot.title || '').trim() ||
-    '把这一镜的事做完'
+    'Complete the action planned for this shot'
   const look = (shot.eyeline || '').trim()
   const line = (shot.voiceover || '').trim()
   const speaker = line.match(/^([^：:\n]{1,12})[：:]/)?.[1]?.trim() || ''
   const spokenRaw = line.replace(/^([^：:\n]{1,12})[：:]\s*/, '').trim()
-  const spoken = /^(?:无|没有|暂无|空|无对白|无台词|无口播|none|n\/a)$/i.test(spokenRaw.replace(/[。.\s]/g, ''))
+  const spoken = /^(?:无|没有|暂无|空|无对白|无台词|无口播|없음|대사없음|내레이션없음|none|n\/a)$/i.test(spokenRaw.replace(/[。.\s]/g, ''))
     ? ''
     : spokenRaw
   const movement = normalizeCameraMovement(shot.cameraMovement)
   const firstEnd = Number((secs * 0.3).toFixed(1))
   const secondEnd = Number((secs * 0.75).toFixed(1))
   const bits = [
-    `${formatBeatRangeCn(0, firstEnd)}：起幅先交代人物前后站位和当前身体状态。${look ? `视线：${look.replace(/^看/, '')}。` : '每个人看向场景里的行动对象，不朝镜头。'}`,
-    `${formatBeatRangeCn(firstEnd, secondEnd)}：${happening.replace(/[。；;]+$/, '')}。动作连续发生，人物的眼神、眉眼和呼吸随触发事件变化。`
+    `${formatBeatRangeEn(0, firstEnd)}: Establish foreground and background blocking and each person's physical state. ${look ? `Eyeline: ${look}.` : 'Everyone looks at the relevant person or object in the scene, away from the lens.'}`,
+    `${formatBeatRangeEn(firstEnd, secondEnd)}: ${happening.replace(/[。；;]+$/, '')}. The action unfolds without interruption and the trigger changes the character's gaze, brow, and breathing.`
   ]
   if ((shot.blocking || '').trim() && happening !== (shot.blocking || '').trim()) {
-    bits[0] += `站位：${(shot.blocking || '').trim()}。`
+    bits[0] += ` Blocking: ${(shot.blocking || '').trim()}.`
   }
-  bits.push(cameraStoryCn(movement))
+  bits.push(cameraDirection(movement))
   if (spoken) {
     bits[1] +=
       speaker
-        ? `${speaker}开口说「${spoken}」。旁边的人闭嘴，侧头或回头看他，脸上要有反应。`
-        : `有人开口说「${spoken}」。旁边的人闭嘴，看向说话者或他指的东西。`
+        ? ` ${speaker} says 「${spoken}」. The others keep their mouths closed, look toward the speaker, and react visibly.`
+        : ` A person says 「${spoken}」. The others keep their mouths closed and look at the speaker or the object indicated.`
   } else {
-    bits[1] += '无对白。'
+    bits[1] += ' No dialogue.'
   }
-  bits.push(`${formatBeatRangeCn(secondEnd, secs)}：${cameraStoryCn(movement)}动作完成后停在明确的结果状态，其他人物保持与行动者的视线关系。`)
-  return bits.join('')
+  bits.push(`${formatBeatRangeEn(secondEnd, secs)}: ${cameraDirection(movement)} Show the clear physical result of the action and maintain the other people's eyelines toward the actor.`)
+  return bits.join('\n')
 }
 
 /** 编辑框里的原文：空就是空，不要把场记补回去；旧稿里的套话顺手剥掉 */
