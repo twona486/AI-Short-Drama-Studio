@@ -112,28 +112,28 @@ function formatRules(input: OptimizeNodePromptInput, current: string): string {
   const duration = input.kind === 'video' ? Math.max(1, Math.round(input.duration || 8)) : 0
   const anchors = extractFormatAnchors(current)
   const anchorLine = anchors.length
-    ? `원문에서 꼭 보존할 표식 ${anchors.join('、')}`
-    : '원문에 섹션 제목이 없습니다. MiniMax 여섯 섹션이나 다른 형식을 입히지 마세요.'
+    ? `Required source markers: ${anchors.join('、')}`
+    : 'The source has no section headings. Do not add the MiniMax six-section format or any other template.'
 
   const shotBlock =
     input.kind === 'video'
-      ? `${duration}초 동안 이어지는 샷 하나입니다. 시작 화면, 동작의 시작과 끝만 구체화하세요. 샷을 자르거나 새 시간 구간을 만들지 마세요. 원문의 시간 표식은 그대로 유지하세요.`
-      : '정지 프레임입니다. 화면에서 보이는 내용만 구체화하고 시간의 흐름은 쓰지 마세요.'
+      ? `This is one continuous ${duration}-second shot. Expand only the opening image, onset of action, and ending. Do not cut or add new time ranges. Preserve the original timing marks.`
+      : 'This is a still frame. Add only visible details, with no passage of time.'
 
-  return `당신은 프롬프트를 다듬는 도우미입니다. 원문에 있는 화면만 구체화하고 형식을 바꾸지 마세요.
-작업 유형은 ${kindLabel}입니다.
-형식 필수 규칙
+  return `Improve the visual details already present in the prompt. Preserve its format.
+Task type: ${kindLabel}.
+Required format rules
 - ${anchorLine}
-- 제목, 섹션, [Shot], 图1=, 0.00-2.00 같은 표식의 이름과 순서를 유지하세요.
-- 자유 형식 문단을 여섯 섹션으로 바꾸거나 기존 섹션을 삭제, 통합, 이름 변경하지 마세요.
-- 기존 문단 안에서 눈썹과 눈, 입, 손, 몸, 빛, 재료와 소리를 구체화하세요.
-- 대사, 이름, 의상, 장면의 제약과 참조 이미지 표시는 그대로 두세요.
-- 생성 모델에 전달하는 프롬프트는 문장마다 원래 언어를 유지하세요. 중국어는 중국어로, 영어는 영어로 유지하고 문단 전체를 다른 언어로 바꾸지 마세요.
+- Preserve the names and order of headings, sections, [Shot], 图1=, and ranges such as 0.00-2.00.
+- Do not convert free-form prose to six sections, delete or combine existing sections, or rename them.
+- Within existing sections, make eyebrows, eyes, mouth, hands, body, light, materials, and sound more concrete.
+- Preserve dialogue, names, wardrobe, scene constraints, and reference image identifiers.
+- Write the final generation prompt in English. Keep Korean (한국어) dialogue, narration, and explicitly requested on-screen text verbatim. Retain existing format markers.
 ${shotBlock}
-필수 요구사항
-- 원문에 없는 이야기를 만들어 내지 마세요.
-- 상투적인 말과 분석 과정을 생략하세요. prompt에는 생성 모델에 보낼 본문 전문만 넣으세요.
-JSON만 출력하세요. {"prompt":"확장한 프롬프트 전문","note":"무엇을 바꿨는지 한국어 한두 문장으로 설명"}`
+Required content rules
+- Do not invent plot details absent from the source.
+- Avoid boilerplate and reasoning. The prompt field must contain only the complete prompt for the generation model.
+Return JSON only: {"prompt":"Complete refined generation prompt in English","note":"One or two sentences in Korean (한국어) explaining what changed"}.`
 }
 
 async function askOnce(
