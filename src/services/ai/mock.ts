@@ -57,7 +57,7 @@ export async function mockLLM(req: LLMRequest): Promise<LLMResponse> {
   await new Promise((r) => setTimeout(r, 600 + Math.random() * 800))
 
   const userMsg = messageText(req.messages[req.messages.length - 1]?.content ?? '')
-  const isStoryboard = userMsg.includes('分镜') || userMsg.includes('storyboard')
+  const isStoryboard = /分镜|스토리보드|storyboard/i.test(userMsg)
 
   if (isStoryboard) {
     return {
@@ -67,7 +67,7 @@ export async function mockLLM(req: LLMRequest): Promise<LLMResponse> {
   }
 
   return {
-    content: `[mock] 收到：${userMsg.slice(0, 60)}...`,
+    content: `[데모] 요청을 받았습니다. ${userMsg.slice(0, 60)}...`,
     model: 'mock-llm'
   }
 }
@@ -91,18 +91,18 @@ export function mockStoryboardFromPrompt(userMsg: string) {
 
   // 关键词启发
   const keywords: Record<string, string> = {
-    城市: '现代城市天际线，霓虹灯，都市建筑',
-    山: '壮丽山景，云雾峰峦，戏剧天空',
-    海: '海浪拍岸，海上金色日落，电影感',
-    森林: '茂密森林，树隙阳光，生机自然',
-    人物: '人物肖像，眼神有戏，柔和布光',
-    科技: '未来科技感，全息界面，科幻氛围',
-    产品: '产品特写，干净棚拍光，简洁构图',
-    食物: '美食特写，热气升腾，暖色光',
-    旅行: '旅行目的地，黄金时段，向往感',
-    运动: '运动动态，轻微运动模糊，充满能量',
-    动物: '动物特写，清晰对焦，自然栖息地',
-    花卉: '鲜艳花卉，微距，背景虚化'
+    城市: 'Modern skyline, neon lighting, and city architecture',
+    山: 'Dramatic mountain peaks under mist and clouds',
+    海: 'Waves on the shore at a golden sunset',
+    森林: 'Dense forest with sun filtering through the trees',
+    人物: 'Character portrait with an expressive gaze and soft light',
+    科技: 'Futuristic technology and holographic interfaces',
+    产品: 'Product close-up with clean studio light and simple framing',
+    食物: 'Food close-up with steam and warm light',
+    旅行: 'Evocative travel destination in golden-hour light',
+    运动: 'Energetic athletic movement with slight motion blur',
+    动物: 'Sharp close-up of an animal in its habitat',
+    花卉: 'Colorful macro flowers with a blurred background'
   }
 
   const shots: Array<Omit<Shot, 'id' | 'status'>> = sentences
@@ -119,11 +119,11 @@ export function mockStoryboardFromPrompt(userMsg: string) {
       if (!visual) {
         // fallback：按 hash 选个稳定描述
         const opts = [
-          '电影感建立镜头，戏剧光影',
-          '浅景深特写，背景虚化',
-          '广角风景，黄金时段',
-          '动态运动镜头，充满能量',
-          '极简构图，大量留白'
+          'Establishing shot with dramatic light',
+          'Close-up with shallow focus and soft background',
+          'Wide landscape during golden hour',
+          'Dynamic, energetic movement',
+          'Minimal framing with ample negative space'
         ]
         visual = opts[hashCode(s) % opts.length]
       }
@@ -132,26 +132,26 @@ export function mockStoryboardFromPrompt(userMsg: string) {
       const purposes = ['建立', '推进', '反应', '揭示'] as const
       const styleGuide =
         style === 'anime'
-          ? '日系动画·赛璐璐上色，线稿清晰，眼睛高光鲜明'
+          ? 'Japanese cel animation with clear lines and bright eye highlights'
           : style === 'ink-wash'
-            ? '中国水墨·墨色浓淡与留白'
+            ? 'Chinese ink wash with layered tones and negative space'
             : style === '3d-render'
-              ? '三维渲染·PBR材质与全局光照'
+              ? '3D rendering with PBR surfaces and global illumination'
               : style === 'oil-painting'
-                ? '古典油画·厚涂笔触与布面纹理'
+                ? 'Classical oil impasto and canvas texture'
                 : style === 'watercolor'
-                  ? '水彩画·透明叠色与纸纹晕染'
+                  ? 'Watercolor washes with transparent layers and paper grain'
                   : style === 'pixel-art'
-                    ? '复古像素·有限色板与清晰像素格'
+                    ? 'Retro pixel art with a limited palette and sharp grid'
                     : style === 'photorealistic'
-                      ? '写实摄影·真实材质与自然光'
-                      : '电影感·胶片调色与戏剧光比'
+                      ? 'Realistic photography with natural light and believable materials'
+                      : 'Film color grading and dramatic contrast'
       return {
         index: i,
         title: s.slice(0, 8),
-        visualPrompt: `【${styleGuide}】画面呈现${visual}。内容：${s}。环境材质与空间纵深清晰，主体姿态表情明确，动作连贯。景别为${sizes[i % sizes.length]}，运镜服务叙事。色彩与光影服务整体氛围。${styleGuide}，高清细节，商业级完成度。`,
-        videoPrompt: `画面中的人把这一镜演完：${s}。有人说「${s}」。镜头跟着动作走。`,
-        audioDescription: '环境音、轻微氛围音乐',
+        visualPrompt: `[${styleGuide}] ${visual}. Story context: ${s}. Show readable depth, materials, pose, expression, and coherent action. Use the ${['wide shot', 'medium shot', 'close shot', 'close-up'][i % sizes.length]} and let the camera serve the story. Match light and color to the tone. High detail and production-quality finish.`,
+        videoPrompt: `Show the action described in the source: ${s}. Someone says 「${s}」. The camera follows the action.`,
+        audioDescription: '환경음과 잔잔한 배경음악',
         voiceover: s,
         duration: Math.min(
           10,
@@ -162,55 +162,55 @@ export function mockStoryboardFromPrompt(userMsg: string) {
         ],
         purpose: purposes[i % purposes.length],
         shotSize: sizes[i % sizes.length],
-        blocking: '相对场景主锚站位，面向叙事焦点',
-        eyeline: '视线朝向本镜叙事焦点',
-        continuity: `起始：承接上一镜末态 → 本镜变化：${s.slice(0, 12)} → 末态：供下一镜承接`,
-        propFocus: '本镜关键道具保持状态连续'
+        blocking: '장면의 주요 기준물 가까이 서서 이야기의 초점을 향한다.',
+        eyeline: '현재 샷의 이야기 중심을 본다.',
+        continuity: `이전 샷의 끝 상태 → 현재 샷의 변화: ${s.slice(0, 12)} → 다음 샷으로 이어지는 상태`,
+        propFocus: '주요 소품의 상태를 유지한다.'
       }
     })
 
   if (shots.length === 0) {
     // 完全 fallback：4 个空镜
     return {
-      aesthetic: `整体氛围\n\n${style}风格，电影感构图，戏剧光影，商业级质感。`,
-      styleBrief: `${style}短片，强调节奏与视觉冲击`,
-      colorPalette: '暖主色 + 冷辅色对比',
-      lightingNote: '电影感侧光，高光与阴影层次清晰',
+      aesthetic: `전체 분위기\n\n${style} 스타일. 영화적 구도와 극적인 명암을 사용한다.`,
+      styleBrief: `리듬과 시각적 인상을 강조한 ${style} 단편`,
+      colorPalette: '따뜻한 주조색과 차가운 보조색의 대비',
+      lightingNote: '영화적 측광으로 밝은 부분과 그림자가 또렷하다.',
       shots: [1, 2, 3, 4].map((i) => ({
         index: i - 1,
-        title: `镜头 ${i}`,
-        visualPrompt: `抽象的${style}风格场景，暖色光影与电影氛围。本片第 ${i} 个镜头。`,
-        videoPrompt: `画面中的人把第 ${i} 镜演完，把该说的话说完，镜头跟着走。`,
-        audioDescription: '环境音、氛围音乐',
-        voiceover: `这是第 ${i} 个分镜`,
+        title: `샷 ${i}`,
+        visualPrompt: `Abstract ${style} location with warm light and cinematic atmosphere. Shot ${i}.`,
+        videoPrompt: `For shot ${i}, follow the people through the complete action and spoken lines.`,
+        audioDescription: '환경음과 배경음악',
+        voiceover: `${i}번 스토리보드 샷입니다.`,
         duration: Math.min(10, Math.max(5, duration + ((i - 1) % 3))),
         cameraMovement: 'static' as const,
         subjectIds: ['sub_1'],
         sceneId: 'scn_1',
         purpose: i === 1 ? '建立' : i === 4 ? '揭示' : '推进',
         shotSize: (['全景', '中景', '近景', '特写'] as const)[(i - 1) % 4],
-        blocking: '相对主锚站位，面向叙事焦点',
-        eyeline: '视线朝向叙事焦点',
-        continuity: `起始承接 → 本镜变化 → 末态供下一镜`,
-        propFocus: '关键道具状态连续'
+        blocking: '주요 기준물을 기준으로 서서 이야기의 중심을 향한다.',
+        eyeline: '이야기의 중심을 본다.',
+        continuity: `앞 샷과 연결 → 현재 샷의 변화 → 다음 샷으로 이어지는 상태`,
+        propFocus: '주요 소품의 상태를 유지한다.'
       })),
       subjects: [
         {
           id: 'sub_1',
-          name: '主角',
+          name: '주인공',
           kind: 'person' as const,
-          description: '全片同一位主角，面部、发型与服装保持一致',
-          role: '主角',
+          description: '전체 영상에서 주인공의 얼굴, 헤어스타일과 의상을 유지한다.',
+          role: '주인공',
           stateVariants: '单一状态'
         }
       ],
       scenes: [
         {
           id: 'scn_1',
-          name: '主场景',
-          description: '全片同一主场景，光线保持一致',
-          mainAnchor: '场景中心视觉焦点',
-          lighting: '电影侧光'
+          name: '주요 장면',
+          description: '전체 영상에서 주 장면과 조명을 유지한다.',
+          mainAnchor: '장면의 주요 시각 기준물',
+          lighting: '영화적 측광'
         }
       ]
     }
