@@ -175,7 +175,7 @@ export function selectSkills(ctx: SkillSelectContext): Skill[] {
 }
 
 export function catalogPrompt(): string {
-  return ALL_SKILLS.map((s) => `- ${s.id}：${s.description}`).join('\n')
+  return ALL_SKILLS.map((s) => `- ${s.id}: ${s.description}`).join('\n')
 }
 
 export function bodiesPrompt(skills: Skill[]): string {
@@ -188,11 +188,12 @@ export function skillContextForAgent(ctx: SkillSelectContext): {
   prompt: string
 } {
   const selected = selectSkills(ctx)
-  const prompt = `【可调用 Skill 目录】
+  // 선택한 제작 지침을 영어로 주입하고 답변 언어를 지정한다.
+  const prompt = `Available skills
 ${catalogPrompt()}
 
-【本轮已加载】${selected.map((s) => s.id).join('、')}
-按已加载手册做事，不要发明目录里没有的流程。
+Skills loaded for this turn: ${selected.map((s) => s.id).join(', ')}
+Follow the loaded guides and do not invent workflows outside this catalog. Write user-facing answers in Korean (한국어). Write final image and video generation prompts in English, keeping original dialogue and requested Korean on-screen text.
 
 ${bodiesPrompt(selected)}`
   return { selected, prompt }
