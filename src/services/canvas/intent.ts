@@ -139,27 +139,28 @@ export function detectIntent(text: string, ctx: IntentContext): AgentIntent {
 }
 
 /** LLM 意图分类的系统提示：只输出 kind，不承担任何任务执行 */
-const INTENT_LLM_SYSTEM = `당신은 ‘剧流 Studio’ 캔버스 에이전트의 의도 분류기입니다. 사용자 메시지의 의도 범주만 판단하세요. 작업을 실행하거나 사용자에게 답하지 마세요.
+// 사용자 의도를 분류하고 기존 kind 값만 반환한다.
+const INTENT_LLM_SYSTEM = `You classify the user's intent in the Studio canvas. Return the category only. Do not carry out the task or answer the user.
 
-범주 중 하나를 선택하세요.
-- remember：사용자가 선호나 사실을 기억하라고 요청함(‘기억해 줘’, ‘앞으로는’ 등)
-- forget：기억 항목을 잊거나 삭제해 달라고 요청함
-- question：질문, 상담 또는 파일 내용을 읽어 달라는 요청으로 캔버스 조작이 필요 없음
-- status：프로젝트 진행 상황, 누락 항목 또는 검수 결과를 요청함
-- prompt_polish：특정 프롬프트, 화면 설명 또는 카메라 움직임 설명의 확장, 최적화 또는 재작성을 요청함
-- create_asset：새 이미지 또는 영상 생성 노드를 만들고 생성을 요청함
-- edit_canvas：캔버스의 기존 노드 또는 스토리보드 수정(프롬프트, 길이, 비율, 카메라 움직임 등)을 요청함
-- pipeline：대본 제작 워크플로 진행을 요청함(대본 작성 또는 이어 쓰기, 대본 분해, 캐릭터와 장면 추출, 스토리보드 생성, 다음 단계, 전체 워크플로, 승인)
-- chitchat：인사, 잡담 또는 ‘먼저 볼게’, ‘잠깐’, ‘필요 없어’처럼 작업 보류
-- task：도구로 캔버스를 조작해야 하는 기타 작업
+Choose one category:
+- remember: remember a preference or fact, such as "기억해 줘" or "앞으로는"
+- forget: forget or delete a memory
+- question: answer a question, give advice, or read a file without changing the canvas
+- status: report project progress, find gaps, or review results
+- prompt_polish: expand, improve, or rewrite a prompt, picture description, or camera direction
+- create_asset: create an image or video generation node and run it
+- edit_canvas: update an existing canvas node or storyboard shot, including prompt, duration, aspect ratio, or camera movement
+- pipeline: advance script production, including writing or continuing a script, extraction, storyboard generation, a next step, a full workflow, or approval
+- chitchat: greetings, small talk, or pausing the task
+- task: another task that requires canvas tools
 
-판단 기준
-- 사용자가 로컬 경로(C:// 등)를 제공하며 읽거나 보라고 하면 question
-- 프로젝트에 대본이나 스토리보드가 있고 ‘계속’ 또는 ‘다음 단계’라고만 하면 pipeline
-- 선택된 노드에서 ‘더 생생하게’나 ‘더 자세하게’라고 하면 prompt_polish
-- 판단하기 어려우면 question
+Decision rules:
+- If the user supplies a local path such as C:// and asks to read it, choose question.
+- If the project contains a script or storyboard and the user only says "계속" or "다음 단계", choose pipeline.
+- If a node is selected and the user asks for more vivid or concrete details, choose prompt_polish.
+- If uncertain, choose question.
 
-JSON만 출력하세요. {"kind":"위 범주의 식별자"}`
+Return JSON only: {"kind":"one category identifier above"}`
 
 function parseIntentJson(raw: string): AgentIntentKind | null {
   let s = raw.trim()
