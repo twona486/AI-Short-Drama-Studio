@@ -1,7 +1,7 @@
 /**
- * 桌面端本地文件夹存储
+ * 데스크톱 로컬 디렉터리 저장소
  *
- * 用户所选保存目录/<project>/
+ * 사용자가 선택한 저장 디렉터리의 프로젝트별 하위 디렉터리
  *   project.json
  *   assets/manifest.json
  *   assets/images|videos|audio/<id>.<ext>
@@ -214,7 +214,7 @@ export async function assetAbsPath(id: string): Promise<string | undefined> {
   return assetAbsPathInDir(dir, id)
 }
 
-/** 不切换当前项目目录，按指定文件夹解析素材路径（首页封面用） */
+/** 현재 프로젝트를 바꾸지 않고 지정한 디렉터리 기준으로 홈 화면 표지 파일 경로를 구한다. */
 export async function assetAbsPathInDir(
   dir: string,
   id: string
