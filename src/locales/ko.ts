@@ -2445,5 +2445,20 @@ export default {
     "empty": "이어 쓰기 결과가 비어 있어요.",
     "noNewScenes": "이어 쓴 대본에 새 장면이 없어요. '아버지가 집에 돌아온 뒤 장면을 두 개 더 써 줘'처럼 방향을 적어 주세요.",
     "heading": "장면 {number}｜이어 쓰기"
+  },
+  "apimartService": {
+    "referenceRead": "참조 이미지를 읽지 못했어요.",
+    "download": "결과를 다운로드하고 있어요…",
+    "processing": "처리 중",
+    "uploadFallback": "업로드 API를 사용할 수 없어 참조 이미지를 직접 제출하고 있어요…",
+    "submitted": "요청을 보냈어요. 진행 상황을 확인하고 있어요…",
+    "editFallback": "편집 API를 사용할 수 없어 생성 요청에 참조 이미지를 넣고 있어요…",
+    "textImage": "텍스트→이미지 요청을 보내고 있어요…",
+    "video": "영상 생성 요청을 보내고 있어요…",
+    "generating": "생성 중 {status}",
+    "prepareRefs": "참조 이미지를 준비하고 있어요({current}/{total})…",
+    "uploadRefs": "참조 이미지를 업로드하고 있어요({current}/{total})…",
+    "sendRefs": "참조 이미지 {count}장을 보내고 있어요…",
+    "imageImage": "참조 이미지 {count}장으로 이미지→이미지 요청을 보내고 있어요…"
   }
 }

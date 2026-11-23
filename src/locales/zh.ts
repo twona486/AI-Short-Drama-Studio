@@ -2445,5 +2445,20 @@ export default {
     "empty": "续写没有返回内容",
     "noNewScenes": "续写没有新增场次。请写明方向，例如「再写两场，写父亲回家之后」。",
     "heading": "场景{number}｜续写"
+  },
+  "apimartService": {
+    "referenceRead": "参考图读取失败",
+    "download": "正在下载结果...",
+    "processing": "处理中",
+    "uploadFallback": "上传接口不可用，改为直接提交参考图...",
+    "submitted": "已提交，正在查询...",
+    "editFallback": "编辑接口不可用，改为在生成请求里带上参考图...",
+    "textImage": "提交文生图任务...",
+    "video": "提交视频任务...",
+    "generating": "生成中 {status}",
+    "prepareRefs": "准备参考图 {current}/{total}...",
+    "uploadRefs": "上传参考图 {current}/{total}...",
+    "sendRefs": "提交参考图（{count} 张）...",
+    "imageImage": "提交图生图任务（{count} 张参考）..."
   }
 }
