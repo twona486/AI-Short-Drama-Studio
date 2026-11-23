@@ -16,7 +16,7 @@ export function isPlayApproved(p: Project | null | undefined): boolean {
   return hasDownstream
 }
 
-/** 有分镜但剧本还没验收时才需要拦；是否真的拦由调用方按「本次动作」决定 */
+/** 스토리보드가 있고 대본이 승인되지 않았는지 확인한다. 실제 제한은 호출자가 판단한다. */
 export function needsPlayReview(p: Project | null | undefined): boolean {
   return Boolean(p?.shots.length) && !isPlayApproved(p)
 }
