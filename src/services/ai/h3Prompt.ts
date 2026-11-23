@@ -1650,24 +1650,24 @@ JSON을 반환하기 전에 초안에 상투적인 시간 구간, 반복되는 �
         },
         {
           role: 'user',
-          content: `${importedDirectorForH3()}Style: ${resolved.aesthetic || 'Cinematic'} (when reference pictures are supplied, their art style overrides this line)
-Duration: ${durationText(resolved)}s
-Aspect: ${resolved.aspectRatio || '16:9'} (${String(resolved.aspectRatio || '16:9') === '9:16' ? 'vertical portrait, taller than wide' : String(resolved.aspectRatio || '16:9') === '1:1' ? 'square' : 'horizontal landscape, wider than tall'})
-Camera preference (override it when the event needs a motivated reframe or cut): ${camera}
-Scene / light: ${[englishOrOmit(resolved.sceneLighting), englishOrOmit(resolved.sceneAnchor), englishOrOmit(resolved.sceneDescription)].filter(Boolean).join(' / ') || 'from director notes'}
-Available character identity references. (S1) stays (S1) for the whole clip. Do not assume every one is a living body in this beat; infer the actual visible form from the scene:
-${characterPeople(resolved).map((slot, i) => `(S${i + 1}) = ${slot.sourceName || slot.name} = <Picture ${slot.picture}>`).join('\n') || onScreenEnglish(resolved).map((name, i) => `(S${i + 1}) = ${name}`).join('\n') || '(from director notes)'}
-MUST COPY this speaker lock verbatim (identity/location lock, not first frames):
-${pictureRoster(resolved) || 'no extra pictures'}
-Voice mode: ${cueLines.length ? resolved.voiceMode || 'dialogue' : 'none — no trusted spoken lines; do NOT invent dialogue'}
-Character voice (this speaker's own timbre, kept verbatim as delivery inside each <d> bracket; do not reinterpret or translate it away): ${resolved.speakerVoice || '(not set — infer a natural timbre that fits the character)'}
-Spoken lines already extracted (quotes / 台词 / 口播栏 only; director notes are NOT speech):
-${cueLines.length ? cueLines.map((line, i) => `${i + 1}. ${line}`).join('\n') : '(none — write No dialogue. No lips moving.)'}
-Dialogue ownership recovered from the source (each item is one exclusive turn; preserve this order):
+          content: `${importedDirectorForH3()}그림체 ${resolved.aesthetic || 'Cinematic'}(참조 이미지가 있으면 그 이미지의 그림체를 우선 적용)
+길이 ${durationText(resolved)}초
+화면 비율 ${resolved.aspectRatio || '16:9'} (${String(resolved.aspectRatio || '16:9') === '9:16' ? '세로형 화면' : String(resolved.aspectRatio || '16:9') === '1:1' ? '정사각형 화면' : '가로형 화면'})
+카메라 움직임 선호(사건에 따라 구도 변경이나 컷이 필요하면 조정)  ${camera}
+장면과 빛  ${[englishOrOmit(resolved.sceneLighting), englishOrOmit(resolved.sceneAnchor), englishOrOmit(resolved.sceneDescription)].filter(Boolean).join(' / ') || '감독 메모 참조'}
+사용 가능한 캐릭터 참조입니다. 클립 전체에서 (S1)을 동일 인물로 유지하세요. 모든 참조가 살아 있는 인물로 등장한다고 가정하지 말고 장면에서 실제로 보이는 형태를 판단하세요.
+${characterPeople(resolved).map((slot, i) => `(S${i + 1}) = ${slot.sourceName || slot.name} = <Picture ${slot.picture}>`).join('\n') || onScreenEnglish(resolved).map((name, i) => `(S${i + 1}) = ${name}`).join('\n') || '（감독 메모 참조）'}
+다음 화자 대응 블록을 원문 그대로 복사하세요. 시작 프레임 대신 인물과 장소를 고정하는 참조입니다.
+${pictureRoster(resolved) || '추가 이미지 없음'}
+음성 모드  ${cueLines.length ? resolved.voiceMode || 'dialogue' : 'none — 확인된 대사가 없으므로 대사 생성 금지'}
+캐릭터 목소리(각 화자 고유의 음색. <d>의 언어 대괄호에서 연기 지시로 원문을 보존하고 다시 해석하거나 번역하지 않음)  ${resolved.speakerVoice || '（설정 없음. 캐릭터에 맞는 자연스러운 음색을 사용）'}
+추출한 대사(인용문, 대사, 내레이션 필드만 사용. 감독 메모는 발화에서 제외)
+${cueLines.length ? cueLines.map((line, i) => `${i + 1}. ${line}`).join('\n') : '（대사 없음. No dialogue. No lips moving.으로 작성）'}
+원문에서 확인한 화자(항목마다 한 명만 발화하며 다음 순서를 유지)
 ${dialogueCues.length ? dialogueCues.map((cue, i) => `${i + 1}. (${speakerCode(resolved, cue.speaker)}) speaker=${cue.speaker || 'unassigned'} | words=${cue.text}`).join('\n') : '(none)'}
-Sound notes: ${englishOrOmit(resolved.audioDescription) || '(from the node text)'}
-NODE MATERIAL TO DIRECT (source of truth for event, props, blocking and continuity; 场记/时长/画风 are not speech):
-${source || '(perform the beat in this location)'}`
+소리 메모  ${englishOrOmit(resolved.audioDescription) || '（노드 텍스트 참조）'}
+연출할 노드 자료(사건, 소품, 인물 배치와 연속성의 근거입니다. 현장 기록, 길이, 그림체는 발화에서 제외하세요.)
+${source || '（이 장소에서 장면의 박자에 맞춰 연기）'}`
         }
       ],
       jsonMode: true,
@@ -1708,23 +1708,23 @@ ${source || '(perform the beat in this location)'}`
           },
           {
             role: 'user',
-            content: `${importedDirectorForH3()}Speaker lock (copy verbatim):
-${pictureRoster(resolved) || 'no extra pictures'}
+            content: `${importedDirectorForH3()}화자 대응 블록(원문 그대로 복사)
+${pictureRoster(resolved) || '추가 이미지 없음'}
 
-Trusted dialogue:
-${cueLines.length ? cueLines.join('\n') : '(none; no dialogue and no lips moving)'}
+확인된 대사
+${cueLines.length ? cueLines.join('\n') : '（대사 없고 입이 움직이지 않음）'}
 
-Required dialogue ownership and order:
+필수 화자와 대사 순서
 ${dialogueCues.length ? dialogueCues.map((cue, i) => `${i + 1}. (${speakerCode(resolved, cue.speaker)}) speaker=${cue.speaker || 'unassigned'} | words=${cue.text}`).join('\n') : '(none)'}
 
-Rejected-draft dialogue defect:
-${firstResult.truncated ? 'The previous JSON response was cut off mid-string. Reconstruct the complete shot; do not merely close the broken sentence.' : firstDialogueIssue || '(none; repair the visual-action defect)'}
+이전 초안의 대사 문제
+${firstResult.truncated ? '이전 JSON 응답이 문자열 도중에 끊겼습니다. 잘린 문장만 닫지 말고 전체 샷을 다시 구성하세요.' : firstDialogueIssue || '（대사 문제 없음. 화면 동작을 보완）'}
 
-Original scene material:
+원본 장면 자료
 ${source}
 
-Rejected draft (diagnose it silently; do not imitate its structure):
-${desc || '(empty)'}`
+검수를 통과하지 못한 초안(내부에서 진단하고 구조는 모방하지 않음)
+${desc || '（비어 있음）'}`
           }
         ],
         jsonMode: true,
@@ -1769,6 +1769,6 @@ ${desc || '(empty)'}`
     if (error instanceof DOMException && error.name === 'AbortError') throw error
     if (!isLLMRequestFailure(error)) return composeH3VideoPrompt(resolved)
     const reason = error instanceof Error ? error.message : String(error || '')
-    throw new Error(`사용 가능한 영상 샷 프롬프트를 생성하지 못했습니다. ${reason || '请重试'}`)
+    throw new Error(`사용 가능한 영상 샷 프롬프트를 생성하지 못했습니다. ${reason || '다시 시도하세요.'}`)
   }
 }
