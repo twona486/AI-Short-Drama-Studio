@@ -1,41 +1,38 @@
 ---
 name: character-consistency
-description: 캐릭터와 장면의 일관성을 고정한다. 먼저 4면 설정 이미지와 장면 기준 이미지를 만든 뒤 스토리보드의 샷 이미지를 생성한다.
-triggers: 人设,角色,主体,四视图,三视图,设定图,一致性,换脸,场景,底板,空镜,锚点图,캐릭터 설정,캐릭터,피사체,4면 설정 이미지,3면 설정 이미지,설정 이미지,일관성,얼굴 변경,장면,빈 장면,기준 이미지
+description: Lock characters and locations with four-view sheets and scene anchor images before making shot images.
+triggers: 人设,角色,主体,四视图,三视图,设定图,一致性,换脸,场景,底板,空镜,锚点图,캐릭터 설정,캐릭터,피사체,4면 설정 이미지,3면 설정 이미지,설정 이미지,일관성,얼굴 변경,장면,빈 장면,기준 이미지,character sheet,location anchor,character design
 ---
 
-# 캐릭터 설정과 장면의 일관성
+# Character and location consistency
 
-짧은 영상에서 흔한 실패는 첫 샷의 인물이 세 번째 샷에서 다른 사람이 되는 것이다. 먼저 인물의 정체성을 고정한 뒤 그린다.
+Before drawing shots, lock identities so people remain recognizable throughout the short film.
 
-## 순서
+## Order
 
-1. 스토리보드에 이미 있는 subjects / scenes를 사용하고 별도로 만들지 않는다.
-2. 4면 설정 이미지가 없는 대상은 `generate_sheet`로, 기준 이미지가 없는 장면은 `generate_scene`으로 처리한다.
-3. 누락이 많으면 `generate_all_sheets` / `generate_all_scenes`를 사용한다.
-4. 4면 설정 이미지와 장면 기준 이미지를 모두 갖추기 전에는 스토리 개요판을 그리지 않는다. `generate_shot_image`도 실행하지 않는다.
+1. Use the existing subjects and scenes from the storyboard.
+2. Use `generate_sheet` for missing character sheets and `generate_scene` for missing location anchors.
+3. If many are missing, use `generate_all_sheets` and `generate_all_scenes`.
+4. Complete character and location references before generating storyboard panels or calling `generate_shot_image`.
 
-## 4면 설정 이미지 구성
+## Character sheets
 
-이미지 한 장에 얼굴 클로즈업, 전신 정면, 전신 측면, 전신 후면을 네 칸으로 배치한다. 모두 같은 얼굴과 의상을 유지한다.
+Make one image with four panels: face close-up, full-body front, full-body side, and full-body back. Preserve the same face and clothing.
 
-- 사용자가 지정한 그림체에 맞는 재료를 사용한다.
-- 손그림이나 특정 재료를 쓰는 그림체라면 해당 매체로 그린다. 스튜디오 실사 4면 설정 이미지를 만들지 않는다.
-- 실사풍이든 손그림이든 배경은 이음새가 없는 순백색(#FFFFFF)이어야 한다. 회색 스튜디오, 그라데이션, 바닥, 풍경을 넣지 않는다.
-- 사용자 참조 이미지가 있으면 그 안의 얼굴과 의상을 유지한다. 이목구비를 임의로 다듬지 않는다.
+- Use the user's specified rendering medium. For hand-drawn or material-specific styles, use that medium; do not generate live-action studio photography instead.
+- Use a seamless pure-white background (#FFFFFF) for any medium. Exclude gray studio backgrounds, gradients, ground, and scenery.
+- If the user supplied an image, match the reference face and clothes. Do not optimize the facial features.
 
-외모는 연령대, 헤어라인, 의상 색과 디자인, 신발, 액세서리까지 구체적으로 묘사한다. ‘잘생기고 멋지다’ 같은 표현은 피한다.
+Describe age range, hairline, colors and styles of clothing, shoes, and accessories. Avoid vague compliments.
 
-## 장면 기준 이미지 구성
+## Location anchors
 
-넓은 풍경 한 컷 대신 4분할 이미지 한 장으로 구성한다.
-1. 인물 없는 전경
-2. 주요 기준물 클로즈업(문, 작업대, 냄비, 엘리베이터 등)
-3. 바닥 또는 인물 배치 구역
-4. 광원 또는 보조 기준물
+Use a four-panel image with these views:
+1. Wide, unoccupied view
+2. Close-up of the main anchor, such as a door, worktop, pan, or elevator
+3. Ground and blocking area
+4. Light source or secondary anchor
 
-아직 인물이 등장하지 않은 상태로 그린다. 얼굴, 행인, 실루엣, 동물, 자막을 넣지 않는다. 네 칸은 모두 같은 장소와 시간대를 보여 줘야 한다. 이후 샷 이미지에는 기준물만 활용하고 4분할 구성을 최종 화면에 넣지 않는다.
+Keep the location and time consistent. Exclude faces, people, silhouettes, animals, and subtitles. Later shots use these physical anchors without reproducing the grid. For video, send character design images, the location image, and the storyboard panel. Do not send a composited character-and-location still. Later shots stay on the same ground and retain the same time of day.
 
-영상을 만들 때 해당 샷의 캐릭터 디자인 이미지, 장면 이미지, 스토리 개요판을 H3에 전달한다. 인물과 장면이 합성된 샷 이미지는 보내지 않는다.
-
-이후의 샷은 모두 같은 바닥 위에서 촬영한다. 빛의 시간대를 멋대로 황혼이나 한낮으로 바꾸지 않는다.
+Write final generation prompts in English and preserve explicitly requested Korean on-screen text. Write user-facing descriptions in Korean (한국어).
