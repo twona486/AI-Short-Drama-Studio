@@ -443,7 +443,7 @@ async function parseJsonWithModelRepair(
   try {
     return robustParseJson(content)
   } catch (parseError) {
-    log(`⚠ ${label} JSON 语法异常，调用结构修复：${(parseError as Error).message.split('\n')[0]}`)
+    log(`⚠ ${label} JSON 문법에 오류가 있어 구조를 복구하고 있어요. ${(parseError as Error).message.split('\n')[0]}`)
     const jsonCandidate = (() => {
       try {
         return extractJsonText(content)
@@ -473,13 +473,13 @@ async function parseJsonWithModelRepair(
       })
       repairedContent = repaired.content || ''
     } catch (llmError) {
-      log(`⚠ ${label} 模型修复调用失败：${(llmError as Error).message}`)
+      log(`⚠ ${label} 구조 복구 요청에 실패했어요. ${(llmError as Error).message}`)
     }
     if (repairedContent.trim()) {
       try {
         return robustParseJson(repairedContent)
       } catch (repairError) {
-        log(`⚠ ${label} 模型修复结果仍无法解析：${(repairError as Error).message.split('\n')[0]}`)
+        log(`⚠ ${label} 복구한 응답을 해석하지 못했어요. ${(repairError as Error).message.split('\n')[0]}`)
       }
     }
     throw new Error(
@@ -553,7 +553,7 @@ Determine the narrative boundary from the original request, then check adjacent 
       .filter(Boolean)
       .slice(0, 6)
   } catch (error) {
-    log(`⚠ 叙事连续性审查不可用，保留结构质检结果：${(error as Error).message}`)
+    log(`⚠ 이야기 연결을 검수하지 못했어요. 구조 검사 결과를 유지해요. ${(error as Error).message}`)
     return []
   }
 }
@@ -569,7 +569,7 @@ async function ensureNarrativeContinuity(
     const issues = await auditStoryboardNarrative(current, input, model)
     if (!issues.length) return current
     onProgress?.(`이야기가 끊기는 부분을 찾아 관련 샷을 재배치하는 중（${round + 1}/2）…`)
-    log(`⚠ 叙事连续性未通过 ${round + 1}/2：${issues.join('；')}`)
+    log(`⚠ 이야기 연결 검수를 통과하지 못했어요. ${round + 1}/2：${issues.join('；')}`)
     current = await repairStoryboardOnce(
       current,
       input,
@@ -607,12 +607,12 @@ async function polishStoryboardOnce(
     const repaired = await repairStoryboardOnce(parsed, input, model, issues)
     const remaining = storyboardQualityIssues(repaired, input)
     if (remaining.length) {
-      log(`⚠ 修订后仍有非阻断问题，交付可编辑稿：${remaining.join('；')}`)
+      log(`⚠ 수정본에 처리할 문제가 있어요. 현재 편집 가능한 초안을 사용해요. ${remaining.join('；')}`)
       onProgress?.(`편집 가능한 스토리보드를 생성했습니다. 캔버스에서 ${remaining.length}개 항목을 더 조정할 수 있습니다.`)
     }
     return repaired.shots.length ? repaired : parsed
   } catch (error) {
-    log(`⚠ 合并修订失败，交付首稿：${(error as Error).message}`)
+    log(`⚠ 수정 사항을 합치지 못해 초안을 사용해요. ${(error as Error).message}`)
     onProgress?.('자동 수정을 완료하지 못해 편집 가능한 첫 초안을 보존했습니다.')
     return parsed
   }
@@ -652,7 +652,7 @@ async function repairStoryboardOnce(
     signal: input.signal,
     timeoutMs: 75_000
   })
-  return normalizeStoryboard(await parseJsonWithModelRepair(repair.content, input, '质量修订稿'), {
+  return normalizeStoryboard(await parseJsonWithModelRepair(repair.content, input, '품질 검수 수정본'), {
     style: input.style,
     topic: input.topic,
     content: input.content,
@@ -674,7 +674,7 @@ async function ensureStoryboardQuality(
     if (!issues.length) return current
     const severe = issues.filter((issue) => issue.startsWith('심각:'))
     if (round > 0 && !severe.length) {
-      log(`⚠ 仍有非阻断问题，继续使用：${issues.join('；')}`)
+      log(`⚠ 검토할 문제가 있어요. 현재 초안을 사용해요. ${issues.join('；')}`)
       return current
     }
     if (round === QUALITY_REPAIR_ROUNDS) {
@@ -683,7 +683,7 @@ async function ensureStoryboardQuality(
       )
     }
     const n = round + 1
-    log(`⚠ 质量未通过，打回重提炼 ${n}/${QUALITY_REPAIR_ROUNDS}：${issues.join('；')}`)
+    log(`⚠ 품질 검수를 통과하지 못해 다시 추출해요. ${n}/${QUALITY_REPAIR_ROUNDS}：${issues.join('；')}`)
     onProgress?.(`검수를 통과하지 못해 다시 추출하는 중（${n}/${QUALITY_REPAIR_ROUNDS}）…`)
     current = await repairStoryboardOnce(current, input, model, issues)
   }
@@ -1008,7 +1008,7 @@ ${batch.nextHint ? `\n다음 작업 묶음의 시작(끝 상태를 정하는 데
     return { shots, model: response.model }
   } catch (error) {
     if (isAbortError(error) && !isTimeoutAbort(error)) throw error
-    log(`⚠ 分镜工作包 ${batch.index + 1}${retry ? '单路重试' : '并发首轮'}失败：${(error as Error).message.split('\n')[0]}`)
+    log(`⚠ 스토리보드 작업 그룹 ${batch.index + 1}${retry ? ' 단독 재시도' : ' 첫 동시 실행'} 실패. ${(error as Error).message.split('\n')[0]}`)
     throw error
   }
 }
@@ -1276,7 +1276,7 @@ ${play}`
       outlines = asShotOutlineList(parseJsonRobust(response.content)).map((item) =>
         attachCastToOutline(item, subjectNames, sceneNames)
       )
-      if (outlines.length) log('⚠ 场记不是文本格式，已从 JSON 兜底识别')
+      if (outlines.length) log('⚠ 현장 기록을 JSON으로 읽었어요.')
     } catch {
       /* 下面统一报空表 */
     }
@@ -1360,7 +1360,7 @@ Expand this shot only.`
     }
   } catch (error) {
     if (isAbortError(error) && !isTimeoutAbort(error)) throw error
-    log(`⚠ 第${index + 1}镜扩节点失败，先用粗分镜落库：${(error as Error).message.split('\n')[0]}`)
+    log(`⚠ 샷 ${index + 1}의 노드를 확장하지 못해 스토리보드 초안을 저장해요. ${(error as Error).message.split('\n')[0]}`)
     return outlineToRawShot(outline)
   }
 }
@@ -1388,7 +1388,7 @@ List all on-screen people and animals under subjects and locations under scenes.
 Preserve names, ages, hairstyles, clothes, and accessories throughout the film.`
 
   if (input.productImages?.length) {
-    log(`→ 调用视觉工具分析 ${input.productImages.length} 张参考图`)
+    log(`→ 비전 도구로 참조 이미지 ${input.productImages.length}장을 분석해요.`)
     onProgress?.(`참조 이미지 ${input.productImages.length}장을 먼저 분석한 뒤 캐릭터 → 장면 → 스토리보드 순으로 추출하는 중…`)
     const visualContent: LLMContentPart[] = [
       ...input.productImages.slice(0, 5).map((url) => ({
@@ -1496,7 +1496,7 @@ Report visible facts only. Do not infer brands, specifications, prices, efficacy
       } catch (error) {
         if (isAbortError(error) && !isTimeoutAbort(error)) throw error
         const message = (error as Error).message
-        log(`⚠ ${label}提炼失败：${message}`)
+        log(`⚠ ${label} 추출에 실패했어요. ${message}`)
         throw new Error(`${label} 추출에 실패했습니다. 이미 완료된 노드는 저장됐습니다. 이 단계만 다시 시도할 수 있습니다. ${message}`)
       }
     }
@@ -1555,7 +1555,7 @@ Return a top-level object with a nonempty scenes array. Do not nest inside data 
       onProgress?.('1/3단계 — 캐릭터와 반복 등장하는 소품을 추출하는 중…')
       const playPeople = extractSubjectsFromPlay(play)
       if (playPeople.length) {
-        log(`✓ 从剧本文字抽出 ${playPeople.length} 个角色，不走模型`)
+        log(`✓ 대본에서 캐릭터 ${playPeople.length}명을 바로 추출했어요.`)
         onProgress?.(`대본에 캐릭터 설정이 있어 캐릭터 ${playPeople.length}개를 바로 저장했습니다.`)
         subjectPart = { raw: { subjects: playPeople }, model: parallelModel }
       } else {
@@ -1571,8 +1571,8 @@ Return a top-level object with a nonempty scenes array. Do not nest inside data 
       await input.onExtractStage?.('subjects', { subjects: normalized.subjects, props, scenes: [], shots: [] })
       onProgress?.(
         props.length
-          ? `✓ 已保存 ${normalized.subjects?.length || 0} 个角色，${props.length} 个反复出现的道具`
-          : `✓ 已保存 ${normalized.subjects?.length || 0} 个角色`
+          ? `✓ 캐릭터 ${normalized.subjects?.length || 0}명과 반복 등장 소품 ${props.length}개를 저장했어요.`
+          : `✓ 캐릭터 ${normalized.subjects?.length || 0}명을 저장했어요.`
       )
       if (stopAfter === 'subjects') {
         onProgress?.('캐릭터 추출을 마쳤습니다. 확인 후 장면을 추출합니다.')
@@ -1589,7 +1589,7 @@ Return a top-level object with a nonempty scenes array. Do not nest inside data 
       onProgress?.('2/3단계 — 장면의 기준 정보를 추출하는 중…')
       const playScenes = extractLocationsFromPlay(play)
       if (playScenes.length) {
-        log(`✓ 从剧本文字抽出 ${playScenes.length} 个地点，不走模型`)
+        log(`✓ 대본에서 장소 ${playScenes.length}곳을 바로 추출했어요.`)
         onProgress?.(`대본에 장소가 있어 장면 ${playScenes.length}개를 바로 저장했습니다.`)
         scenePart = { raw: { scenes: playScenes }, model: parallelModel }
       } else {
@@ -1650,8 +1650,8 @@ ${extractPlayForSceneStage(play)}`
     if (!workBatches.length) throw new Error('대본 본문이 비어 있어 샷을 나눌 수 없습니다.')
     onProgress?.(
       slices.length
-        ? `目标成片 ${targetDurationSec} 秒，单镜最长 ${maxShotSec} 秒 → ${workBatches.length} 个小组（${slices.join(' + ')} 秒）`
-        : `已拆成 ${workBatches.length} 个剧情工作包；每包最多 ${SHOTS_PER_BATCH} 镜，同时运行 ${Math.min(SHOT_BATCH_CONCURRENCY, workBatches.length)} 个小组…`
+        ? `목표 길이 ${targetDurationSec}초, 샷당 최대 ${maxShotSec}초 → 작업 그룹 ${workBatches.length}개(${slices.join(' + ')}초)`
+        : `${workBatches.length}개 그룹으로 나눴어요. 그룹당 최대 ${SHOTS_PER_BATCH}개 샷을 배정해 ${Math.min(SHOT_BATCH_CONCURRENCY, workBatches.length)}개 그룹을 동시에 처리해요…`
     )
     const directives = extractPlayDirectives(play)
     const batchShots: Array<Record<string, unknown>[] | undefined> = new Array(workBatches.length)
@@ -1783,7 +1783,7 @@ ${extractPlayForSceneStage(play)}`
     // 兜底：模型超发时按预算截断，宁可少一镜也不让成片时长失控。
     if (totalShotBudget && rawShots.length > totalShotBudget) {
       onProgress?.(
-        `⚠ 模型给出 ${rawShots.length} 镜，超出 ${targetDurationSec} 秒的 ${totalShotBudget} 镜预算，按剧本顺序保留前 ${totalShotBudget} 镜`
+        `⚠ 모델이 반환한 샷 ${rawShots.length}개가 목표 ${targetDurationSec}초의 한도(${totalShotBudget}개)를 초과해 대본 순서대로 처음 ${totalShotBudget}개를 유지해요.`
       )
       rawShots = rawShots.slice(0, totalShotBudget)
     }
@@ -1854,7 +1854,7 @@ ${extractPlayForSceneStage(play)}`
     )
     const warnings = storyboardQualityIssues(parsed, input)
     if (warnings.length) {
-      log(`⚠ 并行提炼完成，保留可编辑稿并提示 ${warnings.length} 项：${warnings.join('；')}`)
+      log(`⚠ 동시 추출을 마쳤어요. 편집 가능한 초안을 유지했고 확인할 항목은 ${warnings.length}개예요. ${warnings.join('；')}`)
       onProgress?.(`단계별 추출을 완료했습니다. 캔버스에서 ${warnings.length}개 항목을 더 조정할 수 있습니다.`)
     } else {
       onProgress?.('캐릭터, 장면, 스토리보드를 추출하고 연결했습니다.')
@@ -2012,7 +2012,7 @@ Return valid JSON only.`
   const { baseUrl, model: cfgModel } = getLlmConfig()
   const model = resolvePlayModel(input) || cfgModel
   log(
-    `→ 调用主 LLM: ${baseUrl}/chat/completions (model: ${model})`
+    `→ 기본 언어 모델 호출 ${baseUrl}/chat/completions (model: ${model})`
   )
 
   const resp = await callLLM({
@@ -2025,12 +2025,12 @@ Return valid JSON only.`
     timeoutMs: PLAY_LLM_TIMEOUT_MS
   })
 
-  log(`← 收到响应 (${resp.content.length} 字符)`)
+  log(`← 응답 수신(${resp.content.length}자)`)
   if (resp.content.includes('<think>') || resp.content.includes('<reasoning>')) {
-    log('⚠ 响应包含思考标签，使用鲁棒解析剥除')
+    log('⚠ 응답에 포함된 추론 태그를 제거하고 해석해요.')
   }
 
-  let parsed = normalizeStoryboard(await parseJsonWithModelRepair(resp.content, input, '脚本首稿'), {
+  let parsed = normalizeStoryboard(await parseJsonWithModelRepair(resp.content, input, '대본 초안'), {
     style: input.style,
     topic: input.topic,
     content: input.content,
@@ -2048,11 +2048,11 @@ Return valid JSON only.`
   parsed = await ensureShotDuration(parsed, input, model, onProgress)
 
   log(
-    `✓ 解析成功，${parsed.subjects?.length ?? 0} 个主体 / ${parsed.scenes?.length ?? 0} 个场景 / ${parsed.shots.length} 个分镜`
+    `✓ 캐릭터 ${parsed.subjects?.length ?? 0}명, 장면 ${parsed.scenes?.length ?? 0}개, 스토리보드 샷 ${parsed.shots.length}개를 읽었어요.`
   )
   const durSummary = parsed.shots.map((s) => s.duration).join('+')
   const totalDur = parsed.shots.reduce((sum, s) => sum + s.duration, 0)
-  log(`⏱ 镜头秒数：${durSummary} = ${totalDur}s`)
+  log(`⏱ 샷별 길이 ${durSummary} = ${totalDur}s`)
   return { result: parsed, model: resp.model ?? model }
 }
 
@@ -2218,17 +2218,17 @@ async function ensureShotDuration(
     const total = totalShotDuration(current.shots)
     const issue = durationWindowIssue(total, target)
     if (!issue) {
-      if (round > 0) onProgress?.(`时长检测通过：总时长 ${total} 秒，在 ${target} 秒的 ±${DURATION_TOLERANCE_SEC} 秒内`)
+      if (round > 0) onProgress?.(`전체 ${total}초가 목표 ${target}초의 허용 오차 ±${DURATION_TOLERANCE_SEC}초 안에 들어요.`)
       return current
     }
     if (round === DURATION_REPAIR_ROUNDS) break
     onProgress?.(
-      `时长检测未通过：现在 ${total} 秒，用户要 ${target} 秒（允许 ${target - DURATION_TOLERANCE_SEC}–${target + DURATION_TOLERANCE_SEC} 秒）。打回按时长重拆（${round + 1}/${DURATION_REPAIR_ROUNDS}）…`
+      `현재 ${total}초가 목표 ${target}초의 허용 범위(${target - DURATION_TOLERANCE_SEC}–${target + DURATION_TOLERANCE_SEC}초)를 벗어나 다시 샷을 나누고 있어요(${round + 1}/${DURATION_REPAIR_ROUNDS})…`
     )
     try {
       current = await repairStoryboardOnce(current, { ...input, targetDurationSec: target }, model, [issue])
     } catch (error) {
-      log(`⚠ 时长打回失败，改为强制收秒：${(error as Error).message}`)
+      log(`⚠ 길이 보정 요청에 실패해 샷 길이를 직접 조정해요. ${(error as Error).message}`)
       break
     }
   }
@@ -2236,7 +2236,7 @@ async function ensureShotDuration(
   if (!fitted) {
     const total = totalShotDuration(current.shots)
     throw new Error(
-      `时长检测未通过：总时长 ${total} 秒，用户要求 ${target} 秒，只允许上下浮动 ${DURATION_TOLERANCE_SEC} 秒。已打回重拆 ${DURATION_REPAIR_ROUNDS} 次，仍收不进这个区间。`
+      `샷을 ${DURATION_REPAIR_ROUNDS}번 다시 나눴지만 전체 ${total}초가 목표 ${target}초의 허용 오차 ±${DURATION_TOLERANCE_SEC}초를 벗어나요.`
     )
   }
   const fittedTotal = totalShotDuration(fitted)
@@ -2815,11 +2815,11 @@ export async function generateStoryboard(
   const look = lookFromTexts(input.style, input.topic, input.content, input.keywords)
   const resolved: StoryboardInput = { ...input, style: look.style, signal }
   if (look.matched && look.matched !== input.style) {
-    log(`画风已从用户原话对上已知画种：${input.style} → ${look.matched}（${look.medium}）`)
+    log(`요청에 맞는 화면 스타일을 찾았어요. ${input.style} → ${look.matched}（${look.medium}）`)
   } else if (look.userNamed && !look.matched) {
-    log(`画风按用户原词锁定：${look.medium}（不套下拉枚举）`)
+    log(`요청한 화면 스타일을 적용해요. ${look.medium}`)
   }
-  log(`当前 AI 模式：${mode}`)
+  log(`현재 AI 모드 ${mode}`)
 
   if (mode === 'real') {
       onProgress?.(
@@ -2841,7 +2841,7 @@ export async function generateStoryboard(
       return { result, source: 'real', model }
     } catch (e: any) {
       const msg = e?.message ?? String(e)
-      log(`✗ 真实 LLM 调用失败：${msg}`)
+      log(`✗ 언어 모델 호출에 실패했어요. ${msg}`)
       if (isAbortError(e) && !isTimeoutAbort(e)) throw e
       throw new Error(
         msg.startsWith('脚本') ||
@@ -2986,7 +2986,7 @@ async function fillPlayBibleIfThin(
   const gaps = playBibleGaps(draft.playMarkdown)
   if (!gaps.length) return draft
   try {
-    log(`⚠ 剧本缺少设定节，补写一次：${gaps.join('；')}`)
+    log(`⚠ 대본에 설정 항목을 보완해요. ${gaps.join('；')}`)
     const repair = await callLLM({
       messages: [
         {
@@ -3005,12 +3005,12 @@ async function fillPlayBibleIfThin(
       signal: input.signal,
       timeoutMs: PLAY_LLM_TIMEOUT_MS
     })
-    const repaired = await parseJsonWithModelRepair(repair.content, input, '剧本设定补全')
+    const repaired = await parseJsonWithModelRepair(repair.content, input, '대본 설정 보완')
     const playMarkdown = String(repaired?.playMarkdown || '').trim()
     if (playMarkdown.length < draft.playMarkdown.length * 0.8) return draft
     return { ...draft, playMarkdown }
   } catch (error) {
-    log(`⚠ 剧本设定补全失败，保留首稿：${(error as Error).message}`)
+    log(`⚠ 대본 설정을 보완하지 못해 초안을 유지해요. ${(error as Error).message}`)
     return draft
   }
 }
@@ -3120,7 +3120,7 @@ async function ensurePlayNarrativeContinuity(
       .slice(0, 6)
     if (!issues.length) return draft
 
-    log(`⚠ 完整剧本发现叙事断层，自动局部重写：${issues.join('；')}`)
+    log(`⚠ 대본에서 이어지지 않는 부분을 찾아 다시 작성해요. ${issues.join('；')}`)
     const repair = await callLLM({
       messages: [
         {
@@ -3139,12 +3139,12 @@ async function ensurePlayNarrativeContinuity(
       signal: input.signal,
       timeoutMs: PLAY_LLM_TIMEOUT_MS
     })
-    const repaired = await parseJsonWithModelRepair(repair.content, input, '完整剧本连续性修订')
+    const repaired = await parseJsonWithModelRepair(repair.content, input, '대본 연결 수정')
     const playMarkdown = String(repaired?.playMarkdown || '').trim()
     if (playMarkdown.length < 80) return draft
     return { ...draft, playMarkdown }
   } catch (error) {
-    log(`⚠ 完整剧本连续性自检不可用，保留首稿：${(error as Error).message}`)
+    log(`⚠ 대본의 이야기 연결을 검사하지 못해 초안을 유지해요. ${(error as Error).message}`)
     return draft
   }
 }
@@ -3242,7 +3242,7 @@ async function realGeneratePlay(input: StoryboardInput): Promise<{ result: PlayD
   const scaleBrief = playScaleBrief(targetSec)
   const { model: cfgModel } = getLlmConfig()
   const model = resolvePlayModel(input) || cfgModel
-  log(`→ ${continueMode ? '续写剧本' : '写剧本'} LLM: ${model}`)
+  log(`→ ${continueMode ? '대본 이어 쓰기' : '대본 작성'} LLM: ${model}`)
   const resp = await callLLM({
     disableThinking: true,
     messages: [
@@ -3304,7 +3304,7 @@ export async function generatePlay(
   const mode = getAIMode()
   const look = lookFromTexts(input.style, input.topic, input.content, input.keywords)
   const resolved: StoryboardInput = { ...input, style: look.style, signal }
-  log(`${input.playMode === 'continue' ? '续写剧本' : '写剧本'} · AI 模式：${mode}`)
+  log(`${input.playMode === 'continue' ? '대본 이어 쓰기' : '대본 작성'} · AI 모드 ${mode}`)
 
   if (mode === 'real') {
     onProgress?.(input.playMode === 'continue' ? '대본을 이어 쓰는 중…' : '전체 대본을 작성하는 중…')
