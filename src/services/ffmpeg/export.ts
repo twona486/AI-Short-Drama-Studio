@@ -1,12 +1,12 @@
 /**
- * 视频导出
+ * 영상 내보내기
  *
- * 把时间线上的所有片段 → 转场 → 字幕 → 一键合成
+ * 타임라인의 클립을 장면 전환 및 자막과 함께 합성한다.
  *
- * 关键点：
- * - 全部重编码为 H.264/AAC（不 -c copy），兼容 webm/mp4/mov 各种输入
- * - 图片补静音音轨，避免 concat 因缺音频失败
- * - 每个阶段有详细 log 和明确错误信息
+ * 합성 시 적용하는 조건
+ * 다양한 WebM, MP4, MOV 입력을 처리하도록 H.264와 AAC를 사용한다.
+ * 이미지에는 무음 오디오를 추가해 이어 붙이기가 실패하는 일을 방지한다.
+ * 각 단계에서 진행 로그와 오류를 반환한다.
  */
 
 import { t } from "@/i18n"
@@ -33,14 +33,14 @@ export interface ExportInput {
   bgmStartTime?: number
   bgmSourceIn?: number
   bgmDuration?: number
-  /** 分镜原片环境音音量（0=静音，建议 0.35–0.7） */
+  /** 스토리보드 원본 환경음 볼륨(0은 무음, 권장 범위 0.35~0.7) */
   originalVolume?: number
-  /** 分镜口播 TTS（shotId → 音频 blob），叠到对应片段上 */
+  /** 샷 ID별 내레이션 오디오를 해당 클립에 합성한다. */
   voiceoverAudioMap?: Map<string, Blob>
   voiceoverVolume?: number
-  /** 是否保留各段视频自带的环境音效（默认 true） */
+  /** 클립의 환경음을 유지할지 지정한다. 기본값은 true다. */
   keepAmbientAudio?: boolean
-  /** 分镜级原声音轨决策；H3 自带对白/口播可强制保留，不受全局环境音开关影响 */
+  /** 샷별 오디오 설정은 전역 환경음 설정보다 우선할 수 있다. */
   sourceAudioMap?: Map<string, boolean>
   format?: 'mp4' | 'webm'
   onProgress?: (msg: string) => void
@@ -157,7 +157,7 @@ export async function exportVideo(input: ExportInput): Promise<Blob> {
             mixedName,
             voBlob,
             duration,
-            // 环境音已在转码阶段调过音量，这里按 1 原样保留再与口播混合
+            // 변환 단계에서 환경음 볼륨을 조정했으므로 여기서는 기존 볼륨으로 내레이션과 믹싱한다.
             keepAmbient ? 1 : 0,
             input.voiceoverVolume ?? 1
           )
@@ -467,7 +467,7 @@ function audioFilter(_speed: number, _volume: number): string {
   return 'aresample=44100,aformat=sample_fmts=fltp:channel_layouts=stereo'
 }
 
-/** 16-bit stereo PCM 静音 WAV，给没音轨的图片/视频补齐，concat 才不会丢声 */
+/** 오디오가 없는 입력에 추가할 16비트 스테레오 PCM 무음 WAV */
 function makeSilentWav(durationSec: number, sampleRate = 44100): Uint8Array {
   const numSamples = Math.max(1, Math.ceil(durationSec * sampleRate))
   const channels = 2
@@ -552,8 +552,8 @@ async function transcodeClip(
     return
   }
 
-  // 口播成片已是 mp4：画面直通，音轨统一重编码，避免 wasm 里 1080p libx264 把内存打爆。
-  // 音轨不能 -c copy：按时长裁切 AAC 会切到帧中间，拼起来几秒后就是电流声。
+  // MP4 원본 영상은 그대로 복사하고 오디오만 변환해 1080p 재인코딩의 메모리 사용을 피한다.
+  // AAC를 프레임 중간에서 잘라 이어 붙이면 잡음이 생길 수 있어 오디오를 다시 인코딩한다.
   if (opts.speed === 1 && (keepAmbient || volume > 0.01)) {
     if (await remuxNormalizeAudio(ffmpeg, inName, outName, duration, sourceIn, volume)) {
       log('  Copied video and resampled audio to AAC 44100 Hz stereo')
