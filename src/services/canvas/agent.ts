@@ -279,7 +279,7 @@ export async function runAgentTurn(
         return {
           reply: `기억했습니다. ${entry.content}\n${req.scope === 'global' ? '앞으로 모든 프로젝트에 적용합니다.' : '현재 프로젝트에만 적용합니다.'}`,
           results: [],
-          chips: [{ label: '기억 보기', text: '查看记忆' }]
+          chips: [{ label: '기억 보기', text: '기억 목록 보여 줘' }]
         }
       }
     }
@@ -330,15 +330,15 @@ export async function runAgentTurn(
         return {
           reply: `프롬프트 최적화에 실패했습니다.${failed ? `\n원인 ${failed.detail}` : ''}`,
           results: r0,
-          chips: [{ label: '다시 시도', text: '再优化一次当前节点提示词' }]
+          chips: [{ label: '다시 시도', text: '현재 노드 프롬프트 다시 최적화해 줘' }]
         }
       }
       return {
         reply: r0[0]?.detail || '프롬프트를 구체화하고 노드에 저장했습니다.',
         results: r0,
         chips: [
-          { label: '이 노드 생성', text: `生成节点 ${nodeId}` },
-          { label: '더 구체화', text: '继续加厚当前节点提示词，画面再具体一点' }
+          { label: '이 노드 생성', text: `생성 노드 ${nodeId}` },
+          { label: '더 구체화', text: '현재 노드 프롬프트의 화면 묘사를 더 구체화해 줘' }
         ]
       }
     }
@@ -554,8 +554,8 @@ export async function runAgentTurn(
       reply: `후속 작업을 중단했습니다.${ok ? `완료한 ${ok}단계는 보존했습니다.` : ''}\n실패 단계 ${TOOL_LABEL[failed?.tool || ''] || failed?.tool}\n원인 ${failed?.detail || loop.error?.message}`,
       results,
       chips: [
-        { label: '실패 단계 다시 시도', text: `重试${TOOL_LABEL[failed?.tool || ''] || '실패 단계'}` },
-        { label: '설정 확인', text: '帮我检查当前失败原因' }
+        { label: '실패 단계 다시 시도', text: `다시 시도해 줘. ${TOOL_LABEL[failed?.tool || ''] || '실패 단계'}` },
+        { label: '설정 확인', text: '현재 실패 원인을 확인해 줘' }
       ]
     }
   }
@@ -694,14 +694,14 @@ function statusChips(p: Project | null | undefined): { label: string; text: stri
   const chips: { label: string; text: string }[] = []
   const next = nextPipelineStep(p)
   if (next && (p?.shots.length || p?.script?.content?.trim())) {
-    chips.push({ label: `계속 — ${next.label}`, text: '继续' })
+    chips.push({ label: `계속 — ${next.label}`, text: '계속' })
   }
   const failed = (p?.canvas?.nodes ?? []).find(
     (n) => (n.type === 'imageGen' || n.type === 'videoGen') && (n.status === 'failed' || n.error)
   )
-  if (failed) chips.push({ label: '실패한 노드 다시 실행', text: `重新生成节点 ${failed.id}` })
-  chips.push({ label: '이미지 그리기', text: '帮我创建一个图片节点并生成：' })
-  chips.push({ label: '전체 워크플로', text: '全流程跑完' })
+  if (failed) chips.push({ label: '실패한 노드 다시 실행', text: `다시 생성 노드 ${failed.id}` })
+  chips.push({ label: '이미지 그리기', text: '이미지 노드를 새로 만들고 생성해 줘: ' })
+  chips.push({ label: '전체 워크플로', text: '전체 과정' })
   return chips.slice(0, 3)
 }
 
@@ -820,22 +820,22 @@ function continuePlan(p: Project): { say: string; actions: any[] } {
 function clarifyChips(p: Project | null | undefined): { label: string; text: string }[] {
   if (!p?.script?.content?.trim()) {
     return [
-      { label: '먼저 대본 나누기', text: '按我刚说的拆剧本' },
-      { label: '전체 워크플로', text: '全流程跑完' }
+      { label: '먼저 대본 나누기', text: '방금 요청대로 대본을 나눠 줘' },
+      { label: '전체 워크플로', text: '전체 과정' }
     ]
   }
   if (!p.shots.length) {
     return [
-      { label: '대본 나누기', text: '拆剧本' },
-      { label: '전체 워크플로', text: '全流程跑完' }
+      { label: '대본 나누기', text: '대본 나누기' },
+      { label: '전체 워크플로', text: '전체 과정' }
     ]
   }
   if (needsPlayReview(p)) return reviewChips()
   const n = nextPipelineStep(p)
   if (n) {
     return [
-      { label: `계속 — ${n.label}`, text: '继续' },
-      { label: '전체 워크플로', text: '全流程跑完' }
+      { label: `계속 — ${n.label}`, text: '계속' },
+      { label: '전체 워크플로', text: '전체 과정' }
     ]
   }
   return []
@@ -843,18 +843,18 @@ function clarifyChips(p: Project | null | undefined): { label: string; text: str
 
 function reviewChips() {
   return [
-    { label: '승인', text: '确认通过' },
-    { label: '계속 진행', text: '继续' },
-    { label: '전체 워크플로', text: '全流程跑完' }
+    { label: '승인', text: '대본 승인' },
+    { label: '계속 진행', text: '계속' },
+    { label: '전체 워크플로', text: '전체 과정' }
   ]
 }
 
 function nextChips(next: PipelineStep | null): { label: string; text: string }[] {
   if (!next) return []
   return [
-    { label: `계속 — ${next.label}`, text: '继续' },
-    { label: '먼저 확인', text: '先看看' },
-    { label: '전체 워크플로', text: '全流程跑完' }
+    { label: `계속 — ${next.label}`, text: '계속' },
+    { label: '먼저 확인', text: '먼저 보여 줘' },
+    { label: '전체 워크플로', text: '전체 과정' }
   ]
 }
 
@@ -901,14 +901,14 @@ function wrapUpReply(
         : `**기존 장면을 보존하고 대본을 이어 썼습니다.**\n\n- 검토하고 문구를 수정할 수 있습니다.\n- ‘계속’이라고 하면 먼저 캐릭터를 추출합니다. 장면과 스토리보드는 각각 다음 단계에서 추출합니다.${failLine}`,
       chips: hasShots
         ? [
-            { label: '스토리보드 다시 추출', text: '重新提取分镜' },
-            { label: '더 이어 쓰기', text: '续写剧本' },
-            { label: '먼저 확인', text: '先看看' }
+            { label: '스토리보드 다시 추출', text: '스토리보드 다시 추출' },
+            { label: '더 이어 쓰기', text: '대본 이어 쓰기' },
+            { label: '먼저 확인', text: '먼저 보여 줘' }
           ]
         : [
-            { label: '먼저 캐릭터 추출', text: '继续' },
-            { label: '더 이어 쓰기', text: '续写剧本' },
-            { label: '먼저 확인', text: '先看看' }
+            { label: '먼저 캐릭터 추출', text: '계속' },
+            { label: '더 이어 쓰기', text: '대본 이어 쓰기' },
+            { label: '먼저 확인', text: '먼저 보여 줘' }
           ]
     }
   }
@@ -924,10 +924,10 @@ function wrapUpReply(
 
 확인 후 ‘계속’이라고 하면 캐릭터를 추출합니다. 장면과 스토리보드는 각각 다음 단계에서 추출합니다. ‘전체 워크플로’를 요청하면 모든 단계를 실행합니다.${failLine}`,
       chips: [
-        { label: '먼저 캐릭터 추출', text: '继续' },
-        { label: '이어 쓰기', text: '续写剧本' },
-        { label: '먼저 확인', text: '先看看' },
-        { label: '전체 워크플로', text: '全流程跑完' }
+        { label: '먼저 캐릭터 추출', text: '계속' },
+        { label: '이어 쓰기', text: '대본 이어 쓰기' },
+        { label: '먼저 확인', text: '먼저 보여 줘' },
+        { label: '전체 워크플로', text: '전체 과정' }
       ]
     }
   }
@@ -941,8 +941,8 @@ function wrapUpReply(
 
 - 캐릭터를 확인한 뒤 ‘계속’이라고 하면 장면을 추출합니다.${failLine}`,
         chips: [
-          { label: '장면 추출 계속', text: '继续' },
-          { label: '먼저 캐릭터 확인', text: '先看看人物' }
+          { label: '장면 추출 계속', text: '계속' },
+          { label: '먼저 캐릭터 확인', text: '먼저 캐릭터를 보여 줘' }
         ]
       }
     }
@@ -952,8 +952,8 @@ function wrapUpReply(
 
 - 장면을 확인한 뒤 ‘계속’이라고 하면 스토리보드를 추출합니다.${failLine}`,
         chips: [
-          { label: '스토리보드 추출 계속', text: '继续' },
-          { label: '먼저 장면 확인', text: '先看看场景' }
+          { label: '스토리보드 추출 계속', text: '계속' },
+          { label: '먼저 장면 확인', text: '먼저 장면을 보여 줘' }
         ]
       }
     }
@@ -1032,7 +1032,7 @@ function sanitizeActions(actions: any[], userText: string): any[] {
   const t = userText
   // 只有「批量」动作（会一次性烧掉大量额度）才需要用户的话里有对应意图，
   // 单个动作放手让模型根据最新画布决定，避免在意料之外被静默丢弃。
-  const askedBoard = /拆分镜|拆镜|故事板|出分镜|生成分镜|写剧本|提炼节点|拆剧本|续写|接着写|再写|分镜|场次/.test(t)
+  const askedBoard = /拆分镜|拆镜|故事板|出分镜|生成分镜|写剧本|提炼节点|拆剧本|대본\s*나누기|대본을\s*나눠|split (?:the )?script|续写|接着写|再写|分镜|场次/.test(t)
   const askedSheet = /人设|角色图|四视图|人物图|角色/.test(t)
   const askedScene = /场景图|底板|出场景|生成场景|场景/.test(t)
   const askedPanel = /故事看板|看板图|线稿分镜|线稿/.test(t)
@@ -1073,7 +1073,7 @@ function protectImportedScript(actions: any[], userText: string): any[] {
   const kept = actions.filter(
     (item) => !['generate_play', 'generate_storyboard', 'seed_script'].includes(String(item?.tool || ''))
   )
-  const askedSplit = /拆分镜|拆镜|提炼|分镜|出节点|拆剧本|拆人物|拆场景/.test(userText)
+  const askedSplit = /拆分镜|拆镜|提炼|分镜|出节点|拆剧本|대본\s*나누기|대본을\s*나눠|split (?:the )?script|拆人物|拆场景/.test(userText)
   if (askedSplit && !kept.some((item) => item.tool === 'extract_cast')) {
     kept.unshift({ tool: 'extract_cast' })
   }
@@ -1152,7 +1152,7 @@ function heuristicPlan(userText: string): { say: string; actions: any[] } {
   const askedExtract = /提炼节点|提炼人物|提炼场景|拆节点|出节点|重新提取|重新提炼|노드 추출|캐릭터 추출|장면 추출|다시 추출|extract nodes|extract characters|extract scenes|re-extract/i.test(t)
   const askedContinuePlay = /续写|接着写|再写[一两三四\d]*场|加一场|往后写|续一[场段]|写下去|이어\s*(?:쓰기|써)|장면 추가|continue writing|add a scene/i.test(t)
   const askedPlay = /写剧本|完整剧本|重新写剧本/.test(t) && !askedContinuePlay
-  const askedBoard = /拆分镜|拆镜|故事板|出分镜|生成分镜|拆剧本/.test(t)
+  const askedBoard = /拆分镜|拆镜|故事板|出分镜|生成分镜|拆剧本|대본\s*나누기|대본을\s*나눠|split (?:the )?script/i.test(t)
   const askedSheet = /人设|角色图|四视图/.test(t)
   const askedProp = /资产图|道具图|关键道具/.test(t)
   const askedScene = /场景图|底板|出场景|生成场景/.test(t)
