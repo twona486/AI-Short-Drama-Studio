@@ -113,7 +113,7 @@ export class AgentToolError extends Error {
 }
 
 function abortError(tool: string) {
-  return new AgentToolError('任务已由用户停止', tool, 'cancelled', false)
+  return new AgentToolError('사용자가 작업을 중단했습니다.', tool, 'cancelled', false)
 }
 
 async function withControl<T>(
@@ -130,7 +130,7 @@ async function withControl<T>(
     if (error instanceof AgentToolError) throw error
     if (isTimeoutAbort(error, control.signal) && control.signal.aborted) {
       throw new AgentToolError(
-        `这一步超过 ${Math.round(timeoutMs / 1000)} 秒还没完成，请再试一次`,
+        `이 단계가 ${Math.round(timeoutMs / 1000)}초 안에 끝나지 않았습니다. 다시 시도하세요.`,
         tool,
         'timeout',
         true
@@ -177,17 +177,17 @@ export function preflightRegisteredTool(raw: unknown): ToolPreflight {
   if (action.tool === 'extract_cast' && !(project.script?.playReady && project.script.content?.trim())) {
     return {
       state: 'repair',
-      detail: '提炼节点前缺少完整剧本，先补写剧本',
+      detail: '노드를 추출하려면 완성된 대본이 필요합니다. 먼저 대본을 작성합니다.',
       actions: [{ tool: 'generate_play' }]
     }
   }
 
   if (action.tool === 'generate_shot_image') {
     const shot = shotFor(action)
-    if (!shot) throw new AgentToolError(`找不到分镜 ${action.shotId}`, action.tool, 'invalid_action', true)
-    if (shot.imageAssetId) return { state: 'skip', detail: `第 ${shot.index + 1} 镜关键帧已经存在` }
+    if (!shot) throw new AgentToolError(`스토리보드 샷 ${action.shotId}을 찾을 수 없습니다.`, action.tool, 'invalid_action', true)
+    if (shot.imageAssetId) return { state: 'skip', detail: `${shot.index + 1}번 샷에 키프레임이 이미 있습니다.` }
     if (stillModeForShot(shot, project) !== 'keyframe') {
-      return { state: 'skip', detail: `第 ${shot.index + 1} 镜当前视频模型不需要分镜关键帧` }
+      return { state: 'skip', detail: `${shot.index + 1}번 샷의 영상 모델에는 키프레임이 필요 없습니다.` }
     }
     const subjectIds = shot.subjectIds?.length ? shot.subjectIds : (project.subjects ?? []).map((subject) => subject.id)
     const missingSubjects = (project.subjects ?? []).filter(
@@ -197,18 +197,18 @@ export function preflightRegisteredTool(raw: unknown): ToolPreflight {
     const repairs: AgentToolAction[] = missingSubjects.map((subject) => ({ tool: 'generate_sheet', subjectId: subject.id }))
     if (scene && !scene.plateAssetId) repairs.push({ tool: 'generate_scene', sceneId: scene.id })
     if (repairs.length) {
-      return { state: 'repair', detail: `第 ${shot.index + 1} 镜缺少人设或场景，先补齐再出关键帧`, actions: repairs }
+      return { state: 'repair', detail: `${shot.index + 1}번 샷에 캐릭터 설정이나 장면이 없습니다. 먼저 보완한 뒤 키프레임을 생성합니다.`, actions: repairs }
     }
   }
 
   if (action.tool === 'generate_shot_frames') {
     const shot = shotFor(action)
-    if (!shot) throw new AgentToolError(`找不到分镜 ${action.shotId}`, action.tool, 'invalid_action', true)
+    if (!shot) throw new AgentToolError(`스토리보드 샷 ${action.shotId}을 찾을 수 없습니다.`, action.tool, 'invalid_action', true)
     if (!shotUsesFrames(shot, project)) {
-      return { state: 'skip', detail: `第 ${shot.index + 1} 镜不是首尾帧模式，不需要画帧` }
+      return { state: 'skip', detail: `${shot.index + 1}번 샷은 시작·끝 프레임 생성이 필요한 모드가 아닙니다.` }
     }
     if (shot.firstFrameAssetId && shot.lastFrameAssetId) {
-      return { state: 'skip', detail: `第 ${shot.index + 1} 镜首尾帧已经存在` }
+      return { state: 'skip', detail: `${shot.index + 1}번 샷의 시작·끝 프레임이 이미 있습니다.` }
     }
     const subjectIds = shot.subjectIds?.length ? shot.subjectIds : (project.subjects ?? []).map((subject) => subject.id)
     const missingSubjects = (project.subjects ?? []).filter(
@@ -218,29 +218,29 @@ export function preflightRegisteredTool(raw: unknown): ToolPreflight {
     const repairs: AgentToolAction[] = missingSubjects.map((subject) => ({ tool: 'generate_sheet', subjectId: subject.id }))
     if (scene && !scene.plateAssetId) repairs.push({ tool: 'generate_scene', sceneId: scene.id })
     if (repairs.length) {
-      return { state: 'repair', detail: `第 ${shot.index + 1} 镜缺少人设或场景，先补齐再画首尾帧`, actions: repairs }
+      return { state: 'repair', detail: `${shot.index + 1}번 샷에 캐릭터 설정이나 장면이 없습니다. 먼저 보완한 뒤 시작·끝 프레임을 생성합니다.`, actions: repairs }
     }
   }
 
   if (action.tool === 'generate_shot_board' || action.tool === 'generate_video' || action.tool === 'generate_audio') {
     const shot = shotFor(action)
-    if (!shot) throw new AgentToolError(`找不到分镜 ${action.shotId}`, action.tool, 'invalid_action', true)
+    if (!shot) throw new AgentToolError(`스토리보드 샷 ${action.shotId}을 찾을 수 없습니다.`, action.tool, 'invalid_action', true)
 
     if (action.tool === 'generate_video') {
-      if (shot.videoAssetId) return { state: 'skip', detail: `第 ${shot.index + 1} 镜视频已经存在` }
+      if (shot.videoAssetId) return { state: 'skip', detail: `${shot.index + 1}번 샷의 영상이 이미 있습니다.` }
       const fl2vaShot = shotUsesFrames(shot, project)
       const stillMode = stillModeForShot(shot, project)
       if (!fl2vaShot && stillMode === 'storyboard' && !shot.boardAssetId) {
         return {
           state: 'repair',
-          detail: `第 ${shot.index + 1} 镜缺少故事看板，先补看板`,
+          detail: `${shot.index + 1}번 샷에 스토리 개요판이 없어 먼저 생성합니다.`,
           actions: [{ tool: 'generate_shot_board', shotId: shot.id }]
         }
       }
       if (!fl2vaShot && stillMode === 'keyframe' && !shot.imageAssetId) {
         return {
           state: 'repair',
-          detail: `第 ${shot.index + 1} 镜缺少四宫格关键帧，先补关键帧`,
+          detail: `${shot.index + 1}번 샷에 4분할 키프레임이 없어 먼저 생성합니다.`,
           actions: [{ tool: 'generate_shot_image', shotId: shot.id }]
         }
       }
@@ -249,7 +249,7 @@ export function preflightRegisteredTool(raw: unknown): ToolPreflight {
       if (fl2vaShot && !shot.firstFrameAssetId && !shot.lastFrameAssetId) {
         return {
           state: 'repair',
-          detail: `第 ${shot.index + 1} 镜要走首尾帧，先画起始帧和结束帧`,
+          detail: `${shot.index + 1}번 샷에는 시작·끝 프레임이 필요하므로 먼저 생성합니다.`,
           actions: [{ tool: 'generate_shot_frames', shotId: shot.id }]
         }
       }
@@ -261,23 +261,23 @@ export function preflightRegisteredTool(raw: unknown): ToolPreflight {
       const repairs: AgentToolAction[] = missingSubjects.map((subject) => ({ tool: 'generate_sheet', subjectId: subject.id }))
       if (scene && !scene.plateAssetId) repairs.push({ tool: 'generate_scene', sceneId: scene.id })
       if (repairs.length) {
-        return { state: 'repair', detail: `第 ${shot.index + 1} 镜缺少视频身份或场景参考，先补齐`, actions: repairs }
+        return { state: 'repair', detail: `${shot.index + 1}번 샷에 영상의 캐릭터나 장면 참조 이미지가 없어 먼저 보완합니다.`, actions: repairs }
       }
     }
 
     if (action.tool === 'generate_audio') {
-      if (!needsExternalTts(shot, project)) return { state: 'skip', detail: `第 ${shot.index + 1} 镜由 H3 负责声音，不需要独立 TTS` }
-      if (shot.audioAssetId) return { state: 'skip', detail: `第 ${shot.index + 1} 镜口播已经存在` }
+      if (!needsExternalTts(shot, project)) return { state: 'skip', detail: `${shot.index + 1}번 샷은 H3가 음성을 생성하므로 별도의 TTS가 필요 없습니다.` }
+      if (shot.audioAssetId) return { state: 'skip', detail: `${shot.index + 1}번 샷의 내레이션이 이미 있습니다.` }
     }
 
     if (action.tool === 'generate_shot_board') {
       const stillMode = stillModeForShot(shot, project)
       if (stillMode === 'identity') {
-        return { state: 'skip', detail: `第 ${shot.index + 1} 镜当前视频模型不需要看板或关键帧` }
+        return { state: 'skip', detail: `${shot.index + 1}번 샷의 영상 모델에 스토리 개요판이나 키프레임이 필요 없습니다.` }
       }
       if (stillMode === 'keyframe') {
-        if (shot.imageAssetId) return { state: 'skip', detail: `第 ${shot.index + 1} 镜关键帧已经存在` }
-      } else if (shot.boardAssetId) return { state: 'skip', detail: `第 ${shot.index + 1} 镜故事看板已经存在` }
+        if (shot.imageAssetId) return { state: 'skip', detail: `${shot.index + 1}번 샷에 키프레임이 이미 있습니다.` }
+      } else if (shot.boardAssetId) return { state: 'skip', detail: `${shot.index + 1}번 샷의 스토리 개요판이 이미 있습니다.` }
       const subjectIds = shot.subjectIds?.length ? shot.subjectIds : (project.subjects ?? []).map((subject) => subject.id)
       const missingFour = (project.subjects ?? []).filter(
         (subject) => subjectIds.includes(subject.id) && !subject.designSheetAssetId
@@ -288,61 +288,61 @@ export function preflightRegisteredTool(raw: unknown): ToolPreflight {
       ]
       if (scene && !scene.plateAssetId) repairs.push({ tool: 'generate_scene', sceneId: scene.id })
       if (repairs.length) {
-        return { state: 'repair', detail: `第 ${shot.index + 1} 镜缺少角色或场景参考，先补依赖`, actions: repairs }
+        return { state: 'repair', detail: `${shot.index + 1}번 샷에 캐릭터나 장면 참조 이미지가 없어 먼저 보완합니다.`, actions: repairs }
       }
     }
   }
 
   if (action.tool === 'generate_all_sheets') {
     if (!(project.subjects ?? []).some((subject) => !subject.designSheetAssetId)) {
-      return { state: 'skip', detail: '四视图已经补齐' }
+      return { state: 'skip', detail: '4면 설정 이미지가 모두 있습니다.' }
     }
   }
   if (action.tool === 'generate_all_prop_sheets' || action.tool === 'generate_prop_sheet') {
-    return { state: 'skip', detail: '已取消关键道具图' }
+    return { state: 'skip', detail: '주요 소품 이미지 생성을 취소했습니다.' }
   }
 
   if (action.tool === 'generate_all_boards') {
     if (!shotsMissingStoryboard(project).length && !shotsMissingKeyframe(project).length) {
-      return { state: 'skip', detail: '当前视频模型不需要看板或关键帧，或已经补齐' }
+      return { state: 'skip', detail: '현재 영상 모델에 필요한 스토리 개요판과 키프레임을 확인했습니다.' }
     }
     const repairs: AgentToolAction[] = []
     if ((project.subjects ?? []).some((subject) => !subject.designSheetAssetId)) repairs.push({ tool: 'generate_all_sheets' })
     if ((project.scenes ?? []).some((scene) => !scene.plateAssetId)) repairs.push({ tool: 'generate_all_scenes' })
-    if (repairs.length) return { state: 'repair', detail: '批量看板缺少角色或场景参考，先补依赖', actions: repairs }
+    if (repairs.length) return { state: 'repair', detail: '스토리 개요판 일괄 생성에 필요한 캐릭터나 장면 참조 이미지를 먼저 보완합니다.', actions: repairs }
   }
 
   if (action.tool === 'generate_all_images') {
-    if (!shotsMissingKeyframe(project).length) return { state: 'skip', detail: '当前不需要分镜关键帧，或已经补齐' }
+    if (!shotsMissingKeyframe(project).length) return { state: 'skip', detail: '현재 작업에 필요한 키프레임을 확인했습니다.' }
     if (shotsMissingStoryboard(project).length) {
-      return { state: 'repair', detail: '批量配图缺少故事看板，先补看板', actions: [{ tool: 'generate_all_boards' }] }
+      return { state: 'repair', detail: '샷 이미지 일괄 생성에 필요한 스토리 개요판을 먼저 생성합니다.', actions: [{ tool: 'generate_all_boards' }] }
     }
     const repairs: AgentToolAction[] = []
     if ((project.subjects ?? []).some((subject) => !subject.designSheetAssetId)) repairs.push({ tool: 'generate_all_sheets' })
     if ((project.scenes ?? []).some((scene) => !scene.plateAssetId)) repairs.push({ tool: 'generate_all_scenes' })
-    if (repairs.length) return { state: 'repair', detail: '批量关键帧缺少人设或场景，先补依赖', actions: repairs }
+    if (repairs.length) return { state: 'repair', detail: '키프레임 일괄 생성에 필요한 캐릭터 설정이나 장면을 먼저 보완합니다.', actions: repairs }
   }
 
   if (action.tool === 'generate_all_videos') {
-    if (!(project.shots ?? []).some((shot) => !shot.videoAssetId)) return { state: 'skip', detail: '分镜视频已经补齐' }
+    if (!(project.shots ?? []).some((shot) => !shot.videoAssetId)) return { state: 'skip', detail: '모든 스토리보드 샷에 영상이 있습니다.' }
     if (needsShotFrames(project) && (project.shots ?? []).some((shot) => shotUsesFrames(shot, project) && !shot.firstFrameAssetId && !shot.lastFrameAssetId)) {
-      return { state: 'repair', detail: '首尾帧模式：出视频前先补齐每镜的起始帧和结束帧', actions: [{ tool: 'generate_all_frames' }] }
+      return { state: 'repair', detail: '시작·끝 프레임 모드입니다. 영상 생성 전에 샷마다 시작과 끝 프레임을 채웁니다.', actions: [{ tool: 'generate_all_frames' }] }
     }
     if (shotsMissingKeyframe(project).length) {
-      return { state: 'repair', detail: '批量视频缺少关键帧，先补事件画面', actions: [{ tool: 'generate_all_images' }] }
+      return { state: 'repair', detail: '영상 일괄 생성에 필요한 키프레임을 먼저 생성합니다.', actions: [{ tool: 'generate_all_images' }] }
     }
     if (shotsMissingStoryboard(project).length) {
-      return { state: 'repair', detail: '批量视频缺少故事看板，先补看板', actions: [{ tool: 'generate_all_boards' }] }
+      return { state: 'repair', detail: '영상 일괄 생성에 필요한 스토리 개요판을 먼저 생성합니다.', actions: [{ tool: 'generate_all_boards' }] }
     }
     const repairs: AgentToolAction[] = []
     if ((project.subjects ?? []).some((subject) => !subject.designSheetAssetId)) repairs.push({ tool: 'generate_all_sheets' })
     if ((project.scenes ?? []).some((scene) => !scene.plateAssetId)) repairs.push({ tool: 'generate_all_scenes' })
-    if (repairs.length) return { state: 'repair', detail: '批量视频缺少角色设计图或场景图，先补依赖', actions: repairs }
+    if (repairs.length) return { state: 'repair', detail: '영상 일괄 생성에 필요한 캐릭터 디자인 이미지나 장면 이미지를 먼저 보완합니다.', actions: repairs }
   }
 
   if (action.tool === 'generate_all_audio') {
     if (!(project.shots ?? []).some((shot) => needsExternalTts(shot, project) && !shot.audioAssetId)) {
-      return { state: 'skip', detail: '没有需要补的独立 TTS' }
+      return { state: 'skip', detail: '추가로 생성할 별도 TTS가 없습니다.' }
     }
   }
 
@@ -353,60 +353,60 @@ export function preflightRegisteredTool(raw: unknown): ToolPreflight {
 export function verifyRegisteredTool(raw: unknown): string | null {
   const action = validateToolAction(raw)
   const project = useProjectStore().current
-  if (!project) return '项目状态不存在'
+  if (!project) return '프로젝트 상태가 없습니다.'
   const shot = shotFor(action)
   switch (action.tool) {
     case 'generate_play':
     case 'generate_storyboard':
     case 'continue_play':
-      return project.script?.playReady && project.script.content?.trim() ? null : '完整剧本没有成功写入项目'
+      return project.script?.playReady && project.script.content?.trim() ? null : '전체 대본이 프로젝트에 저장되지 않았습니다.'
     case 'extract_cast':
-      return (project.subjects ?? []).length ? null : '人物节点没有成功写入项目'
+      return (project.subjects ?? []).length ? null : '캐릭터 노드가 프로젝트에 저장되지 않았습니다.'
     case 'generate_sheet': {
       const subject = (project.subjects ?? []).find((item) => item.id === action.subjectId)
-      return subject?.designSheetAssetId ? null : '角色四视图没有落库'
+      return subject?.designSheetAssetId ? null : '캐릭터 4면 설정 이미지가 저장되지 않았습니다.'
     }
     case 'generate_prop_sheet':
     case 'generate_all_prop_sheets':
       return null
     case 'generate_scene':
-      return (project.scenes ?? []).find((item) => item.id === action.sceneId)?.plateAssetId ? null : '场景锚点图没有落库'
+      return (project.scenes ?? []).find((item) => item.id === action.sceneId)?.plateAssetId ? null : '장면 기준 이미지가 저장되지 않았습니다.'
     case 'generate_all_sheets':
-      return (project.subjects ?? []).every((item) => item.designSheetAssetId) ? null : '仍有角色四视图缺失'
+      return (project.subjects ?? []).every((item) => item.designSheetAssetId) ? null : '일부 캐릭터의 4면 설정 이미지가 없습니다.'
     case 'generate_all_scenes':
-      return (project.scenes ?? []).every((item) => item.plateAssetId) ? null : '仍有场景锚点图缺失'
+      return (project.scenes ?? []).every((item) => item.plateAssetId) ? null : '일부 장면의 기준 이미지가 없습니다.'
     case 'generate_shot_board': {
-      if (!shot) return '故事看板没有落库'
+      if (!shot) return '스토리 개요판이 저장되지 않았습니다.'
       const mode = stillModeForShot(shot, project)
       if (mode === 'identity') return null
-      if (mode === 'storyboard') return shot.boardAssetId ? null : '故事看板没有落库'
-      return shot.imageAssetId ? null : '关键帧没有落库'
+      if (mode === 'storyboard') return shot.boardAssetId ? null : '스토리 개요판이 저장되지 않았습니다.'
+      return shot.imageAssetId ? null : '키프레임이 저장되지 않았습니다.'
     }
     case 'generate_shot_image':
-      if (!shot) return '关键帧没有落库'
+      if (!shot) return '키프레임이 저장되지 않았습니다.'
       if (stillModeForShot(shot, project) !== 'keyframe') return null
-      return shot.imageAssetId ? null : '关键帧没有落库'
+      return shot.imageAssetId ? null : '키프레임이 저장되지 않았습니다.'
     case 'generate_shot_frames':
-      if (!shot) return '首尾帧没有落库'
-      return shot.firstFrameAssetId && shot.lastFrameAssetId ? null : '首尾帧没有落库'
+      if (!shot) return '시작·끝 프레임이 저장되지 않았습니다.'
+      return shot.firstFrameAssetId && shot.lastFrameAssetId ? null : '시작·끝 프레임이 저장되지 않았습니다.'
     case 'generate_all_frames':
       return (project.shots ?? []).some((s) => !s.firstFrameAssetId || !s.lastFrameAssetId)
-        ? '仍有镜头缺首尾帧'
+        ? '일부 샷에 시작·끝 프레임이 없습니다.'
         : null
     case 'generate_all_boards':
       return shotsMissingStoryboard(project).length || shotsMissingKeyframe(project).length
-        ? '仍有看板或关键帧缺失'
+        ? '일부 샷에 스토리 개요판이나 키프레임이 없습니다.'
         : null
     case 'generate_all_images':
-      return shotsMissingKeyframe(project).length ? '仍有关键帧缺失' : null
+      return shotsMissingKeyframe(project).length ? '일부 키프레임이 없습니다.' : null
     case 'generate_video':
-      return shot?.videoAssetId ? null : '分镜视频没有落库'
+      return shot?.videoAssetId ? null : '스토리보드 샷 영상이 저장되지 않았습니다.'
     case 'generate_all_videos':
-      return project.shots.every((item) => item.videoAssetId) ? null : '仍有分镜视频缺失'
+      return project.shots.every((item) => item.videoAssetId) ? null : '일부 스토리보드 샷 영상이 없습니다.'
     case 'generate_audio':
-      return !shot || !needsExternalTts(shot, project) || shot.audioAssetId ? null : '独立口播没有落库'
+      return !shot || !needsExternalTts(shot, project) || shot.audioAssetId ? null : '별도 내레이션이 저장되지 않았습니다.'
     case 'generate_all_audio':
-      return project.shots.every((item) => !needsExternalTts(item, project) || item.audioAssetId) ? null : '仍有独立口播缺失'
+      return project.shots.every((item) => !needsExternalTts(item, project) || item.audioAssetId) ? null : '일부 별도 내레이션이 없습니다.'
     default:
       return null
   }
@@ -429,17 +429,17 @@ function progress(ctx: ToolExecutionContext) {
 function linkCanvasNodes(sourceId: string, targetId: string): string {
   const project = useProjectStore()
   const canvas = project.current?.canvas
-  if (!project.current || !canvas) throw new Error('当前项目没有可用画布')
+  if (!project.current || !canvas) throw new Error('현재 프로젝트에 사용할 수 있는 캔버스가 없습니다.')
   const source = canvas.nodes.find((n) => n.id === sourceId)
   const target = canvas.nodes.find((n) => n.id === targetId)
-  if (!source) throw new Error(`找不到上游节点 ${sourceId}`)
-  if (!target) throw new Error(`找不到下游节点 ${targetId}`)
-  if (sourceId === targetId) throw new Error('节点不能连自己')
+  if (!source) throw new Error(`상위 노드를 찾을 수 없습니다. ${sourceId}`)
+  if (!target) throw new Error(`하위 노드를 찾을 수 없습니다. ${targetId}`)
+  if (sourceId === targetId) throw new Error('노드를 자기 자신에 연결할 수 없습니다.')
 
   let refNote = ''
   if (canvasNodeProducesImage(source) && (target.type === 'imageGen' || target.type === 'videoGen')) {
     const ok = appendCanvasReferenceSource(project.current, targetId, sourceId)
-    refNote = ok ? '，上游产出已作为参考图传给下游' : '（提示：下游参考图数量已满，只连了线）'
+    refNote = ok ? '(상위 노드의 결과를 하위 노드에 참조 이미지로 전달했습니다.)' : '(하위 노드의 참조 이미지 한도에 도달해 노드 연결만 완료했습니다.)'
   }
 
   const id = `e-${sourceId}-${targetId}-in`
@@ -451,8 +451,8 @@ function linkCanvasNodes(sourceId: string, targetId: string): string {
     ]
   }
   return existed
-    ? `${sourceId} → ${targetId} 本来就连着${refNote}`
-    : `已连线 ${sourceId} → ${targetId}${refNote}`
+    ? `${sourceId} → ${targetId} 노드는 이미 연결돼 있습니다. ${refNote}`
+    : `${sourceId} → ${targetId} 노드를 연결했습니다. ${refNote}`
 }
 
 /** 上游节点右侧的空位，已有几个下游就往下错开 */
@@ -470,7 +470,7 @@ const definitions: ToolDefinition[] = [
     async execute(action, ctx) {
       const project = useProjectStore()
       const cur = project.current
-      if (!cur) throw new Error('请先创建项目')
+      if (!cur) throw new Error('먼저 프로젝트를 만드세요.')
       const text = String(action.text || '').trim()
       const hasFullPlay = Boolean(
         cur.script?.playReady &&
@@ -483,14 +483,14 @@ const definitions: ToolDefinition[] = [
         )
       )
       const explicitReplace =
-        /重新写(?:完整)?剧本|重写(?:完整)?剧本|换(?:一个|成).{0,12}(?:故事|剧本)|新故事|新剧本|从头(?:写|开始)/.test(text)
+        /重新写(?:完整)?剧本|重写(?:完整)?剧本|换(?:一个|成).{0,12}(?:故事|剧本)|新故事|新剧本|从头(?:写|开始)|대본(?:을)?\s*다시\s*써|새\s*(?:대본|이야기)/.test(text)
       if (cur.script?.origin === 'imported' && !explicitReplace) {
-        ctx.onLog('导入的剧本保持原文，不会用聊天内容覆盖')
-        return '这是导入的剧本，正文保持不动。要拆分镜请直接提炼；要重写请明确说「重新写剧本」。'
+        ctx.onLog('가져온 대본의 원문을 유지합니다.')
+        return '가져온 대본의 본문을 보존합니다. 스토리보드는 바로 추출할 수 있습니다. 다시 쓰려면 ‘대본을 다시 써 줘’라고 명시하세요.'
       }
       if (hasFullPlay && !explicitReplace) {
-        ctx.onLog('已有完整剧本；已阻止用当前聊天短句覆盖正文')
-        return '保留已有完整剧本。人物反馈或局部修改不会再清空正文。'
+        ctx.onLog('전체 대본이 있어 현재 채팅 내용으로 덮어쓰지 않았습니다.')
+        return '기존 전체 대본을 보존합니다. 캐릭터 피드백이나 부분 수정 시에도 본문을 유지합니다.'
       }
       const topic = topicFromBrief(text) || cur.name
       const inferred = inferVisualStyleFromText(text)
@@ -513,8 +513,8 @@ const definitions: ToolDefinition[] = [
           playReady: false
         })
       }
-      ctx.onLog('文案已写入')
-      return '文案已准备好'
+      ctx.onLog('원고를 저장했습니다.')
+      return '원고를 준비했습니다.'
     }
   },
   {
@@ -526,7 +526,7 @@ const definitions: ToolDefinition[] = [
         brief: action.text
       })
       revealCanvas('script')
-      return '完整剧本已写好。下一步只拆人物，不会同时拆场景和分镜。'
+      return '전체 대본을 작성했습니다. 다음은 캐릭터 추출 단계입니다.'
     }
   },
   {
@@ -538,7 +538,7 @@ const definitions: ToolDefinition[] = [
         hint: action.text
       })
       revealCanvas('script')
-      return '已按当前剧后续写（保留原场次）。若已提炼过节点，请在「分镜关键帧」分组点重新提取以同步新场。'
+      return '기존 장면을 보존하고 이후 장면을 이어 썼습니다. 노드를 이미 추출했다면 ‘스토리보드 키프레임’ 그룹에서 ‘다시 추출’을 눌러 새 장면을 동기화하세요.'
     }
   },
   {
@@ -550,7 +550,7 @@ const definitions: ToolDefinition[] = [
         brief: action.text
       })
       revealCanvas('script')
-      return '完整剧本已写好（第一步，未拆节点）。回「继续」只拆人物。'
+      return '1단계인 전체 대본 작성을 마쳤습니다. ‘계속’이라고 하면 캐릭터를 추출합니다.'
     }
   },
   {
@@ -563,11 +563,11 @@ const definitions: ToolDefinition[] = [
       if (!isPlayReady(script) && !script?.content?.trim()) {
         await runGeneratePlay(ctx.onLog, ctx.signal)
         revealCanvas('script')
-        return '还没有完整剧本，已先写好剧本（未拆节点）；请再点提炼节点'
+        return '전체 대본이 없어 먼저 작성했습니다. 노드를 추출하려면 ‘노드 추출’을 다시 누르세요.'
       }
       const start = action.extractStage || nextExtractStage(project.current)
       if (!start) {
-        throw new Error('人物、场景和分镜都已提炼。要改某一组，请在对应分组上点「重新提取」，或说明要重新提取人物、场景还是分镜。')
+        throw new Error('캐릭터, 장면, 스토리보드를 모두 추출했습니다. 특정 그룹을 바꾸려면 해당 그룹의 ‘다시 추출’을 누르거나 다시 추출할 그룹을 알려 주세요.')
       }
       await runExtractStoryboard(ctx.onLog, ctx.signal, undefined, start)
       revealCanvas(
@@ -577,24 +577,24 @@ const definitions: ToolDefinition[] = [
       const subjects = after?.subjects?.length ?? 0
       const scenes = after?.scenes?.length ?? 0
       const shots = after?.shots.length ?? 0
-      if (start === 'subjects' && !subjects) throw new Error('人物没有写入画布')
-      if (start === 'scenes' && !scenes) throw new Error('场景没有写入画布')
-      if (start === 'shots' && !shots) throw new Error('分镜没有写入画布')
+      if (start === 'subjects' && !subjects) throw new Error('캐릭터를 캔버스에 저장하지 못했습니다.')
+      if (start === 'scenes' && !scenes) throw new Error('장면을 캔버스에 저장하지 못했습니다.')
+      if (start === 'shots' && !shots) throw new Error('스토리보드를 캔버스에 저장하지 못했습니다.')
       const re = Boolean(action.extractStage)
-      const kept = '已生成的图和视频按同名或镜号保留。'
+      const kept = '이름이나 샷 번호가 같은 기존 이미지와 영상을 보존했습니다.'
       if (start === 'subjects') {
         return re
-          ? `已重新提取人物（${subjects} 个）。${kept}没有动场景和分镜。`
-          : `第1步完成：已拆 ${subjects} 个角色。没有同时拆场景和分镜。`
+          ? `캐릭터 ${subjects}개를 다시 추출했습니다. ${kept}`
+          : `1단계 완료. 캐릭터 ${subjects}개를 추출했습니다.`
       }
       if (start === 'scenes') {
         return re
-          ? `已重新提取场景描点（${scenes} 个）。${kept}没有动人物和分镜。`
-          : `第2步完成：已拆 ${scenes} 个场景。没有同时拆分镜。`
+          ? `장면 ${scenes}개의 기준 정보를 다시 추출했습니다. ${kept}`
+          : `2단계 완료. 장면 ${scenes}개를 추출했습니다.`
       }
       return re
-        ? `已重新提取分镜（${shots} 镜）。${kept}没有动人物和场景。`
-        : `第3步完成：已拆 ${shots} 个分镜。`
+        ? `스토리보드 샷 ${shots}개를 다시 추출했습니다. ${kept}`
+        : `3단계 완료. 스토리보드 샷 ${shots}개를 추출했습니다.`
     }
   },
   {
@@ -603,7 +603,7 @@ const definitions: ToolDefinition[] = [
       const project = useProjectStore()
       project.setPlayApproved(true)
       await project.save()
-      return '剧本已确认'
+      return '대본을 승인했습니다.'
     }
   },
   {
@@ -611,7 +611,7 @@ const definitions: ToolDefinition[] = [
     async execute(action) {
       const project = useProjectStore()
       const shot = project.current?.shots.find((item) => item.id === action.shotId)
-      if (!shot) throw new Error(`找不到分镜 ${action.shotId}`)
+      if (!shot) throw new Error(`스토리보드 샷 ${action.shotId}을 찾을 수 없습니다.`)
       const patch = {
         ...(action.visualPrompt ? { visualPrompt: action.visualPrompt } : {}),
         ...(action.imagePrompt ? { imagePrompt: action.imagePrompt } : {}),
@@ -624,7 +624,7 @@ const definitions: ToolDefinition[] = [
         ...(typeof action.duration === 'number' ? { duration: Math.max(3, Math.min(10, Math.round(action.duration))) } : {}),
         ...(action.cameraMovement ? { cameraMovement: action.cameraMovement } : {})
       }
-      if (!Object.keys(patch).length) throw new Error('revise_shot 没有提供任何修改字段')
+      if (!Object.keys(patch).length) throw new Error('revise_shot에 수정할 필드가 없습니다.')
       project.updateShot(shot.id, patch)
       if (action.visualPrompt) project.updateShot(shot.id, { boardAssetId: undefined })
       if (action.visualPrompt || action.imagePrompt) project.invalidateShotAssets(shot.id, 'image')
@@ -635,7 +635,7 @@ const definitions: ToolDefinition[] = [
       }
       await project.save()
       revealCanvas(`shotImage:${shot.id}`)
-      return `第 ${shot.index + 1} 镜已局部修改，只失效受影响的下游产物`
+      return `${shot.index + 1}번 샷을 부분 수정하고 영향받은 후속 산출물을 무효화했습니다.`
     }
   },
   {
@@ -643,40 +643,40 @@ const definitions: ToolDefinition[] = [
     async execute(action, ctx) {
       const p = useProjectStore().current!
       const sub = (p.subjects ?? []).find((s) => s.id === action.subjectId)
-      if (!sub) throw new Error(`找不到主体 ${action.subjectId}`)
+      if (!sub) throw new Error(`대상 ${action.subjectId}을 찾을 수 없습니다.`)
       await runCanvasNode(`subject:${sub.id}`, progress(ctx), ctx.signal)
       revealCanvas(`subject:${sub.id}`)
-      return `四视图 ${sub.name} 完成`
+      return `${sub.name}의 4면 설정 이미지를 생성했습니다.`
     }
   },
   {
     name: 'generate_all_sheets', phase: 1, timeoutMs: 600_000,
     estimate: () => ({ calls: counts().sheets, seconds: counts().sheets * 90 }),
-    async execute(_action, ctx) { await generateMissingSheets(ctx.onLog, ctx.signal); return '四视图已补齐' }
+    async execute(_action, ctx) { await generateMissingSheets(ctx.onLog, ctx.signal); return '4면 설정 이미지를 모두 생성했습니다.' }
   },
   {
     name: 'generate_all_prop_sheets', phase: 1, timeoutMs: 600_000,
     estimate: () => ({ calls: 0, seconds: 0 }),
-    async execute() { return '已取消关键道具图' }
+    async execute() { return '주요 소품 이미지 생성을 취소했습니다.' }
   },
   {
     name: 'generate_prop_sheet', phase: 1, timeoutMs: 240_000, required: ['sceneId'], estimate: oneImage,
-    async execute() { return '已取消关键道具图' }
+    async execute() { return '주요 소품 이미지 생성을 취소했습니다.' }
   },
   {
     name: 'generate_scene', phase: 1, timeoutMs: 240_000, required: ['sceneId'], estimate: oneImage,
     async execute(action, ctx) {
       const p = useProjectStore().current!
       const scene = (p.scenes ?? []).find((s) => s.id === action.sceneId)
-      if (!scene) throw new Error(`找不到场景 ${action.sceneId}`)
+      if (!scene) throw new Error(`장면 ${action.sceneId}을 찾을 수 없습니다.`)
       await runCanvasNode(`scene:${scene.id}`, progress(ctx), ctx.signal)
-      return `场景锚点图 ${scene.name} 完成`
+      return `${scene.name}의 장면 기준 이미지를 생성했습니다.`
     }
   },
   {
     name: 'generate_all_scenes', phase: 1, timeoutMs: 600_000,
     estimate: () => ({ calls: counts().scenes, seconds: counts().scenes * 45 }),
-    async execute(_action, ctx) { await generateMissingPlates(ctx.onLog, ctx.signal); return '场景锚点图已补齐' }
+    async execute(_action, ctx) { await generateMissingPlates(ctx.onLog, ctx.signal); return '장면 기준 이미지를 모두 생성했습니다.' }
   },
   {
     name: 'generate_shot_board', phase: 2, timeoutMs: 240_000, required: ['shotId'], estimate: oneImage,
@@ -684,11 +684,11 @@ const definitions: ToolDefinition[] = [
       const project = useProjectStore().current
       const shot = project?.shots.find((item) => item.id === action.shotId)
       const mode = shot && project ? stillModeForShot(shot, project) : 'identity'
-      if (mode === 'identity') return '当前视频模型不需要看板或关键帧'
+      if (mode === 'identity') return '현재 영상 모델에 스토리 개요판이나 키프레임이 필요 없습니다.'
       const nodeId = mode === 'storyboard' ? `shotBoard:${action.shotId}` : `shotImage:${action.shotId}`
       await runCanvasNode(nodeId, progress(ctx), ctx.signal)
       revealCanvas(nodeId)
-      return mode === 'storyboard' ? '故事看板完成' : '关键帧完成'
+      return mode === 'storyboard' ? '스토리 개요판을 생성했습니다.' : '키프레임을 생성했습니다.'
     }
   },
   {
@@ -698,10 +698,10 @@ const definitions: ToolDefinition[] = [
       const project = useProjectStore().current
       if (project && shotsMissingStoryboard(project).length) {
         await generateMissingBoards(ctx.onLog, ctx.signal)
-        return '故事看板已补齐'
+        return '스토리 개요판을 모두 생성했습니다.'
       }
       await generateMissingImages(ctx.onLog, ctx.signal)
-      return '关键帧已补齐'
+      return '키프레임을 모두 생성했습니다.'
     }
   },
   {
@@ -709,23 +709,23 @@ const definitions: ToolDefinition[] = [
     async execute(action, ctx) {
       await runCanvasNode(`shotImage:${action.shotId}`, progress(ctx), ctx.signal)
       revealCanvas(`shotImage:${action.shotId}`)
-      return '关键帧完成'
+      return '키프레임을 생성했습니다.'
     }
   },
   {
     name: 'generate_all_images', phase: 3, timeoutMs: 900_000,
     estimate: () => ({ calls: counts().images, seconds: counts().images * 45 }),
-    async execute(_action, ctx) { await generateMissingImages(ctx.onLog, ctx.signal); return '关键帧已补齐' }
+    async execute(_action, ctx) { await generateMissingImages(ctx.onLog, ctx.signal); return '키프레임을 모두 생성했습니다.' }
   },
   {
     name: 'generate_shot_frames', phase: 3, timeoutMs: 300_000, required: ['shotId'],
     estimate: () => ({ calls: 2, seconds: 90 }),
     async execute(action, ctx) {
       const shot = useProjectStore().current?.shots.find((item) => item.id === action.shotId)
-      if (!shot) throw new AgentToolError(`找不到分镜 ${action.shotId}`, action.tool, 'invalid_action', true)
+      if (!shot) throw new AgentToolError(`스토리보드 샷 ${action.shotId}을 찾을 수 없습니다.`, action.tool, 'invalid_action', true)
       await generateShotFramePair(shot, (msg) => ctx.onLog?.(msg), ctx.signal)
       revealCanvas(`shotFrames:${action.shotId}`)
-      return `第 ${shot.index + 1} 镜首尾帧已完成`
+      return `${shot.index + 1}번 샷의 시작·끝 프레임을 생성했습니다.`
     }
   },
   {
@@ -736,12 +736,12 @@ const definitions: ToolDefinition[] = [
       const targets = (p?.shots ?? [])
         .filter((s) => !s.firstFrameAssetId || !s.lastFrameAssetId)
         .sort((a, b) => a.index - b.index)
-      if (!targets.length) return '所有镜头都已经画好首尾帧'
+      if (!targets.length) return '모든 샷에 시작·끝 프레임이 있습니다.'
       // 这一镜起始帧要接着上一镜结束帧，必须按镜号串行
       for (const shot of targets) {
         await generateShotFramePair(shot, (msg) => ctx.onLog?.(msg), ctx.signal)
       }
-      return `${targets.length} 个镜头的首尾帧已按镜号画完`
+      return `${targets.length}개 샷의 시작·끝 프레임을 샷 번호 순서대로 생성했습니다.`
     }
   },
   {
@@ -749,7 +749,7 @@ const definitions: ToolDefinition[] = [
     async execute(action, ctx) {
       await runCanvasNode(`shotVideo:${action.shotId}`, progress(ctx), ctx.signal)
       revealCanvas(`shotVideo:${action.shotId}`)
-      return '分镜视频完成'
+      return '스토리보드 샷 영상을 생성했습니다.'
     }
   },
   {
@@ -758,31 +758,31 @@ const definitions: ToolDefinition[] = [
       const n = counts().videos
       return { calls: n, seconds: n ? Math.ceil(n / VIDEO_GEN_CONCURRENCY) * 180 : 0 }
     },
-    async execute(_action, ctx) { await generateMissingVideos(ctx.onLog, ctx.signal); return '视频已补齐' }
+    async execute(_action, ctx) { await generateMissingVideos(ctx.onLog, ctx.signal); return '영상을 모두 생성했습니다.' }
   },
   {
     name: 'generate_audio', phase: 5, timeoutMs: 180_000, required: ['shotId'], estimate: oneAudio,
-    async execute(action, ctx) { await runCanvasNode(`audio:${action.shotId}`, progress(ctx), ctx.signal); return '口播完成' }
+    async execute(action, ctx) { await runCanvasNode(`audio:${action.shotId}`, progress(ctx), ctx.signal); return '내레이션을 생성했습니다.' }
   },
   {
     name: 'generate_all_audio', phase: 5, timeoutMs: 600_000,
     estimate: () => ({ calls: counts().audio, seconds: counts().audio * 20 }),
-    async execute(_action, ctx) { await generateMissingAudio(ctx.onLog, ctx.signal); return '口播已补齐' }
+    async execute(_action, ctx) { await generateMissingAudio(ctx.onLog, ctx.signal); return '내레이션을 모두 생성했습니다.' }
   },
   {
     name: 'sync_canvas', phase: 6, timeoutMs: 5_000, estimate: noCost,
-    async execute() { useProjectStore().syncCanvasFromProject(); revealCanvas(); return '画布已同步' }
+    async execute() { useProjectStore().syncCanvasFromProject(); revealCanvas(); return '캔버스를 동기화했습니다.' }
   },
   {
     name: 'focus_node', phase: 6, timeoutMs: 5_000, required: ['nodeId'], estimate: noCost,
-    async execute(action) { revealCanvas(action.nodeId); return '已定位节点' }
+    async execute(action) { revealCanvas(action.nodeId); return '노드로 이동했습니다.' }
   },
   {
     name: 'create_image_node', phase: 2, timeoutMs: 5_000, required: ['text'], estimate: noCost,
     async execute(action) {
       const project = useProjectStore()
       const canvas = project.current?.canvas
-      if (!project.current || !canvas) throw new Error('当前项目没有可用画布')
+      if (!project.current || !canvas) throw new Error('현재 프로젝트에 사용할 수 있는 캔버스가 없습니다.')
       const count = canvas.nodes.filter((node) => node.type === 'imageGen').length + 1
       const sourceId = action.sourceNodeId || action.nodeId
       const right = canvas.nodes.reduce((max, node) => Math.max(max, node.position.x), 0)
@@ -794,20 +794,20 @@ const definitions: ToolDefinition[] = [
         id,
         type: 'imageGen',
         position: spot,
-        data: { label: `图片 ${count}`, prompt: action.text, aspectRatio: project.current.settings.aspectRatio },
+        data: { label: `이미지 ${count}`, prompt: action.text, aspectRatio: project.current.settings.aspectRatio },
         status: 'idle'
       })
       await project.save()
       let linked = ''
       if (sourceId) {
         try {
-          linked = `，并${linkCanvasNodes(sourceId, id)}`
+          linked = ` ${linkCanvasNodes(sourceId, id)}`
         } catch (e: any) {
-          linked = `（连线失败：${e?.message || '未知原因'}，可以在画布上手动拉线）`
+          linked = `(연결 실패. ${e?.message || '알 수 없는 원인'}. 캔버스에서 수동으로 연결할 수 있습니다.)`
         }
       }
       revealCanvas(id)
-      return `已创建图片节点 ${id}，提示词已写入${linked}，可继续 run_node 生成`
+      return `이미지 노드 ${id}을 만들고 프롬프트를 저장했습니다. ${linked} run_node로 생성할 수 있습니다.`
     }
   },
   {
@@ -815,7 +815,7 @@ const definitions: ToolDefinition[] = [
     async execute(action) {
       const project = useProjectStore()
       const canvas = project.current?.canvas
-      if (!project.current || !canvas) throw new Error('当前项目没有可用画布')
+      if (!project.current || !canvas) throw new Error('현재 프로젝트에 사용할 수 있는 캔버스가 없습니다.')
       const count = canvas.nodes.filter((node) => node.type === 'videoGen').length + 1
       const sourceId = action.sourceNodeId || action.nodeId
       const right = canvas.nodes.reduce((max, node) => Math.max(max, node.position.x), 0)
@@ -828,7 +828,7 @@ const definitions: ToolDefinition[] = [
         type: 'videoGen',
         position: spot,
         data: {
-          label: `视频 ${count}`,
+          label: `영상 ${count}`,
           prompt: action.text,
           aspectRatio: project.current.settings.aspectRatio,
           duration: Math.max(1, Math.min(15, Math.round(action.duration || 8)))
@@ -839,13 +839,13 @@ const definitions: ToolDefinition[] = [
       let linked = ''
       if (sourceId) {
         try {
-          linked = `，并${linkCanvasNodes(sourceId, id)}`
+          linked = ` ${linkCanvasNodes(sourceId, id)}`
         } catch (e: any) {
-          linked = `（连线失败：${e?.message || '未知原因'}，可以在画布上手动拉线）`
+          linked = `(연결 실패. ${e?.message || '알 수 없는 원인'}. 캔버스에서 수동으로 연결할 수 있습니다.)`
         }
       }
       revealCanvas(id)
-      return `已创建视频节点 ${id}，动态提示词已写入${linked}，可继续 run_node 生成`
+      return `영상 노드 ${id}을 만들고 동작 프롬프트를 저장했습니다. ${linked} run_node로 생성할 수 있습니다.`
     }
   },
   {
@@ -863,9 +863,9 @@ const definitions: ToolDefinition[] = [
       const project = useProjectStore()
       const canvas = project.current?.canvas
       const node = canvas?.nodes.find((n) => n.id === action.nodeId)
-      if (!canvas || !node) throw new Error(`找不到画布节点 ${action.nodeId}`)
+      if (!canvas || !node) throw new Error(`캔버스 노드 ${action.nodeId}을 찾을 수 없습니다.`)
       if (node.type !== 'imageGen' && node.type !== 'videoGen') {
-        throw new Error('delete_node 只能删自由图片/视频节点；剧本、人设、分镜节点要在画布上手动删')
+        throw new Error('delete_node는 자유 이미지·영상 노드를 삭제합니다. 대본, 캐릭터 설정, 스토리보드 노드는 캔버스에서 직접 삭제하세요.')
       }
       const label = node.data.label || node.id
       for (const other of canvas.nodes) {
@@ -876,7 +876,7 @@ const definitions: ToolDefinition[] = [
       }
       project.removeCanvasNode(node.id)
       await project.save()
-      return `已删除节点「${label}」，相关连线和其它节点对它的参考图引用也一起清掉了`
+      return `‘${label}’ 노드와 관련 연결, 다른 노드에서 이 노드를 쓰던 참조 이미지 항목을 삭제했습니다.`
     }
   },
   {
@@ -884,14 +884,14 @@ const definitions: ToolDefinition[] = [
     async execute() {
       const project = useProjectStore()
       const p = project.current
-      if (!p) throw new Error('当前没有打开的项目')
+      if (!p) throw new Error('열려 있는 프로젝트가 없습니다.')
       try {
         p.canvas = rebuildCanvasGraph(p, true)
       } catch {
         p.canvas = rebuildCanvasGraph(p, false)
       }
       await project.save()
-      return '画布已重新排布（按 剧本 → 人设/场景 → 分镜 的顺序整理）'
+      return '캔버스를 대본 → 캐릭터 설정·장면 → 스토리보드 순서로 재배치했습니다.'
     }
   },
   {
@@ -899,14 +899,14 @@ const definitions: ToolDefinition[] = [
     async execute() {
       const project = useProjectStore()
       const p = project.current
-      if (!p) throw new Error('当前没有打开的项目')
+      if (!p) throw new Error('열려 있는 프로젝트가 없습니다.')
       const settings = useSettingsStore()
       const blocking: string[] = []
       const warnings: string[] = []
 
-      if (!(settings.config.llms ?? []).length) blocking.push('没配 LLM，写剧本、拆节点、优化提示词都做不了')
-      if (!(settings.config.images ?? []).length) blocking.push('没配图像模型，出不了图')
-      if (!(settings.config.videos ?? []).length) blocking.push('没配视频模型，出不了视频')
+      if (!(settings.config.llms ?? []).length) blocking.push('LLM을 설정해야 대본 작성, 노드 추출, 프롬프트 최적화를 사용할 수 있습니다.')
+      if (!(settings.config.images ?? []).length) blocking.push('이미지를 생성하려면 이미지 모델을 설정하세요.')
+      if (!(settings.config.videos ?? []).length) blocking.push('영상을 생성하려면 영상 모델을 설정하세요.')
 
       const canvas = p.canvas
       const nodes = canvas?.nodes ?? []
@@ -915,16 +915,16 @@ const definitions: ToolDefinition[] = [
       for (const n of free) {
         const name = n.data.label || n.id
         if (!(n.data.prompt || '').trim()) {
-          warnings.push(`「${name}」还没写提示词，生成会空跑`)
+          warnings.push(`‘${name}’에 프롬프트가 없어 실행해도 생성할 내용이 없습니다.`)
         }
         if (n.type === 'videoGen' && !resolvedCanvasReferenceAssetIds(p, n).length) {
-          warnings.push(`「${name}」是图生视频，但没有连上游也没有参考图，需要至少一张`)
+          warnings.push(`‘${name}’은 이미지→영상 노드입니다. 상위 노드를 연결하지 않았다면 참조 이미지가 한 장 이상 필요합니다.`)
         }
         if (n.status === 'failed') {
-          warnings.push(`「${name}」上次生成失败：${n.error || '原因不明'}`)
+          warnings.push(`‘${name}’의 이전 생성이 실패했습니다. ${n.error || '알 수 없는 원인'}`)
         }
         if (!n.data.outputAssetId && n.status !== 'failed') {
-          warnings.push(`「${name}」还没有产物`)
+          warnings.push(`‘${name}’에 생성 결과가 없습니다.`)
         }
       }
       const connected = new Set<string>()
@@ -934,32 +934,32 @@ const definitions: ToolDefinition[] = [
       }
       const orphans = free.filter((n) => !connected.has(n.id))
       if (orphans.length) {
-        warnings.push(`有 ${orphans.length} 个节点没连线：${orphans.map((n) => n.data.label || n.id).join('、')}`)
+        warnings.push(`연결되지 않은 노드 ${orphans.length}개 ${orphans.map((n) => n.data.label || n.id).join('、')}`)
       }
 
       const subjects = p.subjects ?? []
       const scenes = p.scenes ?? []
-      if (!p.script?.content?.trim()) warnings.push('还没有剧本')
+      if (!p.script?.content?.trim()) warnings.push('대본이 없습니다.')
       if (subjects.length && subjects.some((s) => !s.designSheetAssetId)) {
-        warnings.push(`有 ${subjects.filter((s) => !s.designSheetAssetId).length} 个角色没画人设图`)
+        warnings.push(`캐릭터 ${subjects.filter((s) => !s.designSheetAssetId).length}명에게 설정 이미지가 없습니다.`)
       }
       if (scenes.length && scenes.some((s) => !s.plateAssetId)) {
-        warnings.push(`有 ${scenes.filter((s) => !s.plateAssetId).length} 个场景没画底板`)
+        warnings.push(`장면 ${scenes.filter((s) => !s.plateAssetId).length}개에 기준 이미지가 없습니다.`)
       }
       if (p.shots.length) {
         const noImg = p.shots.filter((s) => !s.imageAssetId).length
         const noVid = p.shots.filter((s) => !s.videoAssetId).length
-        if (noImg) warnings.push(`有 ${noImg} 个分镜还没出图`)
-        if (noVid) warnings.push(`有 ${noVid} 个分镜还没出视频`)
-        if (!p.playApproved) warnings.push('剧本/分镜还没验收，流水线下游动作会被拦住')
+        if (noImg) warnings.push(`스토리보드 샷 ${noImg}개에 이미지가 없습니다.`)
+        if (noVid) warnings.push(`스토리보드 샷 ${noVid}개에 영상이 없습니다.`)
+        if (!p.playApproved) warnings.push('대본과 스토리보드의 검수가 완료되어야 후속 제작을 진행할 수 있습니다.')
       }
 
       if (!blocking.length && !warnings.length) {
-        return `体检通过。剧本、${subjects.length} 个人物、${scenes.length} 个场景、${(p.shots ?? []).length} 个分镜、画布 ${free.length} 个生成节点都没问题。`
+        return `점검을 통과했습니다. 대본, 캐릭터 ${subjects.length}명, 장면 ${scenes.length}개, 스토리보드 샷 ${(p.shots ?? []).length}개, 캔버스 생성 노드 ${free.length}개를 확인했습니다.`
       }
       const lines: string[] = []
-      if (blocking.length) lines.push(`【卡住】\n- ${blocking.join('\n- ')}`)
-      if (warnings.length) lines.push(`【待处理】\n- ${warnings.join('\n- ')}`)
+      if (blocking.length) lines.push(`【진행을 막는 문제】\n- ${blocking.join('\n- ')}`)
+      if (warnings.length) lines.push(`【처리할 항목】\n- ${warnings.join('\n- ')}`)
       return lines.join('\n')
     }
   },
@@ -968,12 +968,12 @@ const definitions: ToolDefinition[] = [
     async execute(action) {
       const project = useProjectStore()
       const node = project.current?.canvas?.nodes.find((item) => item.id === action.nodeId)
-      if (!node) throw new Error(`找不到画布节点 ${action.nodeId}`)
+      if (!node) throw new Error(`캔버스 노드 ${action.nodeId}을 찾을 수 없습니다.`)
       if (node.type !== 'imageGen' && node.type !== 'videoGen') {
-        throw new Error('update_node 只修改自由图片/视频节点；分镜节点请用 revise_shot')
+        throw new Error('update_node는 자유 이미지·영상 노드에 사용합니다. 스토리보드 샷은 revise_shot으로 수정하세요.')
       }
       if (action.text === undefined && action.duration === undefined && action.nodeLabel === undefined) {
-        throw new Error('update_node 至少需要 prompt(text)、duration 或 label')
+        throw new Error('update_node에는 prompt(text), duration, label 중 하나 이상이 필요합니다.')
       }
       project.patchCanvasNode(node.id, {
         ...(action.text !== undefined ? { prompt: action.text } : {}),
@@ -987,27 +987,27 @@ const definitions: ToolDefinition[] = [
       node.error = undefined
       await project.save()
       revealCanvas(node.id)
-      return `已更新节点 ${node.id}，旧输出已失效，可继续 run_node 生成`
+      return `노드 ${node.id}을 갱신했습니다. 기존 결과를 무효화했으며 run_node로 다시 생성할 수 있습니다.`
     }
   },
   {
     name: 'run_node', phase: 2, timeoutMs: 20 * 60_000, required: ['nodeId'], estimate: oneImage,
-    async execute(action, ctx) { await runCanvasNode(action.nodeId!, progress(ctx), ctx.signal); return '节点完成' }
+    async execute(action, ctx) { await runCanvasNode(action.nodeId!, progress(ctx), ctx.signal); return '노드 실행을 완료했습니다.' }
   },
   {
     name: 'optimize_node_prompt', phase: 2, timeoutMs: 240_000, required: ['nodeId'], estimate: oneLlm,
     async execute(action, ctx) {
       const project = useProjectStore()
       const node = project.current?.canvas?.nodes.find((item) => item.id === action.nodeId)
-      if (!node) throw new Error(`找不到画布节点 ${action.nodeId}`)
+      if (!node) throw new Error(`캔버스 노드 ${action.nodeId}을 찾을 수 없습니다.`)
       if (node.type !== 'imageGen' && node.type !== 'videoGen') {
-        throw new Error('optimize_node_prompt 只支持自由图片/视频节点')
+        throw new Error('optimize_node_prompt는 자유 이미지·영상 노드에서 사용할 수 있습니다.')
       }
       const { optimizeNodePrompt } = await import('@/services/ai/promptCoach')
       const result = await optimizeNodePrompt(
         {
           kind: node.type === 'videoGen' ? 'video' : 'image',
-          nodeLabel: `${node.data.label || node.id} · ${node.type === 'videoGen' ? '图生视频' : '生图'}`,
+          nodeLabel: `${node.data.label || node.id} · ${node.type === 'videoGen' ? '이미지→영상' : '이미지 생성'}`,
           currentPrompt: node.data.prompt || '',
           userHint: action.text,
           script: project.current?.script?.content || '',
@@ -1019,7 +1019,7 @@ const definitions: ToolDefinition[] = [
       project.setCanvasNodePrompt(node.id, result.prompt)
       await project.save()
       revealCanvas(node.id)
-      return `${result.note}（已写入「${node.data.label || node.id}」）\n\n\`\`\`\n${result.prompt}\n\`\`\``
+      return `${result.note}(‘${node.data.label || node.id}’에 저장했습니다.)\n\n\`\`\`\n${result.prompt}\n\`\`\``
     }
   },
   {
@@ -1028,8 +1028,8 @@ const definitions: ToolDefinition[] = [
       const { rememberMemory } = await import('@/services/memory/memoryStore')
       const scope = /项目|本剧|这部/.test(action.text || '') ? 'project' : 'global'
       const entry = await rememberMemory(action.text!, { scope })
-      if (!entry) throw new Error('没有可记忆的内容')
-      return `已记住（${scope === 'global' ? '长期' : '本项目'}）：${entry.content}`
+      if (!entry) throw new Error('저장할 기억 내용이 없습니다.')
+      return `${scope === 'global' ? '장기 기억' : '이 프로젝트의 기억'}에 저장했습니다. ${entry.content}`
     }
   },
   {
@@ -1037,8 +1037,8 @@ const definitions: ToolDefinition[] = [
     async execute(action) {
       const { forgetMemory } = await import('@/services/memory/memoryStore')
       const removed = await forgetMemory(action.text!)
-      if (!removed) throw new Error('没有找到匹配的记忆')
-      return `已忘掉：${removed}`
+      if (!removed) throw new Error('일치하는 기억을 찾지 못했습니다.')
+      return `기억을 삭제했습니다. ${removed}`
     }
   }
 ]
@@ -1047,15 +1047,15 @@ const registry = new Map(definitions.map((definition) => [definition.name, defin
 
 export function validateToolAction(raw: unknown): AgentToolAction {
   if (!raw || typeof raw !== 'object') {
-    throw new AgentToolError('工具动作必须是对象', 'unknown', 'invalid_action')
+    throw new AgentToolError('도구 작업은 객체여야 합니다.', 'unknown', 'invalid_action')
   }
   const action = raw as Record<string, unknown>
   const name = String(action.tool || '') as AgentToolName
   const definition = registry.get(name)
-  if (!definition) throw new AgentToolError(`不允许的工具：${name || '空'}`, name, 'invalid_action')
+  if (!definition) throw new AgentToolError(`허용되지 않는 도구입니다. ${name || '이름 없음'}`, name, 'invalid_action')
   for (const key of definition.required ?? []) {
     if (typeof action[key] !== 'string' || !String(action[key]).trim()) {
-      throw new AgentToolError(`${name} 缺少参数 ${key}`, name, 'invalid_action')
+      throw new AgentToolError(`${name}에 파라미터 ${key}이 없습니다.`, name, 'invalid_action')
     }
   }
   return {
@@ -1124,7 +1124,7 @@ export async function executeRegisteredTool(action: unknown, ctx: ToolExecutionC
   } catch (error: any) {
     if (error instanceof AgentToolError) throw error
     const message = error?.message ?? String(error)
-    const hardStop = /401|403|鉴权|密钥|API Key|余额不足|配额不足|内容安全|用户停止|用户取消/.test(message)
+    const hardStop = /401|403|鉴权|密钥|API Key|余额不足|配额不足|内容安全|用户停止|用户取消|API 키|인증 실패|할당량 부족|콘텐츠 안전|사용자가 작업을 (?:중단|취소)/i.test(message)
     throw new AgentToolError(
       message,
       valid.tool,
