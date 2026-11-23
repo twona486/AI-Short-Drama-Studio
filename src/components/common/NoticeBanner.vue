@@ -35,7 +35,7 @@ onMounted(async () => {
     updatedAt.value = stamp
     visible.value = Boolean(title.value || body.value)
   } catch {
-    /* 公告文件缺失时静默 */
+    /* 공지 파일이 없으면 표시하지 않는다. */
   }
 })
 

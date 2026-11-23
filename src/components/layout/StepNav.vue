@@ -117,7 +117,7 @@ const progress = computed(() =>
   overflow-y: auto;
 }
 
-/* ── 顶部进度 ── */
+/* 상단 진행률 */
 .nav-head {
   padding: 2px 6px 12px;
   margin-bottom: 8px;
@@ -155,7 +155,7 @@ const progress = computed(() =>
   transition: width 0.3s ease;
 }
 
-/* ── 步骤列表 ── */
+/* 단계 목록 */
 .steps {
   list-style: none;
   margin: 0;
@@ -192,7 +192,7 @@ const progress = computed(() =>
   background: rgba(126, 180, 255, 0.11);
 }
 
-/* 序号 / 状态点 */
+/* 순번과 상태 표시 */
 .dot {
   width: 24px;
   height: 24px;
@@ -244,7 +244,7 @@ const progress = computed(() =>
   }
 }
 
-/* 文案 */
+/* 안내 문구 */
 .text {
   min-width: 0;
   display: grid;
@@ -291,7 +291,7 @@ const progress = computed(() =>
   opacity: 0.7;
 }
 
-/* 连接线 */
+/* 연결선 */
 .line {
   position: absolute;
   left: 20px;

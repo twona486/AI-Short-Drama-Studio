@@ -1,6 +1,5 @@
 <script setup lang="ts">
 import { t as translate } from '@/i18n'
-import zh from '@/locales/zh'
 import { computed, nextTick, onBeforeUnmount, ref } from 'vue'
 import { llmSetupReady, runSetupAgentTurn, type SetupEvent, type SetupMessage } from '@/services/settings/setupAgent'
 import { friendlyAiError, isAbortError, isTimeoutAbort } from '@/services/ai/abort'
@@ -29,7 +28,7 @@ const feed = ref<FeedItem[]>([
     id: 'welcome',
     type: 'msg',
     role: 'assistant',
-    content: zh.setupAgent.welcome
+    content: translate('setupAgent.welcome')
   }
 ])
 const input = ref('')
@@ -37,11 +36,11 @@ const busy = ref(false)
 const log = ref('')
 const trace = ref<TraceRow[]>([])
 const setupChips = [
-  { id: 'vision', get label() { return translate('setupAgent.setupVision') }, text: '帮我配视觉理解' },
-  { id: 'image', get label() { return translate('setupAgent.setupImage') }, text: '帮我配图像生成' },
-  { id: 'tts', get label() { return translate('setupAgent.setupTts') }, text: '帮我配 TTS 配音' },
-  { id: 'video', get label() { return translate('setupAgent.setupVideo') }, text: '帮我配视频生成' },
-  { id: 'docs', get label() { return translate('setupAgent.fromDocs') }, text: '下面是我的 API 文档，请按文档写成自定义接入（可以是中转站）：\n' }
+  { id: 'vision', get label() { return translate('setupAgent.setupVision') }, get text() { return translate('setupAgent.setupVisionCommand') } },
+  { id: 'image', get label() { return translate('setupAgent.setupImage') }, get text() { return translate('setupAgent.setupImageCommand') } },
+  { id: 'tts', get label() { return translate('setupAgent.setupTts') }, get text() { return translate('setupAgent.setupTtsCommand') } },
+  { id: 'video', get label() { return translate('setupAgent.setupVideo') }, get text() { return translate('setupAgent.setupVideoCommand') } },
+  { id: 'docs', get label() { return translate('setupAgent.fromDocs') }, get text() { return translate('setupAgent.fromDocsCommand') } }
 ]
 const chips = ref<{ label: string; text: string }[]>(setupChips)
 const box = ref<HTMLElement | null>(null)
@@ -87,7 +86,7 @@ function openSection(section: string) {
 }
 
 function useChip(c: { label: string; text: string }) {
-  if (c.text.includes('请按文档写成') || c.text.endsWith('：\n') || c.text.endsWith(':\n')) {
+  if (c.text.endsWith(':\n') || c.text.endsWith('：\n')) {
     input.value = c.text
     return
   }

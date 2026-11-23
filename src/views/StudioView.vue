@@ -41,7 +41,7 @@ function dismissGuide() {
   try {
     localStorage.setItem(GUIDE_KEY, 'done')
   } catch {
-    /* 本地存储不可用时，本次会话内也不再弹 */
+    /* 로컬 스토리지를 쓸 수 없어도 현재 세션에는 다시 표시하지 않는다. */
   }
 }
 
@@ -50,8 +50,8 @@ const resizingAgent = ref(false)
 const rightOpen = ref(false)
 const optimizingAllVideos = ref(false)
 const optimizeAllProgress = ref('')
-// 合并模式：不再区分自由画布与创作模式，只有这一种画布
-// （保留 img2video 只是老项目的历史字段，不再用于功能分叉）
+// 자유 캔버스와 일반 제작을 같은 캔버스에서 처리한다.
+// img2video는 이전 프로젝트를 위한 기록용 값이다.
 
 const AGENT_WIDTH_KEY = 'aicut:agent-chat-width'
 const AGENT_MIN_WIDTH = 300
@@ -246,7 +246,7 @@ onMounted(async () => {
     (project.current.scenes?.length || 0) > 0 ||
     project.current.shots.length > 0 ||
     Boolean(project.current.canvas?.nodes.some((n) => n.type === 'groupFrame'))
-  // 合并模式：项目里还没有剧本 / 人物 / 场景 / 分镜时，画布保持空白，由智能体或右键添加来起头
+  // 대본, 캐릭터, 배경, 샷이 없으면 빈 캔버스에서 시작한다. 에이전트 또는 우클릭으로 첫 노드를 만든다.
   const hasGroupFrame = project.current.canvas?.nodes.some((n) => n.type === 'groupFrame')
   if (hasPipeline || hasGroupFrame) {
     project.setCanvas(rebuildCanvasGraph(project.current, Boolean(hasGroupFrame)))
@@ -420,12 +420,12 @@ async function optimizeAllVideoPrompts() {
       for (const result of results) {
         if (result.ok) continue
         failed.push(`${result.node.data.label || result.node.id}：${result.message}`)
-        if (/401|鉴权失败|Authentication Fails|invalid.*api.?key/i.test(result.message)) {
+        if (/401|鉴权失败|인증.*실패|Authentication Fail|invalid.*api.?key/i.test(result.message)) {
           stoppedByAuth = true
         }
       }
       if (stoppedByAuth) {
-        const authMessage = results.find((result) => !result.ok && /401|鉴权失败|Authentication Fails|invalid.*api.?key/i.test(result.message))?.message || ''
+        const authMessage = results.find((result) => !result.ok && /401|鉴权失败|인증.*실패|Authentication Fail|invalid.*api.?key/i.test(result.message))?.message || ''
         toast.error(translate('studio.authFailed', { p0: authMessage }), 12000)
         break
       }

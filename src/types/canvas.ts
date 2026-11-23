@@ -19,19 +19,19 @@ export type CanvasNodeType =
   | 'imageGen'
   | 'videoGen'
 
-/** 图生视频节点模型。默认 H3 15s；h3-v5 为 10 秒且可选 1080p；万相走百炼同一套 Key。 */
+/** 이미지에서 영상을 만드는 노드 모델. H3 기본은 15초, h3-v5는 10초와 1080p 옵션을 지원하며 완샹은 Model Studio 키를 쓴다. */
 export type VideoGenModel = 'h3' | 'h3-v5' | 'wan-prime'
 
 export type VideoResolution = '768p' | '1080p'
 
-/** H3 出片方式。reference=多图参考（当前默认）；fl2va=首尾帧。 */
+/** H3 영상 생성 방식. reference는 다중 이미지 참조, fl2va는 시작·끝 프레임 방식이다. */
 export type H3VideoGenMode = 'reference' | 'fl2va'
 
 /**
- * 出视频前的参考图策略。必须在生成视频前按模型定好，画布是否铺「分镜关键帧」也跟它走。
- * identity：只传角色设计图 + 场景图（H3 默认，不经过看板/四宫格，减少多人物）
- * keyframe：人设 + 场景 + 四宫格关键帧（万相及其他模型）
- * storyboard：人设 + 场景 + 故事看板（短剧/电影章节可选）
+ * 영상 생성 전 모델에 맞는 참조 이미지 방식. 캔버스의 키프레임 배치도 이 설정을 따른다.
+ * identity는 H3 기본값으로 캐릭터와 배경 이미지만 사용해 인물 추가를 줄인다.
+ * keyframe은 캐릭터, 배경, 4컷 키프레임을 참조한다. 완샹 등에서 사용한다.
+ * storyboard는 캐릭터, 배경, 스토리 개요판을 참조한다. 숏드라마와 영화 챕터에서 선택할 수 있다.
  */
 export type VideoStillMode = 'identity' | 'keyframe' | 'storyboard'
 
@@ -48,7 +48,7 @@ export function videoStillNeedsCanvas(mode: VideoStillMode): boolean {
   return mode !== 'identity'
 }
 
-/** 内置 H3 走人设+场景；万相走关键帧；自定义接入看 profile.stillMode，否则按工作流推断。 */
+/** 내장 H3는 캐릭터와 배경, 완샹은 키프레임을 사용한다. 사용자 지정 연결은 profile.stillMode 또는 워크플로를 따른다. */
 export function stillModeForVideoModel(
   model: VideoGenModel,
   profile?: { stillMode?: unknown; workflowId?: string; provider?: string } | null
@@ -122,28 +122,28 @@ export interface CanvasNode {
     kind?: string
     prompt?: string
     referenceAssetIds?: string[]
-    /** 通过画布连线继承参考图的上游节点，顺序即图1、图2…… */
+    /** 캔버스 연결에서 참조 이미지를 가져오는 상위 노드. 배열 순서대로 이미지 번호를 붙인다. */
     referenceSourceNodeIds?: string[]
     outputAssetId?: string
     duration?: number
-    /** 节点自己的画幅；为空时只继承项目默认值，不反向修改其他节点。 */
+    /** 노드별 화면 비율. 비어 있으면 프로젝트 기본값을 상속한다. */
     aspectRatio?: import('./project').AspectRatio
     videoModel?: VideoGenModel
-    /** 当前节点锁定的视频接入，避免不同供应商配置互相串用。 */
+    /** 현재 노드에서 사용할 영상 모델 연결. 다른 공급업체 설정의 혼용을 방지한다. */
     videoProfileId?: string
-    /** 这一镜出视频时用什么参考图；切模型时写入，决定画布是否铺分镜关键帧 */
+    /** 영상 참조 방식. 모델을 바꿀 때 저장하며 키프레임 배치를 결정한다. */
     videoStillMode?: VideoStillMode
-    /** h3-v5 可选 1080p，其余固定 768p */
+    /** h3-v5는 1080p를 선택할 수 있다. 다른 모델은 768p로 고정된다. */
     videoResolution?: VideoResolution
-    /** 文档列出的出图档位，节点上由用户选 1K / 2K / 4K */
+    /** 노드에서 선택하는 이미지 해상도. 모델 문서에 따라 1K, 2K, 4K를 사용한다. */
     imageResolution?: '1k' | '2k' | '4k'
-    /** 文档有音频开关时，节点上的有声 / 无声 */
+    /** 음성 켜기 옵션을 지원하는 모델에서 유음 또는 무음을 지정한다. */
     generateAudio?: boolean
-    /** H3：参考图生成（默认）或首尾帧 */
+    /** H3에서 참조 이미지 또는 시작·끝 프레임을 사용한다. */
     h3GenMode?: H3VideoGenMode
     firstFrameAssetId?: string
     lastFrameAssetId?: string
-    /** AutoDL / 万相进行中任务，重试时先查结果 */
+    /** 진행 중인 AutoDL 또는 완샹 작업. 재시도 시 기존 결과를 먼저 조회한다. */
     videoTaskId?: string
   }
   status?: TaskStatus

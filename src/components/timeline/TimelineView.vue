@@ -66,7 +66,7 @@ const ruler = computed(() => {
   return ticks
 })
 
-/** 拖动片段边缘做真实素材裁剪：左侧改变入点，右侧改变出点。 */
+/** 클립 가장자리를 끌어 원본 범위를 자른다. 왼쪽은 시작점, 오른쪽은 종료점을 바꾼다. */
 function startTrim(clip: TimelineClip, edge: 'left' | 'right', evt: MouseEvent) {
   evt.preventDefault()
   evt.stopPropagation()

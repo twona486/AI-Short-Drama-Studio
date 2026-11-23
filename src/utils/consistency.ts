@@ -1,3 +1,4 @@
+import { t } from '@/i18n'
 import type { ID, Project, Scene, Shot, StoryProp, Subject } from '@/types'
 import { sceneForShotPlace, shotMentionsScene } from '@/utils/shotPlace'
 import { lookFromScript, mediumLockText } from '@/utils/visualStyle'
@@ -388,15 +389,15 @@ export type ShotRefSlot = {
 
 export function refSlotLabel(id: ID, project: Project): string {
   const four = (project.subjects ?? []).find((s) => s.designSheetAssetId === id)
-  if (four) return `사면도 · ${four.name}`
+  if (four) return t('referenceSlots.character', { name: four.name })
   const prop = (project.scenes ?? []).find((s) => s.propSheetAssetId === id)
-  if (prop) return `주요 소품 · ${prop.name}`
+  if (prop) return t('referenceSlots.prop', { name: prop.name })
   const scn = (project.scenes ?? []).find((s) => s.plateAssetId === id)
-  if (scn) return `기준 이미지 · ${scn.name}`
+  if (scn) return t('referenceSlots.anchor', { name: scn.name })
   const board = (project.shots ?? []).find((s) => s.boardAssetId === id)
-  if (board) return `스토리 개요판 · ${board.index + 1}`
-  if ((project.script?.referenceAssetIds ?? []).includes(id)) return '제품'
-  return '참조 이미지'
+  if (board) return t('referenceSlots.numberedBoard', { number: board.index + 1 })
+  if ((project.script?.referenceAssetIds ?? []).includes(id)) return t('referenceSlots.product')
+  return t('common.referenceImage')
 }
 
 /** 이미지 생성 노드에서는 캐릭터, 배경, 제품 참조를 고정한다. 추가 참조는 삭제할 수 있다. */
@@ -409,16 +410,18 @@ export function imageRefSlots(shot: Shot, project: Project): ShotRefSlot[] {
     seen.add(id)
     slots.push({ id, label, locked })
   }
-  push(videoRequiresStoryboard(project) ? shot.boardAssetId : undefined, '스토리 개요판', true)
+  push(videoRequiresStoryboard(project) ? shot.boardAssetId : undefined, t('referenceSlots.board'), true)
   for (const sub of subjectsForShot(shot, project)) {
-    push(sub.designSheetAssetId, `사면도 · ${sub.name}`, true)
+    push(sub.designSheetAssetId, t('referenceSlots.character', { name: sub.name }), true)
   }
   const scene = sceneAssetForShot(shot, project)
-  push(scene?.plateAssetId, scene ? `기준 이미지 · ${scene.name}` : '배경 기준 이미지', true)
-  push(scene?.propSheetAssetId, scene ? `주요 소품 · ${scene.name}` : '주요 소품 이미지', true)
+  if (scene) {
+    push(scene.plateAssetId, t('referenceSlots.anchor', { name: scene.name }), true)
+    push(scene.propSheetAssetId, t('referenceSlots.prop', { name: scene.name }), true)
+  }
   if (project.pipelineMode === 'remake') {
     for (const id of project.script?.referenceAssetIds ?? []) {
-      push(id, '제품', true)
+      push(id, t('referenceSlots.product'), true)
     }
   }
   for (const id of uniqueIds(shot.referenceAssetIds ?? [])) {
@@ -436,16 +439,7 @@ export function boardRefSlots(shot: Shot, project: Project): ShotRefSlot[] {
 export function videoRefSlots(shot: Shot, project: Project): ShotRefSlot[] {
   return packVideoRefEntries(collectShotVideoEntries(shot, project)).map((entry, index) => ({
     id: entry.id,
-    label:
-      entry.kind === 'character'
-        ? `이미지 ${index + 1} · 캐릭터 설정 · ${entry.name}`
-        : entry.kind === 'scene'
-          ? `이미지 ${index + 1} · 배경 · ${entry.name}`
-          : entry.kind === 'extra'
-            ? `이미지 ${index + 1} · 추가 참조`
-            : entry.kind === 'keyframe'
-              ? `이미지 ${index + 1} · 4컷 키프레임`
-              : `이미지 ${index + 1} · 이 샷의 스토리 개요판`,
+    label: t(`referenceSlots.video.${entry.kind}`, { number: index + 1, name: entry.name }),
     locked: false
   }))
 }

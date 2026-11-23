@@ -108,7 +108,7 @@ const scene = computed(() =>
     : undefined
 )
 
-/* ── 角色卡语音：音色描述 + 可选参考音频 ── */
+/* 캐릭터 음색 설명과 선택형 참조 오디오 */
 const voicePromptText = computed({
   get: () => subject.value?.voicePrompt ?? '',
   set: (v: string) => {
@@ -178,7 +178,7 @@ async function onVoiceRefChange(ev: Event) {
       filename: file.name,
       projectId: project.current?.id
     })
-    // 换了样本，之前复刻的音色作废
+    // 샘플이 바뀌면 이전에 복제한 음색을 무효화한다.
     project.updateSubject(subject.value.id, {
       voiceRefAssetId: asset.id,
       clonedVoiceId: undefined,
@@ -266,7 +266,7 @@ const assetId = computed(() => {
   if (!shot.value) return undefined
   if (type.value === 'shotBoard') return shot.value.boardAssetId
   if (type.value === 'shotImage') return shot.value.imageAssetId
-  // 首尾帧节点有两张产出，单图预览取起始帧
+  // 두 결과 중 시작 프레임을 대표 이미지로 표시한다.
   if (type.value === 'shotFrames') return shot.value.firstFrameAssetId || shot.value.lastFrameAssetId
   if (type.value === 'shotVideo') return shot.value.videoAssetId
   if (type.value === 'audio') return shot.value.audioAssetId
@@ -283,7 +283,7 @@ const mediaAspect = computed(() => {
 
 const status = computed(() => nodeMeta.value?.status ?? 'idle')
 const generating = computed(() => isNodeRunning(props.id))
-// 首尾帧要两张都画出来才算完成，只有起始帧时节点仍显示未生成
+// 시작 프레임과 종료 프레임이 모두 생성되면 완료로 표시한다.
 const hasAsset = computed(() =>
   type.value === 'shotFrames'
     ? Boolean(shot.value?.firstFrameAssetId && shot.value?.lastFrameAssetId)
@@ -383,7 +383,7 @@ const showPrompt = computed(
     type.value === 'audio'
 )
 
-/** 首尾帧的两张图各有一个 URL，节点上并排显示 */
+/** 시작과 종료 프레임은 각각의 URL로 나란히 표시한다. */
 const frameUrls = ref({ start: '', end: '' })
 async function loadFrames() {
   const s = shot.value
@@ -500,8 +500,8 @@ watch(
   { immediate: true }
 )
 watch(
-  // 必须把每一项作为独立 source。若用 getter 每次返回一个新数组，回写提示词后
-  // 即使数组内容完全相同也会被判定为变化，从而递归触发本 watcher。
+  // 각 항목을 개별 감시 대상으로 등록한다. getter가 매번 배열을 새로 만들면
+  // 같은 내용으로 프롬프트가 갱신될 때도 감시가 다시 실행된다.
   [
     () => props.selected,
     () => type.value,
@@ -559,7 +559,7 @@ function setShotDuration(raw: number) {
   project.updateShot(shot.value.id, { duration: d })
 }
 
-/** 只重画一张帧（起始帧或结束帧），另一张不动 */
+/** 시작 또는 종료 프레임 하나만 다시 생성한다. */
 async function redrawFrame(which: 'start' | 'end') {
   if (generating.value || toolBusy.value || !shot.value) return
   moreOpen.value = false
@@ -642,7 +642,7 @@ async function loadMedia() {
     videoUrl.value = ''
     mediaUrl.value = (await assets.getUrl(id)) || ''
   }
-  // 首尾帧有两张图，跟着一起刷新
+  // 시작과 종료 프레임을 함께 갱신한다.
   if (type.value === 'shotFrames') await loadFrames()
 }
 
@@ -688,7 +688,7 @@ async function generateThis(ev?: Event, hd = false) {
     await loadMedia()
     if (hd) toast.success(translate('pipelineNode.upscaled'))
   } catch (e: any) {
-    // 节点上只有一个小红点，失败原因必须直接弹出来，否则表现为「点了生成，什么都没出来」
+    // 실패 상태만 표시하면 원인을 알 수 없으므로 오류 내용도 알림으로 표시한다.
     if (shouldToastAiError(e)) toast.error(friendlyAiError(e) || translate('common.generateFailed'))
   } finally {
     toolBusy.value = ''
@@ -782,7 +782,7 @@ function startCrop() {
   crop.value = { x: 0.08, y: 0.08, w: 0.84, h: 0.84 }
 }
 
-/** 截取视频最后一帧 → 在视频旁边落一个图片节点，可以拿去当下一镜首帧或参考图 */
+/** 영상의 끝 프레임을 이미지 노드로 추출한다. 다음 샷의 시작 프레임이나 참조로 쓸 수 있다. */
 async function grabLastFrame() {
   if (toolBusy.value) return
   if (!assetId.value) {
@@ -1600,7 +1600,7 @@ const cropStyle = computed(() => ({
   font-weight: 600;
 }
 
-/* 首尾帧节点：起始帧 → 结束帧并排 */
+/* 시작과 종료 프레임을 나란히 배치 */
 .frame-pair {
   position: absolute;
   inset: 0;
@@ -1738,7 +1738,7 @@ const cropStyle = computed(() => ({
   border-radius: 0 0 11px 11px;
 }
 
-/* ── 角色卡 ── */
+/* 캐릭터 카드 */
 .pnode.kind-subject {
   border-color: rgba(167, 139, 250, 0.28);
 }
@@ -1833,7 +1833,7 @@ const cropStyle = computed(() => ({
   color: #6ee7b7;
 }
 
-/* ── 角色语音编辑区（展开面板） ── */
+/* 캐릭터 음성 편집 패널 */
 .voice-sec {
   margin-bottom: 8px;
   padding: 9px 10px;

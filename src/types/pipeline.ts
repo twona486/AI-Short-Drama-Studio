@@ -1,5 +1,5 @@
 /**
- * Pipeline / 任务状态
+ * 파이프라인 작업 상태.
  */
 
 export type TaskStatus =
@@ -12,28 +12,28 @@ export type TaskStatus =
 
 export interface PipelineTask {
   id: string
-  /** 任务类型 */
+  /** 작업 유형. */
   kind:
     | 'storyboard'
     | 'image'
     | 'video'
     | 'caption'
     | 'export'
-  /** 任务标题 */
+  /** 작업 제목. */
   title: string
-  /** 状态 */
+  /** 상태. */
   status: TaskStatus
-  /** 进度 0-1 */
+  /** 진행률. 범위는 0~1이다. */
   progress: number
-  /** 当前步骤描述 */
+  /** 현재 단계 설명. */
   message?: string
-  /** 错误 */
+  /** 오류. */
   error?: string
-  /** 开始时间 */
+  /** 시작 시각. */
   startedAt?: number
-  /** 结束时间 */
+  /** 종료 시각. */
   finishedAt?: number
-  /** 关联的分镜 ID（可选） */
+  /** 관련 샷 ID. 선택 사항이다. */
   shotId?: string
 }
 
@@ -65,11 +65,11 @@ export interface PipelineStep {
   id: PipelineStepId
   label: string
   description: string
-  /** 是否已完成（用户主动标记） */
+  /** 사용자가 완료로 표시했는지 여부. */
   done: boolean
-  /** 是否可访问 */
+  /** 접근할 수 있는지 여부. */
   enabled: boolean
-  /** 当前处于的步骤 */
+  /** 현재 단계. */
   current: boolean
   route: string
   icon: string

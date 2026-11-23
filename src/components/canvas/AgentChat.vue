@@ -1,6 +1,5 @@
 <script setup lang="ts">
 import { t as translate } from '@/i18n'
-import zh from '@/locales/zh'
 import { computed, nextTick, onMounted, onBeforeUnmount, ref, watch } from 'vue'
 import { runAgentTurn, type AgentEvent, type AgentMessage } from '@/services/canvas/agent'
 import { friendlyAiError, isAbortError, isTimeoutAbort } from '@/services/ai/abort'
@@ -33,7 +32,7 @@ type FeedItem =
   | { id: string; type: 'run'; rows: TraceRow[] }
 
 const feed = ref<FeedItem[]>([
-  { id: 'welcome', type: 'msg', role: 'assistant', content: zh.agentChat.welcome }
+  { id: 'welcome', type: 'msg', role: 'assistant', content: translate('agentChat.welcome') }
 ])
 const messages = computed<AgentMessage[]>(() =>
   feed.value
@@ -46,9 +45,9 @@ const thinking = ref(false)
 const log = ref('')
 const trace = ref<TraceRow[]>([])
 const chips = ref<{ label: string; text: string }[]>([
-  { get label() { return translate('agentChat.breakDownScript') }, text: '拆剧本' },
-  { get label() { return translate('agentChat.drawImage') }, text: '帮我创建一个图片节点并生成：' },
-  { get label() { return translate('agentChat.viewProgress') }, text: '现在画布什么情况' }
+  { get label() { return translate('agentChat.breakDownScript') }, get text() { return translate('agentChat.breakDownScriptCommand') } },
+  { get label() { return translate('agentChat.drawImage') }, get text() { return translate('agentChat.drawImageCommand') } },
+  { get label() { return translate('agentChat.viewProgress') }, get text() { return translate('agentChat.viewProgressCommand') } }
 ])
 const box = ref<HTMLElement | null>(null)
 const autonomy = ref<AgentAutonomy>('gated')
@@ -61,7 +60,7 @@ let offActivity: (() => void) | undefined
 const hoverMode = ref<AgentAutonomy | null>(null)
 const settings = useSettingsStore()
 const toast = useToastStore()
-/** 本轮要带上的本地文件附件（文本内容已在选择时读入） */
+/** 이번 요청에 첨부할 로컬 파일. 텍스트는 파일 선택 시 읽어 둔다. */
 const attachments = ref<AgentAttachment[]>([])
 const TEXT_ATTACH_FILTERS = [
   { get name() { return translate('agentChat.textFiles') }, extensions: ['txt', 'md', 'markdown', 'fountain', 'srt', 'ass', 'lrc', 'json', 'csv'] }
@@ -80,17 +79,17 @@ async function pickAttachments() {
       try {
         const raw = await desktop().readText(p)
         const content = raw.length > 200_000
-          ? `${raw.slice(0, 200_000)}\n\n【内容过长，已截取前 200,000 个字符】`
+          ? `${raw.slice(0, 200_000)}\n\n[${translate('agentChat.attachmentTruncated')}]`
           : raw
         attachments.value.push({ name: p.split(/[\\/]/).pop() || p, path: p, content })
       } catch (e) {
         toast.error(translate('agentChat.readFailed', { p0: p.split(/[\\/]/).pop() || p }))
-        console.warn('[agent] 附件读取失败', e)
+        console.warn('[agent] Could not read attachment', e)
       }
     }
   } catch (e) {
     toast.error(translate('agentChat.fileSelectionFailed'))
-    console.warn('[agent] pickFiles 失败', e)
+    console.warn('[agent] Could not choose files', e)
   }
 }
 
@@ -98,7 +97,7 @@ function removeAttachment(index: number) {
   attachments.value.splice(index, 1)
 }
 
-/** 出片生成模式：自动（默认）/ 首尾帧链（第 2 镜起取上一镜视频末帧作首帧） */
+/** 영상 생성 방식은 자동 또는 시작·끝 프레임 연결이다. 연결 방식에서는 둘째 샷부터 이전 영상의 끝 프레임을 사용한다. */
 const shotChainMode = computed<'auto' | 'fl2va'>(
   () => project.current?.settings.h3ShotChainMode || 'auto'
 )
@@ -119,7 +118,7 @@ function chooseShotChainMode(v: 'auto' | 'fl2va') {
 
 let controller: AbortController | null = null
 
-/* ── 生成配置：比例 / 图像模型 / 视频模型，选好即生效，智能体照此执行 ── */
+/* 생성에 사용할 비율과 모델을 선택하면 에이전트에 즉시 적용된다. */
 const currentMode = computed(() => MODES.find((m) => m.id === autonomy.value) || MODES[1])
 const modeTip = computed(() => {
   const id = hoverMode.value || autonomy.value
@@ -132,10 +131,10 @@ const ASPECT_OPTIONS: { value: AspectRatio; label: string }[] = [
   { value: '4:3', get label() { return translate('common.classicRatio') } },
   { value: '21:9', get label() { return translate('common.cinemaRatio') } }
 ]
-/* 创作偏好弹窗：比例 + 图像/视频模型收进一个面板 */
+/* 창작 환경설정에서 비율, 이미지 모델, 영상 모델을 함께 고른다. */
 const prefOpen = ref(false)
 const prefTab = ref<'video' | 'image'>('video')
-/* 父容器 overflow 会裁剪浮层，所以传送到 body 按按钮位置定位 */
+/* 상위 요소의 overflow로 잘리지 않도록 body에 표시하고 버튼 기준으로 배치한다. */
 const prefBtn = ref<HTMLElement | null>(null)
 const prefPanel = ref<HTMLElement | null>(null)
 const PANEL_WIDTH = 480
@@ -151,7 +150,7 @@ function placePrefPanel() {
   const spaceAbove = rect.top - 12
   const spaceBelow = vh - rect.bottom - 12
   const style: Record<string, string> = { left: `${Math.round(left)}px`, width: `${Math.round(width)}px` }
-  // 上下哪边空间大就往哪边展开，不够时压缩高度并内部滚动
+  // 위아래 중 여유가 큰 쪽으로 열고, 공간이 부족하면 높이를 줄여 내부를 스크롤한다.
   if (spaceAbove >= 260 || spaceAbove >= spaceBelow) {
     style.bottom = `${Math.round(vh - rect.top + 6)}px`
     style.maxHeight = `${Math.round(Math.max(180, Math.min(spaceAbove, 460)))}px`
@@ -201,7 +200,7 @@ const activeVideoLabel = computed(() => {
   return p ? p.name : translate('agentChat.videoModel')
 })
 
-/** 比例小图标的内框尺寸（外框固定 40×26 居中） */
+/** 비율 아이콘의 내부 크기. 고정된 40×26 프레임 가운데에 배치한다. */
 function ratioBoxStyle(value: AspectRatio) {
   const map: Record<AspectRatio, [number, number]> = {
     '16:9': [30, 17],
@@ -214,7 +213,7 @@ function ratioBoxStyle(value: AspectRatio) {
   return { width: `${w}px`, height: `${h}px` }
 }
 
-/** 视频端点没有模型名，副标题显示服务商或域名 */
+/** 영상 모델 이름이 없으면 부제에 공급업체 또는 도메인을 표시한다. */
 function videoSub(p: { provider?: string; baseUrl: string }): string {
   if (p.provider) return p.provider
   try {
@@ -224,7 +223,7 @@ function videoSub(p: { provider?: string; baseUrl: string }): string {
   }
 }
 
-/* 选中后不关面板，方便连续调整 */
+/* 여러 옵션을 연달아 선택할 수 있도록 패널을 열어 둔다. */
 function pickAspectRatio(value: AspectRatio) {
   project.setAspectRatio(value)
 }
@@ -234,12 +233,12 @@ function pickImage(id: string) {
 }
 
 function pickVideo(id: string) {
-  // 选了具体接入就回到「跟随接入」模式，清掉内置工作流默认
+  // 개별 연결을 선택하면 내장 워크플로 기본값을 해제한다.
   settings.selectVideoModelDefault(undefined)
   settings.selectVideo(id)
 }
 
-/** 与视频节点下拉同款的内置工作流（用设置里的 AutoDL 令牌），创作偏好里也能直接选 */
+/** 창작 환경설정과 영상 노드에서 같은 AutoDL 내장 워크플로를 선택할 수 있다. */
 const VIDEO_WORKFLOW_OPTIONS: { value: VideoGenModel; name: string; desc: string }[] = [
   { value: 'h3', get name() { return translate('agentChat.h3') }, get desc() { return translate('agentChat.autoDLReference') } },
   { value: 'h3-v5', get name() { return translate('agentChat.h3v5') }, get desc() { return translate('agentChat.autoDLQuality') } },
@@ -249,14 +248,14 @@ const videoDefault = computed(() => settings.config.defaultVideoModel)
 
 function pickVideoWorkflow(model: VideoGenModel) {
   settings.selectVideoModelDefault(model)
-  // H3 系列内置工作流用 AutoDL 令牌：顺手把当前接入切到 AutoDL，免得提交时还指着别家
+  // H3 내장 워크플로는 AutoDL 토큰을 쓰므로 현재 연결도 AutoDL로 맞춘다.
   if (model !== 'wan-prime') {
     const autodlId = autodlVideoProfileId()
     if (autodlId) settings.selectVideo(autodlId)
   }
 }
 
-/** 与节点下拉一致：给接入线路带上服务商标签 */
+/** 노드의 모델 선택 목록과 동일한 공급업체 라벨을 사용한다. */
 function videoProfileTag(p: { provider?: string; baseUrl?: string; adapter?: { type?: string } }): string {
   const zealman = p.provider === 'zealman' || p.adapter?.type === 'zealman-workflow'
   const autodl = !zealman && (p.provider === 'autodl' || /autodl\.art/i.test(p.baseUrl || ''))
@@ -292,7 +291,7 @@ const statusText = computed(() => {
 })
 const statusLive = computed(() => busy.value || canvasLive.value)
 
-/** 自由画布：当前选中节点卡片 */
+/** 자유 캔버스에서 현재 선택한 노드 카드. */
 const selectedGenNode = computed(() => {
   const n = props.selectedNode
   if (!n || (n.type !== 'imageGen' && n.type !== 'videoGen')) return null
@@ -302,9 +301,9 @@ const selectedKindLabel = computed(() =>
   selectedGenNode.value?.type === 'videoGen' ? translate('agentChat.videoGeneration') : translate('agentChat.imageGeneration')
 )
 const polishChips = [
-  { get label() { return translate('agentChat.moreVisual') }, text: '更有画面感：补构图、光影、材质和空气感，不改原文格式' },
-  { get label() { return translate('agentChat.clearActions') }, text: '把眉眼嘴、手和身体怎么动写具体，不改原文格式' },
-  { get label() { return translate('agentChat.matchStory') }, text: '对照剧本，只写这一镜该发生的事，不改原文格式' }
+  { get label() { return translate('agentChat.moreVisual') }, get text() { return translate('agentChat.moreVisualCommand') } },
+  { get label() { return translate('agentChat.clearActions') }, get text() { return translate('agentChat.clearActionsCommand') } },
+  { get label() { return translate('agentChat.matchStory') }, get text() { return translate('agentChat.matchStoryCommand') } }
 ]
 
 onMounted(() => {
@@ -379,7 +378,7 @@ function upsertCanvasStep(key: string, patch: Partial<TraceRow>) {
   }
 }
 
-/** 计划卡片与执行步骤的状态同步 */
+/** 계획 카드와 실행 단계의 상태를 동기화한다. */
 function syncPlanSteps(stepKey: string, status: StepStatus) {
   for (const row of trace.value) {
     if (row.kind !== 'plan' || !row.plan) continue
@@ -417,9 +416,9 @@ function onProgress(ev: AgentEvent) {
     })
     syncPlanSteps(ev.step, ev.status || 'running')
   } else if (ev.kind === 'log') {
-    thinking.value = ev.label.includes('想')
+    thinking.value = /想|생각|검토 중|thinking/i.test(ev.label)
     const running = [...trace.value].reverse().find((s) => s.kind === 'step' && s.status === 'running')
-    const landed = /已上画布|已写入画布|已交付 \d+ 个可编辑分镜/.test(ev.label)
+    const landed = /已上画布|已写入画布|已交付 \d+ 个可编辑分镜|캔버스에.*(?:반영|배치|추가)|편집 가능한 샷.*완료|added to (?:the )?canvas/i.test(ev.label)
     if (running && (ev.step === running.key || !ev.step)) {
       running.detail = ev.label
       if (landed) {
@@ -440,7 +439,7 @@ function applyCanvasActivity(ev: CanvasActivity) {
   if (ev.source === 'agent' && busy.value) return
   canvasLive.value = true
   if (!busy.value) log.value = ev.message || ev.label
-  const landed = /已上画布|已写入画布/.test(ev.message || ev.label || '')
+  const landed = /已上画布|已写入画布|캔버스에.*(?:반영|배치|추가)|added to (?:the )?canvas/i.test(ev.message || ev.label || '')
   upsertCanvasStep(ev.nodeId, {
     kind: 'step',
     label: landed && ev.message ? ev.message : ev.label,
@@ -493,7 +492,7 @@ async function finishCanvasRun(ev: CanvasActivity) {
     chips.value = next
       ? [
           { get label() { return translate('agentChat.continue', { p0: nextLabel() }) }, text: translate('agentChat.continueCommand') },
-          { get label() { return translate('agentChat.quickPeek') }, text: '先看看' }
+          { get label() { return translate('agentChat.quickPeek') }, get text() { return translate('agentChat.quickPeekCommand') } }
         ]
       : []
   }
@@ -945,7 +944,7 @@ function visibleRows(rows: TraceRow[]) {
   overflow-x: hidden;
 }
 
-/* ── 头部 ── */
+/* 헤더 */
 .head {
   display: flex;
   align-items: center;
@@ -1044,7 +1043,7 @@ function visibleRows(rows: TraceRow[]) {
   flex-shrink: 0;
 }
 
-/* ── 选中节点卡片（自由画布） ── */
+/* 선택한 자유 캔버스 노드 카드 */
 .target {
   margin: 0 14px 8px;
   padding: 10px 12px;
@@ -1111,7 +1110,7 @@ function visibleRows(rows: TraceRow[]) {
   background: rgba(126, 180, 255, 0.16);
 }
 
-/* ── 消息流 ── */
+/* 메시지 목록 */
 .msgs {
   flex: 1;
   min-width: 0;
@@ -1228,7 +1227,7 @@ function visibleRows(rows: TraceRow[]) {
   min-width: 0;
 }
 
-/* ── 执行轨迹 ── */
+/* 실행 내역 */
 .think {
   display: flex;
   align-items: center;
@@ -1253,7 +1252,7 @@ function visibleRows(rows: TraceRow[]) {
   0%, 100% { opacity: 0.3; transform: translateY(0); }
   50% { opacity: 1; transform: translateY(-2px); }
 }
-/* ── 快捷指令 ── */
+/* 빠른 명령 */
 .chips {
   display: flex;
   flex-wrap: wrap;
@@ -1278,7 +1277,7 @@ function visibleRows(rows: TraceRow[]) {
   color: var(--color-text-1);
 }
 
-/* ── 输入区 ── */
+/* 입력 영역 */
 .composer {
   padding: 10px 12px 12px;
   border-top: 1px solid var(--color-border);
@@ -1421,7 +1420,7 @@ textarea {
   right: 0;
   left: auto;
 }
-/* ── 创作偏好弹窗 ── */
+/* 창작 환경설정 팝업 */
 .pref-btn {
   gap: 5px;
   padding: 0 10px;
@@ -1495,7 +1494,7 @@ textarea {
   color: var(--color-text-4);
 }
 
-/* 偏好面板里的分组小标题（视频工作流 / 已配置接入） */
+/* 영상 워크플로와 구성된 연결의 그룹 제목 */
 .pref-g {
   margin: 10px 4px 4px;
   font-size: 10px;

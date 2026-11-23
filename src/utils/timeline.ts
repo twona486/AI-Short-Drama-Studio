@@ -6,7 +6,7 @@ export function timelineClipAssetId(project: Project, clip: TimelineClip): strin
   return shot?.videoAssetId || shot?.imageAssetId
 }
 
-/** 按分镜顺序从已有视频/图片构建时间线 */
+/** 기존 영상과 이미지로 샷 순서에 따라 타임라인을 만든다. */
 export function buildTimelineFromShots(project: Project): TimelineClip[] {
   const clips: TimelineClip[] = [...project.shots]
     .sort((a, b) => a.index - b.index)
@@ -33,8 +33,8 @@ export function buildTimelineFromShots(project: Project): TimelineClip[] {
 }
 
 /**
- * 若时间线为空且有可导出分镜，则自动补齐。
- * 返回是否新建了时间线。
+ * 타임라인이 비어 있고 내보낼 수 있는 샷이 있으면 자동으로 채운다.
+ * 새 타임라인을 만들었는지 반환한다.
  */
 export function ensureTimelineFromShots(project: Project): {
   built: boolean
@@ -47,7 +47,7 @@ export function ensureTimelineFromShots(project: Project): {
   return { built: clips.length > 0, clips }
 }
 
-/** 是否具备导出条件（时间线有启用片段，或分镜已有视频素材） */
+/** 활성 타임라인 클립 또는 샷의 영상이 있어 내보낼 수 있는지 확인한다. */
 export function canBuildExport(project: Project | null | undefined): boolean {
   if (!project) return false
   if (project.timeline.some((c) => c.enabled)) return true

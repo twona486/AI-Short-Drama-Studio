@@ -227,7 +227,7 @@ const isImageNode = computed(() => {
 const canPickAsset = computed(() => isImageNode.value || props.node?.type === 'imageGen')
 const isVideoNode = computed(() => props.node?.type === 'shotVideo' || props.node?.type === 'videoGen')
 
-/** 本镜说话角色的音色：人物卡上的实时值优先，其次用提炼时绑定的快照 */
+/** 현재 샷 화자의 음색은 최신 캐릭터 카드 값이 우선하며, 없으면 추출 시 저장한 값을 쓴다. */
 const shotSpeakerVoice = computed(() => {
   const s = shot.value
   if (!s) return ''
@@ -365,10 +365,10 @@ const lastFrameId = computed({
   }
 })
 const isH3Fl2va = computed(() => isH3Video.value && h3GenMode.value === 'fl2va')
-/** 项目级「首尾帧链」：整条片按镜号首尾相接，不需要逐镜手动选帧 */
+/** 시작·끝 프레임 연결 모드에서는 샷 순서로 프레임을 자동 연결한다. */
 const fl2vaChain = computed(() => isH3Video.value && isFl2vaChainActive(project.current))
 
-/** 首尾帧节点：两张帧各自的画面词 */
+/** 시작과 종료 두 프레임의 개별 화면 프롬프트. */
 const startFramePromptValue = computed(() => {
   const s = shot.value
   if (!s || !project.current) return ''

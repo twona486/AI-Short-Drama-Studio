@@ -1,5 +1,5 @@
 /**
- * 全局 toast / 通知
+ * 전역 알림 스토어.
  */
 
 import { defineStore } from 'pinia'

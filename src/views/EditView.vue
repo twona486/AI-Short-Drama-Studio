@@ -43,7 +43,7 @@ const playhead = ref(0)
 
 onMounted(async () => {
   if (!project.current) return
-  // 第一次进入按分镜顺序铺满；之后保留用户顺序，只补上新生成的视频。
+  // 처음에는 샷 순서로 배치한다. 이후에는 사용자가 정한 순서를 유지하고 새 영상만 추가한다.
   if (project.current.timeline.length === 0 && project.current.shots.length > 0) {
     autoBuildTimeline()
   } else {
@@ -453,7 +453,7 @@ const totalDuration = computed(() =>
     .toFixed(1)
 )
 
-/** 预览：用 FFmpeg 把当前时间线快速拼一下 */
+/** FFmpeg로 현재 타임라인을 합쳐 빠르게 미리 본다. */
 async function preview() {
   if (!project.current) return
   if (merging.value) return

@@ -13,12 +13,12 @@ export {
 } from '@/utils/shotPrompt'
 export type { VideoPromptStyle } from '@/utils/shotPrompt'
 
-/** 配图实际使用的提示词：独立覆盖优先，否则用分镜画面描述 */
+/** 이미지 프롬프트를 별도로 지정했으면 우선 사용하고, 없으면 샷의 화면 묘사를 사용한다. */
 export function effectiveImagePrompt(shot: Shot): string {
   return composeShotVisualPrompt(shot, 'image')
 }
 
-/** 视频内容表现：谁做什么、说什么、镜头怎么走。绝不回退成配图静帧词 */
+/** 영상용 연기 설명을 반환한다. 정지 이미지용 프롬프트는 사용하지 않는다. */
 export function effectiveVideoPrompt(shot: Shot): string {
   return composeShotVisualPrompt(shot, 'video')
 }
@@ -29,7 +29,7 @@ export function isDigitalHumanSpeechProject(
   return project?.pipelineMode === 'smart-speech' && project.speechWorkflow?.mode === 'digital-human'
 }
 
-/** 默认使用 H3 出镜对白；已有独立音频的旧项目继续按 TTS 处理。 */
+/** H3 화면 대사를 기본으로 사용한다. 오디오를 이미 만든 기존 프로젝트는 TTS로 처리한다. */
 export function effectiveShotAudioMode(shot: Shot): ShotAudioMode {
   return shot.audioMode ?? (shot.audioAssetId ? 'tts' : 'h3-dialogue')
 }
@@ -41,7 +41,7 @@ export function h3VoiceMode(shot: Shot): 'dialogue' | 'voiceover' | 'none' {
   return 'none'
 }
 
-/** 说话者不在画面里时，即使标成对白也按画外音处理，避免把被叫的人当成开口者。 */
+/** 화자가 화면에 없으면 화면 밖 음성으로 처리해 호명된 인물이 입을 움직이지 않도록 한다. */
 export function resolveH3VoiceMode(shot: Shot, onScreenNames: string[] = []): 'dialogue' | 'voiceover' | 'none' {
   const mode = h3VoiceMode(shot)
   if (mode !== 'dialogue') return mode
@@ -59,7 +59,7 @@ export function needsExternalTts(
   return effectiveShotAudioMode(shot) === 'tts' && Boolean(shot.voiceover.trim())
 }
 
-/** 把旧素材推进历史，当前换成新的（去重、最多留 12 条） */
+/** 새 에셋을 현재 결과로 지정하고 기존 에셋은 이력에 보관한다. 중복을 제거하고 최대 12개를 유지한다. */
 export function pushHistory(
   currentId: string | undefined,
   nextId: string,

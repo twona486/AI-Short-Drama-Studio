@@ -5,13 +5,13 @@ import { computed, ref } from 'vue'
 const props = withDefaults(
   defineProps<{
     content: string
-    /** 小字号模式：用在执行轨迹的说明里 */
+    /** 실행 내역의 설명에 사용하는 작은 글자 모드. */
     compact?: boolean
   }>(),
   { compact: false }
 )
 
-/** ── 行内：代码 → 加粗 → 斜体 → 删除线 → 链接 ── */
+/** 인라인 코드, 굵게, 기울임, 취소선, 링크를 처리한다. */
 function escapeHtml(s: string): string {
   return s
     .replace(/&/g, '&amp;')
@@ -42,7 +42,7 @@ function inline(src: string): string {
 
 interface Block {
   html: string
-  /** 代码块原文，供复制使用 */
+  /** 복사에 사용할 코드 블록 원문. */
   raw?: string
   lang?: string
   lines?: number
@@ -63,7 +63,7 @@ const blocks = computed<Block[]>(() => {
       continue
     }
 
-    // 代码块 / 提示词块
+    // 코드 또는 프롬프트 블록
     const fence = line.match(/^\s*```([\w+#.-]*)\s*$/)
     if (fence) {
       const lang = fence[1] || ''
@@ -84,14 +84,14 @@ const blocks = computed<Block[]>(() => {
       continue
     }
 
-    // 分隔线
+    // 구분선
     if (/^\s*([-*_])\1{2,}\s*$/.test(line)) {
       out.push({ html: '<hr />' })
       i += 1
       continue
     }
 
-    // 标题
+    // 제목
     const h = line.match(/^(#{1,4})\s+(.+)$/)
     if (h) {
       const lv = Math.min(4, h[1].length)
@@ -100,7 +100,7 @@ const blocks = computed<Block[]>(() => {
       continue
     }
 
-    // 引用
+    // 인용문
     if (/^\s*>\s?/.test(line)) {
       const buf: string[] = []
       while (i < lines.length && /^\s*>\s?/.test(lines[i])) {
@@ -111,7 +111,7 @@ const blocks = computed<Block[]>(() => {
       continue
     }
 
-    // 表格
+    // 표
     if (line.includes('|') && i + 1 < lines.length && /^\s*\|?[\s:|-]+\|[\s:|-]*$/.test(lines[i + 1])) {
       const split = (row: string) =>
         row
@@ -137,7 +137,7 @@ const blocks = computed<Block[]>(() => {
       continue
     }
 
-    // 无序列表
+    // 순서 없는 목록
     if (/^\s*[-*•·]\s+/.test(line)) {
       const items: string[] = []
       while (i < lines.length && /^\s*[-*•·]\s+/.test(lines[i])) {
@@ -150,7 +150,7 @@ const blocks = computed<Block[]>(() => {
       continue
     }
 
-    // 有序列表
+    // 순서 있는 목록
     if (/^\s*\d+[.、)]\s+/.test(line)) {
       const items: string[] = []
       while (i < lines.length && /^\s*\d+[.、)]\s+/.test(lines[i])) {
@@ -163,7 +163,7 @@ const blocks = computed<Block[]>(() => {
       continue
     }
 
-    // 普通段落：连续非空行合并，用 <br> 保留换行
+    // 연속된 비어 있지 않은 줄을 합치고 줄바꿈은 <br>로 보존한다.
     const buf: string[] = []
     while (
       i < lines.length &&
@@ -385,7 +385,7 @@ async function onClick(ev: MouseEvent) {
   color: #cbd5ff;
 }
 
-/* ── 表格 ── */
+/* 표 */
 .rich :deep(.tb-wrap) {
   margin: 8px 0 10px;
   overflow-x: auto;
@@ -413,7 +413,7 @@ async function onClick(ev: MouseEvent) {
   border-bottom: none;
 }
 
-/* ── 代码块 / 提示词卡片 ── */
+/* 코드 블록과 프롬프트 카드 */
 .rich :deep(.code-card) {
   margin: 8px 0 10px;
   border: 1px solid var(--color-border);

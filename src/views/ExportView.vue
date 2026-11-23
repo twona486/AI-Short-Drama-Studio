@@ -49,7 +49,7 @@ onMounted(async () => {
   ensureExportTimeline()
 })
 
-/** 画布模式下往往没走过「剪辑」页，时间线为空会导致导出按钮灰掉——自动从分镜补齐 */
+/** 편집 단계를 거치지 않은 캔버스 프로젝트는 내보낼 수 있도록 샷에서 타임라인을 구성한다. */
 function ensureExportTimeline(silent = false) {
   if (!project.current) return false
   const { built, clips } = ensureTimelineFromShots(project.current)
@@ -255,7 +255,7 @@ async function doExport() {
       format: format.value,
       onProgress: (msg) => {
         progressMsg.value = msg
-        // 模拟进度（FFmpeg 不直接给百分比）
+        // FFmpeg가 백분율을 제공하지 않아 진행률을 추정한다.
         progress.value = Math.min(0.95, progress.value + 0.05)
       }
     })
@@ -266,7 +266,7 @@ async function doExport() {
     progressMsg.value = translate('export.completed')
     toast.success(translate('export.fileSize', { p0: formatSize(blob.size) }))
   } catch (e: unknown) {
-    console.error('[ExportView] 导出失败:', e)
+    console.error('[ExportView] Export failed:', e)
     const msg = e instanceof Error ? e.message : String(e)
     const displayMsg = msg.length > 600 ? msg.slice(0, 600) + '...' : msg
     toast.error(translate('export.failed', { error: displayMsg }), 15000)

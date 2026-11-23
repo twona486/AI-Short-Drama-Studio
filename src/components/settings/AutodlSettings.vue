@@ -45,7 +45,7 @@ function apply() {
       settings.patchVideo(values)
     } else settings.addVideo(values)
   }
-  // 之前选中的视频接入可用就保持不动；不可用（比如默认接入没填 Key）则切到 H3 默认工作流。
+  // 현재 연결을 쓸 수 있으면 유지한다. API 키가 비어 있는 등 사용할 수 없으면 H3 기본 워크플로로 바꾼다.
   const previousProfile = settings.config.videos.find((item) => item.id === previous)
   if (previousProfile && endpointReady(previousProfile)) {
     settings.selectVideo(previous)

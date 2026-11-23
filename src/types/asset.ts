@@ -1,11 +1,11 @@
 /**
- * 素材（图片 / 视频 / 音频）
- * - id         : 唯一 ID
- * - kind       : 类型
+ * 이미지, 영상, 오디오 에셋.
+ * - id: 고유 식별자
+ * - kind: 유형
  * - mimeType   : MIME
- * - blob       : 二进制（IndexedDB 存）
- * - url        : 运行时 blob URL（从 blob 派生，不持久化）
- * - meta       : 宽高、时长、大小
+ * - blob: IndexedDB에 저장하는 이진 데이터
+ * - url: blob에서 파생하는 런타임 URL. 별도로 저장하지 않는다.
+ * - meta: 해상도, 길이, 크기
  */
 
 import type { ID } from './project'
@@ -16,29 +16,29 @@ export interface AssetBase {
   id: ID
   kind: AssetKind
   mimeType: string
-  /** 文件名（用户原始） */
+  /** 사용자가 올린 원래 파일 이름. */
   filename: string
-  /** 文件大小（字节） */
+  /** 파일 크기(바이트). */
   size: number
-  /** 创建时间 */
+  /** 생성 시간. */
   createdAt: number
-  /** 来源：ai-generated / uploaded / extracted */
+  /** 출처. ai-generated, uploaded 또는 extracted. */
   source: 'ai-generated' | 'uploaded' | 'extracted'
-  /** 关联的 prompt（如果是 AI 生成的） */
+  /** AI로 생성할 때 사용한 프롬프트. */
   prompt?: string
-  /** 所属项目（资源库筛选用） */
+  /** 리소스 라이브러리의 필터에 사용하는 소속 프로젝트. */
   projectId?: ID
-  /** 生成时关联的分镜 */
+  /** 생성 시 연결된 샷. */
   shotId?: ID
-  /** 桌面端相对项目目录的路径，如 assets/images/xxx.png */
+  /** 데스크톱에서 프로젝트 폴더를 기준으로 한 경로. 예를 들어 assets/images/xxx.png. */
   fileRelPath?: string
-  /** 公共资产库（跨项目可选用） */
+  /** 여러 프로젝트에서 사용할 수 있는 공용 에셋 라이브러리. */
   library?: boolean
-  /** 用户自建分类文件夹；空则在公共资产（未分类） */
+  /** 사용자 지정 폴더. 비어 있으면 분류되지 않은 공용 에셋이다. */
   folderId?: string
 }
 
-/** 公共资产库里的用户自建文件夹 */
+/** 공용 에셋 라이브러리의 사용자 지정 폴더. */
 export interface LibraryFolder {
   id: ID
   name: string
@@ -57,9 +57,9 @@ export interface VideoAsset extends AssetBase {
   height: number
   duration: number
   fps: number
-  /** 缩略图（视频的第一帧） */
+  /** 영상 첫 프레임으로 만든 썸네일. */
   thumbnailId?: ID
-  /** 是否有音轨 */
+  /** 오디오 트랙 포함 여부. */
   hasAudio: boolean
 }
 
@@ -70,7 +70,7 @@ export interface AudioAsset extends AssetBase {
 
 export type Asset = ImageAsset | VideoAsset | AudioAsset
 
-/** 素材 + 运行时 blob URL 的封装 */
+/** 에셋과 실행 중 사용하는 blob URL 묶음. */
 export type AssetWithUrl = Asset & {
   url: string
   thumbnailUrl?: string

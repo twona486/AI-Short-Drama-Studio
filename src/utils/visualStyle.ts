@@ -26,6 +26,8 @@ export const STYLE_ALIASES: Record<VisualStyle, string[]> = {
     '水墨风',
     '水墨画',
     '写意画',
+    '수묵화',
+    '수묵',
     'ink-wash',
     'ink wash',
     'inkwash',

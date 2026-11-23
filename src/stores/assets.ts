@@ -1,8 +1,8 @@
 import { t } from '@/i18n'
 /**
- * 素材 store
+ * 에셋 스토어.
  *
- * 维护：素材元数据 + 运行时 blob URL 缓存
+ * 에셋 메타데이터와 런타임 blob URL 캐시를 관리한다.
  */
 
 import { defineStore } from 'pinia'
@@ -33,12 +33,12 @@ export const useAssetsStore = defineStore('assets', () => {
   const images = computed(() => all.value.filter((a) => a.kind === 'image'))
   const videos = computed(() => all.value.filter((a) => a.kind === 'video'))
 
-  /** 刷新列表 */
+  /** 에셋 목록을 새로 고친다. */
   async function refresh() {
     all.value = await listAssets()
   }
 
-  /** 添加素材（AI 生成或上传） */
+  /** AI로 생성하거나 업로드한 에셋을 추가한다. */
   async function add(
     blob: Blob,
     kind: Asset['kind'],
@@ -72,7 +72,7 @@ export const useAssetsStore = defineStore('assets', () => {
     if (kind === 'image') {
       asset = { ...base, kind: 'image', width: info.width, height: info.height }
     } else if (kind === 'video') {
-      // 防止把预览图误存成视频资产（下载后变成 png/jpg）
+      // 미리보기 이미지를 영상 에셋으로 저장하지 않는다.
       const head = new Uint8Array(await typed.slice(0, 16).arrayBuffer())
       const isJpeg = head[0] === 0xff && head[1] === 0xd8 && head[2] === 0xff
       const isPng =
@@ -83,7 +83,7 @@ export const useAssetsStore = defineStore('assets', () => {
           t('assets.imageInsteadOfVideo')
         )
       }
-      // 元数据偶尔读成 0 秒，不能因此把已经下好的 mp4 扔掉
+      // 길이가 0초로 읽혀도 다운로드가 끝난 MP4는 보존한다.
       if (
         typed.size < 80_000 &&
         info.duration != null &&
@@ -116,7 +116,7 @@ export const useAssetsStore = defineStore('assets', () => {
     return kind === 'image' ? 'image/png' : kind === 'video' ? 'video/mp4' : 'audio/mpeg'
   }
 
-  /** 获取播放 URL。视频/音频走完整 blob，避免自定义协议不支持 Range 时只播前半段。 */
+  /** 재생 URL을 반환한다. 영상과 오디오는 전체 blob을 사용해 Range가 없는 프로토콜에서도 끝까지 재생한다. */
   async function getUrl(id: ID): Promise<string | undefined> {
     const meta = all.value.find((a) => a.id === id)
     const asBlob =
@@ -143,7 +143,7 @@ export const useAssetsStore = defineStore('assets', () => {
     return url
   }
 
-  /** 获取缩略图 URL */
+  /** 썸네일 URL을 반환한다. */
   async function getThumbUrl(id: ID): Promise<string | undefined> {
     if (thumbCache.has(id)) return thumbCache.get(id)
     const blob = await loadThumbBlob(id)
@@ -153,7 +153,7 @@ export const useAssetsStore = defineStore('assets', () => {
     return url
   }
 
-  /** 没有封面、或封面是黑场，就现场截一帧存起来 */
+  /** 썸네일이 없거나 검은 화면이면 프레임을 추출해 저장한다. */
   async function ensureThumb(id: ID): Promise<string | undefined> {
     const stored = await loadThumbBlob(id)
     if (stored && stored.size >= 80) {
@@ -180,17 +180,17 @@ export const useAssetsStore = defineStore('assets', () => {
     return url
   }
 
-  /** 直接拿 blob（用于 FFmpeg 处理） */
+  /** FFmpeg 처리에 필요한 원본 blob을 반환한다. */
   async function getBlob(id: ID): Promise<Blob | undefined> {
     return loadAssetBlob(id)
   }
 
-  /** 同步获取元数据（已加载的列表里） */
+  /** 메모리에 불러온 메타데이터를 즉시 반환한다. */
   function getMeta(id: ID): Asset | undefined {
     return all.value.find((a) => a.id === id)
   }
 
-  /** 把资源库或其它来源的素材收进当前项目；已在项目里则原样返回。 */
+  /** 리소스 라이브러리 등의 에셋을 현재 프로젝트에 추가한다. 이미 있으면 그대로 반환한다. */
   async function adopt(
     id: ID,
     kind: Asset['kind'],
@@ -228,7 +228,7 @@ export const useAssetsStore = defineStore('assets', () => {
     await refresh()
   }
 
-  /** 释放所有 URL */
+  /** 생성한 URL을 모두 해제한다. */
   function cleanup() {
     for (const url of urlCache.values()) {
       if (url.startsWith('blob:')) URL.revokeObjectURL(url)

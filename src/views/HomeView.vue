@@ -71,7 +71,7 @@ watch(
         const url = await projectCoverUrl(p)
         if (url) next[p.id] = url
       } catch {
-        /* 某个项目素材读失败就跳过 */
+        /* 특정 프로젝트의 에셋을 읽지 못하면 건너뛴다. */
       }
     }
     for (const [id, url] of Object.entries(covers.value)) {
@@ -136,7 +136,7 @@ function openProjectAs(id: string, target: 'studio' | 'script') {
   })
 }
 
-/** 新建：不再弹选项，直接开一张新画布 */
+/** 옵션 팝업 없이 새 캔버스를 연다. */
 async function quickCreate() {
   if (creating.value) return
   creating.value = true
@@ -805,7 +805,7 @@ async function moveSelectedLibrary() {
   border-color: rgba(255, 255, 255, 0.2);
 }
 
-/* ───────── 指标 ───────── */
+/* 프로젝트 통계 */
 .stats {
   display: flex;
   width: fit-content;

@@ -91,7 +91,7 @@ const draft = ref('')
 const dirty = ref(false)
 const continueHint = ref('')
 
-/* ── 空剧本：先选「导入」或「生成」── */
+/* 빈 대본에서 가져오기 또는 생성 선택 */
 const emptyState = computed(
   () => !editing.value && !(project.current?.script?.content || '').trim()
 )
@@ -175,7 +175,7 @@ async function saveEdit(ev?: Event) {
     if (clone.subjects) project.setSubjects(clone.subjects)
     if (clone.scenes) project.setScenes(clone.scenes)
     if (clone.shots) project.setShots(clone.shots)
-    // 改过剧本后需要重新确认，避免带着旧验收状态往下跑
+    // 수정된 대본은 기존 승인 상태를 해제해 다시 확인할 수 있도록 한다.
     if (project.current.playApproved) {
       project.setPlayApproved(false)
     }
@@ -786,7 +786,7 @@ async function generateThis(ev: Event, kind: 'play' | 'extract' | 'continue' = '
   color: var(--color-error);
 }
 
-/* ── 空剧本：导入 / 生成 ── */
+/* 빈 대본 가져오기 및 생성 */
 .sdoc-empty {
   flex: 1;
   min-height: 0;

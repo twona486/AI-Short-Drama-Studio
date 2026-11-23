@@ -53,7 +53,7 @@ function htmlPick(kind: LocalFileKind, multiple: boolean): Promise<File[]> {
   })
 }
 
-/** 桌面端走系统文件框 + 主进程复制，避免杀毒拦截 Chromium 的 <input type=file>。 */
+/** 데스크톱에서는 보안 프로그램이 Chromium의 파일 선택을 차단할 수 있어 시스템 대화상자와 메인 프로세스를 사용한다. */
 export async function pickLocalFiles(opts: {
   kind?: LocalFileKind
   multiple?: boolean

@@ -491,9 +491,9 @@ async function buildBaseline() {
       index: 0,
       title: digital ? translate('smartSpeech.digitalMainShot') : translate('smartSpeech.liveMainShot'),
       visualPrompt: digital
-        ? '保持上传人物形象、机位和背景稳定，人物自然面向镜头口播。'
-        : '保留真人原片，后续根据逐字识别结果完成卡顿和气口清理。',
-      audioDescription: '清晰人声，背景音乐不盖过口播。',
+        ? 'Preserve the appearance of the uploaded person, camera position, and background. Have them speak naturally to the camera.'
+        : 'Preserve the original live-action footage. Remove hesitations and excessive pauses using the word-level transcript.',
+      audioDescription: 'Keep the spoken audio clear and the background music below it.',
       voiceover: p.script?.content || '',
       audioMode: digital ? 'h3-dialogue' : 'none',
       duration,
@@ -533,7 +533,7 @@ async function buildBaseline() {
     toast.success(translate('smartSpeech.baseProjectGenerated'))
   } catch (error: any) {
     const cancelled = generationController.value?.signal.aborted
-    const remoteTaskFinishedWithoutVideo = /生成失败|任务完成但没有视频|任务已过期|status.*failed/i.test(
+    const remoteTaskFinishedWithoutVideo = /生成失败|任务完成但没有视频|任务已过期|생성.*실패|영상.*없|작업.*만료|status.*failed|completed without (?:a )?video|task expired/i.test(
       error?.message || ''
     )
     if (p.speechWorkflow) {
@@ -642,7 +642,7 @@ async function buildDigitalHumanVideo(
     try {
       speechWindows.set(videoId, await detectSpeechWindow(blob))
     } catch {
-      /* 切气口失败时仍用整段，避免挡住生成 */
+      /* 발화 구간을 자르지 못하면 전체 오디오를 사용해 생성을 계속한다. */
     }
   }
 
@@ -901,9 +901,9 @@ function makeDigitalShot(
     id: shotId,
     index,
     title: translate('smartSpeech.digitalHumanNumber', { p0: index + 1 }),
-    visualPrompt: '保持人物身份、服装、背景和机位稳定，自然面向镜头口播。',
+    visualPrompt: 'Preserve the identity of the person, outfit, background, and camera position. Have them speak naturally to the camera.',
     videoPrompt,
-    audioDescription: '克隆音色按台词合成的口播，H3 对口型。',
+    audioDescription: 'Use the cloned voice to deliver the supplied script and have H3 synchronize the mouth movements.',
     voiceover: text,
     audioMode: 'h3-dialogue',
     duration,

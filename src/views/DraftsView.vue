@@ -2,10 +2,10 @@
 import { confirmAction } from '@/utils/confirmAction'
 import { t as translate } from '@/i18n'
 /**
- * 资源库
+ * 리소스 라이브러리.
  *
- * 显示当前项目步骤产物 + IndexedDB 里全部图片/视频。
- * 重新生成不会把旧文件从资源库删掉。
+ * 현재 프로젝트의 단계별 결과와 IndexedDB의 모든 이미지와 영상을 표시한다.
+ * 다시 생성해도 기존 파일은 리소스 라이브러리에 유지한다.
  */
 
 import { ref, computed, onMounted } from 'vue'
@@ -81,7 +81,7 @@ async function loadAssets() {
   }
 }
 
-// ===== 派生数据 =====
+// 파생 데이터
 
 const project_ = computed(() => project.current)
 const shots = computed(() => project.current?.shots ?? [])
@@ -144,7 +144,7 @@ const filledProgress = computed(() => {
   }
 })
 
-// ===== 操作 =====
+// 작업
 
 function goTo(step: string) {
   router.push('/' + step)
@@ -349,7 +349,7 @@ function downloadProjectJson() {
       </div>
     </header>
 
-    <!-- 项目元数据 -->
+    <!-- 프로젝트 메타데이터 -->
     <GlassCard padding="md" class="meta-card">
       <div class="meta-grid">
         <div>
@@ -383,7 +383,7 @@ function downloadProjectJson() {
       </div>
     </GlassCard>
 
-    <!-- 资源库全部素材 -->
+    <!-- 리소스 라이브러리의 모든 에셋 -->
     <GlassCard padding="md" class="section-card">
       <div class="card-head">
         <h3>{{ $t('drafts.libraryImages') }}{{ libraryImages.length }}）</h3>
@@ -455,7 +455,7 @@ function downloadProjectJson() {
       </div>
     </GlassCard>
 
-    <!-- 剧本库 -->
+    <!-- 대본 라이브러리 -->
     <GlassCard padding="md" class="section-card">
       <div class="card-head">
         <h3>{{ $t('drafts.scripts') }}{{ scripts.docs.length }}）</h3>
@@ -496,7 +496,7 @@ function downloadProjectJson() {
       <pre class="aesthetic-text">{{ script.aesthetic }}</pre>
     </GlassCard>
 
-    <!-- 文案 -->
+    <!-- 대본 -->
     <GlassCard v-if="script" padding="md" class="section-card">
       <div class="card-head">
         <h3>{{ $t('drafts.narration') }}</h3>
@@ -514,7 +514,7 @@ function downloadProjectJson() {
       <pre class="content-text">{{ script.content || $t('drafts.none') }}</pre>
     </GlassCard>
 
-    <!-- 分镜列表 -->
+    <!-- 스토리보드 목록 -->
     <GlassCard padding="md" class="section-card">
       <div class="card-head">
         <h3>{{ $t('drafts.storyboards') }}{{ shots.length }} {{ $t('common.pieces') }}</h3>
@@ -546,7 +546,7 @@ function downloadProjectJson() {
       </div>
     </GlassCard>
 
-    <!-- 图片网格 -->
+    <!-- 이미지 그리드 -->
     <GlassCard padding="md" class="section-card">
       <div class="card-head">
         <h3>{{ $t('drafts.generatedImages') }}{{ allImages.length }} {{ $t('common.imageCount') }}</h3>
@@ -578,7 +578,7 @@ function downloadProjectJson() {
       </div>
     </GlassCard>
 
-    <!-- 视频列表 -->
+    <!-- 영상 목록 -->
     <GlassCard padding="md" class="section-card">
       <div class="card-head">
         <h3>{{ $t('drafts.generatedVideos') }}{{ allVideos.length }} {{ $t('common.clips') }}</h3>
@@ -624,7 +624,7 @@ function downloadProjectJson() {
       </div>
     </GlassCard>
 
-    <!-- 时间线状态 -->
+    <!-- 타임라인 상태 -->
     <GlassCard padding="md" class="section-card">
       <div class="card-head">
         <h3>{{ $t('drafts.timeline') }}{{ timeline.length }} {{ $t('drafts.countDuration') }} {{ totalDuration }}s）</h3>
@@ -641,7 +641,7 @@ function downloadProjectJson() {
       </div>
     </GlassCard>
 
-    <!-- 字幕 -->
+    <!-- 자막 -->
     <GlassCard padding="md" class="section-card">
       <div class="card-head">
         <h3>{{ $t('drafts.captions') }}</h3>
@@ -656,7 +656,7 @@ function downloadProjectJson() {
       </div>
     </GlassCard>
 
-    <!-- 预览弹窗 -->
+    <!-- 미리보기 모달 -->
     <transition name="fade">
       <div v-if="previewAsset" class="preview-mask" @click.self="closePreview">
         <div class="preview-modal">

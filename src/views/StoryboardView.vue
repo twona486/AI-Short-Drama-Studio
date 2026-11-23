@@ -53,7 +53,7 @@ const aestheticDraft = ref('')
 const styleBriefDraft = ref('')
 const colorPaletteDraft = ref('')
 const lightingNoteDraft = ref('')
-/** 展开导演备注的分镜 id 集合 */
+/** 감독 메모를 펼친 샷 ID 목록. */
 const directingOpen = ref<Record<string, boolean>>({})
 
 function startEditAesthetic() {
@@ -106,7 +106,7 @@ async function generate() {
       try {
         productImages.push(await blobToChatImageUrl(blob))
       } catch (e) {
-        console.warn('产品图转码失败', id, e)
+        console.warn('Could not convert product image', id, e)
       }
     }
     if (productImages.length) {
@@ -131,7 +131,7 @@ async function generate() {
     project.setSubjects(runResult.result.subjects ?? [])
     project.setScenes(runResult.result.scenes ?? [])
     await project.save()
-    // 把项目级导演字段存到 Script
+    // 프로젝트별 감독 지침을 Script에 저장한다.
     if (project.current?.script) {
       const r = runResult.result
       project.setScript({
@@ -237,7 +237,7 @@ function movementLabel(m: Shot['cameraMovement']): string {
       </div>
     </header>
 
-    <!-- 项目级制作计划（风格锚点） -->
+    <!-- 프로젝트 전체의 제작 계획과 화풍 기준 -->
     <GlassCard
       v-if="project.current?.script && (project.current.script.aesthetic || project.current.script.styleBrief || shots.length)"
       padding="md"

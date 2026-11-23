@@ -155,7 +155,7 @@ export function defaultVideoSendPrompt(shot: Shot, project: Project): string {
     shot.continuity ? `Continuity: ${shot.continuity}` : '',
     shot.propFocus && !/^(?:无|없음|none)$/i.test(shot.propFocus) ? `Key props: ${shot.propFocus}` : '',
     shot.audioDescription ? `Synchronized sound: ${shot.audioDescription}` : '',
-    spoken ? `Deliver the following dialogue verbatim in Korean unless the source specifies another language: ${shot.voiceover}` : 'There is no dialogue. Do not animate the characters speaking.'
+    spoken ? `Deliver the following dialogue in its original language: ${shot.voiceover}` : 'There is no dialogue. Do not animate the characters speaking.'
   ]
     .filter(Boolean)
     .join('\n\n')
@@ -275,7 +275,7 @@ export function defaultShotFramePrompts(shot: Shot, project: Project): { start: 
     shot.propFocus && !/^(?:无|없음|none)$/i.test(shot.propFocus) ? `Key props: ${shot.propFocus}.` : '',
     `Use exactly a ${ar} aspect ratio for the entire image.`
   ].filter(Boolean)
-  const still = 'Output a single complete still. Avoid panels, collages, numbering, text, and dialogue subtitles.'
+  const still = 'Output a single complete still. Avoid panels, collages, numbering, text, and dialogue subtitles. Preserve any explicitly requested Korean on-screen text verbatim.'
   const startPrompt = [
     startRoster,
     `Opening frame for shot ${shot.index + 1} ("${shot.title || 'This shot'}"). Show the moment before the action begins.`,

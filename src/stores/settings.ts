@@ -1,8 +1,8 @@
 import { t } from '@/i18n'
 /**
- * 全局应用设置（AI 模式、模型端点、UI 偏好）
- * 桌面端写入用户所选保存目录内的本机 SQLite，不走浏览器存储。
- * Web 端仍用 localStorage。
+ * AI 모드, 모델 연결, UI 환경설정을 관리한다.
+ * 데스크톱에서는 사용자가 선택한 폴더의 SQLite에 저장한다.
+ * 웹에서는 localStorage를 사용한다.
  */
 
 import { defineStore } from 'pinia'
@@ -31,17 +31,17 @@ export interface ServiceEndpoint {
   baseUrl: string
   apiKey: string
   model: string
-  /** 配好后可在下拉里选 */
+  /** 연결을 구성하면 모델 목록에서 선택할 수 있다. */
   models: string[]
-  /** 设置页选中的接入方式 id，如 deepseek / dashscope / custom */
+  /** 설정 페이지에서 선택한 연결 방식 ID. 예를 들어 deepseek, dashscope, custom. */
   provider?: string
-  /** 自定义适配器：openai-compatible / openai-images / http-custom / comfyui-* */
+  /** 사용자 지정 어댑터. openai-compatible, openai-images, http-custom 또는 comfyui 계열. */
   adapter?: AdapterConfig
-  /** 文档里写明的节点选项，例如出图 1K/2K */
+  /** 문서에 명시된 노드 옵션. 예를 들어 이미지 해상도 1K 또는 2K. */
   options?: ModelNodeOptions
 }
 
-/** 一套已保存的接入（地址 + Key + 模型列表） */
+/** 주소, API 키, 모델 목록을 저장한 연결 프로필. */
 export interface NamedEndpoint extends ServiceEndpoint {
   id: string
   name: string
@@ -63,19 +63,19 @@ export interface VideoEndpoint {
   apiKey: string
   workflowId: string
   /**
-   * scene-narrative：配图里已经有人，直接写谁是谁和怎么演（默认）。
-   * formatted：人物图 + 空镜底板直接出视频，套 Aesthetic / SHOT 结构。
+   * scene-narrative는 이미지에 있는 사람을 식별하고 동작을 서술하는 기본 방식이다.
+   * formatted는 인물과 배경 참조로 영상을 만들며 Aesthetic / SHOT 구조를 적용한다.
    */
   promptStyle: VideoPromptStyle
   provider?: string
   /**
-   * 出视频参考图。H3 / AutoDL 默认 identity（人设+场景）；万相及其他模型用 keyframe。
-   * 画布是否铺分镜关键帧跟这个走，必须在出视频前定好。
+   * 영상 참조 이미지 방식. H3와 AutoDL은 기본적으로 identity, 완샹 등은 keyframe을 사용한다.
+   * 영상 생성 전에 캔버스에 키프레임을 배치할지 이 값으로 결정한다.
    */
   stillMode: VideoStillMode
-  /** 自定义适配器：comfyui-workflow（AutoDL）/ comfyui-prompt（自建）/ http-custom */
+  /** 사용자 지정 어댑터. AutoDL은 comfyui-workflow, 자체 서버는 comfyui-prompt이며 http-custom도 지원한다. */
   adapter?: AdapterConfig
-  /** 文档里写明的节点选项：音频开关、尾帧是否必填 */
+  /** 음성 켜기, 종료 프레임 필수 여부 등 문서에서 정의한 옵션. */
   options?: ModelNodeOptions
 }
 
@@ -106,18 +106,18 @@ export interface AppSettings {
   videos: VideoProfile[]
   activeVideoId: string
   /**
-   * 创作偏好里选的默认视频模型（内置工作流：h3 / h3-v5 / wan-prime）。
-   * undefined = 跟随「已配置的视频接入」（activeVideoId）。节点上单独选过的模型优先于它。
+   * 창작 환경설정의 기본 영상 모델. 내장 워크플로는 h3, h3-v5, wan-prime이다.
+   * 비어 있으면 activeVideoId를 사용한다. 노드에서 선택한 모델이 우선한다.
    */
   defaultVideoModel?: VideoGenModel
-  /** Zealman 镜像独立地址，不与 AutoDL/其它视频 profile 共用。 */
+  /** Zealman 미러는 AutoDL 등 다른 영상 프로필과 주소를 공유하지 않는다. */
   zealmanBaseUrl: string
-  /** AutoDL 令牌。H3 系列内置工作流共用这一个 Key，用户只填这一处。 */
+  /** H3 내장 워크플로가 공유하는 AutoDL 토큰. 한 곳에서만 입력한다. */
   autodlToken: string
   music: ServiceEndpoint
   musics: NamedEndpoint[]
   activeMusicId: string
-  /** 用户导入的导演手册。拆分镜头和写提示词时优先用它。 */
+  /** 사용자가 가져온 감독 지침. 샷 분할과 프롬프트 생성에 우선 사용한다. */
   directorSkill: DirectorSkillDoc | null
 }
 
@@ -154,9 +154,9 @@ function uniq(list: string[]): string[] {
 const LLM_CATALOG = new Set(LLM_PROVIDERS.flatMap((preset) => preset.models))
 
 /**
- * 下拉里只保留真正配置过的模型名。
- * 内置目录里的名字，除非就是当前正在用的那一个，否则不算已配置。
- * 用户手打或点「加入」后仍留在列表里的非目录名会保留。
+ * 목록에는 직접 구성한 모델만 표시한다.
+ * 카탈로그 모델 중 현재 사용 중인 모델만 구성된 것으로 본다.
+ * 사용자가 직접 추가한 카탈로그 외 모델도 유지한다.
  */
 function configuredLlmModels(models: string[] | undefined, active: string): string[] {
   const saved = uniq(models ?? [])
@@ -197,7 +197,7 @@ export function isLlmConfigured(cfg: AppSettings) {
   return endpointReady(cfg.llm)
 }
 
-/** 每个接入下可切换的模型名，给智能体 / 写剧本下拉用 */
+/** 에이전트와 대본 작성에서 선택할 수 있는 연결별 모델 목록. */
 export function namedModelGroups(list: NamedEndpoint[] | TtsProfile[]) {
   return (list ?? []).map((p) => ({
     id: p.id,
@@ -353,7 +353,7 @@ function isAutodlVideoProfile(profile: { provider?: string; baseUrl?: string; ad
   return normalized.provider === 'autodl' || isAutodlHost(normalized.baseUrl || '')
 }
 
-/** AutoDL 令牌只留在 AutoDL 接入上。其它供应商如果存了同一串，读档时清掉。 */
+/** AutoDL 토큰은 AutoDL 연결에만 둔다. 다른 공급업체에 같은 토큰이 저장돼 있으면 불러올 때 제거한다. */
 function isolateVideoKeys(list: VideoProfile[]): VideoProfile[] {
   const autodlKeys = new Set(
     list
@@ -381,8 +381,8 @@ function hydrateVideo(
     : []
   const list = savedList.length
     ? savedList.map((p) => {
-        // 只给“当前这一条”补缺省。其它接入缺 adapter 时不能继承当前 Zealman，
-        // 否则 AutoDL 会在读档时被写成 zealman-workflow，提交时打到镜像的 /api/workflow/generate。
+        // 현재 연결에만 기본값을 보완한다. 다른 연결은 Zealman 어댑터를 상속하지 않는다.
+        // AutoDL 요청을 Zealman 미러로 잘못 제출하지 않도록 한다.
         const isActive = p.id === savedActiveId
         return videoFromEndpoint(
           normalizeStoredVideoEndpoint({
@@ -410,7 +410,7 @@ function normalizeDirectorSkill(raw: unknown): DirectorSkillDoc | null {
   const body = String((raw as DirectorSkillDoc).body || '').trim().slice(0, 24_000)
   if (body.length < 20) return null
   return {
-    name: String((raw as DirectorSkillDoc).name || '导演手册').trim().slice(0, 80) || '导演手册',
+    name: String((raw as DirectorSkillDoc).name || t('directorSkill.defaultName')).trim().slice(0, 80) || t('directorSkill.defaultName'),
     filename: String((raw as DirectorSkillDoc).filename || '').slice(0, 180),
     body,
     importedAt: Number((raw as DirectorSkillDoc).importedAt) || Date.now()
@@ -650,7 +650,7 @@ function writeDisk(v: AppSettings) {
         await persistToDisk(snap)
       }
     } catch (e) {
-      console.warn('[settings] 写入本地库失败', e)
+      console.warn('[settings] Could not write to local database', e)
       throw e
     }
   })
@@ -718,7 +718,7 @@ export const useSettingsStore = defineStore('settings', () => {
           lastSavedAt.value = Date.now()
         }
       } catch (e) {
-        console.warn('[settings] 读取本地库失败', e)
+        console.warn('[settings] Could not read local database', e)
       } finally {
         diskReady.value = true
         const extra = pendingDisk
@@ -1099,7 +1099,7 @@ export const useSettingsStore = defineStore('settings', () => {
     if (profile) syncVideo(profile)
   }
 
-  /** 创作偏好：选内置工作流（h3/h3-v5/wan-prime）作为默认视频模型；传 undefined = 跟随已配置接入 */
+  /** 기본 영상 모델로 내장 워크플로를 선택한다. undefined면 구성된 연결을 따른다. */
   function selectVideoModelDefault(model?: VideoGenModel) {
     if (config.value.defaultVideoModel === model) return
     config.value = { ...config.value, defaultVideoModel: model }

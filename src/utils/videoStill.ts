@@ -21,7 +21,7 @@ export function stillModeForShot(shot: Shot, project: Project): VideoStillMode {
 }
 
 export function shotMissingStill(shot: Shot, project: Project): boolean {
-  // 走首尾帧的镜头视频直接吃起始帧/结束帧，不要求关键帧或看板
+  // 시작·끝 프레임으로 영상을 생성할 때는 키프레임과 개요판이 필요 없다.
   if (shotUsesFrames(shot, project)) return false
   const mode = stillModeForShot(shot, project)
   if (mode === 'storyboard') return !shot.boardAssetId
@@ -49,7 +49,7 @@ export function shotsMissingStoryboard(project: Project): Shot[] {
   )
 }
 
-/** 这一镜是否走首尾帧出片：项目开了首尾帧链则全部镜头都是，否则看镜头自己的 h3GenMode。 */
+/** 프로젝트 전체의 프레임 연결 또는 샷의 개별 h3GenMode를 확인한다. */
 export function shotUsesFrames(shot: Shot, project: Project | null | undefined): boolean {
   if (!project) return false
   if ((project.settings?.h3ShotChainMode || 'auto') === 'fl2va') return true
@@ -57,8 +57,8 @@ export function shotUsesFrames(shot: Shot, project: Project | null | undefined):
 }
 
 /**
- * 这个项目到底要不要走首尾帧：项目开了首尾帧链，或有镜头自己选了首尾帧模式。
- * 一处定义，画布分组、流水线下一步、智能体判断都用它，免得三边判断不一致。
+ * 프로젝트의 프레임 연결 또는 개별 샷의 시작·끝 프레임 설정을 확인한다.
+ * 캔버스, 제작 순서, 에이전트에서 공통으로 사용한다.
  */
 export function needsShotFrames(project: Project | null | undefined): boolean {
   if (!project) return false
@@ -66,7 +66,7 @@ export function needsShotFrames(project: Project | null | undefined): boolean {
   return (project.shots ?? []).some((shot) => normalizeH3GenMode(shot.h3GenMode) === 'fl2va')
 }
 
-/** 还缺起始帧或结束帧的镜头（只算走首尾帧的镜头，混合模式下普通镜头不算缺） */
+/** 시작·끝 프레임 모드를 사용하는 샷에서 누락된 프레임을 찾는다. */
 export function shotsMissingFrames(project: Project | null | undefined): Shot[] {
   if (!project) return []
   return (project.shots ?? []).filter(
@@ -74,7 +74,7 @@ export function shotsMissingFrames(project: Project | null | undefined): Shot[] 
   )
 }
 
-/** 首尾帧这一站是否还挂着活：要首尾帧，且还有镜头没画完 */
+/** 아직 시작 또는 종료 프레임을 만들어야 하는 샷이 있는지 확인한다. */
 export function frameStagePending(project: Project | null | undefined): boolean {
   return needsShotFrames(project) && shotsMissingFrames(project).length > 0
 }

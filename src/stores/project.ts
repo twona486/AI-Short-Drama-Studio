@@ -1,9 +1,9 @@
 /**
- * 项目 store
+ * 프로젝트 스토어.
  *
- * - 持有当前项目
- * - 自动持久化到 IndexedDB
- * - 提供新建/加载/保存/删除
+ * - 현재 프로젝트를 관리한다.
+ * - IndexedDB에 자동 저장한다.
+ * - 프로젝트 생성, 불러오기, 저장, 삭제를 제공한다.
  */
 
 import { defineStore } from 'pinia'
@@ -117,7 +117,7 @@ export const useProjectStore = defineStore('project', () => {
   const allProjects = ref<Project[]>([])
   const dirty = ref(false)
   const lastSavedAt = ref<number | null>(null)
-  /** 首次从 IndexedDB 恢复完成，视图据此避免「还没加载就当成空项目」 */
+  /** IndexedDB에서 처음 불러왔는지 표시한다. 로딩 중에는 빈 프로젝트로 처리하지 않는다. */
   const hydrated = ref(false)
   let hydratePromise: Promise<void> | null = null
 
@@ -133,14 +133,14 @@ export const useProjectStore = defineStore('project', () => {
     }
   }
 
-  /** 加载项目列表 */
+  /** 프로젝트 목록을 불러온다. */
   async function refreshList() {
     allProjects.value = await listProjects()
   }
 
   /**
-   * 路由进入工作流页之前调用：从 IDB 恢复上次项目，避免刷新后每一步都像没做过。
-   * 不自动新建空项目（首页自己处理）。
+   * 워크플로 페이지 진입 시 IndexedDB에서 최근 프로젝트를 복원한다.
+   * 빈 프로젝트 생성은 홈 화면에서 처리한다.
    */
   async function ensureLoaded() {
     if (hydrated.value) return
@@ -163,11 +163,11 @@ export const useProjectStore = defineStore('project', () => {
     return hydratePromise
   }
 
-  /** 加载项目 */
+  /** 프로젝트를 불러온다. */
   async function load(id: string) {
     const p = await loadProject(id)
     if (p) {
-      // 兼容旧数据：缺字段补默认
+      // 이전 데이터의 누락된 필드를 기본값으로 채운다.
       p.shots = (p.shots ?? []).map((s, i) => ({
         ...s,
         index: s.index ?? i,
@@ -226,7 +226,7 @@ export const useProjectStore = defineStore('project', () => {
     }
   }
 
-  /** 新建项目 */
+  /** 프로젝트를 생성한다. */
   function create(name = t('common.untitledProject')): Project {
     if (current.value && dirty.value) {
       saveProject(current.value).catch(() => {})
@@ -268,7 +268,7 @@ export const useProjectStore = defineStore('project', () => {
     await refreshList()
   }
 
-  /** 设置文案 */
+  /** 대본을 설정한다. */
   function setScript(script: Script) {
     if (!current.value) return
     current.value.script = script
@@ -297,7 +297,7 @@ export const useProjectStore = defineStore('project', () => {
     touch()
   }
 
-  /** 用剧本名称作为项目标题 */
+  /** 대본 이름을 프로젝트 제목으로 사용한다. */
   function applyPlayTitle(title?: string) {
     if (!current.value) return
     const name = (title || '').replace(/\s+/g, ' ').trim().slice(0, 48)
@@ -306,7 +306,7 @@ export const useProjectStore = defineStore('project', () => {
     touch()
   }
 
-  /** 设置分镜 */
+  /** 스토리보드를 설정한다. */
   function setShots(shots: Shot[]) {
     if (!current.value) return
     current.value.shots = shots
@@ -364,7 +364,7 @@ export const useProjectStore = defineStore('project', () => {
     touch()
   }
 
-  /** 更新单个分镜 */
+  /** 샷 하나를 갱신한다. */
   function updateShot(id: ID, patch: Partial<Shot>) {
     if (!current.value) return
     const idx = current.value.shots.findIndex((s) => s.id === id)
@@ -373,7 +373,7 @@ export const useProjectStore = defineStore('project', () => {
     touch()
   }
 
-  /** 视频提示词的唯一写入口：改字即让旧视频任务失效，绝不续跑旧 prompt。 */
+  /** 영상 프롬프트를 변경하면 이전 프롬프트로 제출한 작업을 무효화한다. */
   function setShotVideoPrompt(id: ID, value: string) {
     if (!current.value) return
     const idx = current.value.shots.findIndex((s) => s.id === id)
@@ -401,7 +401,7 @@ export const useProjectStore = defineStore('project', () => {
     })
   }
 
-  /** 把图片绑到分镜：旧图进历史，不从资源库删除 */
+  /** 이미지를 샷에 연결한다. 이전 이미지는 리소스 라이브러리와 이력에 남긴다. */
   function assignShotImage(shotId: ID, assetId: ID) {
     if (!current.value) return
     const shot = current.value.shots.find((s) => s.id === shotId)
@@ -416,7 +416,7 @@ export const useProjectStore = defineStore('project', () => {
     })
   }
 
-  /** 把视频绑到分镜：旧视频进历史，不从资源库删除 */
+  /** 영상을 샷에 연결한다. 이전 영상은 리소스 라이브러리와 이력에 남긴다. */
   function assignShotVideo(shotId: ID, assetId: ID) {
     if (!current.value) return
     const shot = current.value.shots.find((s) => s.id === shotId)
@@ -428,7 +428,7 @@ export const useProjectStore = defineStore('project', () => {
     })
   }
 
-  /** 把口播音频绑到分镜 */
+  /** 내레이션 오디오를 샷에 연결한다. */
   function assignShotAudio(shotId: ID, assetId: ID) {
     if (!current.value) return
     const shot = current.value.shots.find((s) => s.id === shotId)
@@ -439,7 +439,7 @@ export const useProjectStore = defineStore('project', () => {
     })
   }
 
-  /** 设置时间线 */
+  /** 타임라인을 설정한다. */
   function setTimeline(timeline: TimelineClip[]) {
     if (!current.value) return
     current.value.timeline = timeline
@@ -492,7 +492,7 @@ export const useProjectStore = defineStore('project', () => {
     touch()
   }
 
-  /** 人声方案属于视频生成条件；切换时保留旧视频到历史并要求局部重做。 */
+  /** 음성 방식을 바꾸면 이전 영상을 이력으로 옮기고 해당 영상만 다시 생성한다. */
   function setShotAudioMode(id: ID, audioMode: ShotAudioMode) {
     if (!current.value) return
     const idx = current.value.shots.findIndex((s) => s.id === id)
@@ -514,7 +514,7 @@ export const useProjectStore = defineStore('project', () => {
     touch()
   }
 
-  /** 局部修改时只失效受影响的下游产物；旧素材仍留在历史和资源库中。 */
+  /** 변경한 항목에 의존하는 결과만 무효화한다. 기존 에셋은 이력과 라이브러리에 보존한다. */
   function invalidateShotAssets(shotId: ID, from: 'image' | 'video' | 'audio') {
     if (!current.value) return
     const idx = current.value.shots.findIndex((s) => s.id === shotId)
@@ -578,7 +578,7 @@ export const useProjectStore = defineStore('project', () => {
     touch()
   }
 
-  /** 自由生成节点的 prompt 单一写入口；修改后禁止复用旧任务或旧输出。 */
+  /** 자유 생성 노드의 프롬프트를 변경하면 기존 작업과 출력을 무효화한다. */
   function setCanvasNodePrompt(id: string, prompt: string) {
     const node = current.value?.canvas?.nodes.find((n) => n.id === id)
     if (!node || (node.data.prompt ?? '') === prompt) return
@@ -600,7 +600,7 @@ export const useProjectStore = defineStore('project', () => {
     touch()
   }
 
-  /** 把已有素材绑到画布节点成片，跳过生成。公共库素材请先 adopt 进项目。 */
+  /** 기존 에셋을 노드 결과에 연결한다. 공용 에셋은 먼저 프로젝트로 가져온다. */
   function assignCanvasNodeAsset(nodeId: string, assetId: ID) {
     const p = current.value
     const node = p?.canvas?.nodes.find((n) => n.id === nodeId)
@@ -744,7 +744,7 @@ export const useProjectStore = defineStore('project', () => {
     dirty.value = true
   }
 
-  /** 自动保存（watch） */
+  /** 변경 사항을 자동 저장한다. */
   let stopWatch: (() => void) | null = null
   let saveTimer: ReturnType<typeof setTimeout> | null = null
   function startAutoSave() {
@@ -771,7 +771,7 @@ export const useProjectStore = defineStore('project', () => {
     }
   }
 
-  /** 主动保存（串行，避免并行生成互相覆盖） */
+  /** 동시 생성으로 저장이 덮어써지는 것을 막기 위해 순서대로 저장한다. */
   let saveChain: Promise<void> = Promise.resolve()
   async function save() {
     const run = async () => {
@@ -789,7 +789,7 @@ export const useProjectStore = defineStore('project', () => {
     return next
   }
 
-  /** 删除项目 */
+  /** 프로젝트를 삭제한다. */
   async function remove(id: string) {
     await deleteProject(id)
     if (current.value?.id === id) {

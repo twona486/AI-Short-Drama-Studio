@@ -68,7 +68,7 @@ const highlightScale = computed({
 const ttsVoice = computed({
   get: () => {
     const v = project.current?.settings.ttsVoice || 'longanhuan_v3.6'
-    // 旧版 qwen3-tts 音色名（Cherry 等）与新模型不兼容，自动落到默认音色
+    // 이전 버전의 qwen3-tts 음색은 새 모델과 호환되지 않으므로 기본 음색으로 바꾼다.
     if (TTS_VOICES.some((x) => x.id === v)) return v
     return 'longanhuan_v3.6'
   },
