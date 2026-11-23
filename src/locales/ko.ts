@@ -2343,5 +2343,29 @@ export default {
     "pipeline": "제작 진행",
     "chitchat": "일상 대화",
     "task": "작업 실행"
+  },
+  "ffmpegClient": {
+    "local": "로컬",
+    "mirror": "npmmirror 미러",
+    "desktopSharedBuffer": "데스크톱 앱에서 영상 합성을 시작하지 못했어요(SharedArrayBuffer를 사용할 수 없어요). 영상 합성 수정이 포함된 최신 버전을 설치하고 다시 시도해 주세요.",
+    "browserSharedBuffer": "브라우저에서 SharedArrayBuffer를 지원하지 않아요. Chrome 92+, Edge 92+, Firefox 89+에서 http://localhost로 접속해 주세요(file:// 제외).",
+    "desktopIsolation": "데스크톱 영상 페이지에서 보안 격리가 켜져 있지 않아 FFmpeg 합성을 시작하지 못했어요. 영상 합성 수정이 포함된 최신 버전을 설치해 주세요.",
+    "browserIsolation": "현재 페이지에 교차 출처 격리가 설정되어 있지 않아요. Vite를 시작할 때 COOP/COEP 헤더가 설정됐는지 확인해 주세요.",
+    "checkingSources": "FFmpeg 코어를 불러올 수 있는 주소를 확인하고 있어요…",
+    "coreMissing": "404가 반환됐어요. public/ffmpeg/에 ffmpeg-core.js가 있는지 확인해 주세요.",
+    "directUrl": "직접 URL 모드에서 ESM 코어를 사용해요(toBlobURL 미사용).",
+    "initializing": "FFmpeg 코어를 초기화하고 있어요…",
+    "ready": "FFmpeg를 사용할 준비가 됐어요.",
+    "sourceAvailable": "✓ {source}을(를) 사용할 수 있어요({elapsed}ms).",
+    "sourceUnavailable": "✗ {source}을(를) 사용할 수 없어요.",
+    "progress": "처리 중 {percent}%",
+    "sourceSelected": "{source}에서 FFmpeg를 불러와요.",
+    "checkJs": "ffmpeg-core.js를 확인하고 있어요({url}).",
+    "checkWasm": "ffmpeg-core.wasm을 확인하고 있어요({url}).",
+    "jsUnavailable": "core.js에 연결하지 못했어요(HTTP {status} {detail}).\n",
+    "wasmUnavailable": "core.wasm에 연결하지 못했어요(HTTP {status} {detail}).\nURL: {url}",
+    "noSource": "모든 FFmpeg 주소에 연결하지 못했어요.\n네트워크 시간 초과나 차단, COEP의 교차 출처 리소스 차단, CDN 파일 누락을 확인해 주세요.\n코어 파일을 public/ffmpeg/에 직접 추가하는 방법은 public/ffmpeg/README.md에 있어요.",
+    "invalidMime": "core.wasm의 MIME 유형을 사용할 수 없어요({mime}).\napplication/wasm 또는 application/octet-stream을 사용해 주세요.\nVite에 에셋 유형을 지정하거나 vite preview에서 확인해 주세요.",
+    "loadFailed": "{source}에서 FFmpeg 코어를 불러오지 못했어요({error}).\nCDN의 CORP 헤더, Worker 파일, WASM MIME 유형을 확인해 주세요.\n코어 파일을 public/ffmpeg/에 다운로드해서 로컬 파일을 쓸 수 있어요."
   }
 }

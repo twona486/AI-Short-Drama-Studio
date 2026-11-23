@@ -2343,5 +2343,29 @@ export default {
     "pipeline": "推进制作",
     "chitchat": "闲聊",
     "task": "执行任务"
+  },
+  "ffmpegClient": {
+    "local": "本地",
+    "mirror": "国内镜像 npmmirror",
+    "desktopSharedBuffer": "桌面版未能启用视频合成环境（SharedArrayBuffer 不可用）。这是当前安装版本的问题，请安装包含桌面合成修复的最新版后重试。",
+    "browserSharedBuffer": "浏览器不支持 SharedArrayBuffer。请用 Chrome 92+ / Edge 92+ / Firefox 89+，并确保通过 http://localhost 访问（不是 file://）。",
+    "desktopIsolation": "桌面版视频页面未启用安全隔离，无法启动 FFmpeg 合成。请安装包含桌面合成修复的最新版后重试。",
+    "browserIsolation": "当前页面未启用 cross-origin isolation。请确认 Vite 启动时设置了 COOP/COEP headers。",
+    "checkingSources": "探测 FFmpeg 核心源...",
+    "coreMissing": "提示：404 说明 vite 没找到 public/ffmpeg/ 下的文件，确认 ffmpeg-core.js 存在",
+    "directUrl": "使用直接 URL 模式（不走 toBlobURL，ESM core）",
+    "initializing": "初始化 FFmpeg core...",
+    "ready": "FFmpeg 就绪",
+    "sourceAvailable": "✓ {source} 可用 ({elapsed}ms)",
+    "sourceUnavailable": "✗ {source} 不可用",
+    "progress": "处理中 {percent}%",
+    "sourceSelected": "使用源：{source}",
+    "checkJs": "检查 ffmpeg-core.js: {url}",
+    "checkWasm": "检查 ffmpeg-core.wasm: {url}",
+    "jsUnavailable": "core.js 不可访问：HTTP {status} {detail}\n",
+    "wasmUnavailable": "core.wasm 不可访问：HTTP {status} {detail}\nURL: {url}",
+    "noSource": "所有 FFmpeg 源都不可用。\n可能原因：\n1) 网络问题（被墙/超时）\n2) COEP 阻止了 cross-origin 资源\n3) CDN 资源不存在\n解决：手动下载 ffmpeg core 到 public/ffmpeg/ 目录。\n查看 public/ffmpeg/README.md 了解怎么放。",
+    "invalidMime": "core.wasm 的 MIME 类型不对：{mime}\n期望 application/wasm 或 application/octet-stream。\n修复：Vite 配置里加 assets 识别，或用 vite preview 看是否正常。",
+    "loadFailed": "FFmpeg core 加载失败（{source}）：{error}\n可能原因：\n1) COEP=require-corp 阻止了无 CORP 头的 CDN 资源\n2) Worker 文件加载失败\n3) WASM MIME 类型不匹配\n推荐：把 core 文件下载到 public/ffmpeg/ 目录使用本地源。"
   }
 }

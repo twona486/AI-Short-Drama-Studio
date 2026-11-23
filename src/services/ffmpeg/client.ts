@@ -13,6 +13,7 @@
  * 这样 ffmpeg 内部 worker 会自己去 fetch，比 toBlobURL 链路更短、更稳。
  */
 
+import { t } from "@/i18n"
 import { FFmpeg } from '@ffmpeg/ffmpeg'
 import { fetchFile, toBlobURL } from '@ffmpeg/util'
 // 用 Vite ?url import 拿到本地 core 文件的 URL
@@ -32,7 +33,7 @@ const CORE_VERSION = '0.12.10'
  */
 const CDN_SOURCES = [
   {
-    name: '本地',
+    name: t('ffmpegClient.local'),
     base: '(vite ?url)',
     urls: {
       js: coreJsUrl,
@@ -56,7 +57,7 @@ const CDN_SOURCES = [
     }
   },
   {
-    name: '国内镜像 npmmirror',
+    name: t('ffmpegClient.mirror'),
     base: `https://registry.npmmirror.com/@ffmpeg/core@${CORE_VERSION}/files/dist/esm`,
     urls: {
       js: `https://registry.npmmirror.com/@ffmpeg/core@${CORE_VERSION}/files/dist/esm/ffmpeg-core.js`,
@@ -90,10 +91,10 @@ async function pickBestSource(onLog?: (msg: string) => void): Promise<typeof CDN
   for (const src of CDN_SOURCES) {
     const ms = await probeUrl(src.urls.js)
     if (ms > 0) {
-      onLog?.(`✓ ${src.name} 可用 (${Math.round(ms)}ms)`)
+      onLog?.(t('ffmpegClient.sourceAvailable', { source: src.name, elapsed: Math.round(ms) }))
       return src
     } else {
-      onLog?.(`✗ ${src.name} 不可用`)
+      onLog?.(t('ffmpegClient.sourceUnavailable', { source: src.name }))
     }
   }
   return null
@@ -116,21 +117,21 @@ export async function getFFmpeg(
     if (typeof SharedArrayBuffer === 'undefined') {
       if (window.desktop?.isDesktop) {
         throw new Error(
-          '桌面版未能启用视频合成环境（SharedArrayBuffer 不可用）。这是当前安装版本的问题，请安装包含桌面合成修复的最新版后重试。'
+          t('ffmpegClient.desktopSharedBuffer')
         )
       }
       throw new Error(
-        '浏览器不支持 SharedArrayBuffer。请用 Chrome 92+ / Edge 92+ / Firefox 89+，并确保通过 http://localhost 访问（不是 file://）。'
+        t('ffmpegClient.browserSharedBuffer')
       )
     }
     if (!self.crossOriginIsolated) {
       if (window.desktop?.isDesktop) {
         throw new Error(
-          '桌面版视频页面未启用安全隔离，无法启动 FFmpeg 合成。请安装包含桌面合成修复的最新版后重试。'
+          t('ffmpegClient.desktopIsolation')
         )
       }
       throw new Error(
-        '当前页面未启用 cross-origin isolation。请确认 Vite 启动时设置了 COOP/COEP headers。'
+        t('ffmpegClient.browserIsolation')
       )
     }
 
@@ -148,79 +149,60 @@ export async function getFFmpeg(
     })
     ffmpeg.on('progress', ({ progress }) => {
       if (progress > 0) {
-        log(`处理中 ${Math.round(progress * 100)}%`)
+        log(t('ffmpegClient.progress', { percent: Math.round(progress * 100) }))
       }
     })
 
-    log('探测 FFmpeg 核心源...')
+    log(t('ffmpegClient.checkingSources'))
     const src = await pickBestSource(log)
     if (!src) {
-      throw new Error(
-        '所有 FFmpeg 源都不可用。\n' +
-          '可能原因：\n' +
-          '1) 网络问题（被墙/超时）\n' +
-          '2) COEP 阻止了 cross-origin 资源\n' +
-          '3) CDN 资源不存在\n' +
-          '解决：手动下载 ffmpeg core 到 public/ffmpeg/ 目录。\n' +
-          '查看 public/ffmpeg/README.md 了解怎么放。'
-      )
+      throw new Error(t('ffmpegClient.noSource'))
     }
-    log(`使用源：${src.name}`)
+    log(t('ffmpegClient.sourceSelected', { source: src.name }))
 
     try {
       // 1) 先 HEAD 探活 + 检查 MIME，明确报错
-      log(`检查 ffmpeg-core.js: ${src.urls.js}`)
+      log(t('ffmpegClient.checkJs', { url: src.urls.js }))
       const headJs = await fetch(src.urls.js, { method: 'HEAD' })
       log(`  → ${headJs.status} ${headJs.statusText}, type=${headJs.headers.get('content-type')}`)
       if (!headJs.ok) {
         throw new Error(
-          `core.js 不可访问：HTTP ${headJs.status} ${headJs.statusText}\n` +
+          t('ffmpegClient.jsUnavailable', { status: headJs.status, detail: headJs.statusText }) +
             `URL: ${src.urls.js}\n` +
             (headJs.status === 404
-              ? '提示：404 说明 vite 没找到 public/ffmpeg/ 下的文件，确认 ffmpeg-core.js 存在'
+              ? t('ffmpegClient.coreMissing')
               : '')
         )
       }
 
-      log(`检查 ffmpeg-core.wasm: ${src.urls.wasm}`)
+      log(t('ffmpegClient.checkWasm', { url: src.urls.wasm }))
       const headWasm = await fetch(src.urls.wasm, { method: 'HEAD' })
       log(`  → ${headWasm.status} ${headWasm.statusText}, type=${headWasm.headers.get('content-type')}`)
       if (!headWasm.ok) {
         throw new Error(
-          `core.wasm 不可访问：HTTP ${headWasm.status} ${headWasm.statusText}\nURL: ${src.urls.wasm}`
+          t('ffmpegClient.wasmUnavailable', { status: headWasm.status, detail: headWasm.statusText, url: src.urls.wasm })
         )
       }
       const wasmMime = headWasm.headers.get('content-type') || ''
       if (wasmMime && !wasmMime.includes('wasm') && !wasmMime.includes('octet')) {
-        throw new Error(
-          `core.wasm 的 MIME 类型不对：${wasmMime}\n` +
-            '期望 application/wasm 或 application/octet-stream。\n' +
-            '修复：Vite 配置里加 assets 识别，或用 vite preview 看是否正常。'
-        )
+        throw new Error(t('ffmpegClient.invalidMime', { mime: wasmMime }))
       }
 
       // 2) 直接传 URL 给 ffmpeg.load()，不用 toBlobURL
       //    ffmpeg.wasm 0.12+ 接受 string URL，内部 worker 会自己 fetch
       //    ESM core + module worker + dynamic import(.default) 这条链路是通的
-      log('使用直接 URL 模式（不走 toBlobURL，ESM core）')
+      log(t('ffmpegClient.directUrl'))
 
-      log('初始化 FFmpeg core...')
+      log(t('ffmpegClient.initializing'))
       await ffmpeg.load({
         coreURL: src.urls.js,
         wasmURL: src.urls.wasm
       })
-      log('FFmpeg 就绪')
+      log(t('ffmpegClient.ready'))
       _ffmpeg = ffmpeg
       return ffmpeg
     } catch (e: any) {
-      throw new Error(
-        `FFmpeg core 加载失败（${src.name}）：${e.message}\n` +
-          '可能原因：\n' +
-          '1) COEP=require-corp 阻止了无 CORP 头的 CDN 资源\n' +
-          '2) Worker 文件加载失败\n' +
-          '3) WASM MIME 类型不匹配\n' +
-          '推荐：把 core 文件下载到 public/ffmpeg/ 目录使用本地源。'
-      )
+      throw new Error(t('ffmpegClient.loadFailed', { source: src.name, error: e.message }))
     }
   })().catch((e) => {
     _loading = null
