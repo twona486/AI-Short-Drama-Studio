@@ -1,12 +1,12 @@
 /**
- * 对话Attachment: 把本地文本文件内容注入智能体本轮材料。
- * 桌面端已在设置里授权文件访问；地址一律以用户给的路径为准。
+ * 대화의 로컬 텍스트 첨부를 이번 요청의 자료로 추가한다.
+ * 데스크톱 설정에서 파일 접근을 허용하면 사용자가 지정한 경로를 읽는다.
  */
 import { desktop, isDesktop } from '@/services/desktop'
 
 export interface AgentAttachment {
   name: string
-  /** 本地绝对路径（有的话可去重、可追溯） */
+  /** 중복을 제거하고 출처를 확인하기 위한 로컬 절대 경로 */
   path?: string
   content: string
 }
@@ -20,13 +20,13 @@ function limitedContent(content: string): string {
 }
 
 /**
- * 任意盘符路径（含文件夹、无后缀文件）。遇到空格 / 引号 / 中文标点即截止（路径里允许中文，如 F:\剧本\），
- * 命中已知文本后缀时只截到后缀为止，避免把后面的指令吃进来（如 F:\剧本\x.txt拆成分镜）。
+ * 드라이브 문자로 시작하는 경로를 확인한다. 공백, 인용 부호 또는 전각 문장 부호에서 끝난다.
+ * 지원하는 텍스트 확장자 뒤에 이어진 사용자 지시는 경로에서 제외한다.
  */
 const ANY_PATH_RE = /[A-Za-z]:[\\/][^\s"'“”‘’<>|*?，。！？；：、]+/g
 const TEXT_EXT_RE = /\.(markdown|fountain|json|csv|txt|md|srt|ass|lrc)(?![A-Za-z0-9])/i
 
-/** 从用户消息里的本地路径 + 显式附件构建材料块；没有材料返回空串。 */
+/** 사용자 메시지의 로컬 경로와 첨부에서 자료를 만든다. 자료가 없으면 빈 문자열을 반환한다. */
 export async function buildMaterialBlock(
   userText: string,
   attachments?: AgentAttachment[],
@@ -47,14 +47,14 @@ export async function buildMaterialBlock(
   const known = new Set((attachments || []).map((a) => (a.path || a.name).toLowerCase()))
   for (const m of userText.matchAll(ANY_PATH_RE)) {
     let p = m[0].replace(/[\\/]+$/, '')
-    // 路径后面紧跟指令文字时，只保留到已知文本后缀为止
+    // 경로 바로 뒤의 지시를 제외하고 알려진 텍스트 확장자까지만 사용한다.
     const extHit = p.match(TEXT_EXT_RE)
     if (extHit && extHit.index !== undefined) p = p.slice(0, extHit.index + extHit[0].length)
     if (!p || known.has(p.toLowerCase())) continue
     known.add(p.toLowerCase())
     const ext = extHit ? extHit[1].toLowerCase() : ''
     if (!extHit && /[^\\/]\.[A-Za-z0-9]{2,5}$/.test(p)) {
-      // 有后缀但不是文本格式：不读，明说
+      // 지원하지 않는 확장자라면 파일을 읽지 않고 사유를 전달한다.
       parts.push(`【Local file: ${p} is not a supported text file. Convert to TXT or Markdown, or paste its contents.】`)
       onLog?.(`텍스트가 아닌 파일을 건너뛰었어요. ${p}`)
       continue
