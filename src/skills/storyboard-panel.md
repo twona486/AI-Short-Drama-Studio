@@ -1,27 +1,27 @@
 ---
 name: storyboard-panel
-description: 스토리 개요판을 선화로 만들어 구도를 고정한 뒤 최종 샷 이미지에 반영한다. 사용자가 개요판, 선화, 스토리보드 이미지, 화면 제어를 요청할 때 사용한다.
-triggers: 故事看板,看板图,线稿,分镜图,构图,스토리 개요판,개요판 이미지,선화,스토리보드 이미지,구도
+description: Draw a storyboard panel as line art to lock the composition before generating the final shot image.
+triggers: 故事看板,看板图,线稿,分镜图,构图,스토리 개요판,개요판 이미지,선화,스토리보드 이미지,구도,storyboard panel,line art,composition
 ---
 
-# 스토리 개요판 이미지
+# Storyboard panel image
 
-샷 이미지를 만들기 전에 흑백 6분할 스토리 개요판을 그려 동일 샷의 시작 상태, 동작 과정, 반응과 종료 상태를 고정한다. 화면과 영상 동작을 제어하는 중간 시안으로 쓴다.
+Before generating the shot image, use one six-panel black-and-white storyboard to establish the starting state, movement, reaction, and ending within the same shot. It is an intermediate reference for composition and video action.
 
-## 순서
+## Order
 
-1. 4면 설정 이미지와 장면 기준 이미지를 먼저 갖춘다.
-2. 개요판이 없으면 `generate_shot_board` / `generate_all_boards`를 실행한다.
-3. 이어서 `generate_shot_image`를 실행한다. 샷 이미지는 개요판 구도를 따르며 새 카메라 위치를 만들지 않는다.
+1. Gather the four-view character sheets and location anchor image.
+2. Use `generate_shot_board` or `generate_all_boards` for missing panels.
+3. Use `generate_shot_image`. Match its camera position and composition to the panel.
 
-## 개요판 구성
+## Panel composition
 
-- 3×2의 6분할 선화로 고정한다. 채색, 자막, 번호, 말풍선, 설명 문구를 넣지 않는다.
-- 한 연속 샷에서 여섯 시점을 뽑는다. 상황 제시, 준비, 시작, 핵심 동작, 반응, 종료 순이다.
-- 인물의 위치와 시선, 손에 든 것, 소품의 변화와 장면의 주 기준점을 알아볼 수 있게 그린다.
-- 인물, 의상, 소품, 광원, 화면 방향, 공간 관계를 모든 칸에서 일관되게 유지한다.
-- 4면 설정 이미지를 참고해 인물을 고정하고, 장면 기준 이미지를 참고해 장소를 고정한다.
+- Use fixed 3×2 line art. Do not add colors, subtitles, numbers, speech bubbles, or captions.
+- Sample six points in one continuous shot: establish, prepare, begin, main action, reaction, and end.
+- Make blocking, eyelines, objects in hand, prop changes, and the main location anchor legible.
+- Preserve faces, clothes, props, light source, screen direction, and spatial relations across panels.
+- Use the character sheets for people and the anchor image for location. Write the generation prompt in English.
 
-## 샷 이미지와 영상에 적용
+## Use in later generation
 
-캐릭터 디자인과 장면 이미지를 참고해 개요판을 그린다. 영상 생성 시 샷의 개요판을 캐릭터 설정 및 장면 이미지와 함께 모델에 보내며 최대 9장으로 제한한다. 화면 밖 음성이 나오는 샷에서는 여섯 칸의 모든 인물이 입을 다물고, 이름이 불린 인물은 듣고 반응하기만 한다. 최종 결과는 채색하며 얼굴은 4면 설정 이미지와 같아야 한다. 영상은 여섯 칸의 동작 순서만 따르며 분할 화면, 선화, 콜라주 화면을 생성하지 않는다.
+Use character and location images to draw the panel. Include the current panel alongside the character and location references when generating video, with at most nine reference images. In off-screen narration shots, all visible mouths stay closed across the six panels. A person who is called only listens and reacts. Color the final image and match the character sheet faces. Video follows only the action sequence and must omit grids, line art, and collage. Write notes to the user in Korean (한국어).
