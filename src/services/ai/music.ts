@@ -31,18 +31,18 @@ const log = (msg: string) =>
   console.log('%c[music]', 'color:#10b981;font-weight:600', msg)
 
 const STYLE_MUSIC: Record<VisualStyle, string> = {
-  cinematic: '电影感配乐，温暖弦乐与轻电子铺底，节奏平稳',
-  anime: '日系动画风轻快配乐，钢琴与合成器，明亮但不吵',
-  photorealistic: '现代纪录片感原声，木吉他与氛围垫音',
-  '3d-render': '科技感电子氛围，干净低频，节奏克制',
-  'oil-painting': '古典油画气质，轻弦乐与钢琴，舒缓',
-  watercolor: '清新水彩感，木吉他与长笛，轻柔',
-  'pixel-art': '复古游戏风芯片音乐，轻快但音量克制',
-  'ink-wash': '中国风水墨，古筝笛箫点到为止，留白多'
+  cinematic: 'Cinematic music. Warm strings and a light electronic bed at a steady pace.',
+  anime: 'Bright Japanese-animation-inspired piano and synth, upbeat and restrained.',
+  photorealistic: 'Modern documentary score with acoustic guitar and ambient pads.',
+  '3d-render': 'Futuristic electronic ambience with clean bass and restrained rhythm.',
+  'oil-painting': 'Gentle strings and piano with a classical oil-painting mood.',
+  watercolor: 'Light acoustic guitar and flute with a fresh watercolor mood.',
+  'pixel-art': 'Upbeat retro game chiptune, mixed quietly.',
+  'ink-wash': 'Sparse Chinese ink-wash mood with restrained guzheng and flutes.'
 }
 
 export function buildMusicPrompt(project: Project): string {
-  const topic = project.script?.topic || project.name || '短视频'
+  const topic = project.script?.topic || project.name || 'short video'
   const style = project.script?.style ?? 'cinematic'
   const aesthetic = (project.script?.aesthetic || '').replace(/\s+/g, ' ').slice(0, 180)
   const titles = project.shots
@@ -52,12 +52,12 @@ export function buildMusicPrompt(project: Project): string {
     .join('、')
   const mood = STYLE_MUSIC[style] || STYLE_MUSIC.cinematic
   return [
-    `纯音乐背景，绝对无人声、无歌词、无对白。`,
-    `主题：${topic}。`,
-    titles ? `画面段落：${titles}。` : '',
-    `音乐风格：${mood}。`,
-    aesthetic ? `整体氛围：${aesthetic}。` : '',
-    `适合短视频 BGM：音量铺底、不要抢人声口播，节奏连贯可循环，淡入淡出自然。`
+    `Instrumental background music only, with no voices, lyrics, or dialogue.`,
+    `Topic: ${topic}.`,
+    titles ? `Visual sequence: ${titles}.` : '',
+    `Music style: ${mood}.`,
+    aesthetic ? `Overall mood: ${aesthetic}.` : '',
+    `Mix quietly under narration. Keep a continuous loopable rhythm and use natural fades.`
   ]
     .filter(Boolean)
     .join('')
