@@ -1,86 +1,87 @@
 ---
 name: film-chapter-production
-description: 가져온 오리지널 영화 챕터를 사실주의 제작 절차에 따라 캐릭터 디자인, 장면 기준 이미지, 컬러 스토리 개요판, MiniMax H3 샷 프롬프트와 영상으로 제작한다. workflowMode=film-chapter인 일반 프로젝트에만 적용한다.
-triggers: 原创电影,电影章节,亲身经历,章节剧本,彩色故事板,四宫格,八宫格,现实主义,오리지널 영화,영화 챕터,실화,챕터 대본,컬러 스토리 개요판,4분할,8분할,사실주의
+description: Produce character design references, location anchors, color storyboard panels, MiniMax H3 prompts, and video for an original film chapter. Use only for workflowMode=film-chapter outside video remake.
+triggers: 原创电影,电影章节,亲身经历,章节剧本,彩色故事板,四宫格,八宫格,现实主义,오리지널 영화,영화 챕터,실화,챕터 대본,컬러 스토리 개요판,4분할,8분할,사실주의,original film,film chapter,color storyboard,realist film
 ---
 
-# 오리지널 영화 챕터 제작
+# Original film chapter production
 
-`script.workflowMode === film-chapter`이고 `pipelineMode !== remake`일 때만 사용한다. 영상 재현에는 별도 워크플로가 있으므로 재현 분석, 상품 교체, 참조 영상 프레임 모방, 재현 전용 프롬프트를 사용하거나 수정하지 않는다.
+Use only when `script.workflowMode === film-chapter` and `pipelineMode !== remake`. Video remake uses a separate workflow. Do not call or rewrite its analysis, product replacement, frame imitation, or prompts.
 
-## 기본 원칙
+## Principles
 
-- 가져온 Markdown 대본을 사실과 이야기 범위의 유일한 근거로 사용한다. 이전 초안과의 모순을 먼저 해결한 뒤 샷을 나눈다. 다음 챕터를 임의로 이어 쓰지 않는다.
-- 현실적이고 생활감 있게 시대를 표현한다. 인물은 실제로 만날 법한 사람처럼 묘사하고, 의상, 건축, 차량, 간판, 가구와 군중의 상태는 대본의 연도와 지역에 맞춘다.
-- 캐릭터와 장소를 먼저 고정하고 스토리 개요판을 생성한 뒤 H3 프롬프트와 영상을 만든다. 검수에 실패한 결과를 후속 일괄 작업에 전달하지 않는다.
-- 작업마다 별도 버전으로 저장한다. 사용자가 승인한 캐릭터 이미지, 장면 이미지, 개요판, 영상은 덮어쓰지 않는다.
+- The imported Markdown script defines the facts and story boundary. Resolve conflicts with earlier drafts before breaking down shots. Do not continue into the next chapter on your own.
+- Make people believable. Match clothing, architecture, vehicles, signs, furnishings, and crowds to the script's period and region.
+- Lock characters and locations first, then panels, then H3 prompts and videos. Do not send failed assets downstream in bulk.
+- Save each version separately. Preserve user-approved character images, location references, panels, and videos.
 
-## 작업 전 확인
+## Before production
 
-1. 대본에서 챕터 범위, 연도, 지역, 계절, 날씨, 낮과 밤, 신체 상태, 캐릭터 관계와 주요 소품을 추출한다.
-2. ‘이전 샷의 끝 상태 → 현재 샷의 변화 → 다음 샷의 시작 상태’로 연속성 목록을 만든다. 의상이 젖거나 마른 상태, 얼룩, 부상과 통증, 허기, 헤어스타일, 손에 든 물건, 몸 방향과 지면 상태를 특히 확인한다.
-3. 가져온 대본과 사용자가 나중에 수정한 내용이 충돌하면 먼저 정식 대본을 갱신하고 사용자 확인을 기다린다.
-4. 사용자가 ‘전체 워크플로’를 요청할 때만 일괄 진행한다. 그 외에는 캐릭터, 장면, 첫 샷 묶음을 각각 완료한 뒤 멈춘다.
+1. Extract chapter boundaries, year, region, season, weather, time of day, physical states, relationships, and key props.
+2. Build a continuity checklist: previous ending → current change → next opening. Check wet or dry clothing, stains, injury, hunger, hair, objects in hand, orientation, and the ground.
+3. If later user edits conflict with the import, update the canonical script and stop for user confirmation.
+4. Batch only on an explicit full-workflow request. Otherwise stop after characters, locations, and the first batch of shots.
 
-## 캐릭터 디자인
+## Character design
 
-- 대사가 있거나 반복 등장하거나 핵심 동작을 맡는 인물에 개별 캐릭터를 만든다. 일반 행인은 시대에 맞는 군중 참조 이미지를 사용하고 하나씩 디자인하지 않는다.
-- 실사풍 캐릭터는 16:9의 네 칸을 사용한다. 왼쪽 약 40%에는 머리와 어깨가 크게 보이는 정면 클로즈업을 배치한다. 오른쪽에는 전신 정면, 정확한 측면, 전신 후면 순으로 배치하고 가는 세로선으로 구분한다.
-- 이음새 없는 순백색 배경(#FFFFFF)과 고른 광원을 쓰고 전신 이미지의 발이 잘리지 않게 한다. 회색 스튜디오, 그라데이션이나 환경을 넣지 않는다. 네 칸에서 얼굴, 나이, 키, 체형, 헤어스타일, 의상과 닳은 상태가 같아야 한다.
-- 캐릭터 식별 참조를 가장 우선한다. 의상 참조는 옷에만 적용하며 얼굴, 나이, 민족적 외형은 바꾸지 않는다.
-- 머리와 몸의 비율, 턱, 어깨 너비, 손발과 서 있는 자세에서 나이가 드러나게 한다. 청소년을 어린이나 성인처럼 표현하지 않는다.
+- Create individual designs for people with dialogue, recurring appearances, or key actions. Use period crowd references for passersby.
+- Use a 16:9 four-column realistic sheet: the left 40% is a large frontal head-and-shoulders close-up. On the right, show full-body front, strict side, and full-body back, separated by fine vertical lines.
+- Use seamless white (#FFFFFF), even light, and uncropped feet. Exclude gray studio backgrounds, gradients, and settings. Keep face, age, height, build, hair, wardrobe, and wear consistent.
+- Identity references take precedence. Clothing references may change clothing only, without modifying face, age, or ethnicity.
+- Convey age through head-to-body proportions, jaw, shoulders, hands, feet, and stance. Do not make youth look like children or adults.
 
-## 장면 기준 이미지
+## Location anchors
 
-- 장면 이미지에 인물을 넣지 않는다. 건축 구조, 출입구, 지면, 주요 기준물, 광원, 날씨, 시대를 드러내는 물건, 인물이 설 수 있는 위치를 고정한다.
-- 같은 날씨가 이어지는 구간에서는 앞뒤 장면의 상태를 유지한다. 비가 내리면 젖은 바닥, 웅덩이, 반사, 젖은 의상과 비를 피하는 시설을 유지해 갑자기 마르지 않게 한다.
-- 군중 장면은 사람들이 앉아 있는지, 줄을 서 있는지, 이동하는지 먼저 정한다. 원경에서 왜곡되기 쉬우면 돌아다니는 사람을 줄이고 앉은 자세에서 작은 동작만 하게 한다.
+- Keep people out of the location image. Lock the structure, entrances, exits, ground, main anchor, light, weather, period objects, and blocking space.
+- Keep continuous weather across scenes. Carry wet ground, puddles, reflections, damp clothing, and shelter after rain.
+- For crowds, decide who is seated, in line, or moving. In distant views with unstable figures, reduce movement and use seated people with small gestures.
 
-## 스토리 개요판
+## Storyboard panels
 
-- 기본값은 영화 제작용 컬러 스토리 개요판이다. 일반 흑백 6분할 형식을 사용하지 않는다.
-- 명확한 동작 하나는 2×2 4분할, 9–10초이거나 몽타주 또는 여러 단계의 동작에는 4×2 8분할을 쓴다.
-- 왼쪽 위부터 오른쪽 아래로 같은 샷 또는 짧은 구간의 시간 흐름을 보여 준다. 상황 제시 → 망설임이나 준비 → 핵심 동작 → 반응과 마무리 순이다.
-- 캐릭터 디자인과 장면 기준 이미지에 화면을 맞춘다. 칸이 바뀌어도 얼굴, 옷, 날씨, 바닥, 광원, 화면 방향과 소품의 상태를 유지한다.
-- 색을 입히고 사실주의 영화 질감을 적용한다. 번호, 자막, 대사 말풍선, 설명 문구, 워터마크는 넣지 않는다.
-- 개요판은 동작과 구도의 참조로 쓴다. 영상 모델에는 분할 화면, 테두리, 콜라주를 복제하지 말라고 지시한다.
+- Use color film panels by default rather than a generic black-and-white six-panel sheet.
+- Use 2×2 for a single clear action and 4×2 for a 9–10-second shot, montage, or multi-stage action.
+- Read the same continuous shot or sequence from top left to bottom right: establish → hesitation or preparation → main action → reaction and ending.
+- Use character sheets and scene anchors. Preserve faces, costumes, weather, ground, light, screen direction, and prop state.
+- Use natural color and a realistic film look. Exclude numbers, subtitles, speech bubbles, captions, and watermarks.
+- Use panels for motion and composition only. Do not reproduce their borders, grids, or collage in video.
 
-## 스토리보드와 영상 연출
+## Shots and performance
 
-- 샷마다 5–10초로 구성한다. 캔버스의 한 샷에 주고받는 대사를 넣을 수 있다. H3에 전달할 때는 내부 `[Shot 1]/[Shot 2]/[Shot 3]`으로 나누고 대사마다 d 태그를 하나 쓴다. 화면 밖 내레이션에는 `h3-voiceover`를 쓰고 화면 속 인물은 입을 다문다.
-- 극적 박자에 따라 샷을 나눈다. 대본을 짧은 내레이션 열몇 개로 압축하지 않는다. 몽타주는 같은 의도의 이어지는 화면을 8–10초 샷으로 구성해 눈에 보이는 동작으로 쓴다. ‘시간이 흘렀다’라고 쓰지 않는다.
-- `videoPrompt`는 감독이 배우에게 장면을 설명하듯 쓴다. 모델로 전달되는 연출 문장은 원래 언어를 유지한다. 0초부터 샷 끝까지 실제 박자에 맞춰 2–5구간을 배정하고, 구간마다 행동하는 인물, 움직임과 표정, 화자와 대사 원문, 다른 인물의 위치·시선·반응, 카메라 움직임과 도착점을 쓴다. 화자는 뒤쪽에 있어도 된다. 단체 사진처럼 카메라를 보게 하거나 시간을 기계적으로 등분하거나 ‘표정 없는 얼굴을 피한다’만 써서는 안 된다.
-- 각색 원칙을 각 샷에 포함한다. 상처를 클로즈업하거나 신상 및 종교의식을 촬영하거나 노숙자를 괴물이나 웃음거리로 만들지 않는다. 선의는 대야에 따뜻한 물을 담아 가져오거나 게임 토큰 하나를 양보하는 평범한 행동으로 표현한다.
-- 카메라 움직임은 감정과 모델 안정성을 우선한다. 아주 넓은 샷, 복잡한 건물, 배경 인물이 많은 화면은 고정 샷을 우선한다. 이야기에 필요할 때만 전진, 후진, 팬 또는 트래킹을 쓴다.
-- H3는 `h3-prompt-writing`에 따라 `integrated_multimodal_description` + `overall_soundscape` + `non_diegetic_music`을 쓴다. 캐릭터 설정, 장면, 개요판은 I2VA의 시작 프레임으로 사용하지 않는다.
-- `[Shot 1]`에는 타임스탬프를 넣지 않는다. 이후 내부 샷은 `[Shot 2] At 00:03.000, ...` 형식을 쓰고 `From 0.00s to 1.50s`는 사용하지 않는다. 캔버스에서 샷 하나당 영상 하나를 만들며 영상 내부에는 컷을 둘 수 있다. 카메라 움직임은 `The camera pushes in with small amplitude at slow speed`처럼 문장 안에서 표현한다.
-- 그림체, 구도, 캐릭터 외모와 음색은 `[Shot 1]`의 시작에 적는다. 캐릭터에는 `the man (S1)`처럼 영어 외모 설명과 번호를 쓰고 중국어 이름은 d 태그 밖에 쓰지 않는다.
-- 대사는 원문 언어에 맞춰 `<d>[Korean] 대사 원문</d>` 또는 `<d>[Chinese] 原词</d>`에만 넣는다. 대사마다 태그를 하나 쓴다. 화면 밖 음성은 `says in an off-screen voiceover`로 적고 입을 다물게 한다. 대사가 없으면 `No dialogue. No lips moving.`이라고 쓴다.
-- `non_diegetic_music`은 항상 `N/A`다.
-- 군중 원경에서는 누가 움직여도 되고 누가 앉아 있어야 하는지, 화면을 가로질러도 되는지 명시한다. 무관한 사람이 음식을 나르거나 돌아다니거나 화면의 주의를 빼앗지 않게 한다.
-- 부정 제약은 이 샷에서 실제로 발생할 수 있는 문제를 기준으로 작성한다. 일반적인 문구만 나열하지 않는다. 고정 샷은 no pan / no tilt / no zoom / no push-in을 명시한다.
+- Use 5–10 seconds per shot. Dialogue exchanges can stay in a canvas shot. For H3 use internal `[Shot 1]/[Shot 2]/[Shot 3]` as needed and one d tag per line. Use `h3-voiceover` for off-screen narration with closed on-screen mouths.
+- Split by dramatic beats, without flattening a chapter into a list of short narration fragments. Keep one montage intention in an 8–10-second shot and describe visible action, not a generic passage of time.
+- Write `videoPrompt` as English actor direction. Cover the full shot in 2–5 real beats and specify current actor, actions and expressions, speaker and original lines, others' blocking, eyelines and reactions, camera motion and endpoint. A speaker can be in the back. Avoid posing toward the camera, equal divisions, and generic notes about blank expressions.
+- Carry adaptation limits into each shot: avoid wound close-ups, religious icons and rituals, and framing a homeless person as monstrous or ridiculous. Show kindness through ordinary gestures such as bringing warm water or sharing a game token.
+- Choose motion for emotion and model stability. Prefer static wide shots for complex buildings or crowds, and push, pull, pan, or track only when justified.
+- For H3 follow `h3-prompt-writing` and use `integrated_multimodal_description`, `overall_soundscape`, and `non_diegetic_music`. Character and location references and panels are not I2VA first frames.
+- Leave `[Shot 1]` untimed. Use `[Shot 2] At 00:03.000, ...` for later internal cuts, without `From 0.00s to 1.50s`. One canvas shot produces one clip, which can contain internal cuts. Write camera movements in the action, such as `The camera pushes in with small amplitude at slow speed`.
+- Introduce style, framing, appearance, and voice at the start of `[Shot 1]`. Use English descriptions and speaker IDs such as `the man (S1)`.
+- Place dialogue only inside tags in the original language. Use `<d>[Korean] 대사 원문</d>` for Korean or `<d>[Chinese] 原词</d>` for Chinese. Use `says in an off-screen voiceover` and specify closed lips for off-screen narration. Without dialogue, write `No dialogue. No lips moving.`
+- Use `N/A` for `non_diegetic_music`.
+- In a distant crowd shot, say who can move, who stays seated, and who can cross the frame. Avoid irrelevant serving, walking, or attention-grabbing actions.
+- Write exclusions for this shot's real risks. A static shot explicitly rules out pan, tilt, zoom, and push-in.
+- Write final model prompts in English and preserve requested Korean (한국어) dialogue, narration, and visible text. Write user-facing descriptions and review notes in Korean (한국어).
 
-## 영상 생성과 품질 점검
+## Quality checks
 
-샷마다 다음을 확인한다.
+For each shot verify the following:
 
-- 아펑 등 고정 캐릭터의 얼굴과 나이가 유지되는가?
-- 의상, 헤어스타일, 얼룩, 젖은 상태, 부상과 통증, 체력이 이전 샷과 이어지는가?
-- 장소의 구조, 날씨, 바닥, 조명이 갑자기 바뀌는가?
-- 배경 인물, 손, 식기, 자전거 등이 왜곡되거나 갑자기 나타나는가?
-- 길이 안에 동작과 대사가 끝나는가? 말하지 않는 사람은 입을 다물고 있는가?
-- 시대와 맞지 않는 스마트폰, 고급 차, 의상, 간판, 지나치게 말끔한 공간이 들어갔는가?
+- Recurring people still have the same faces and correct ages.
+- Wardrobe, hair, dirt, wetness, injuries, and energy follow the prior shot.
+- The location structure, weather, ground, and light stay continuous.
+- Background people, hands, utensils, bikes, and other props do not deform or appear suddenly.
+- Action and dialogue finish within the duration and non-speakers keep their mouths closed.
+- Modern phones, luxury cars, clothes, signage, or an implausibly pristine location do not break the period.
 
-실패하면 가장 중요한 문제 한 가지만 수정해 다시 시도한다. 최대 두 번까지 시도하고 계속 실패하면 해당 샷을 보류한다. 검수를 통과한 다른 결과는 저장하고 구체적인 실패 사유를 보고한다.
+Fix one main problem per retry and try no more than twice. If both fail, pause that shot, keep successful outputs, and report the reason.
 
-## 일괄 작업 순서
+## Batch order
 
-1. 정식 대본을 확정한다.
-2. 캐릭터, 장면, 스토리보드와 연속성 정보를 추출한다.
-3. 캐릭터 디자인 이미지를 생성하고 검수한다.
-4. 인물 없는 장면 기준 이미지를 생성하고 검수한다.
-5. 대표 샷 3–5개의 컬러 스토리 개요판과 H3 영상을 먼저 만든다.
-6. 샘플이 검수를 통과하면 장면별로 나머지 개요판과 영상을 일괄 생성한다.
-7. 자동으로 검수하고 문제 부분을 수정한 뒤 타임라인에 넣는다.
+1. Lock the canonical script.
+2. Extract characters, locations, shots, and continuity.
+3. Generate and review character design sheets.
+4. Generate and review empty location anchors.
+5. Generate color panels and H3 video for 3–5 representative shots.
+6. After approval, batch remaining panels and videos by location.
+7. Check quality, repair targeted issues, and write to the timeline.
 
-영상 재현 프로젝트에는 이 절차를 적용하지 않는다.
+Never route video remake through this workflow.
