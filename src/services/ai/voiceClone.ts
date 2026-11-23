@@ -32,14 +32,14 @@ function audioFromBase64(value: string, mime = 'audio/mpeg'): Blob {
 
 async function downloadAudio(url: string, signal?: AbortSignal): Promise<Blob> {
   const response = await fetch(url, { signal })
-  if (!response.ok) throw new Error(`下载克隆语音失败：HTTP ${response.status}`)
+  if (!response.ok) throw new Error(`복제한 음성을 다운로드하지 못했습니다. HTTP ${response.status}`)
   const type = response.headers.get('content-type') || 'audio/mpeg'
   return new Blob([await response.arrayBuffer()], { type })
 }
 
 async function request(path: string, body: unknown, signal?: AbortSignal): Promise<any> {
   const config = getTtsConfig()
-  if (!config.apiKey.trim()) throw new Error('未配置百炼 API Key，请先到设置页配置“口播 TTS”')
+  if (!config.apiKey.trim()) throw new Error('Bailian API 키가 없습니다. 설정에서 ‘내레이션 TTS’를 구성하세요.')
   const response = await fetch(`${apiRoot(config.baseUrl)}${path}`, {
     method: 'POST',
     headers: {
@@ -54,10 +54,10 @@ async function request(path: string, body: unknown, signal?: AbortSignal): Promi
   try {
     data = JSON.parse(raw)
   } catch {
-    throw new Error(`声音服务返回异常：HTTP ${response.status} ${raw.slice(0, 180)}`)
+    throw new Error(`음성 서비스가 오류를 반환했습니다. HTTP ${response.status} ${raw.slice(0, 180)}`)
   }
   if (!response.ok || data?.code) {
-    throw new Error(`声音服务失败：${data?.message || data?.code || response.status}`)
+    throw new Error(`음성 서비스가 실패했습니다. ${data?.message || data?.code || response.status}`)
   }
   return data
 }
@@ -74,7 +74,7 @@ export async function cloneVoiceFromSample(
   preferredName: string,
   signal?: AbortSignal
 ): Promise<CloneVoiceOutput> {
-  if (sample.size > 10 * 1024 * 1024) throw new Error('声音样本不能超过 10 MB')
+  if (sample.size > 10 * 1024 * 1024) throw new Error('음성 샘플은 10MB 이하여야 합니다.')
   const safeName = preferredName.toLowerCase().replace(/[^a-z0-9_]/g, '').slice(0, 16) || 'aicutvoice'
   const data = await request(
     '/services/audio/tts/customization',
@@ -90,7 +90,7 @@ export async function cloneVoiceFromSample(
     signal
   )
   const voiceId = String(data?.output?.voice || '').trim()
-  if (!voiceId) throw new Error('声音复刻成功响应中没有 voice ID')
+  if (!voiceId) throw new Error('음성 복제 성공 응답에 voice ID가 없습니다.')
   return {
     voiceId,
     model: String(data?.output?.target_model || CLONE_MODEL),
@@ -113,7 +113,7 @@ export async function synthesizeClonedSpeech(
   const audio = data?.output?.audio ?? data?.audio
   if (audio?.data) return audioFromBase64(String(audio.data), audio?.mime_type || 'audio/mpeg')
   const url = String(audio?.url || data?.output?.audio_url || '').trim()
-  if (!url) throw new Error(`克隆语音响应中没有音频：${JSON.stringify(data).slice(0, 220)}`)
+  if (!url) throw new Error(`음성 복제 응답에 오디오가 없습니다. ${JSON.stringify(data).slice(0, 220)}`)
   return downloadAudio(url, signal)
 }
 
