@@ -22,7 +22,7 @@ export async function replaceVideoAudio(
   const outputName = 'talking_cloned.mp4'
   await writeFile(ffmpeg, videoName, video)
   await writeFile(ffmpeg, audioName, audio)
-  onProgress?.('正在把克隆语音写入人物视频…')
+  onProgress?.('복제한 음성을 인물 영상에 합성하고 있어요…')
   const exitCode = await ffmpeg.exec([
     '-i', videoName,
     '-i', audioName,
@@ -52,7 +52,7 @@ export async function sliceAudio(
   const inputName = `src.${extension(audio.type, 'mp3')}`
   const outputName = 'slice.m4a'
   await writeFile(ffmpeg, inputName, audio)
-  onProgress?.('正在按台词时长切开播音频…')
+  onProgress?.('대사 길이에 맞춰 오디오를 나누고 있어요…')
   const exitCode = await ffmpeg.exec([
     '-ss', String(Math.max(0, start)),
     '-t', String(Math.max(0.4, duration)),
@@ -86,7 +86,7 @@ export async function toDigitalHumanWav(
   await clearFS(ffmpeg)
   const inputName = `src.${extension(audio.type, 'mp3')}`
   await writeFile(ffmpeg, inputName, audio)
-  onProgress?.('正在把口播音频转成 WAV，并对齐到 5–15 秒…')
+  onProgress?.('내레이션을 WAV로 변환하고 길이를 5~15초로 맞추고 있어요…')
   const exitCode = await ffmpeg.exec([
     '-i', inputName,
     '-af', 'apad=whole_dur=5',
