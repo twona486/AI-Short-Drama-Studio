@@ -168,7 +168,7 @@ export async function blobToChatImageUrl(
   canvas.width = w
   canvas.height = h
   const ctx = canvas.getContext('2d')
-  if (!ctx) throw new Error('无法压缩产品图')
+  if (!ctx) throw new Error('제품 이미지를 압축할 수 없습니다.')
   ctx.drawImage(bitmap, 0, 0, w, h)
   bitmap.close()
   return canvas.toDataURL('image/jpeg', quality)
@@ -190,7 +190,7 @@ export async function callLLM(req: LLMRequest): Promise<LLMResponse> {
 
   if (!baseUrl || !apiKey) {
     const label = req.provider === 'vision' ? '视觉模型' : 'LLM'
-    throw new Error(`[AI] 真实模式但没配 ${label} 地址或密钥，请到设置页配置`)
+    throw new Error(`[AI] 실제 생성 모드에 ${label} 주소 또는 API 키가 없습니다. 설정에서 입력하세요.`)
   }
 
   const withImages = hasImageParts(req.messages)
