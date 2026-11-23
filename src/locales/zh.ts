@@ -194,6 +194,14 @@ export default {
     "pendingTts": "待合成 TTS"
   },
   "autodlSettings": {
+    "h3Name": "H3 图生视频 · 15 秒",
+    "h3Note": "默认出视频工作流，人设 + 场景参考图直接生成",
+    "h3V5Name": "H3 v5 · 10 秒（可选 1080p）",
+    "h3V5Note": "画质升级版，支持 1080p 分辨率",
+    "firstLastName": "H3 首尾帧",
+    "firstLastNote": "首帧 + 尾帧两张图中间补运动，镜头衔接用",
+    "digitalHumanName": "数字人口播 · 图 + 音频",
+    "digitalHumanNote": "人物图 + 配音音频同步驱动，口播镜头用",
     "builtIn": "内置 H3 工作流（填完 Token 自动可用）",
     "configured": "AutoDL 已配置，H3 系列模型可以直接用了",
     "copyToken": "在 AutoDL 控制台 → API 界面复制令牌",
@@ -1381,7 +1389,26 @@ export default {
     "studio": "画布",
     "videos": "4 · AI 视频"
   },
+  "providerErrors": {
+    "llmConfig": "[AI] 真实模式但没配 LLM 地址或密钥，请到设置页配置",
+    "visionConfig": "[AI] 真实模式但没配 视觉模型 地址或密钥，请到设置页配置",
+    "musicKey": "[music] 未配置 VITE_MUSIC_API_KEY（MiniMax API Key）\n在 .env 里填写后重启 npm run dev",
+    "h3AutodlConfig": "[video] 10 秒 H3 走 AutoDL 工作流。当前没有可用的 AutoDL 接入，请到设置里保存 AutoDL 算力，不要用 Zealman 镜像。",
+    "voiceCloneDashscopeKey": "未配置百炼 API Key，请先到设置页配置“口播 TTS”",
+    "videoAutodlToken": "[video] 没配 AutoDL Token，请到设置页填写图生视频令牌",
+    "videoDashscopeKey": "[video] 没配百炼 Token，请到设置页填写口播 TTS 的 DashScope Key",
+    "videoApimartKey": "[video] 这条 APIMart 视频接入还没有自己的 API Key。不会使用 AutoDL 令牌。",
+    "apimartKey": "APIMart 需要填写 API Key",
+    "autodlToken": "缺少 AutoDL Token / API Key",
+    "apiKey": "缺少 API Key"
+  },
   "script": {
+    "summerVlogTopic": "厦门三日游",
+    "summerVlogContent": "清晨的鼓浪屿，海风轻拂，远处传来悠扬的钢琴声。\n午后骑行在环岛路，一边是椰林，一边是蔚蓝大海。\n傍晚曾厝垵的小巷里，灯笼亮起，空气中飘着沙茶面的香气。\n夜晚的海滩，篝火闪烁，星空格外清澈。",
+    "productLaunchTopic": "智能耳机新品上市",
+    "productLaunchContent": "开场：极简线条勾勒耳机轮廓，金属质感彰显品质。\n核心：降噪技术演示，嘈杂街头瞬间安静。\n体验：佩戴轻盈，长时间无负担。\n续航：30 小时超长续航，告别频繁充电。\n结尾：自由掌控，静享每一刻。",
+    "scienceExplainerTopic": "一分钟了解黑洞",
+    "scienceExplainerContent": "黑洞是一个引力极强的天体，连光都无法逃脱。\n它由大质量恒星坍缩形成，密度无限大。\n事件视界是黑洞的边界，越过就无法返回。\n霍金辐射告诉我们，黑洞也会缓慢蒸发。\n人类对黑洞的探索从未停止。",
     "addedImages": "已添加 {p0} 张产品图",
     "anime": "🌸 动漫",
     "applyExample": "📋 一键套用示例",
@@ -1524,6 +1551,9 @@ export default {
     "noProjectMarkdown": "# 剧本\n\n*还没有打开项目。*"
   },
   "scripts": {
+    "defaultEpisodeTitle": "第 {p0} 集",
+    "newEpisodeBody": "> 一句话概括本集发生的事\n\n**场景**：\n**人物**：\n**剧情**：",
+    "untitledEpisode": "未命名",
     "aiScript": "AI 剧本",
     "aiWrite": "AI 写剧本",
     "aiWriteIcon": "✨ AI 写剧本",
@@ -1783,12 +1813,13 @@ export default {
     "videoHint": "先做人设图和场景图，再出视频。本镜会带上绑定场景的场景图。"
   },
   "smartSpeech": {
+    "studioSubtitle": "口播自动化工作室",
     "addReference": "添加 AIGC 参考图（可选）",
     "adjustLater": "可在生成基础工程后逐项调整。",
     "aigcHint": "以真人口播为主轨，在重点内容处插入 AI 分镜，提升节奏和可看性。",
     "aigcMix": "真人 AIGC 混剪",
     "aigcOverlay": "AIGC 插入点与覆盖轨",
-    "assets": "素材",
+    "assets": "{mode}素材",
     "assetsHint": "素材、文案和包装偏好一次提交。项目会保留每一步的中间产物，方便人工复核和局部重做。",
     "assetsLost": "口播素材状态丢失。请点右上角「新建口播项目」重新上传素材。",
     "assetsQueued": "素材已经入库，等待处理。",
@@ -2252,6 +2283,11 @@ export default {
     }
   },
   "zealmanSettings": {
+    "u01Name": "U01-minimax_h3_light2v多图参考生视频加速版",
+    "u02Name": "U02-minimax_h3_light2v首尾帧图生视频加速版",
+    "u04Name": "U04-minimax_h3_light2v-5图参考生视频加速版",
+    "u06Name": "U06-minimax_h3_light2v多图参考生视频叠加加速插帧优化版",
+    "a01Name": "A01-文生图-Qwen2512高清放大",
     "api": "Zealman 镜像接口",
     "builtInImage": "内置 Zealman 生图",
     "builtInWorkflow": "内置 Zealman 工作流",

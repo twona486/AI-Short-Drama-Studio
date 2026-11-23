@@ -1,7 +1,9 @@
+import { t as translate } from '@/i18n'
 export const ZEALMAN_WORKFLOWS = [
   {
     id: 'U01-minimax_h3_light2v多图参考生视频加速版',
     name: 'U01-minimax_h3_light2v多图参考生视频加速版',
+    get displayName() { return translate('zealmanSettings.u01Name') },
     mode: 'reference' as const,
     stillMode: 'identity' as const,
     maxImages: 3,
@@ -16,6 +18,7 @@ export const ZEALMAN_WORKFLOWS = [
   {
     id: 'U02-minimax_h3_light2v首尾帧图生视频加速版',
     name: 'U02-minimax_h3_light2v首尾帧图生视频加速版',
+    get displayName() { return translate('zealmanSettings.u02Name') },
     mode: 'fl2va' as const,
     stillMode: 'keyframe' as const,
     maxImages: 2,
@@ -30,6 +33,7 @@ export const ZEALMAN_WORKFLOWS = [
   {
     id: 'U04-minimax_h3_light2v-5图参考生视频加速版',
     name: 'U04-minimax_h3_light2v-5图参考生视频加速版',
+    get displayName() { return translate('zealmanSettings.u04Name') },
     mode: 'reference' as const,
     stillMode: 'identity' as const,
     maxImages: 5,
@@ -44,6 +48,7 @@ export const ZEALMAN_WORKFLOWS = [
   {
     id: 'U06-minimax_h3_light2v多图参考生视频叠加加速插帧优化版',
     name: 'U06-minimax_h3_light2v多图参考生视频叠加加速插帧优化版',
+    get displayName() { return translate('zealmanSettings.u06Name') },
     mode: 'reference' as const,
     stillMode: 'identity' as const,
     maxImages: 9,
@@ -62,6 +67,7 @@ export type ZealmanWorkflow = (typeof ZEALMAN_WORKFLOWS)[number]
 export interface ZealmanImageWorkflow {
   id: string
   name: string
+  displayName: string
   seedKey: string
   promptKey: string
   negativeKey: string
@@ -77,6 +83,7 @@ export const ZEALMAN_IMAGE_WORKFLOWS: ZealmanImageWorkflow[] = [
   {
     id: 'API-A01-文生图-Qwen2512高清放大',
     name: 'A01-文生图-Qwen2512高清放大',
+    get displayName() { return translate('zealmanSettings.a01Name') },
     seedKey: 'seed',
     promptKey: 'prompt',
     negativeKey: 'prompt_2',

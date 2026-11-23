@@ -194,6 +194,14 @@ export default {
     "pendingTts": "TTS 합성 대기"
   },
   "autodlSettings": {
+    "h3Name": "H3 이미지로 영상 만들기 · 15초",
+    "h3Note": "캐릭터와 장면의 참조 이미지로 영상을 만들어요.",
+    "h3V5Name": "H3 v5 · 10초 (1080p 선택 가능)",
+    "h3V5Note": "1080p 해상도를 지원해요.",
+    "firstLastName": "H3 시작·끝 프레임",
+    "firstLastNote": "두 이미지 사이의 움직임을 만들어 샷을 이어 줘요.",
+    "digitalHumanName": "디지털 휴먼 내레이션 · 이미지 + 오디오",
+    "digitalHumanNote": "인물 이미지와 내레이션 오디오를 동기화해요.",
     "builtIn": "내장 H3 워크플로 (토큰 입력 후 사용 가능)",
     "configured": "AutoDL 연결을 마쳤어요. 이제 H3 시리즈 모델을 골라 보세요.",
     "copyToken": "AutoDL 콘솔 → API에서 토큰 복사",
@@ -1381,7 +1389,26 @@ export default {
     "studio": "캔버스",
     "videos": "4 · AI 영상"
   },
+  "providerErrors": {
+    "llmConfig": "설정의 '언어 모델'에서 주소와 API 키를 입력해 주세요.",
+    "visionConfig": "설정의 '이미지 이해'에서 주소와 API 키를 입력해 주세요.",
+    "musicKey": "MiniMax API 키를 사용하려면 .env에 VITE_MUSIC_API_KEY를 입력하고 개발 서버를 다시 시작해 주세요.",
+    "h3AutodlConfig": "10초 H3 모델을 사용하려면 설정의 'AutoDL 컴퓨팅'에서 AutoDL 연결을 추가해 주세요.",
+    "voiceCloneDashscopeKey": "설정의 '더빙'에서 DashScope API 키를 입력해 주세요.",
+    "videoAutodlToken": "설정의 'AutoDL 컴퓨팅'에서 AutoDL 토큰을 입력해 주세요.",
+    "videoDashscopeKey": "설정의 '더빙'에서 DashScope API 키를 입력해 주세요.",
+    "videoApimartKey": "영상 설정에서 APIMart API 키를 입력해 주세요. AutoDL 토큰은 사용할 수 없어요.",
+    "apimartKey": "APIMart API 키를 입력해 주세요.",
+    "autodlToken": "AutoDL 토큰 또는 API 키를 입력해 주세요.",
+    "apiKey": "API 키를 입력해 주세요."
+  },
   "script": {
+    "summerVlogTopic": "샤먼 3일 여행",
+    "summerVlogContent": "이른 아침 구랑위에 바닷바람이 살랑이고, 멀리서 피아노 선율이 들려요.\n오후에는 환다오루를 따라 자전거를 타요. 한쪽에는 야자수가, 다른 쪽에는 푸른 바다가 펼쳐져요.\n해 질 무렵 쩡춰안 골목에 등불이 켜지고, 사차면 냄새가 퍼져요.\n밤바다에서는 모닥불이 반짝이고 별이 유난히 선명해요.",
+    "productLaunchTopic": "스마트 이어폰 신제품 출시",
+    "productLaunchContent": "오프닝: 간결한 선이 이어폰의 윤곽을 그리고, 금속 표면이 빛나요.\n기능: 소음 차단 기능을 켜자 시끄러운 거리가 순식간에 조용해져요.\n착용: 가벼워서 오래 착용해도 편해요.\n배터리: 한 번 충전으로 30시간 동안 사용할 수 있어요.\n마무리: 원하는 순간, 고요함을 즐겨 보세요.",
+    "scienceExplainerTopic": "1분 만에 알아보는 블랙홀",
+    "scienceExplainerContent": "블랙홀은 중력이 아주 강해 빛조차 빠져나올 수 없는 천체예요.\n질량이 큰 별이 붕괴하면 블랙홀이 생길 수 있어요.\n사건의 지평선은 블랙홀의 경계예요. 이 경계를 넘으면 돌아올 수 없어요.\n호킹 복사 이론에 따르면 블랙홀도 아주 천천히 증발할 수 있어요.\n블랙홀을 이해하려는 연구는 지금도 이어지고 있어요.",
     "addedImages": "제품 이미지 {p0}장을 추가했어요.",
     "anime": "🌸 애니메이션",
     "applyExample": "📋 예시 적용",
@@ -1524,6 +1551,9 @@ export default {
     "noProjectMarkdown": "# 대본\n\n*열린 프로젝트가 없어요.*"
   },
   "scripts": {
+    "defaultEpisodeTitle": "{p0}화",
+    "newEpisodeBody": "> 이번 회차에서 일어나는 일을 한 문장으로 적어 주세요.\n\n**장면**:\n**등장인물**:\n**줄거리**:",
+    "untitledEpisode": "제목 없음",
     "aiScript": "AI 대본",
     "aiWrite": "AI 대본 작성",
     "aiWriteIcon": "✨ AI 대본 작성",
@@ -1783,12 +1813,13 @@ export default {
     "videoHint": "캐릭터 설정 이미지와 장면 이미지를 먼저 만들고 영상을 만들어 주세요. 영상 생성에는 이 샷에 연결한 장면 이미지도 써요."
   },
   "smartSpeech": {
+    "studioSubtitle": "내레이션 자동화 스튜디오",
     "addReference": "AIGC 참조 이미지 추가 (선택 사항)",
     "adjustLater": "기본 프로젝트를 먼저 만들고 나중에 항목별로 조정해 보세요.",
     "aigcHint": "실사 내레이션을 메인 트랙으로 사용하고 주요 구간에 AI 스토리보드를 삽입해요.",
     "aigcMix": "실사·AIGC 혼합 편집",
     "aigcOverlay": "AIGC 삽입 위치 및 오버레이 트랙",
-    "assets": "소스",
+    "assets": "{mode} 소스",
     "assetsHint": "소스, 대본, 영상 꾸미기 설정을 한 번에 제출해요. 각 단계의 중간 결과를 저장해 확인하고 일부를 다시 만들 수 있어요.",
     "assetsLost": "내레이션 소스를 찾을 수 없어요. 오른쪽 위의 '새 내레이션 프로젝트'에서 소스를 다시 업로드하세요.",
     "assetsQueued": "소스를 저장했어요. 처리 대기 중이에요.",
@@ -2252,6 +2283,11 @@ export default {
     }
   },
   "zealmanSettings": {
+    "u01Name": "U01 · MiniMax H3 Light2V 여러 이미지 참조 영상 (가속)",
+    "u02Name": "U02 · MiniMax H3 Light2V 시작·끝 프레임 영상 (가속)",
+    "u04Name": "U04 · MiniMax H3 Light2V 이미지 5장 참조 영상 (가속)",
+    "u06Name": "U06 · MiniMax H3 Light2V 여러 이미지 참조 영상 (가속·프레임 보간)",
+    "a01Name": "A01 · Qwen 2512 텍스트로 이미지 만들기 (고해상도 확대)",
     "api": "Zealman 미러 API",
     "builtInImage": "내장 Zealman 이미지 생성",
     "builtInWorkflow": "내장 Zealman 워크플로",

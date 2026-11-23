@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { confirmAction } from '@/utils/confirmAction'
 import { t as translate } from '@/i18n'
 import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
@@ -353,7 +354,7 @@ async function generateAll() {
 }
 
 async function regenerate(shot: Shot) {
-  if (!confirm(translate('images.regenerateConfirm', { number: shot.index + 1 }))) return
+  if (!await confirmAction(translate('images.regenerateConfirm', { number: shot.index + 1 }))) return
   await generateOne(shot)
 }
 

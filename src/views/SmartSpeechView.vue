@@ -956,7 +956,7 @@ onBeforeUnmount(() => {
         <span class="brand-dot" />
         <div>
           <strong>{{ $t('common.smartSpeech') }}</strong>
-          <small>Speech Automation Studio</small>
+          <small>{{ $t('smartSpeech.studioSubtitle') }}</small>
         </div>
       </div>
       <button v-if="showWorkspace" class="new-task" type="button" @click="startNew">{{ $t('smartSpeech.newProject') }}</button>
@@ -1021,7 +1021,7 @@ onBeforeUnmount(() => {
             <div class="section-title">
               <span>02</span>
               <div>
-                <h2>{{ selectedMode.title }}{{ $t('smartSpeech.assets') }}</h2>
+                <h2>{{ $t('smartSpeech.assets', { mode: selectedMode.title }) }}</h2>
                 <p>{{ selectedMode.input }}</p>
               </div>
             </div>

@@ -6,6 +6,7 @@
  * 查询：GET /v1/tasks/{task_id}?language=zh
  */
 
+import { t as translate } from '@/i18n'
 import { isApimartHost, isLocalComfyHost, providerHttp } from './adapters'
 
 export const APIMART_DEFAULT_BASE = 'https://api.aishuch.com'
@@ -75,7 +76,7 @@ function bearer(apiKey: string): string {
     .trim()
     .replace(/^['"]|['"]$/g, '')
   key = key.replace(/^bearer\s+/i, '').trim()
-  if (!key) throw new Error('APIMart 需要填写 API Key')
+  if (!key) throw new Error(translate('providerErrors.apimartKey'))
   return `Bearer ${key}`
 }
 

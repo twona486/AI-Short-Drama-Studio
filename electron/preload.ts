@@ -3,6 +3,7 @@ import { contextBridge, ipcRenderer } from 'electron'
 export type DesktopAPI = {
   isDesktop: true
   setLocale: (locale: 'ko' | 'zh') => Promise<void>
+  confirmAction: (message: string, locale: 'ko' | 'zh') => Promise<boolean>
   getRoot: () => Promise<string>
   setRoot: (root: string) => Promise<string>
   getVersion: () => Promise<string>
@@ -67,6 +68,7 @@ export type DesktopAPI = {
 const api: DesktopAPI = {
   isDesktop: true,
   setLocale: (locale) => ipcRenderer.invoke('desktop:setLocale', locale),
+  confirmAction: (message, locale) => ipcRenderer.invoke('desktop:confirmAction', message, locale),
   getRoot: () => ipcRenderer.invoke('desktop:getRoot'),
   setRoot: (root) => ipcRenderer.invoke('desktop:setRoot', root),
   getVersion: () => ipcRenderer.invoke('desktop:getVersion'),

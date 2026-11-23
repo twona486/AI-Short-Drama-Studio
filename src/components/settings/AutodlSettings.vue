@@ -3,7 +3,7 @@ import { t as translate } from '@/i18n'
 
 import { computed, ref } from 'vue'
 import { endpointReady, useSettingsStore, useToastStore } from '@/stores'
-import { AUTODL_BASE_URL, AUTODL_WORKFLOWS } from '@/services/ai/autodl'
+import { AUTODL_BASE_URL, AUTODL_WORKFLOWS, autodlWorkflowById } from '@/services/ai/autodl'
 
 const settings = useSettingsStore()
 const toast = useToastStore()
@@ -11,6 +11,11 @@ const token = ref(settings.config.autodlToken || '')
 const existing = computed(() =>
   settings.config.videos.filter((item) => item.provider === 'autodl' && Boolean(item.apiKey))
 )
+function profileDisplayName(profile: (typeof existing.value)[number]) {
+  const workflow = autodlWorkflowById(profile.workflowId || '')
+  return workflow && profile.name === workflow.name ? workflow.displayName : profile.name
+}
+
 const configured = computed(() => Boolean(settings.config.autodlToken) && existing.value.length > 0)
 
 function apply() {
@@ -83,7 +88,7 @@ function apply() {
       <h2>{{ $t('autodlSettings.builtIn') }}</h2>
       <div class="workflow-list">
         <article v-for="workflow in AUTODL_WORKFLOWS" :key="workflow.id">
-          <strong>{{ workflow.name }}</strong>
+          <strong>{{ workflow.displayName }}</strong>
           <span>{{ workflow.mode === 'fl2va' ? $t('common.firstLastFrame') : workflow.mode === 'audio-sync' ? $t('common.narration') : $t('common.imageToVideo') }}</span>
           <small>{{ workflow.note }} {{ $t('autodlSettings.maximum') }} {{ workflow.maxDuration }} {{ $t('common.seconds') }}</small>
         </article>
@@ -93,7 +98,7 @@ function apply() {
       <h2>{{ $t('common.connected') }}</h2>
       <ul class="ready-list">
         <li v-for="profile in existing" :key="profile.id">
-          <b>{{ profile.name }}</b>
+          <b>{{ profileDisplayName(profile) }}</b>
           <span>{{ profile.workflowId }}</span>
         </li>
       </ul>
