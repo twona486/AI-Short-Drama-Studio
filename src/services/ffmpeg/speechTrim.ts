@@ -120,7 +120,7 @@ async function extractPcmWithFfmpeg(blob: Blob): Promise<{ samples: Float32Array
       'speech.pcm'
     ])
     if (typeof code === 'number' && code !== 0) {
-      throw new Error('读取音轨失败，无法自动切气口')
+      throw new Error('오디오 트랙을 읽지 못해 호흡 구간을 자동으로 자를 수 없습니다.')
     }
     const raw = await readFile(ffmpeg, 'speech.pcm')
     const samples = new Float32Array(raw.buffer.slice(raw.byteOffset, raw.byteOffset + raw.byteLength))
