@@ -1,5 +1,5 @@
 /**
- * ComfyUI 工作流：校验 API Format、从本机 userdata 尝试列举、导入文件/URL。
+ * ComfyUI 워크플로의 API 형식을 검사하고 로컬 목록과 파일 또는 URL을 가져온다.
  */
 
 import { buildAuthHeader, providerHttp, type AdapterConfig } from '@/services/ai/adapters'
@@ -10,17 +10,17 @@ export type ComfyWorkflowFormat = 'api' | 'ui' | 'unknown'
 export interface DiscoveredWorkflow {
   id: string
   name: string
-  /** userdata 相对路径，如 workflows/foo.json 或 foo.json（取决于服务返回） */
+  /** userdata 기준 상대 경로. 응답에 따라 workflows/foo.json 또는 foo.json이다. */
   path: string
   size?: number
   modified?: number
   source: 'userdata' | 'api-workflows' | 'url' | 'file'
   /**
-   * 列举成功的目录前缀（如 workflows）。列表接口常返回相对该目录的路径，
-   * 读取文件时必须把这个前缀拼回去，否则 404。
+   * 목록을 읽은 디렉터리 접두사. 예를 들어 workflows다.
+   * 목록의 상대 파일 경로 앞에 이 접두사를 다시 붙여야 한다.
    */
   root?: string
-  /** 列举成功的接口（如 /userdata、/api/v2/userdata），读取时优先复用 */
+  /** 목록을 읽은 API 경로를 파일을 읽을 때 우선 사용한다. */
   endpoint?: string
 }
 
@@ -28,7 +28,7 @@ export interface DiscoverResult {
   ok: boolean
   reachable: boolean
   workflows: DiscoveredWorkflow[]
-  /** 向用户说明探测结果（含「官方无统一列表」等诚实提示） */
+  /** 검색 결과와 공통 목록 API의 지원 여부를 사용자에게 안내한다. */
   message: string
   tried: string[]
 }
@@ -36,14 +36,14 @@ export interface DiscoverResult {
 export interface WorkflowParseResult {
   ok: boolean
   format: ComfyWorkflowFormat
-  /** 可写入 adapter.workflowTemplate 的字符串（API 提交体） */
+  /** API에 제출할 수 있는 adapter.workflowTemplate 문자열 */
   template?: string
   detail: string
-  /** 调试用：实际请求过的完整 URL 与返回状态 */
+  /** 디버깅용 전체 요청 URL과 응답 상태 */
   tried?: string[]
-  /** 解析后的节点图，供助手分析输入映射 */
+  /** 도우미가 입력 매핑을 분석할 때 쓰는 노드 그래프 */
   payload?: any
-  /** 规则初判的输入节点（助手分析前 / 助手不可用时的兜底） */
+  /** 도우미의 분석 전이나 분석이 불가능할 때 규칙으로 추정한 입력 노드 */
   bindings?: ComfyInputBinding[]
 }
 
@@ -77,7 +77,7 @@ export function detectWorkflowFormat(raw: unknown): ComfyWorkflowFormat {
   return 'unknown'
 }
 
-/** 把粘贴/导入的 JSON 规范成可提交的 workflowTemplate */
+/** 가져온 JSON을 제출 가능한 workflowTemplate으로 정규화한다. */
 export function parseComfyWorkflowJson(text: string): WorkflowParseResult {
   const trimmed = String(text || '').trim()
   if (!trimmed) return { ok: false, format: 'unknown', detail: '내용이 비어 있습니다.' }
@@ -111,8 +111,8 @@ export function parseComfyWorkflowJson(text: string): WorkflowParseResult {
     payload = { prompt: o }
   }
   if (!payload.client_id) payload.client_id = 'ai-cut'
-  // 不再往 JSON 里写死占位符：节点怎么接输入由助手读完结构后给出映射，
-  // 保存时会一并把映射写进接入配置。
+  // JSON에 고정 플레이스홀더를 넣지 않고 도우미가 구조를 읽어 입력 매핑을 구한다.
+  // 연결을 저장할 때 입력 매핑도 함께 저장한다.
   const bindings = guessInputMap(payload).bindings
   return {
     ok: true,
@@ -190,8 +190,8 @@ function normalizeListedFiles(
 }
 
 /**
- * 探测本机 Comfy 是否可达，并尝试列举已保存工作流。
- * 官方桌面端通过 GET /userdata?dir=workflows 列举；无此目录时诚实说明。
+ * 로컬 ComfyUI 연결을 확인하고 저장된 워크플로의 목록을 요청한다.
+ * 데스크톱 목록은 GET /userdata?dir=workflows를 시도하고 디렉터리가 없으면 안내한다.
  */
 export async function discoverComfyWorkflows(opts: {
   baseUrl: string
@@ -211,7 +211,7 @@ export async function discoverComfyWorkflows(opts: {
   }
   const headers = authHeaders(opts.apiKey, opts.adapter)
 
-  // 1) 连通性：/system_stats 或 /object_info
+  // 연결 확인에는 /system_stats 또는 /object_info를 사용한다.
   let reachable = false
   for (const path of ['/system_stats', '/api/system_stats', '/object_info', '/api/object_info']) {
     const url = joinUrl(base, path)
@@ -232,7 +232,7 @@ export async function discoverComfyWorkflows(opts: {
     }
   }
 
-  // 2) userdata 列表（本地 Comfy 常见）
+  // 로컬 ComfyUI의 userdata 목록을 조회한다.
   const dirs = ['workflows', 'workflows/', 'user/default/workflows', 'default/workflows']
   const listPaths = ['/userdata', '/api/userdata', '/v2/userdata', '/api/v2/userdata']
   let workflows: DiscoveredWorkflow[] = []
@@ -255,7 +255,7 @@ export async function discoverComfyWorkflows(opts: {
     if (workflows.length) break
   }
 
-  // 3) 部分扩展：/api/workflows（非官方标配）
+  // 일부 확장 기능의 /api/workflows도 시도한다.
   if (!workflows.length) {
     for (const path of ['/api/workflows', '/workflows']) {
       tried.push(`GET ${path}`)
@@ -299,18 +299,18 @@ function uniqStrings(list: string[]): string[] {
 }
 
 /**
- * 拉取 userdata 中的单个工作流文件。
- * 关键：列表接口通常返回「相对目录」的路径（如 C图像-Zimage/xx.json），
- * 读取时必须把列举时用的目录前缀（workflows 等）拼回去，否则必然 404。
+ * userdata에서 개별 워크플로 파일을 가져온다.
+ * 목록 API가 디렉터리 기준 상대 경로를 반환할 수 있다.
+ * 파일을 읽을 때 목록에 사용한 workflows 같은 디렉터리 접두사를 추가한다.
  */
 export async function fetchComfyUserdataWorkflow(opts: {
   baseUrl: string
   path: string
   apiKey?: string
   adapter?: AdapterConfig
-  /** 列举时成功的目录前缀（来自 DiscoveredWorkflow.root） */
+  /** DiscoveredWorkflow.root에서 가져온 목록 디렉터리 접두사 */
   root?: string
-  /** 列举时成功的接口（来自 DiscoveredWorkflow.endpoint） */
+  /** DiscoveredWorkflow.endpoint에서 가져온 목록 API 경로 */
   endpoint?: string
   source?: DiscoveredWorkflow['source']
 }): Promise<WorkflowParseResult> {
@@ -340,21 +340,21 @@ export async function fetchComfyUserdataWorkflow(opts: {
   const otherRoots = roots.filter((r) => r !== knownRoot)
   const otherEps = endpoints.filter((e) => e !== knownEp)
   const candidates: string[] = []
-  // 1) 列举成功时的接口 + 目录（最可能命中），两种编码都试
+  // 목록을 조회한 API와 디렉터리에서 두 가지 인코딩을 시도한다.
   if (knownEp) candidates.push(...build(knownEp, knownRoot))
-  // 2) 同一接口换目录前缀（列表返回相对路径的情况）
+  // 목록이 상대 경로를 반환하면 같은 API에 다른 접두사를 사용한다.
   if (knownEp) for (const r of otherRoots) candidates.push(...build(knownEp, r).slice(0, 1))
-  // 3) 换接口、仍用已知目录
+  // 기존 디렉터리를 유지하고 API 경로를 바꾼다.
   for (const e of otherEps) candidates.push(...build(e, knownRoot).slice(0, 1))
-  // 4) 最常见兜底：/userdata/workflows/... 与 /api/userdata/workflows/...
+  // 일반적인 대체 경로는 /userdata/workflows 및 /api/userdata/workflows다.
   candidates.push(...build('/userdata', 'workflows').slice(0, 1), ...build('/api/userdata', 'workflows').slice(0, 1))
-  // 5) 查询串形式（部分网关 / 云 API 用 ?file= 而不是路径参数）
+  // 일부 게이트웨이의 파일 경로는 ?file= 쿼리 매개변수로 받는다.
   for (const ep of endpoints) {
     for (const root of roots) {
       candidates.push(`${ep}?file=${encodeURIComponent(fullSeg(root))}`)
     }
   }
-  // 6) 部分扩展把工作流当资源暴露（/api/workflows/xx）
+  // 일부 확장 기능은 워크플로를 /api/workflows/xx 리소스로 노출한다.
   if (opts.source === 'api-workflows' || !opts.source) {
     const id = encodeURIComponent(rel)
     candidates.push(`/api/workflows/${id}`, `/workflows/${id}`)
