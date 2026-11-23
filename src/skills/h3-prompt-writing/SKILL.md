@@ -14,9 +14,9 @@ compatibility: 로컬 파일을 읽을 수 있는 에이전트에서 사용할 �
 
 ```text
 Speaker lock (these labels are the pictures):
-(S1) is 「阿凯」 / <Picture 1>. Lock face, hair, body, age and outfit. Identity reference only, not the first frame.
-(S2) is 「大斌」 / <Picture 2>. Lock face, hair, body, age and outfit. Identity reference only, not the first frame.
-<Picture 3> is the location 「出租屋」. Lock space, materials, weather and light. One unified place.
+(S1) is 「민준」 / <Picture 1>. Lock face, hair, body, age and outfit. Identity reference only, not the first frame.
+(S2) is 「도윤」 / <Picture 2>. Lock face, hair, body, age and outfit. Identity reference only, not the first frame.
+<Picture 3> is the location 「임대 아파트」. Lock space, materials, weather and light. One unified place.
 Only one (S#) speaks at a time. Everyone else keeps their lips completely closed.
 ```
 
@@ -25,7 +25,7 @@ Only one (S#) speaks at a time. Everyone else keeps their lips completely closed
 ## 본문
 
 1. 화자 대응 블록 뒤에 `[Shot 1]`과 실제 배치를 쓴다. 누가 왼쪽이나 오른쪽에 있고 무엇을 들고 있으며 소품이 어떻게 바뀌는지 명시한다.
-2. 원문에 있는 대사마다 시간 구간을 배정한다. 중국어는 `(S1) says: <d>[Chinese] 原词</d>`, 한국어는 `(S1) says: <d>[Korean] 대사 원문</d>`으로 쓰고, 나머지 인물이 입을 다문다고 이어서 적는다.
+2. 원문에 있는 대사마다 시간 구간을 배정한다. 중국어는 `(S1) says: <d>[Chinese] 중국어 대사 원문</d>`, 한국어는 `(S1) says: <d>[Korean] 대사 원문</d>`으로 쓰고, 나머지 인물이 입을 다문다고 이어서 적는다.
 3. 동작, 카메라, 빛은 영어로 작성한다. 중국어는 `<d>`와 「이름」 안에서만 사용한다. 중국어 장면 문단은 삭제되어 인물 목록만 남을 수 있다.
 4. `overall_soundscape`에는 장면에서 실제로 들리는 소리를 쓴다. “close breath stay synchronized”만 쓰지 않는다.
 5. `non_diegetic_music`은 항상 `N/A`다.
