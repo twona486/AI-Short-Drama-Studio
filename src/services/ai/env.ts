@@ -1,4 +1,4 @@
-/** 从 Vite .env 读本机开发默认值。打包构建会清空这些值，不会写进安装包。 */
+/** 개발 기본값은 Vite .env에서 읽으며 설치 빌드에는 포함하지 않는다. */
 
 function envStr(key: string, fallback = ''): string {
   const v = (import.meta.env as Record<string, string | undefined>)[key]
@@ -8,11 +8,11 @@ function envStr(key: string, fallback = ''): string {
 
 export const VIDEO_AUTODL_ROOT = 'https://autodl.art'
 export const VIDEO_DEFAULT_WORKFLOW_ID = 'minimax_h3_lightx2v_v5_15s'
-/** H3 v5 10 秒工作流，可选 1080p */
+/** 1080p를 선택할 수 있는 H3 v5 10초 워크플로 */
 export const VIDEO_H3_V5_10S_WORKFLOW_ID = 'minimax_h3_lightx2v_v5'
-/** H3 首尾帧工作流 */
+/** H3 시작·끝 프레임 워크플로 */
 export const VIDEO_FL2VA_WORKFLOW_ID = 'minimax_h3_b99_002'
-/** 数字人口播：图+音频同步 */
+/** 디지털 휴먼의 이미지와 음성 립싱크 */
 export const VIDEO_DIGITAL_HUMAN_WORKFLOW_ID = 'minimax_h3_image_audio_to_video'
 
 export function isLegacyVideoConfig(value: string): boolean {
