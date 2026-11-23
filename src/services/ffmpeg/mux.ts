@@ -9,7 +9,7 @@ function extension(mime: string, fallback: string): string {
   return fallback
 }
 
-/** 删除生成视频的临时声音，换成最终克隆语音，让剪辑台预览和导出听到同一音轨。 */
+/** 임시 오디오를 복제 음성으로 교체해 편집 미리보기와 내보내기에 동일하게 사용한다. */
 export async function replaceVideoAudio(
   video: Blob,
   audio: Blob,
@@ -40,7 +40,7 @@ export async function replaceVideoAudio(
   return toBlob((await readFile(ffmpeg, outputName)) as Uint8Array, 'video/mp4')
 }
 
-/** 按秒从整段口播里切出这一镜的音频，交给 H3 音画同步。 */
+/** 전체 내레이션에서 이 샷의 오디오 구간을 잘라 H3 립싱크에 전달한다. */
 export async function sliceAudio(
   audio: Blob,
   start: number,
@@ -68,8 +68,8 @@ export async function sliceAudio(
 }
 
 /**
- * 数字人音画同步只要 WAV/MP3，时长 5–15 秒。
- * 切片若是 AAC/m4a 或不足 5 秒，提交会被判「参数值非法」。
+ * 디지털 휴먼 립싱크는 5~15초 WAV나 MP3만 받는다.
+ * AAC, m4a 또는 5초 미만 클립은 공급자에서 거부한다.
  */
 export async function toDigitalHumanWav(
   audio: Blob,
