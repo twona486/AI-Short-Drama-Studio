@@ -650,7 +650,7 @@ async function realWorkflowVideo(
     onProgress?.(`API 제한 ${MIN_DUR}–${MAX_DUR}초에 맞춰 영상 길이를 ${targetDuration}초로 조정했습니다.`)
   }
 
-  let finalPrompt = isAudioSync ? (input.prompt || input.voiceover || '数字人口播').trim() : buildPrompt(input)
+  let finalPrompt = isAudioSync ? (input.prompt || input.voiceover || 'Digital human narration').trim() : buildPrompt(input)
   if (finalPrompt.length > 10000) {
     finalPrompt = finalPrompt.slice(0, 10000)
     onProgress?.('프롬프트가 10,000자를 넘어 잘랐습니다.')
