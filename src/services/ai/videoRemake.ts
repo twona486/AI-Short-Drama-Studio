@@ -251,7 +251,7 @@ export async function analyzeRemakeVideo(
 내용, 샷마다 화면 크기·카메라 움직임·동작, 들리는 내레이션, 현장 환경음, 출연 캐릭터와 장면을 파악하세요.
 그다음 재현할 수 있는 스토리보드 대본을 쓰세요. 상품 외형에 원본 영상의 브랜드를 복사하지 마세요. 나중에 사용자가 업로드한 제품 이미지 ${input.productCount}장으로 바꾸므로 모델용 프롬프트에는 「用户产品」으로만 쓰세요.
 
-제목과 설명은 한국어로 작성하고 이미지·영상 모델에 전달되는 연출 문장은 중국어로 유지하세요. 참조 영상에서 들리는 내레이션 원문을 보존하세요. JSON만 출력하세요.
+Write titles and user-facing descriptions in Korean (한국어). Write image and video generation direction in English. Preserve verbatim narration from the reference and any requested Korean on-screen text. Return JSON only.
 {
   "topic": "<짧은 제목>",
   "summary": "<한두 문단의 줄거리>",
@@ -264,8 +264,8 @@ export async function analyzeRemakeVideo(
     "shotSize": "",
     "cameraMovement": "push|pull|pan|tilt|static|orbit",
     "purpose": "钩子|说明|反应|揭示|收口",
-    "visualPrompt": "<촬영할 수 있는 중국어 묘사. 제품 이름은 用户产品>",
-    "videoPrompt": "<중국어 영상 연출. 캐릭터별 표정과 기색, 동작, 환경 반응, 대사 원문, 카메라 움직임을 구체화하고 visualPrompt를 복사하지 않음>",
+    "visualPrompt": "<Filmable English description using the user's product>",
+    "videoPrompt": "<English direction with character expressions, action, environmental reactions, original dialogue, and camera motion. Do not repeat visualPrompt.>",
     "voiceover": "<이 샷에서 들리는 내레이션 원문. 없으면 빈 문자열>",
     "audioDescription": "<환경음을 짧은 문장으로 묘사>",
     "audioMode": "tts"
@@ -294,7 +294,7 @@ export async function analyzeRemakeVideo(
           messages: [
             {
               role: 'system',
-              content: '유효한 JSON만 출력하세요. 영상의 샷과 연출을 분석해 재현 가능한 스토리보드를 쓰세요. 더빙은 모두 후반 작업에서 TTS로 합성합니다.'
+              content: 'Return valid JSON only. Analyze the shot language and produce a filmable storyboard. Write descriptions for the user in Korean (한국어), generation prompts in English, and leave all dubbing to postproduction TTS.'
             },
             { role: 'user', content: parts }
           ],
