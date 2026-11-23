@@ -1,13 +1,13 @@
 /**
- * 整片背景音乐（纯音乐，无人声）
+ * 영상 전체의 보컬 없는 배경음악
  *
- * 分镜视频自带的配乐切来切去不流畅，导出时会丢掉。
- * 这里按主题/风格生成一段 BGM，循环铺满视频，再叠口播。
+ * 내보낼 때 샷마다 달라지는 기존 배경음악을 제거한다.
+ * 주제와 스타일에 맞는 배경음악을 반복하고 내레이션을 합성한다.
  *
  * MiniMax Music 3.0：
  *   POST https://api.minimaxi.com/v1/music_generation
- *   is_instrumental: true  → 纯音乐，不跟口播抢人声
- * （lyrics_generation 只写词，不出音频）
+ *   is_instrumental을 true로 설정해 내레이션과 겹치는 보컬을 제거한다.
+ * lyrics_generation은 오디오 없이 가사만 반환한다.
  */
 
 import { t as translate } from '@/i18n'
@@ -17,7 +17,7 @@ import type { Project, VisualStyle } from '@/types'
 
 export interface MusicGenInput {
   prompt: string
-  /** 目标时长（秒），生成结果会在导出时循环/裁切对齐 */
+  /** 목표 길이(초). 내보낼 때 반복하거나 잘라 맞춘다. */
   duration?: number
 }
 
