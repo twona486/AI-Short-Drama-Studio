@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { t as translate } from '@/i18n'
 import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useProjectStore, useAssetsStore, useToastStore } from '@/stores'
@@ -49,7 +50,7 @@ const pickerShotId = ref<string | null>(null)
 
 onMounted(async () => {
   if (!project.current?.shots.length) {
-    toast.warn('请先生成分镜')
+    toast.warn(translate('common.makeStoryboardFirst'))
     router.push('/storyboard')
     return
   }
@@ -69,8 +70,8 @@ const height = computed(() => project.current?.settings.height ?? 720)
 const aesthetic = computed(() => project.current?.script?.h3Aesthetic || project.current?.script?.aesthetic || '')
 const videoPromptPlaceholder = computed(() =>
   getVideoPromptStyle() === 'formatted'
-    ? '每个角色的表情神态、手脚动作、环境怎么动、说什么原词、镜头怎么走。写细才有表现力。'
-    : '画面中：站位、发型、衣服、动作、年龄的人是谁。空一行后连续写这一镜怎么演、台词原词、环境动势、镜头怎么收。'
+    ? translate('videos.promptHint')
+    : translate('videos.sceneHint')
 )
 
 /** 首尾帧模式：项目开了首尾帧链，或有镜头自己选了首尾帧。批量出片只能串行，且要先画帧 */
@@ -89,7 +90,7 @@ async function generateAllFrames() {
   const targets = [...shotsWithoutFrames.value].sort((a, b) => a.index - b.index)
   if (!targets.length || drawingFrames.value) return
   drawingFrames.value = true
-  toast.info(`按镜号串行画 ${targets.length} 个镜头的首尾帧…`, 4000)
+  toast.info(translate('videos.drawSequentially', { p0: targets.length }), 4000)
   let done = 0
   for (const shot of targets) {
     try {
@@ -98,13 +99,13 @@ async function generateAllFrames() {
       })
       done += 1
     } catch (e: any) {
-      toast.error(`分镜 ${shot.index + 1} 首尾帧画失败：${e.message}`)
+      toast.error(translate('videos.framesFailed', { p0: shot.index + 1, p1: e.message }))
     } finally {
       delete progress.value[shot.id]
     }
   }
   drawingFrames.value = false
-  if (done) toast.success(`${done} 个镜头的首尾帧已画好，可以直接出视频了`)
+  if (done) toast.success(translate('videos.framesReady', { p0: done }))
 }
 
 /** 链模式卡住时的逃生开关：一键回到每镜按自己参考图出片的自动模式 */
@@ -113,7 +114,7 @@ function turnOffChain() {
   if (!p) return
   p.settings = { ...p.settings, h3ShotChainMode: 'auto' }
   void project.save()
-  toast.success('已切回自动模式：每镜按自己的参考图出片。')
+  toast.success(translate('videos.switchedAuto'))
 }
 
 /** 真正的第 1 镜：删过镜头后 index 不一定连续，按排序后的位置认 */
@@ -217,9 +218,9 @@ function updateVideoPrompt(shot: Shot, value: string) {
 async function resetVideoPrompt(shot: Shot) {
   try {
     await rewriteShotPerformance(shot)
-    toast.success('已按本镜剧情重写视频内容表现')
+    toast.success(translate('videos.motionRewritten'))
   } catch (e: any) {
-    toast.error(e?.message || '重写失败')
+    toast.error(e?.message || translate('common.rewriteFailed'))
   }
 }
 
@@ -229,9 +230,9 @@ async function optimizeVideoPrompt(shot: Shot) {
   try {
     await optimizeShotVideoPrompt(shot)
     expanded.value = new Set(expanded.value).add(shot.id)
-    toast.success('已优化提示词')
+    toast.success(translate('common.optimized'))
   } catch (e: any) {
-    toast.error(e?.message || '优化失败')
+    toast.error(e?.message || translate('common.optimizationFailed'))
   } finally {
     const next = new Set(optimizing.value)
     next.delete(shot.id)
@@ -243,7 +244,7 @@ function changeAudioMode(shot: Shot, mode: NonNullable<Shot['audioMode']>) {
   if (effectiveShotAudioMode(shot) === mode) return
   const hadVideo = Boolean(shot.videoAssetId)
   project.setShotAudioMode(shot.id, mode)
-  if (hadVideo) toast.info('人声方案已改变，旧视频已放入历史；请重新生成本镜以避免声音或口型不匹配。', 6000)
+  if (hadVideo) toast.info(translate('videos.voiceChanged'), 6000)
 }
 
 function composedPrompt(shot: Shot) {
@@ -268,9 +269,9 @@ async function generateOne(shot: Shot) {
     const url = await assets.getUrl(asset.id)
     if (url) videoUrls.value[shot.id] = url
     await loadHistory()
-    toast.success(`分镜 ${shot.index + 1} 视频已生成并加入资源库`)
+    toast.success(translate('videos.videoReady', { p0: shot.index + 1 }))
   } catch (e: any) {
-    toast.error(`分镜 ${shot.index + 1} 视频生成失败：${e.message}`)
+    toast.error(translate('videos.videoFailed', { p0: shot.index + 1, p1: e.message }))
   } finally {
     const done = new Set(generating.value)
     done.delete(shot.id)
@@ -291,7 +292,7 @@ async function generateAll() {
     .sort((a, b) => a.index - b.index)
   if (!targets.length) return
   if (chain) {
-    toast.info(`首尾帧链模式：${targets.length} 个镜头按顺序串行生成，下一镜首帧取自上一镜末帧。`, 5000)
+    toast.info(translate('videos.firstLastChain', { p0: targets.length }), 5000)
     await mapPool(targets, 1, (shot) => generateOne(shot))
     return
   }
@@ -304,7 +305,7 @@ async function restoreHistory(shot: Shot, assetId: ID) {
   const url = await assets.getUrl(assetId)
   if (url) videoUrls.value[shot.id] = url
   await loadHistory()
-  toast.success('已切回历史版本')
+  toast.success(translate('common.versionRestored'))
 }
 
 async function onPickerConfirm(ids: ID[]) {
@@ -318,12 +319,12 @@ async function onPickerConfirm(ids: ID[]) {
   const url = await assets.getUrl(ids[0])
   if (url) videoUrls.value[shot.id] = url
   await loadHistory()
-  toast.success(`分镜 ${shot.index + 1} 已从资源库选用视频`)
+  toast.success(translate('videos.videoSelected', { p0: shot.index + 1 }))
 }
 
 function next() {
   if (shots.value.some((s) => !s.videoAssetId)) {
-    if (!confirm('还有分镜没生成视频，确定进入剪辑？')) return
+    if (!confirm(translate('videos.goToEditConfirm'))) return
   }
   router.push('/edit')
 }
@@ -333,12 +334,12 @@ function next() {
   <div class="page">
     <header class="page-head">
       <div>
-        <h1>🎥 AI 视频生成</h1>
-        <p v-if="isDigitalHuman">每次生成和重新生成都强制使用项目上传的人物图作为唯一参考，并锁定人物、服装、背景、构图和机位。</p>
-        <p v-else>H3 可用人设、场景、配图或参考图出视频；故事看板可选。口播人声请到「字幕」步骤按台词生成。</p>
+        <h1>{{ $t('videos.heading') }}</h1>
+        <p v-if="isDigitalHuman">{{ $t('videos.lockReference') }}</p>
+        <p v-else>{{ $t('videos.h3Hint') }}</p>
       </div>
       <div class="head-actions">
-        <GradientButton type="ghost" @click="router.push('/images')">← 上一步</GradientButton>
+        <GradientButton type="ghost" @click="router.push('/images')">{{ $t('common.previousStep') }}</GradientButton>
         <GradientButton
           v-if="fl2vaChain && !isDigitalHuman"
           type="ghost"
@@ -349,10 +350,10 @@ function next() {
         >
           {{
             drawingFrames
-              ? `画帧中 ${shotsWithoutFrames.length} 镜`
+              ? $t('videos.drawingFrames', { p0: shotsWithoutFrames.length })
               : shotsWithoutFrames.length
-                ? `画首尾帧（${shotsWithoutFrames.length} 镜）`
-                : '首尾帧已齐'
+                ? $t('videos.drawFrames', { p0: shotsWithoutFrames.length })
+                : $t('videos.firstLastReady')
           }}
         </GradientButton>
         <GradientButton
@@ -363,36 +364,34 @@ function next() {
         >
           {{
             generating.size > 0
-              ? `生成中 ${generating.size}/${shotsWithoutVideo.length}`
+              ? $t('videos.generatingCount', { p0: generating.size, p1: shotsWithoutVideo.length })
               : fl2vaChain
-                ? '按顺序串行生成全部'
-                : '一键生成全部'
+                ? $t('videos.generateSequentially')
+                : $t('videos.generateAll')
           }}
         </GradientButton>
-        <GradientButton icon="→" @click="next">下一步：剪辑</GradientButton>
+        <GradientButton icon="→" @click="next">{{ $t('videos.next') }}</GradientButton>
       </div>
     </header>
 
     <GlassCard v-if="shotsWithoutStill.length > 0" padding="md" class="warn-card">
-      ⚠️ 还有 {{ shotsWithoutStill.length }} 个分镜缺当前模型需要的参考图。H3 只需要人设和场景；万相需要四宫格关键帧。
+      {{ $t('videos.missingCountPrefix') }} {{ shotsWithoutStill.length }} {{ $t('videos.missingCountSuffix') }}
     </GlassCard>
 
     <GlassCard v-if="fl2vaChain && !isDigitalHuman" padding="md" class="chain-card">
       <div class="chain-row">
         <span>
-          🔗 首尾帧链：每一镜先用本镜的人物和场景合成「起始帧 → 结束帧」两张图，再用这两张出视频。
-          画布上「首尾帧」那一组就是干这个的，也可以直接点右上角「画首尾帧」。画帧和出片都按镜号串行，
-          因为这一镜的起始帧要接着上一镜的结束帧 —— 并发会把衔接丢掉。凑不齐首尾帧的镜头会自动退回常规出片，不会卡住。
+          {{ $t('videos.firstLastDescription') }}
         </span>
-        <button class="chain-off" @click="turnOffChain">切回自动模式</button>
+        <button class="chain-off" @click="turnOffChain">{{ $t('videos.backToAuto') }}</button>
       </div>
     </GlassCard>
 
     <EmptyState
       v-if="shots.length === 0"
       icon="🎥"
-      title="还没有分镜"
-      description="请先回到分镜步骤"
+      :title="$t('common.noStoryboard')"
+      :description="$t('common.goToStoryboard')"
     />
 
     <div v-else class="grid">
@@ -405,25 +404,25 @@ function next() {
         <div class="shot-head">
           <div class="shot-num">{{ shot.index + 1 }}</div>
           <div class="shot-title">{{ shot.title }}</div>
-          <Tag v-if="shot.videoAssetId" type="success" size="sm">已完成</Tag>
-          <Tag v-else-if="generating.has(shot.id)" type="warning" size="sm">生成中</Tag>
+          <Tag v-if="shot.videoAssetId" type="success" size="sm">{{ $t('common.generationComplete') }}</Tag>
+          <Tag v-else-if="generating.has(shot.id)" type="warning" size="sm">{{ $t('common.generating') }}</Tag>
           <Tag
             v-else-if="fl2vaChain && isFirstShot(shot) && !shot.firstFrameAssetId && !shot.imageAssetId"
             type="warning"
             size="sm"
-          >无首帧·常规出片</Tag>
-          <Tag v-else-if="shotH3Mode(shot) === 'fl2va' && !shot.lastFrameAssetId" type="error" size="sm">缺尾帧</Tag>
+          >{{ $t('videos.withoutFirstFrame') }}</Tag>
+          <Tag v-else-if="shotH3Mode(shot) === 'fl2va' && !shot.lastFrameAssetId" type="error" size="sm">{{ $t('videos.missingLastFrame') }}</Tag>
           <Tag
             v-else-if="shotH3Mode(shot) !== 'fl2va' && project.current && stillModeForShot(shot, project.current) === 'storyboard' && !shot.boardAssetId"
             type="error"
             size="sm"
-          >缺看板</Tag>
+          >{{ $t('videos.missingBoard') }}</Tag>
           <Tag
             v-else-if="shotH3Mode(shot) !== 'fl2va' && project.current && stillModeForShot(shot, project.current) === 'keyframe' && !shot.imageAssetId"
             type="error"
             size="sm"
-          >缺关键帧</Tag>
-          <Tag v-else size="sm">待生成</Tag>
+          >{{ $t('videos.missingKeyframe') }}</Tag>
+          <Tag v-else size="sm">{{ $t('common.pendingGeneration') }}</Tag>
         </div>
 
         <div class="shot-video">
@@ -437,7 +436,7 @@ function next() {
           />
           <div v-else-if="generating.has(shot.id)" class="placeholder">
             <ProgressRing :progress="0.5" :size="64" :stroke-width="3" />
-            <div class="progress-msg">{{ progress[shot.id] || '处理中...' }}</div>
+            <div class="progress-msg">{{ progress[shot.id] || $t('common.processing') }}</div>
           </div>
           <div v-else class="placeholder">
             <img
@@ -445,11 +444,11 @@ function next() {
               :src="imageUrls[shot.id]"
               class="still zoomable"
               alt=""
-              title="点击查看大图"
+              :title="$t('common.clickFullImage')"
               @click="openLightbox(imageUrls[shot.id], 'image', shot.title)"
             />
             <div v-else class="placeholder-icon">🎬</div>
-            <div class="placeholder-text">未生成</div>
+            <div class="placeholder-text">{{ $t('common.outOfDate') }}</div>
           </div>
         </div>
 
@@ -457,12 +456,12 @@ function next() {
           v-if="(shot.videoHistoryIds?.length ?? 0) > 0"
           class="history"
         >
-          <span class="history-label">历史版本</span>
+          <span class="history-label">{{ $t('common.history') }}</span>
           <button
             v-for="hid in shot.videoHistoryIds"
             :key="hid"
             class="history-item"
-            title="切回这个版本"
+            :title="$t('common.useVersion')"
             @click="restoreHistory(shot, hid)"
           >
             <img
@@ -470,7 +469,7 @@ function next() {
               class="zoomable"
               :src="historyUrls[hid]"
               alt=""
-              title="查看大图并切回这个版本"
+              :title="$t('common.restoreVersion')"
               @click="openLightbox(historyUrls[hid])"
             />
           </button>
@@ -482,7 +481,7 @@ function next() {
             v-if="shotH3Mode(shot) === 'fl2va'"
             :first-id="shot.firstFrameAssetId"
             :last-id="shot.lastFrameAssetId"
-            first-hint="空则用本镜配图"
+            :first-hint="$t('common.useShotImage')"
             @update:first-id="project.updateShot(shot.id, { firstFrameAssetId: $event })"
             @update:last-id="project.updateShot(shot.id, { lastFrameAssetId: $event })"
           />
@@ -492,14 +491,14 @@ function next() {
             <VideoModelSelect :model-value="shotVideoModel(shot)" @update:model-value="setShotVideoModel(shot, $event)" />
           </div>
           <div v-if="!isDigitalHuman && videoAllows1080p(shotVideoModel(shot)) && shotH3Mode(shot) !== 'fl2va'" class="info-row">
-            <span>清晰度</span>
+            <span>{{ $t('common.resolution') }}</span>
             <VideoResolutionSeg
               :model-value="shotVideoResolution(shot)"
               @update:model-value="setShotVideoResolution(shot, $event)"
             />
           </div>
           <label class="info-row">
-            <span>时长</span>
+            <span>{{ $t('common.length') }}</span>
             <input
               class="dur-input"
               type="number"
@@ -511,49 +510,49 @@ function next() {
             />
           </label>
           <label class="info-row">
-            <span>运镜</span>
+            <span>{{ $t('common.cameraMotion') }}</span>
             <select
               class="cam-select"
               :value="shot.cameraMovement"
               @change="project.updateShot(shot.id, { cameraMovement: ($event.target as HTMLSelectElement).value as Shot['cameraMovement'] })"
             >
-              <option value="push">推</option>
-              <option value="pull">拉</option>
-              <option value="pan">摇</option>
-              <option value="tilt">移</option>
-              <option value="orbit">环绕</option>
-              <option value="static">固定</option>
+              <option value="push">{{ $t('common.cameraPush') }}</option>
+              <option value="pull">{{ $t('common.cameraPull') }}</option>
+              <option value="pan">{{ $t('common.cameraPan') }}</option>
+              <option value="tilt">{{ $t('common.cameraTrack') }}</option>
+              <option value="orbit">{{ $t('common.cameraOrbit') }}</option>
+              <option value="static">{{ $t('common.cameraFixed') }}</option>
             </select>
           </label>
           <label v-if="!isDigitalHuman" class="info-row">
-            <span>人声</span>
+            <span>{{ $t('videos.voice') }}</span>
             <select
               class="cam-select"
               :value="effectiveShotAudioMode(shot)"
               @change="changeAudioMode(shot, ($event.target as HTMLSelectElement).value as NonNullable<Shot['audioMode']>)"
             >
-              <option value="h3-dialogue">H3 出镜对白 + 对口型</option>
-              <option value="h3-voiceover">H3 画外口播 + 人物闭嘴</option>
-              <option value="tts">后期 TTS + H3 不说话</option>
-              <option value="none">无口播，仅环境声</option>
+              <option value="h3-dialogue">{{ $t('common.h3Dialogue') }}</option>
+              <option value="h3-voiceover">{{ $t('videos.h3Offscreen') }}</option>
+              <option value="tts">{{ $t('videos.postTtsMode') }}</option>
+              <option value="none">{{ $t('videos.environmentOnly') }}</option>
             </select>
           </label>
           <div v-else class="info-row">
-            <span>人声</span>
-            <strong>成片已带上传音频</strong>
+            <span>{{ $t('videos.voice') }}</span>
+            <strong>{{ $t('videos.withAudio') }}</strong>
           </div>
         </div>
 
         <div class="shot-prompt">
           <div class="prompt-bar">
-            <div class="prompt-label">实际提交给视频模型的提示词</div>
+            <div class="prompt-label">{{ $t('videos.submittedPrompt') }}</div>
             <div class="prompt-tools">
               <button class="reset-btn" :disabled="optimizing.has(shot.id)" @click="optimizeVideoPrompt(shot)">
-                {{ optimizing.has(shot.id) ? '优化中…' : '优化提示词' }}
+                {{ optimizing.has(shot.id) ? $t('common.optimizing') : $t('common.optimizePrompt') }}
               </button>
-              <button class="reset-btn" @click="resetVideoPrompt(shot)">按分镜动作重写</button>
+              <button class="reset-btn" @click="resetVideoPrompt(shot)">{{ $t('videos.rewriteMotion') }}</button>
               <button class="reset-btn" @click="toggleExpanded(shot.id)">
-                {{ expanded.has(shot.id) ? '收起 H3 提交格式' : '看 H3 提交格式' }}
+                {{ expanded.has(shot.id) ? $t('videos.hideH3Format') : $t('videos.showH3Format') }}
               </button>
             </div>
           </div>
@@ -576,7 +575,7 @@ function next() {
             :disabled="generating.has(shot.id)"
             @click="generateOne(shot)"
           >
-            生成视频
+            {{ $t('common.generateVideo') }}
           </GradientButton>
           <GradientButton
             v-else
@@ -586,14 +585,14 @@ function next() {
             :loading="generating.has(shot.id)"
             @click="generateOne(shot)"
           >
-            重新生成
+            {{ $t('common.regenerate') }}
           </GradientButton>
           <GradientButton
             size="sm"
             type="ghost"
             @click="pickerShotId = shot.id"
           >
-            资源库选用
+            {{ $t('common.useFromLibrary') }}
           </GradientButton>
         </div>
       </GlassCard>
@@ -603,7 +602,7 @@ function next() {
       :open="!!pickerShotId"
       kind="video"
       :multiple="false"
-      title="从资源库选用视频片段"
+      :title="$t('videos.useFromLibrary')"
       @close="pickerShotId = null"
       @confirm="onPickerConfirm"
     />

@@ -212,6 +212,8 @@ export function parseRememberRequest(
   const t = text.trim()
   let m = t.match(/^(?:帮我|请|你)?记(?:住|一下|下来)[：:，,]?\s*(.+)$/)
   if (!m) m = t.match(/^(?:以后|今后)(?:都|要)?(.+)$/)
+  if (!m) m = t.match(/^(.+?)\s*기억해\s*(?:줘|주세요)[.!。！]*$/)
+  if (!m) m = t.match(/^기억해\s*(?:줘|주세요)\s*[:：,，]?\s*(.+)$/)
   if (!m) return null
   let content = m[1].trim().replace(/[。！!]+$/, '')
   if (content.length < 2) return null
@@ -220,7 +222,13 @@ export function parseRememberRequest(
     scope = 'project'
     content = content.replace(/^(?:在|对)?(?:这个|本|当前)项目[里中内]?[，,：:]?\s*/, '')
   }
-  const kind: MemoryKind = /喜欢|偏好|习惯|不要|别|总是|一律|默认/.test(content)
+  const projectPrefix = /^(?:이|현재)\s*프로젝트(?:에서|에)\s+/
+  if (projectPrefix.test(content)) {
+    scope = 'project'
+    content = content.replace(projectPrefix, '')
+    if (content.length < 2) return null
+  }
+  const kind: MemoryKind = /喜欢|偏好|习惯|不要|别|总是|一律|默认|선호|좋아|기본/.test(content)
     ? 'preference'
     : 'fact'
   return { content, kind, scope }

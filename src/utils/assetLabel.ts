@@ -1,3 +1,4 @@
+import { t } from '@/i18n'
 import type { Asset, Project } from '@/types'
 
 export function assetContext(
@@ -11,9 +12,9 @@ export function assetContext(
   const shot =
     (proj?.shots ?? []).find((s) => s.id === a.shotId) ||
     current?.shots.find((s) => s.id === a.shotId)
-  const projectName = proj?.name || (a.projectId ? '其他项目' : '未归属项目')
+  const projectName = proj?.name || (a.projectId ? t('assetLabel.otherProject') : t('assetLabel.unassigned'))
   const shotTitle = shot?.title
-    ? `分镜 ${(shot.index ?? 0) + 1} · ${shot.title}`
+    ? t('assetLabel.storyboardTitle', { number: (shot.index ?? 0) + 1, title: shot.title })
     : ''
   const duration =
     a.kind === 'video' && 'duration' in a && a.duration

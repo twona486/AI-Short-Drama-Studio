@@ -1,11 +1,13 @@
 <script setup lang="ts">
+import { t as translate } from '@/i18n'
+import zh from '@/locales/zh'
 import { computed, nextTick, onMounted, onBeforeUnmount, ref, watch } from 'vue'
 import { runAgentTurn, type AgentEvent, type AgentMessage } from '@/services/canvas/agent'
 import { friendlyAiError, isAbortError, isTimeoutAbort } from '@/services/ai/abort'
 import { appendAgentMessage, getAgentState, setAgentAutonomy } from '@/services/canvas/taskStore'
 import { estimateRequestText } from '@/services/canvas/toolRegistry'
 import { onCanvasActivity, type CanvasActivity } from '@/services/canvas/canvasBridge'
-import { nextPipelineStep } from '@/services/canvas/pipeline'
+import { nextExtractStage, nextPipelineStep } from '@/services/canvas/pipeline'
 import { useProjectStore, useSettingsStore, useToastStore } from '@/stores'
 import { desktop, isDesktop } from '@/services/desktop'
 import { autodlVideoProfileId } from '@/services/ai/runtime'
@@ -30,11 +32,8 @@ type FeedItem =
   | { id: string; type: 'msg'; role: 'user' | 'assistant'; content: string }
   | { id: string; type: 'run'; rows: TraceRow[] }
 
-const WELCOME =
-  '我是这张画布的创作搭档，两种用法都行：\n\n- **一句话开工**：说「写一个修仙短剧，8 个分镜」或「画一张黄昏的海边」，我直接建节点、写提示词、跑生成\n- **自己拼**：在画布空白处右键添加图片 / 视频 / 剧本 / 角色 / 道具 / 场景 / 分镜，点选节点后让我改提示词、重跑\n\n我也带本地记忆——说「记住…」以后一直生效。想一次做到底就说「全流程」，否则我做一步停一步等你确认。'
-
 const feed = ref<FeedItem[]>([
-  { id: 'welcome', type: 'msg', role: 'assistant', content: WELCOME }
+  { id: 'welcome', type: 'msg', role: 'assistant', content: zh.agentChat.welcome }
 ])
 const messages = computed<AgentMessage[]>(() =>
   feed.value
@@ -47,9 +46,9 @@ const thinking = ref(false)
 const log = ref('')
 const trace = ref<TraceRow[]>([])
 const chips = ref<{ label: string; text: string }[]>([
-  { label: '拆剧本', text: '拆剧本' },
-  { label: '帮我画一张图', text: '帮我创建一个图片节点并生成：' },
-  { label: '看看进度', text: '现在画布什么情况' }
+  { get label() { return translate('agentChat.breakDownScript') }, text: '拆剧本' },
+  { get label() { return translate('agentChat.drawImage') }, text: '帮我创建一个图片节点并生成：' },
+  { get label() { return translate('agentChat.viewProgress') }, text: '现在画布什么情况' }
 ])
 const box = ref<HTMLElement | null>(null)
 const autonomy = ref<AgentAutonomy>('gated')
@@ -65,12 +64,12 @@ const toast = useToastStore()
 /** 本轮要带上的本地文件附件（文本内容已在选择时读入） */
 const attachments = ref<AgentAttachment[]>([])
 const TEXT_ATTACH_FILTERS = [
-  { name: '文本文件', extensions: ['txt', 'md', 'markdown', 'fountain', 'srt', 'ass', 'lrc', 'json', 'csv'] }
+  { get name() { return translate('agentChat.textFiles') }, extensions: ['txt', 'md', 'markdown', 'fountain', 'srt', 'ass', 'lrc', 'json', 'csv'] }
 ]
 
 async function pickAttachments() {
   if (!isDesktop()) {
-    toast.warn('读取本地文件需要桌面端（已安装的应用）')
+    toast.warn(translate('agentChat.desktopRequired'))
     return
   }
   try {
@@ -85,12 +84,12 @@ async function pickAttachments() {
           : raw
         attachments.value.push({ name: p.split(/[\\/]/).pop() || p, path: p, content })
       } catch (e) {
-        toast.error(`读取失败：${p.split(/[\\/]/).pop() || p}`)
+        toast.error(translate('agentChat.readFailed', { p0: p.split(/[\\/]/).pop() || p }))
         console.warn('[agent] 附件读取失败', e)
       }
     }
   } catch (e) {
-    toast.error('选择文件失败')
+    toast.error(translate('agentChat.fileSelectionFailed'))
     console.warn('[agent] pickFiles 失败', e)
   }
 }
@@ -113,8 +112,8 @@ function chooseShotChainMode(v: 'auto' | 'fl2va') {
   void project.save()
   toast.success(
     v === 'fl2va'
-      ? '已切换到首尾帧链：第 2 镜起会自动取上一镜视频末帧往下生成，镜头间保持连续。'
-      : '已切换到自动模式：按每镜自己的参考图出片。'
+      ? translate('agentChat.switchedFirstLast')
+      : translate('agentChat.switchedAuto')
   )
 }
 
@@ -127,11 +126,11 @@ const modeTip = computed(() => {
   return MODES.find((m) => m.id === id)?.desc || ''
 })
 const ASPECT_OPTIONS: { value: AspectRatio; label: string }[] = [
-  { value: '16:9', label: '横版 16:9' },
-  { value: '9:16', label: '竖版 9:16' },
-  { value: '1:1', label: '方形 1:1' },
-  { value: '4:3', label: '传统 4:3' },
-  { value: '21:9', label: '影院 21:9' }
+  { value: '16:9', get label() { return translate('agentChat.landscape') } },
+  { value: '9:16', get label() { return translate('agentChat.portrait') } },
+  { value: '1:1', get label() { return translate('common.squareRatio') } },
+  { value: '4:3', get label() { return translate('common.classicRatio') } },
+  { value: '21:9', get label() { return translate('common.cinemaRatio') } }
 ]
 /* 创作偏好弹窗：比例 + 图像/视频模型收进一个面板 */
 const prefOpen = ref(false)
@@ -193,13 +192,13 @@ const activeVideo = computed(
 )
 const activeImageLabel = computed(() => {
   const p = activeImage.value
-  return p ? `${p.name} · ${p.model}` : '图像模型'
+  return p ? `${p.name} · ${p.model}` : translate('agentChat.imageModel')
 })
 const activeVideoLabel = computed(() => {
   const d = videoDefault.value
-  if (d) return VIDEO_WORKFLOW_OPTIONS.find((w) => w.value === d)?.name || '视频模型'
+  if (d) return VIDEO_WORKFLOW_OPTIONS.find((w) => w.value === d)?.name || translate('agentChat.videoModel')
   const p = activeVideo.value
-  return p ? p.name : '视频模型'
+  return p ? p.name : translate('agentChat.videoModel')
 })
 
 /** 比例小图标的内框尺寸（外框固定 40×26 居中） */
@@ -242,9 +241,9 @@ function pickVideo(id: string) {
 
 /** 与视频节点下拉同款的内置工作流（用设置里的 AutoDL 令牌），创作偏好里也能直接选 */
 const VIDEO_WORKFLOW_OPTIONS: { value: VideoGenModel; name: string; desc: string }[] = [
-  { value: 'h3', name: 'H3 v5 · 15 秒', desc: 'AutoDL · 人设+场景参考图直接生成' },
-  { value: 'h3-v5', name: 'H3 v5 · 10 秒 · 1080p', desc: 'AutoDL · 画质升级版' },
-  { value: 'wan-prime', name: '万相 3.0 Prime', desc: '需四宫格关键帧' }
+  { value: 'h3', get name() { return translate('agentChat.h3') }, get desc() { return translate('agentChat.autoDLReference') } },
+  { value: 'h3-v5', get name() { return translate('agentChat.h3v5') }, get desc() { return translate('agentChat.autoDLQuality') } },
+  { value: 'wan-prime', get name() { return translate('agentChat.wan') }, get desc() { return translate('agentChat.requiresGrid') } }
 ]
 const videoDefault = computed(() => settings.config.defaultVideoModel)
 
@@ -267,28 +266,28 @@ function videoProfileTag(p: { provider?: string; baseUrl?: string; adapter?: { t
 const MODES: { id: AgentAutonomy; label: string; desc: string }[] = [
   {
     id: 'assist',
-    label: '陪我做',
-    desc: '每一步都先问你再动手，适合一起磨剧本、分镜和提示词。'
+    get label() { return translate('agentChat.guided') },
+    get desc() { return translate('agentChat.guidedHint') }
   },
   {
     id: 'gated',
-    label: '关键确认',
-    desc: '能连续做几步，但写完剧本、拆人物/场景/分镜、验收这些关键点会停下来问你。'
+    get label() { return translate('agentChat.confirmKeyActions') },
+    get desc() { return translate('agentChat.gatedHint') }
   },
   {
     id: 'autopilot',
-    label: '全自动',
-    desc: '按你这句话尽量一路做完，中途失败才停。要出片仍需说「全流程」。'
+    get label() { return translate('agentChat.autonomous') },
+    get desc() { return translate('agentChat.autonomousHint') }
   }
 ]
 
 const estimate = computed(() => estimateRequestText(input.value))
 const statusText = computed(() => {
   if (busy.value) {
-    if (thinking.value) return '思考中'
-    return log.value || '执行中'
+    if (thinking.value) return translate('agentChat.thinking')
+    return log.value || translate('agentChat.working')
   }
-  if (canvasLive.value) return log.value || '画布生成中'
+  if (canvasLive.value) return log.value || translate('agentChat.generating')
   return currentMode.value.label
 })
 const statusLive = computed(() => busy.value || canvasLive.value)
@@ -300,12 +299,12 @@ const selectedGenNode = computed(() => {
   return n
 })
 const selectedKindLabel = computed(() =>
-  selectedGenNode.value?.type === 'videoGen' ? '图生视频' : '生图'
+  selectedGenNode.value?.type === 'videoGen' ? translate('agentChat.videoGeneration') : translate('agentChat.imageGeneration')
 )
 const polishChips = [
-  { label: '更有画面感', text: '更有画面感：补构图、光影、材质和空气感，不改原文格式' },
-  { label: '写清动作表情', text: '把眉眼嘴、手和身体怎么动写具体，不改原文格式' },
-  { label: '按剧情对齐', text: '对照剧本，只写这一镜该发生的事，不改原文格式' }
+  { get label() { return translate('agentChat.moreVisual') }, text: '更有画面感：补构图、光影、材质和空气感，不改原文格式' },
+  { get label() { return translate('agentChat.clearActions') }, text: '把眉眼嘴、手和身体怎么动写具体，不改原文格式' },
+  { get label() { return translate('agentChat.matchStory') }, text: '对照剧本，只写这一镜该发生的事，不改原文格式' }
 ]
 
 onMounted(() => {
@@ -468,19 +467,33 @@ async function finishCanvasRun(ev: CanvasActivity) {
     })
   }
   const next = nextPipelineStep(project.current)
+  const extractLabels = {
+    subjects: 'nodeInspector.stepSubjects',
+    scenes: 'nodeInspector.stepScenes',
+    shots: 'nodeInspector.stepShots'
+  }
+  const stage = next?.id === 'board' ? nextExtractStage(project.current) : null
+  const nextLabel = () => next ? translate(stage ? extractLabels[stage] : `agentChat.steps.${next.id}`) : ''
   const content =
     ev.kind === 'error'
-      ? `画布上的「${ev.label}」失败了。\n原因：${ev.message || '未知错误'}\n可以改提示词后在右侧重试，或让我来处理。`
-      : `画布上的「${ev.label}」已完成。${ev.message ? `\n${ev.message}` : ''}\n${
-          next ? `下一步是「${next.label}」。回「继续」只做这一步。` : '需要继续就直接说下一步。'
-        }`
+      ? translate('agentChat.canvasRunFailed', {
+          label: ev.label,
+          error: ev.message || translate('agentChat.unknownError')
+        })
+      : [
+          translate('agentChat.canvasRunCompleted', { label: ev.label }),
+          ev.message,
+          next
+            ? translate('agentChat.canvasRunNext', { label: nextLabel() })
+            : translate('agentChat.canvasRunFollowUp')
+        ].filter(Boolean).join('\n')
   feed.value.push({ id: `a-${Date.now()}`, type: 'msg', role: 'assistant', content })
   await appendAgentMessage('assistant', content)
   if (!busy.value) {
     chips.value = next
       ? [
-          { label: `继续：${next.label}`, text: '继续' },
-          { label: '先看看', text: '先看看' }
+          { get label() { return translate('agentChat.continue', { p0: nextLabel() }) }, text: translate('agentChat.continueCommand') },
+          { get label() { return translate('agentChat.quickPeek') }, text: '先看看' }
         ]
       : []
   }
@@ -502,8 +515,8 @@ async function sendText(text: string) {
   attachments.value = []
   busy.value = true
   thinking.value = true
-  log.value = attachedNames.length ? `读取附件 ${attachedNames.join('、')}…` : '开始…'
-  trace.value = [{ key: 'think', kind: 'think', label: '在想怎么做…', status: 'running' }]
+  log.value = attachedNames.length ? translate('agentChat.readingAttachments', { p0: attachedNames.join('、') }) : translate('agentChat.starting')
+  trace.value = [{ key: 'think', kind: 'think', get label() { return translate('agentChat.deliberating') }, status: 'running' }]
   chips.value = []
   const turnController = new AbortController()
   controller = turnController
@@ -536,8 +549,8 @@ async function sendText(text: string) {
     attachments.value = attachOptions
     const cancelled = turnController.signal.aborted || (isAbortError(e) && !isTimeoutAbort(e))
     const content = cancelled
-      ? '已停止。已完成的产物会保留，未开始的步骤不会继续。'
-      : '失败：' + friendlyAiError(e)
+      ? translate('agentChat.turnStopped')
+      : translate('agentChat.turnFailed', { error: friendlyAiError(e) })
     feed.value.push({ id: `a-${Date.now()}`, type: 'msg', role: 'assistant', content })
     await appendAgentMessage('assistant', content)
   } finally {
@@ -551,7 +564,7 @@ async function sendText(text: string) {
 
 function cancel() {
   controller?.abort()
-  log.value = '正在停止…'
+  log.value = translate('agentChat.stopping')
 }
 
 const copiedMsg = ref('')
@@ -594,7 +607,7 @@ function visibleRows(rows: TraceRow[]) {
       <div class="head-id">
         <span class="avatar" :class="{ live: statusLive }"><i /></span>
         <div class="head-txt">
-          <strong>智能体</strong>
+          <strong>{{ $t('common.agent') }}</strong>
           <span class="sub" :class="{ live: statusLive }">{{ statusText }}</span>
         </div>
       </div>
@@ -603,7 +616,7 @@ function visibleRows(rows: TraceRow[]) {
           type="button"
           class="head-btn"
           :class="{ on: memoryOpen }"
-          title="本地记忆"
+          :title="$t('agentChat.localMemory')"
           @click.stop="memoryOpen = !memoryOpen"
         >
           <svg viewBox="0 0 24 24">
@@ -616,12 +629,12 @@ function visibleRows(rows: TraceRow[]) {
     </header>
 
     <section class="target" :class="{ empty: !selectedGenNode }">
-      <p class="k">当前选中</p>
+      <p class="k">{{ $t('common.selectedModel') }}</p>
       <p v-if="selectedGenNode" class="name">
         {{ selectedGenNode.data.label || selectedGenNode.id }}
         <small>{{ selectedKindLabel }}</small>
       </p>
-      <p v-else class="name dim">还没选节点。点画布上的图片或视频节点，我来改它的提示词。</p>
+      <p v-else class="name dim">{{ $t('agentChat.noSelectedNode') }}</p>
       <p v-if="selectedGenNode?.data.prompt" class="preview">{{ selectedGenNode.data.prompt }}</p>
       <div v-if="selectedGenNode && !busy" class="target-chips">
         <button v-for="c in polishChips" :key="c.label" type="button" @click="sendText(c.text)">
@@ -635,14 +648,14 @@ function visibleRows(rows: TraceRow[]) {
         <div v-if="item.type === 'msg'" class="msg" :class="item.role">
           <span v-if="item.role === 'assistant'" class="msg-avatar"><i /></span>
           <div class="bubble">
-            <AgentRichText :content="item.content" />
+            <AgentRichText :content="item.id === 'welcome' ? $t('agentChat.welcome') : item.content" />
             <button
               v-if="item.role === 'assistant'"
               type="button"
               class="bubble-copy"
               :class="{ ok: copiedMsg === item.id }"
-              :title="copiedMsg === item.id ? '已复制' : '复制这条回复'"
-              @click="copyMsg(item.id, item.content)"
+              :title="copiedMsg === item.id ? $t('common.copied') : $t('agentChat.copyReply')"
+              @click="copyMsg(item.id, item.id === 'welcome' ? $t('agentChat.welcome') : item.content)"
             >
               <svg viewBox="0 0 24 24" aria-hidden="true">
                 <rect x="9" y="9" width="11" height="11" rx="2" />
@@ -663,7 +676,7 @@ function visibleRows(rows: TraceRow[]) {
       <div v-if="busy" class="turn">
         <div v-if="thinking" class="think">
           <span class="dot-pulse"><i /><i /><i /></span>
-          <span>思考中</span>
+          <span>{{ $t('agentChat.thinking') }}</span>
         </div>
         <AgentTraceList :rows="visibleRows(trace)" />
       </div>
@@ -677,20 +690,20 @@ function visibleRows(rows: TraceRow[]) {
 
     <form class="composer" @submit.prevent="send">
       <p v-if="input.trim() && estimate.calls" class="estimate">
-        预计 {{ estimate.calls }} 次调用 · 约 {{ Math.max(1, Math.ceil(estimate.seconds / 60)) }} 分钟
+        {{ $t('agentChat.estimated') }} {{ estimate.calls }} {{ $t('common.requestCountEstimate') }} {{ Math.max(1, Math.ceil(estimate.seconds / 60)) }} {{ $t('common.minutes') }}
       </p>
       <div class="box" :class="{ busy }">
         <div v-if="attachments.length" class="attach-chips">
           <span v-for="(a, i) in attachments" :key="a.path || a.name" class="attach-chip">
             📎 {{ a.name }}
-            <button type="button" :disabled="busy" title="移除附件" @click="removeAttachment(i)">×</button>
+            <button type="button" :disabled="busy" :title="$t('agentChat.removeAttachment')" @click="removeAttachment(i)">×</button>
           </span>
         </div>
         <textarea
           v-model="input"
           rows="5"
           :disabled="busy"
-          placeholder="说一句话就行，例如：写一个修仙短剧并出 8 个分镜 / 画一张黄昏的海边 / 把第 3 镜改成手持跟拍"
+          :placeholder="$t('agentChat.placeholder')"
           @keydown.enter.exact.prevent="send"
         />
         <div class="bar">
@@ -699,13 +712,13 @@ function visibleRows(rows: TraceRow[]) {
               type="button"
               class="bar-btn attach-btn"
               :disabled="busy"
-              title="附加本地文件（txt / md / 剧本等文本），或直接在消息里写文件路径"
+              :title="$t('agentChat.attachmentHint')"
               @click.stop="pickAttachments"
             >
               <svg viewBox="0 0 24 24" aria-hidden="true">
                 <path d="M21 12.5l-8.2 8.2a5.6 5.6 0 0 1-7.9-7.9L13 4.7a3.8 3.8 0 0 1 5.4 5.4l-8.1 8.1a1.9 1.9 0 0 1-2.7-2.7l7.5-7.5" />
               </svg>
-              <span>附件</span>
+              <span>{{ $t('agentChat.attachments') }}</span>
             </button>
           </div>
           <div class="bar-pop">
@@ -713,10 +726,10 @@ function visibleRows(rows: TraceRow[]) {
               type="button"
               class="bar-btn"
               :disabled="busy"
-              title="出片生成模式：自动按参考图；首尾帧链取上一镜末帧保证镜头连续"
+              :title="$t('agentChat.generationModeHint')"
               @click.stop="genModeOpen = !genModeOpen; modeOpen = false"
             >
-              生成模式 · {{ shotChainMode === 'fl2va' ? '首尾帧' : '自动' }}
+              {{ $t('agentChat.mode') }} {{ shotChainMode === 'fl2va' ? $t('common.firstLastFrame') : $t('common.automatic') }}
               <i />
             </button>
             <div v-if="genModeOpen" class="menu" @click.stop>
@@ -725,20 +738,20 @@ function visibleRows(rows: TraceRow[]) {
                 :class="{ on: shotChainMode === 'auto' }"
                 @click="chooseShotChainMode('auto')"
               >
-                自动模式
+                {{ $t('agentChat.autoMode') }}
               </button>
               <button
                 type="button"
                 :class="{ on: shotChainMode === 'fl2va' }"
                 @click="chooseShotChainMode('fl2va')"
               >
-                首尾帧模式
+                {{ $t('agentChat.firstLastMode') }}
               </button>
               <p class="tip">
                 {{
                   shotChainMode === 'fl2va'
-                    ? '首尾帧链：第 1 镜用本镜配图起手；第 2 镜起自动截取上一镜视频的最后一帧作首帧，下一镜的配图作尾帧，镜头间画面连续。因为下一镜要等上一镜出片，批量出片会自动改成按镜号串行（一次一镜）。凑不齐首尾帧的镜头会自动退回常规出片，不会卡住生成。'
-                    : '每镜按自己的参考图 / 关键帧出片（默认）。想要镜头之间画面连续就选首尾帧模式。'
+                    ? $t('agentChat.firstLastHint')
+                    : $t('agentChat.autoModeHint')
                 }}
               </p>
             </div>
@@ -775,7 +788,7 @@ function visibleRows(rows: TraceRow[]) {
               type="button"
               class="bar-btn pref-btn"
               :disabled="busy"
-              :title="`创作偏好：比例 ${currentAspectRatio} · 图像 ${activeImageLabel} · 视频 ${activeVideoLabel}`"
+              :title="$t('agentChat.preferencesSummary', { p0: currentAspectRatio, p1: activeImageLabel, p2: activeVideoLabel })"
               @click.stop="togglePrefPanel"
             >
               <svg viewBox="0 0 24 24" class="pref-icon" aria-hidden="true">
@@ -783,7 +796,7 @@ function visibleRows(rows: TraceRow[]) {
                 <circle cx="16" cy="8" r="2.2" />
                 <circle cx="8" cy="16" r="2.2" />
               </svg>
-              <span>创作偏好</span>
+              <span>{{ $t('agentChat.preferences') }}</span>
             </button>
             <Teleport to="body">
               <div
@@ -800,21 +813,21 @@ function visibleRows(rows: TraceRow[]) {
                   :class="{ on: prefTab === 'video' }"
                   @click="prefTab = 'video'"
                 >
-                  视频偏好
+                  {{ $t('agentChat.videoPreferences') }}
                 </button>
                 <button
                   type="button"
                   :class="{ on: prefTab === 'image' }"
                   @click="prefTab = 'image'"
                 >
-                  图片偏好
+                  {{ $t('agentChat.imagePreferences') }}
                 </button>
               </div>
               <div class="pref-body">
                 <div class="pref-models">
-                  <p class="pref-k">模型选择</p>
+                  <p class="pref-k">{{ $t('agentChat.modelSelection') }}</p>
                   <template v-if="prefTab === 'video'">
-                    <p class="pref-g">工作流（用设置里的 AutoDL 令牌）</p>
+                    <p class="pref-g">{{ $t('common.autoDlWorkflow') }}</p>
                     <button
                       v-for="w in VIDEO_WORKFLOW_OPTIONS"
                       :key="w.value"
@@ -829,9 +842,9 @@ function visibleRows(rows: TraceRow[]) {
                         <small>{{ w.desc }}</small>
                       </span>
                     </button>
-                    <p class="pref-g">已配置的视频接入</p>
+                    <p class="pref-g">{{ $t('common.configuredVideo') }}</p>
                     <p v-if="!videoProfiles.length" class="pref-empty">
-                      还没有视频模型，去「设置」里添加一个
+                      {{ $t('agentChat.noVideoModel') }}
                     </p>
                     <button
                       v-for="p in videoProfiles"
@@ -850,7 +863,7 @@ function visibleRows(rows: TraceRow[]) {
                   </template>
                   <template v-else>
                     <p v-if="!imageProfiles.length" class="pref-empty">
-                      还没有图像模型，去「设置」里添加一个
+                      {{ $t('agentChat.noImageModel') }}
                     </p>
                     <button
                       v-for="p in imageProfiles"
@@ -869,7 +882,7 @@ function visibleRows(rows: TraceRow[]) {
                   </template>
                 </div>
                 <div class="pref-ratios">
-                  <p class="pref-k">画面比例</p>
+                  <p class="pref-k">{{ $t('common.frameRatio') }}</p>
                   <div class="ratio-grid">
                     <button
                       v-for="a in ASPECT_OPTIONS"
@@ -883,7 +896,7 @@ function visibleRows(rows: TraceRow[]) {
                       <span class="ratio-label">{{ a.value }}</span>
                     </button>
                   </div>
-                  <p class="pref-hint">选好即生效，智能体生成图片和视频都会照此执行；单个节点仍可单独指定模型。</p>
+                  <p class="pref-hint">{{ $t('agentChat.preferenceHint') }}</p>
                 </div>
               </div>
               </div>
@@ -893,7 +906,7 @@ function visibleRows(rows: TraceRow[]) {
             v-if="busy"
             type="button"
             class="icon-act stop"
-            title="停止"
+            :title="$t('common.stop')"
             @click="cancel"
           >
             <svg viewBox="0 0 24 24" aria-hidden="true">
@@ -904,7 +917,7 @@ function visibleRows(rows: TraceRow[]) {
             v-else
             type="submit"
             class="icon-act send"
-            title="发送"
+            :title="$t('common.send')"
             :disabled="!input.trim()"
           >
             <svg viewBox="0 0 24 24" aria-hidden="true">

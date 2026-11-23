@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { t as translate } from '@/i18n'
 import { computed, ref, watch } from 'vue'
 import { useProjectStore, useAssetsStore, useToastStore, useSettingsStore } from '@/stores'
 import { llmChoiceKey, llmModelGroups, parseLlmChoiceKey } from '@/stores/settings'
@@ -8,7 +9,7 @@ import { effectiveShotAudioMode, needsExternalTts } from '@/utils/shot'
 import { applyShotVideoModel, applyShotVideoProfile } from '@/services/canvas/videoModel'
 import { videoRequiresStoryboard } from '@/utils/storyboardGate'
 import { stillModeForShot } from '@/utils/videoStill'
-import { needsPlayReview, PLAY_GATE_MSG } from '@/services/canvas/playGate'
+import { needsPlayReview } from '@/services/canvas/playGate'
 import { isPlayReady } from '@/services/ai'
 import { shotFrameSendPrompt } from '@/utils/nodePrompt'
 import { scriptFromImportedPlay } from '@/utils/scriptMarkdown'
@@ -134,7 +135,7 @@ watch(
 function removeInspectorRef(id: ID) {
   if (!props.node) return
   project.removeCanvasNodeRef(props.node.id, id)
-  toast.success('已移除这张参考图')
+  toast.success(translate('common.referenceRemoved'))
 }
 
 const currentAssetId = computed(() => {
@@ -172,37 +173,37 @@ const actionLabel = computed(() => {
   const t = props.node?.type
   const again = hasAsset.value || Boolean(project.current?.finalVideoAssetId)
   if (t === 'script') {
-    return isPlayReady(project.current?.script) ? '重新写剧本' : '写剧本'
+    return isPlayReady(project.current?.script) ? translate('nodeInspector.rewriteScript') : translate('nodeInspector.writeScript')
   }
-  if (t === 'subject') return again ? '重新生成四视图' : '生成四视图'
-  if (t === 'prop') return again ? '重新生成多角度图' : '生成多角度图'
-  if (t === 'sceneProps') return again ? '重新生成关键道具图' : '生成关键道具图'
-  if (t === 'scene') return again ? '重新生成锚点图' : '生成锚点图'
-  if (t === 'shotBoard') return again ? '重新生成故事看板' : '生成故事看板'
+  if (t === 'subject') return again ? translate('nodeInspector.regenerateFourViews') : translate('nodeInspector.generateFourViews')
+  if (t === 'prop') return again ? translate('nodeInspector.regeneratePropViews') : translate('nodeInspector.generatePropViews')
+  if (t === 'sceneProps') return again ? translate('nodeInspector.regenerateKeyProps') : translate('nodeInspector.generateKeyProps')
+  if (t === 'scene') return again ? translate('nodeInspector.regenerateAnchors') : translate('nodeInspector.generateAnchors')
+  if (t === 'shotBoard') return again ? translate('nodeInspector.regenerateBoard') : translate('nodeInspector.generateBoard')
   if (t === 'shotImage') {
     return again
       ? videoRequiresStoryboard(project.current)
-        ? '重新生成配图'
-        : '重新生成四宫格'
+        ? translate('nodeInspector.regenerateShotImage')
+        : translate('nodeInspector.regenerateGrid')
       : videoRequiresStoryboard(project.current)
-        ? '生成配图'
-        : '生成四宫格'
+        ? translate('nodeInspector.generateShotImage')
+        : translate('nodeInspector.generateGrid')
   }
-  if (t === 'shotFrames') return again ? '重画首尾帧' : '画首尾帧'
-  if (t === 'shotVideo') return again ? '重新生成视频' : '生成视频'
+  if (t === 'shotFrames') return again ? translate('nodeInspector.redrawFrames') : translate('nodeInspector.drawFrames')
+  if (t === 'shotVideo') return again ? translate('nodeInspector.regenerateVideo') : translate('nodeInspector.generateVideo')
   if (t === 'audio') {
-    if (!shot.value || !needsExternalTts(shot.value, project.current)) return '无需独立配音'
-    return again ? '重新生成口播' : '生成口播'
+    if (!shot.value || !needsExternalTts(shot.value, project.current)) return translate('nodeInspector.noExtraVoice')
+    return again ? translate('nodeInspector.regenerateNarration') : translate('nodeInspector.generateNarration')
   }
-  if (t === 'export' || t === 'final') return again ? '重新合成视频' : '合成视频'
-  return again ? '重新生成' : '生成这个节点'
+  if (t === 'export' || t === 'final') return again ? translate('nodeInspector.composeAgain') : translate('nodeInspector.composeVideo')
+  return again ? translate('nodeInspector.regenerate') : translate('nodeInspector.generateNode')
 })
 
 const extractLabel = computed(() => {
   const stage = nextExtractStage(project.current)
-  if (stage === 'subjects') return '第 1 步：提炼人物'
-  if (stage === 'scenes') return '第 2 步：提炼场景'
-  if (stage === 'shots') return '第 3 步：拆分镜'
+  if (stage === 'subjects') return translate('nodeInspector.stepSubjects')
+  if (stage === 'scenes') return translate('nodeInspector.stepScenes')
+  if (stage === 'shots') return translate('nodeInspector.stepShots')
   return ''
 })
 const canExtractNext = computed(() => Boolean(nextExtractStage(project.current)))
@@ -382,9 +383,9 @@ async function redrawFrame(which: 'start' | 'end') {
   if (!s || running.value) return
   try {
     await regenerateShotFrame(s, which, (msg) => toast.info(msg))
-    toast.success(which === 'start' ? '起始帧已重画' : '结束帧已重画')
+    toast.success(which === 'start' ? translate('common.startFrameRedrawn') : translate('common.endFrameRedrawn'))
   } catch (e: any) {
-    toast.error(friendlyAiError(e) || '重画失败')
+    toast.error(friendlyAiError(e) || translate('common.redrawFailed'))
   }
 }
 
@@ -406,35 +407,35 @@ const previewAspect = computed(() => {
 
 const kindLabel = computed(() => {
   const t = props.node?.type
-  if (t === 'script') return '完整剧本'
-  if (t === 'subject') return '人物 · 四视图'
-  if (t === 'prop') return '道具 · 多角度'
-  if (t === 'sceneProps') return '场景 · 关键道具图'
-  if (t === 'scene') return '场景 · 锚点图'
-  if (t === 'shotBoard') return '分镜 · 故事看板'
-  if (t === 'shotImage') return videoRequiresStoryboard(project.current) ? '分镜 · 配图' : '分镜 · 四宫格关键帧'
-  if (t === 'shotFrames') return '分镜 · 首尾帧'
+  if (t === 'script') return translate('nodeInspector.fullScript')
+  if (t === 'subject') return translate('nodeInspector.subjectType')
+  if (t === 'prop') return translate('nodeInspector.propType')
+  if (t === 'sceneProps') return translate('nodeInspector.scenePropType')
+  if (t === 'scene') return translate('nodeInspector.sceneType')
+  if (t === 'shotBoard') return translate('nodeInspector.boardType')
+  if (t === 'shotImage') return videoRequiresStoryboard(project.current) ? translate('nodeInspector.shotImageType') : translate('nodeInspector.gridType')
+  if (t === 'shotFrames') return translate('nodeInspector.framesType')
   if (t === 'shotVideo') {
     const d = shot.value?.duration
-    return d ? `分镜 · 视频 · ${d}s` : '分镜 · 视频'
+    return d ? translate('nodeInspector.videoDurationType', { p0: d }) : translate('nodeInspector.videoType')
   }
-  if (t === 'audio') return '分镜 · 口播'
-  if (t === 'export') return '视频 · 合成'
-  if (t === 'final') return '视频 · 预览'
-  if (t === 'imageGen') return '图片生成'
-  if (t === 'videoGen') return '图生视频'
+  if (t === 'audio') return translate('nodeInspector.audioType')
+  if (t === 'export') return translate('nodeInspector.exportType')
+  if (t === 'final') return translate('nodeInspector.finalType')
+  if (t === 'imageGen') return translate('nodeInspector.imageType')
+  if (t === 'videoGen') return translate('nodeInspector.imageToVideoType')
   return t || ''
 })
 
 const title = computed(() => {
-  if (!props.node) return '未选择'
-  if (props.node.type === 'script') return project.current?.script?.topic || '文案'
+  if (!props.node) return translate('nodeInspector.unselected')
+  if (props.node.type === 'script') return project.current?.script?.topic || translate('nodeInspector.script')
   if (subject.value) return subject.value.name
   if (propItem.value) return propItem.value.name
   if (scene.value) return scene.value.name
   if (shot.value) return `${shot.value.index + 1}. ${shot.value.title}`
-  if (props.node.type === 'export') return '合成视频'
-  if (props.node.type === 'final') return '视频预览'
+  if (props.node.type === 'export') return translate('nodeInspector.composeVideo')
+  if (props.node.type === 'final') return translate('nodeInspector.videoPreview')
   return props.node.data.label || props.node.type
 })
 
@@ -450,7 +451,7 @@ const historyIds = computed(() => {
 })
 
 const videoPromptPlaceholder = computed(() =>
-  '这里完全由你编辑。清空后不会回填；可自己填写，或主动点“优化提示词 / 按分镜重铺”。'
+  translate('nodeInspector.editVideoPrompt')
 )
 
 watch(
@@ -515,7 +516,7 @@ async function restoreHistory(assetId: string) {
   await project.save()
   await refreshPreview()
   await loadHistory()
-  toast.success('已切回这个版本')
+  toast.success(translate('nodeInspector.restored'))
 }
 
 async function onPickerConfirm(ids: ID[]) {
@@ -531,21 +532,21 @@ async function onPickerConfirm(ids: ID[]) {
     await project.save()
     await refreshPreview()
     await loadHistory()
-    toast.success('已选用该图片')
+    toast.success(translate('common.imageSelected'))
   } catch (e: any) {
-    toast.error(e?.message || '选用失败')
+    toast.error(e?.message || translate('common.useFailed'))
   }
 }
 
 async function downloadFinal() {
   const id = project.current?.finalVideoAssetId
   if (!id) {
-    toast.warn('还没有合成视频，请先合成')
+    toast.warn(translate('nodeInspector.noComposedVideo'))
     return
   }
   const blob = await assets.getBlob(id)
   if (!blob) {
-    toast.error('视频文件读取失败')
+    toast.error(translate('nodeInspector.videoReadFailed'))
     return
   }
   const url = URL.createObjectURL(blob)
@@ -559,7 +560,7 @@ async function downloadFinal() {
 async function run() {
   if (!props.node) return
   if (gateBlocked.value) {
-    toast.warn(PLAY_GATE_MSG)
+    toast.warn(translate('common.reviewScript'))
     return
   }
   try {
@@ -570,9 +571,9 @@ async function run() {
     }
     await refreshPreview()
     await loadHistory()
-    toast.success(actionLabel.value + '完成')
+    toast.success(actionLabel.value + translate('common.done'))
   } catch (e: any) {
-    if (shouldToastAiError(e)) toast.error(friendlyAiError(e) || '生成失败')
+    if (shouldToastAiError(e)) toast.error(friendlyAiError(e) || translate('common.generateFailed'))
   }
 }
 
@@ -580,31 +581,31 @@ async function runContinue() {
   if (!props.node) return
   try {
     await runScriptNode('continue', undefined, undefined, llmModel.value, continueHint.value)
-    toast.success('已续写剧本')
+    toast.success(translate('nodeInspector.continued'))
   } catch (e: any) {
-    if (shouldToastAiError(e)) toast.error(friendlyAiError(e) || '续写失败')
+    if (shouldToastAiError(e)) toast.error(friendlyAiError(e) || translate('common.continueFailed'))
   }
 }
 
 async function runExtract(stage?: ExtractStage) {
   if (!props.node) return
   if (stage === 'shots' && !canExtractShots.value) {
-    toast.warn('请先提炼角色和场景，再拆分镜')
+    toast.warn(translate('common.extractBeforeShots'))
     return
   }
   try {
     await runScriptNode('extract', undefined, undefined, llmModel.value, undefined, stage)
     toast.success(
       stage === 'subjects'
-        ? '角色已提炼到画布'
+        ? translate('nodeInspector.characterExtracted')
         : stage === 'scenes'
-          ? '场景已提炼到画布'
+          ? translate('nodeInspector.sceneExtracted')
           : stage === 'shots'
-            ? '分镜已提炼到画布'
-            : '节点已从剧本提炼出来'
+            ? translate('nodeInspector.storyboardExtracted')
+            : translate('nodeInspector.extracted')
     )
   } catch (e: any) {
-    if (shouldToastAiError(e)) toast.error(friendlyAiError(e) || '提炼失败')
+    if (shouldToastAiError(e)) toast.error(friendlyAiError(e) || translate('nodeInspector.extractionFailed'))
   }
 }
 
@@ -646,7 +647,7 @@ function patchScript(field: 'topic' | 'content', value: string) {
 async function importPlayMarkdown() {
   if (!project.current) return
   const existing = (project.current.script?.content || '').trim()
-  if (existing && !confirm('导入会替换当前剧本正文，确定吗？')) return
+  if (existing && !confirm(translate('common.replaceScriptConfirm'))) return
   try {
     const picked = await pickPlayMarkdownFile()
     if (!picked) return
@@ -655,9 +656,9 @@ async function importPlayMarkdown() {
     project.applyPlayTitle(script.topic)
     if (project.current.pipelineMode !== 'img2video') project.setPlayApproved(false)
     await project.save()
-    toast.success(`已导入「${script.topic}」`)
+    toast.success(translate('common.importedNamed', { p0: script.topic }))
   } catch (e: any) {
-    toast.error(e?.message || '导入失败')
+    toast.error(e?.message || translate('common.importFailed'))
   }
 }
 
@@ -692,16 +693,16 @@ function rebuildPrompt() {
   } else {
     return
   }
-  toast.success('已按当前画风重铺提示词。再点生成才会出新图。')
+  toast.success(translate('nodeInspector.styleApplied'))
 }
 
 async function resetVideoPrompt() {
   if (!shot.value) return
   try {
     await rewriteShotPerformance(shot.value)
-    toast.success('已按本镜剧情重写')
+    toast.success(translate('nodeInspector.motionUpdated'))
   } catch (e: any) {
-    toast.error(friendlyAiError(e) || '重写失败')
+    toast.error(friendlyAiError(e) || translate('common.rewriteFailed'))
   }
 }
 
@@ -716,9 +717,9 @@ async function optimizeVideoPrompt() {
     } else {
       return
     }
-    toast.success('已优化提示词')
+    toast.success(translate('common.optimized'))
   } catch (e: any) {
-    toast.error(friendlyAiError(e) || '优化失败')
+    toast.error(friendlyAiError(e) || translate('common.optimizationFailed'))
   } finally {
     optimizingPrompt.value = false
   }
@@ -727,35 +728,35 @@ async function optimizeVideoPrompt() {
 
 <template>
   <aside class="insp">
-    <div v-if="!node" class="empty">点画布上的节点，这里改提示词、单独重新生成</div>
+    <div v-if="!node" class="empty">{{ $t('nodeInspector.emptyHint') }}</div>
     <template v-else>
       <div class="insp-k">{{ kindLabel }}</div>
       <h3>{{ title }}</h3>
       <p v-if="node.error" class="err">{{ node.error }}</p>
       <p v-else-if="hasAsset && node.type === 'audio'" class="hint">
-        点播放可试听口播。改文案后重新生成，只动这一个节点。
+        {{ $t('nodeInspector.listenHint') }}
       </p>
       <p v-else-if="hasAsset && node.type !== 'script' && node.type !== 'export' && node.type !== 'final'" class="hint">
-        改下面提示词后点重新生成，只动这一个节点。也可以从资源库选用已有图。点缩略图可看大图。
+        {{ $t('nodeInspector.regenerateHint') }}
       </p>
       <p v-else-if="canPickAsset" class="hint">
-        可以生成，也可以从资源库选用已有图片，不必临时出图。
+        {{ $t('nodeInspector.imageLibraryHint') }}
       </p>
 
       <p v-else-if="node.type === 'script'" class="hint">
         {{
           isImg2Video
-            ? '可导入 .md 剧本，或先写完整剧本，再点提炼角色、场景或分镜。也可以右键直接加空白节点。'
-            : '可导入 .md 剧本。或先写完整剧本（背景、人物、环境、分场都要写清，还不拆节点），再提炼人物、场景、分镜。'
+            ? $t('nodeInspector.scriptNodeHint')
+            : $t('nodeInspector.beforeExtract')
         }}
       </p>
       <p v-else-if="node.type === 'export'" class="hint">
-        先调下方音频与字幕，再点合成。视频会出现在「视频预览」节点。
+        {{ $t('nodeInspector.composeHint') }}
       </p>
       <p v-else-if="node.type === 'final'" class="hint">
-        可预览/下载视频。改音频设置后点重新合成即可。
+        {{ $t('nodeInspector.videoPreviewHint') }}
       </p>
-      <p v-else-if="gateBlocked" class="hint">{{ PLAY_GATE_MSG }}</p>
+      <p v-else-if="gateBlocked" class="hint">{{ $t('common.reviewScript') }}</p>
 
       <AspectRatioSeg v-if="showAspect" v-model="nodeAspectRatio" />
 
@@ -766,29 +767,29 @@ async function optimizeVideoPrompt() {
       </div>
       <div v-else-if="preview && node.type === 'audio'" class="prev prev-audio">
         <audio :src="preview" controls preload="auto" />
-        <span>试听口播</span>
+        <span>{{ $t('nodeInspector.listenNarration') }}</span>
       </div>
       <button
         v-else-if="preview"
         class="prev"
         type="button"
-        title="点击查看大图"
+        :title="$t('common.clickFullImage')"
         @click="openLightbox(preview, 'image', title)"
       >
         <div class="prev-frame" :style="{ aspectRatio: previewAspect }">
           <img :src="preview" alt="" />
         </div>
-        <span>查看大图</span>
+        <span>{{ $t('common.fullImage') }}</span>
       </button>
 
       <template v-if="isExportNode && project.current">
-        <label>字幕</label>
+        <label>{{ $t('common.caption') }}</label>
         <label class="check">
           <input v-model="burnCaptions" type="checkbox" />
-          <span>烧录字幕到画面</span>
+          <span>{{ $t('nodeInspector.burnCaptions') }}</span>
         </label>
 
-        <label>分镜原声（环境音）</label>
+        <label>{{ $t('nodeInspector.shotAudio') }}</label>
         <div class="seg">
           <button
             type="button"
@@ -796,7 +797,7 @@ async function optimizeVideoPrompt() {
             :class="{ on: keepAmbientAudio }"
             @click="keepAmbientAudio = true"
           >
-            保留
+            {{ $t('nodeInspector.keepAudio') }}
           </button>
           <button
             type="button"
@@ -804,33 +805,33 @@ async function optimizeVideoPrompt() {
             :class="{ on: !keepAmbientAudio }"
             @click="keepAmbientAudio = false"
           >
-            去掉
+            {{ $t('nodeInspector.discard') }}
           </button>
         </div>
         <p class="hint">
           {{
             keepAmbientAudio
-              ? '保留普通镜头环境音；H3 自带对白 / 口播始终保留。'
-              : '静音 TTS / 无口播镜头原声；H3 自带人声不受影响。'
+              ? $t('nodeInspector.keepAudioHint')
+              : $t('nodeInspector.muteHint')
           }}
         </p>
         <div v-if="keepAmbientAudio" class="vol-row">
-          <span class="hint">环境音</span>
+          <span class="hint">{{ $t('common.ambientSound') }}</span>
           <input v-model.number="ambientVolume" type="range" min="0.1" max="1" step="0.05" />
           <span class="hint">{{ Math.round(ambientVolume * 100) }}%</span>
         </div>
       </template>
 
       <template v-if="node.type === 'script' && project.current">
-        <label>主题</label>
+        <label>{{ $t('common.topic') }}</label>
         <input
           :value="project.current.script?.topic"
           @input="patchScript('topic', ($event.target as HTMLInputElement).value)"
         />
-        <label>文案（Markdown，可用 # 大标题 ## 小标题）</label>
+        <label>{{ $t('nodeInspector.markdownScript') }}</label>
         <div class="lab-row">
-          <p class="hint">可导入 .md / .markdown / .txt。</p>
-          <button class="link" type="button" @click="importPlayMarkdown">导入 Markdown</button>
+          <p class="hint">{{ $t('nodeInspector.importFormats') }}</p>
+          <button class="link" type="button" @click="importPlayMarkdown">{{ $t('common.importMarkdown') }}</button>
         </div>
         <textarea
           rows="12"
@@ -843,16 +844,16 @@ async function optimizeVideoPrompt() {
           type="secondary"
           @click="project.setPlayApproved(true)"
         >
-          确认通过，往下做人设
+          {{ $t('nodeInspector.approve') }}
         </GradientButton>
-        <label>画面风格</label>
+        <label>{{ $t('common.visualStyle') }}</label>
         <select v-model="projectStyle">
           <option v-for="[id, name] in styleOptions" :key="id" :value="id">{{ name }}</option>
         </select>
-        <p class="hint">这是项目默认画风。各节点上已经展开的提示词不会自动改；换完到人物/场景/分镜点「按这个画风重铺」。</p>
-        <label>写剧本用的 LLM</label>
+        <p class="hint">{{ $t('nodeInspector.projectStyleHint') }}</p>
+        <label>{{ $t('nodeInspector.scriptLlm') }}</label>
         <select v-model="llmChoice">
-          <option v-if="!llmGroups.some((g) => g.models.length)" value="">请先在设置里添加模型</option>
+          <option v-if="!llmGroups.some((g) => g.models.length)" value="">{{ $t('common.noModel') }}</option>
           <optgroup v-for="g in llmGroups" :key="g.id" :label="g.name">
             <option v-for="m in g.models" :key="`${g.id}::${m}`" :value="`${g.id}::${m}`">{{ m }}</option>
           </optgroup>
@@ -860,18 +861,18 @@ async function optimizeVideoPrompt() {
       </template>
 
       <template v-else-if="node.type === 'prop' && propItem">
-        <label>实际出图提示词</label>
+        <label>{{ $t('nodeInspector.actualImagePrompt') }}</label>
         <div class="lab-row">
-          <p class="hint">纯白背景，正面、侧面、背面、细节。框里是什么就发什么。</p>
-          <button class="link" type="button" @click="rebuildPrompt">按这个画风重铺</button>
+          <p class="hint">{{ $t('nodeInspector.characterPreviewPrompt') }}</p>
+          <button class="link" type="button" @click="rebuildPrompt">{{ $t('nodeInspector.rebuildWithStyle') }}</button>
         </div>
         <textarea
           rows="12"
           :value="propItem.sheetPrompt ?? ''"
-          placeholder="同一件道具的多角度图。形状、材质、颜色。改完点重新生成。"
+          :placeholder="$t('nodeInspector.propHint')"
           @input="project.updateProp(propItem.id, { sheetPrompt: ($event.target as HTMLTextAreaElement).value })"
         />
-        <label>道具名</label>
+        <label>{{ $t('nodeInspector.propName') }}</label>
         <input
           :value="propItem.name"
           @change="project.updateProp(propItem.id, { name: ($event.target as HTMLInputElement).value.trim() || propItem.name })"
@@ -879,125 +880,124 @@ async function optimizeVideoPrompt() {
       </template>
 
       <template v-else-if="node.type === 'subject' && subject">
-        <label>实际出图提示词</label>
+        <label>{{ $t('nodeInspector.actualImagePrompt') }}</label>
         <div class="lab-row">
-          <p class="hint">框里是什么就发什么。换风格：改画风那几句，或先在剧本节点改画面风格，再点重铺。</p>
-          <button class="link" type="button" @click="rebuildPrompt">按这个画风重铺</button>
+          <p class="hint">{{ $t('nodeInspector.changeStyleHint') }}</p>
+          <button class="link" type="button" @click="rebuildPrompt">{{ $t('nodeInspector.rebuildWithStyle') }}</button>
         </div>
         <textarea
           rows="16"
           :value="subject.sheetPrompt ?? ''"
-          placeholder="纯白背景四视图。外貌、服装、画风。改完点重新生成。"
+          :placeholder="$t('nodeInspector.characterPrompt')"
           @input="project.updateSubject(subject.id, { sheetPrompt: ($event.target as HTMLTextAreaElement).value })"
         />
       </template>
 
       <template v-else-if="node.type === 'sceneProps' && scene">
-        <label>实际出图提示词</label>
+        <label>{{ $t('nodeInspector.actualImagePrompt') }}</label>
         <div class="lab-row">
-          <p class="hint">框里是什么就发什么。</p>
-          <button class="link" type="button" @click="rebuildPrompt">按这个画风重铺</button>
+          <p class="hint">{{ $t('nodeInspector.sendAsIs') }}</p>
+          <button class="link" type="button" @click="rebuildPrompt">{{ $t('nodeInspector.rebuildWithStyle') }}</button>
         </div>
         <textarea
           rows="16"
           :value="scene.propSheetPrompt ?? ''"
-          placeholder="关键道具怎么画。改完点重新生成。"
+          :placeholder="$t('nodeInspector.propPromptHint')"
           @input="project.updateScene(scene.id, { propSheetPrompt: ($event.target as HTMLTextAreaElement).value })"
         />
       </template>
 
       <template v-else-if="node.type === 'scene' && scene">
-        <label>实际出图提示词</label>
+        <label>{{ $t('nodeInspector.actualImagePrompt') }}</label>
         <div class="lab-row">
-          <p class="hint">框里是什么就发什么。</p>
-          <button class="link" type="button" @click="rebuildPrompt">按这个画风重铺</button>
+          <p class="hint">{{ $t('nodeInspector.sendAsIs') }}</p>
+          <button class="link" type="button" @click="rebuildPrompt">{{ $t('nodeInspector.rebuildWithStyle') }}</button>
         </div>
         <textarea
           rows="16"
           :value="scene.platePrompt ?? ''"
-          placeholder="这个地点的四宫格锚点图怎么画。"
+          :placeholder="$t('nodeInspector.gridAnchorPrompt')"
           @input="project.updateScene(scene.id, { platePrompt: ($event.target as HTMLTextAreaElement).value })"
         />
-        <label>地点描述</label>
+        <label>{{ $t('nodeInspector.locationDescription') }}</label>
         <textarea
           rows="4"
           :value="scene.description"
-          placeholder="人还没进来时这个地方：地面、光、门窗、材质。"
+          :placeholder="$t('nodeInspector.emptySceneHint')"
           @input="project.updateScene(scene.id, { description: ($event.target as HTMLTextAreaElement).value })"
         />
-        <label>主锚</label>
+        <label>{{ $t('common.frameAnchor') }}</label>
         <input
           :value="scene.mainAnchor || ''"
-          placeholder="电梯门、接待台、锅灶……摄像能对着的实物"
+          :placeholder="$t('nodeInspector.anchorExample')"
           @change="project.updateScene(scene.id, { mainAnchor: ($event.target as HTMLInputElement).value })"
         />
-        <label>四宫格锚点</label>
+        <label>{{ $t('nodeInspector.gridAnchor') }}</label>
         <textarea
           rows="3"
           :value="scene.anchors || ''"
-          placeholder="全景；主锚；地面站位；光源或次锚"
+          :placeholder="$t('nodeInspector.sceneAnchorExample')"
           @input="project.updateScene(scene.id, { anchors: ($event.target as HTMLTextAreaElement).value })"
         />
       </template>
 
       <template v-else-if="node.type === 'shotBoard' && shot">
-        <label>实际出图提示词</label>
+        <label>{{ $t('nodeInspector.actualImagePrompt') }}</label>
         <div class="lab-row">
-          <p class="hint">框里是什么就发什么。</p>
-          <button class="link" type="button" @click="rebuildPrompt">按这个画风重铺</button>
+          <p class="hint">{{ $t('nodeInspector.sendAsIs') }}</p>
+          <button class="link" type="button" @click="rebuildPrompt">{{ $t('nodeInspector.rebuildWithStyle') }}</button>
         </div>
         <textarea
           rows="16"
           :value="shot.boardPrompt ?? ''"
-          placeholder="故事看板怎么画。改完点生成。"
+          :placeholder="$t('nodeInspector.boardPrompt')"
           @input="project.updateShot(shot.id, { boardPrompt: ($event.target as HTMLTextAreaElement).value })"
         />
       </template>
 
       <template v-else-if="node.type === 'shotImage' && shot">
         <div class="lab-row">
-          <label>实际出图提示词</label>
-          <button class="link" type="button" @click="rebuildPrompt">按这个画风重铺</button>
+          <label>{{ $t('nodeInspector.actualImagePrompt') }}</label>
+          <button class="link" type="button" @click="rebuildPrompt">{{ $t('nodeInspector.rebuildWithStyle') }}</button>
         </div>
-        <p class="hint">下面就是发给出图接口的全文。改完原样发送。</p>
+        <p class="hint">{{ $t('nodeInspector.imagePromptHint') }}</p>
         <textarea
           rows="16"
           :value="shot.imagePrompt ?? ''"
-          placeholder="2×2 四宫格，正好四格。左上到右下是这一镜的事件。"
+          :placeholder="$t('nodeInspector.gridHint')"
           @input="project.updateShot(shot.id, { imagePrompt: ($event.target as HTMLTextAreaElement).value })"
         />
       </template>
 
       <template v-else-if="node.type === 'shotFrames' && shot">
         <p class="hint">
-          首尾帧用本镜的人物和场景参考图合成：起始帧画开场那一瞬，结束帧画动作走完的末态。
-          画完的两张直接就是出视频的首帧和尾帧。
+          {{ $t('nodeInspector.framesHint') }}
         </p>
         <div class="lab-row">
-          <label>起始帧画面词</label>
-          <button class="link" type="button" :disabled="running" @click="redrawFrame('start')">重画这一张</button>
+          <label>{{ $t('common.startFramePrompt') }}</label>
+          <button class="link" type="button" :disabled="running" @click="redrawFrame('start')">{{ $t('nodeInspector.redraw') }}</button>
         </div>
         <textarea
           rows="9"
           :value="startFramePromptValue"
-          placeholder="留空则按分镜描述与连续性自动拼"
+          :placeholder="$t('common.startFramePromptHint')"
           @input="project.updateShot(shot.id, { startFramePrompt: ($event.target as HTMLTextAreaElement).value })"
         />
         <div class="lab-row">
-          <label>结束帧画面词</label>
-          <button class="link" type="button" :disabled="running" @click="redrawFrame('end')">重画这一张</button>
+          <label>{{ $t('common.endFramePrompt') }}</label>
+          <button class="link" type="button" :disabled="running" @click="redrawFrame('end')">{{ $t('nodeInspector.redraw') }}</button>
         </div>
         <textarea
           rows="9"
           :value="endFramePromptValue"
-          placeholder="留空则按「起始 → 末态」里的末态自动拼"
+          :placeholder="$t('common.endFramePromptHint')"
           @input="project.updateShot(shot.id, { endFramePrompt: ($event.target as HTMLTextAreaElement).value })"
         />
       </template>
 
       <template v-else-if="node.type === 'shotVideo' && shot">
         <div class="lab-row">
-          <label>实际出视频提示词</label>
+          <label>{{ $t('nodeInspector.actualVideoPrompt') }}</label>
           <div class="lab-actions">
             <button
               class="link"
@@ -1005,13 +1005,13 @@ async function optimizeVideoPrompt() {
               :disabled="optimizingPrompt || running"
               @click="optimizeVideoPrompt"
             >
-              {{ optimizingPrompt ? '优化中…' : '优化提示词' }}
+              {{ optimizingPrompt ? $t('common.optimizing') : $t('common.optimizePrompt') }}
             </button>
-            <button class="link" type="button" :disabled="optimizingPrompt || running" @click="resetVideoPrompt">按分镜重铺</button>
+            <button class="link" type="button" :disabled="optimizingPrompt || running" @click="resetVideoPrompt">{{ $t('nodeInspector.rebuildFromStoryboard') }}</button>
           </div>
         </div>
         <p class="hint">
-          优化按这个框里的原文改写成 H3 格式。你写的台词会进 &lt;d&gt;，口播栏为空也不会删掉。
+          {{ $t('nodeInspector.h3EditableNarration', { tag: '<d>' }) }}
         </p>
         <textarea
           rows="16"
@@ -1019,7 +1019,7 @@ async function optimizeVideoPrompt() {
           :placeholder="videoPromptPlaceholder"
           @input="project.setShotVideoPrompt(shot.id, ($event.target as HTMLTextAreaElement).value)"
         />
-        <label>时长（秒）</label>
+        <label>{{ $t('common.secondsDuration') }}</label>
         <input
           type="number"
           :min="videoMinSeconds(videoModel)"
@@ -1028,31 +1028,31 @@ async function optimizeVideoPrompt() {
           :value="shot.duration"
           @change="project.updateShot(shot.id, { duration: Math.min(videoMaxSeconds(videoModel), Math.max(videoMinSeconds(videoModel), Math.round(Number(($event.target as HTMLInputElement).value) || shot.duration))) })"
         />
-        <label>运镜</label>
+        <label>{{ $t('common.cameraMotion') }}</label>
         <select
           :value="shot.cameraMovement"
           @change="project.updateShot(shot.id, { cameraMovement: ($event.target as HTMLSelectElement).value as any })"
         >
-          <option value="static">固定</option>
-          <option value="push">推</option>
-          <option value="pull">拉</option>
-          <option value="pan">摇</option>
-          <option value="tilt">移</option>
-          <option value="orbit">环绕</option>
+          <option value="static">{{ $t('common.cameraFixed') }}</option>
+          <option value="push">{{ $t('common.cameraPush') }}</option>
+          <option value="pull">{{ $t('common.cameraPull') }}</option>
+          <option value="pan">{{ $t('common.cameraPan') }}</option>
+          <option value="tilt">{{ $t('common.cameraTrack') }}</option>
+          <option value="orbit">{{ $t('common.cameraOrbit') }}</option>
         </select>
         <p
           v-if="shot && project.current && stillModeForShot(shot, project.current) === 'storyboard' && !isH3Fl2va && !shot.boardAssetId"
           class="err"
-        >这一镜还没有故事看板，先生成看板再出视频。</p>
+        >{{ $t('nodeInspector.needsBoard') }}</p>
         <p
           v-else-if="shot && project.current && stillModeForShot(shot, project.current) === 'keyframe' && !isH3Fl2va && !shot.imageAssetId"
           class="err"
-        >这一镜还没有四宫格关键帧，当前模型需要关键帧后再出视频。</p>
+        >{{ $t('nodeInspector.needsGrid') }}</p>
         <p v-else-if="isH3Fl2va && lastFrameRequired && shot && !shot.lastFrameAssetId" class="err">
-          这一镜的视频模型要求尾帧，请在下方选择。
+          {{ $t('nodeInspector.requiresEndFrame') }}
         </p>
         <p v-else-if="fl2vaChain && shot && !isH3Fl2va" class="hint">
-          项目已开启首尾帧链：第 1 镜用本镜配图起手，第 2 镜起自动接上一镜末帧，不用手动选帧。凑不齐首尾帧时会自动退回常规出片，不会卡住生成。
+          {{ $t('nodeInspector.chainHint') }}
         </p>
       </template>
 
@@ -1062,7 +1062,7 @@ async function optimizeVideoPrompt() {
         v-model:first-id="firstFrameId"
         v-model:last-id="lastFrameId"
         :last-required="lastFrameRequired"
-        :first-hint="node.type === 'shotVideo' && shot?.imageAssetId ? '空则用本镜配图' : ''"
+        :first-hint="node.type === 'shotVideo' && shot?.imageAssetId ? $t('common.useShotImage') : ''"
       />
       <ShotRefStrip
         v-else-if="shot && (node.type === 'shotBoard' || node.type === 'shotImage' || node.type === 'shotVideo')"
@@ -1075,87 +1075,87 @@ async function optimizeVideoPrompt() {
       />
       <template v-if="node.type === 'videoGen'">
         <div class="lab-row">
-          <label>实际出视频提示词</label>
+          <label>{{ $t('nodeInspector.actualVideoPrompt') }}</label>
           <button
             class="link"
             type="button"
             :disabled="optimizingPrompt || running || videoModel === 'wan-prime'"
             @click="optimizeVideoPrompt"
           >
-            {{ optimizingPrompt ? '优化中…' : '优化提示词' }}
+            {{ optimizingPrompt ? $t('common.optimizing') : $t('common.optimizePrompt') }}
           </button>
         </div>
-        <p class="hint">优化按这个框里的原文改写成 H3 格式。只有真正台词进 &lt;d&gt;。</p>
+        <p class="hint">{{ $t('nodeInspector.h3EditableDialogue', { tag: '<d>' }) }}</p>
         <textarea
           rows="12"
           :value="node.data.prompt ?? ''"
-          placeholder="写视频提示词，描述动作、镜头和声音。"
+          :placeholder="$t('nodeInspector.videoPrompt')"
           @input="project.setCanvasNodePrompt(node.id, ($event.target as HTMLTextAreaElement).value)"
         />
       </template>
       <div v-if="node.type === 'imageGen' || node.type === 'videoGen'" class="insp-refs">
-        <div class="lab-row"><label>参考图</label></div>
+        <div class="lab-row"><label>{{ $t('common.referenceImage') }}</label></div>
         <div v-if="inspectorRefIds.length" class="insp-ref-list">
           <div v-for="id in inspectorRefIds" :key="id" class="insp-ref">
             <img v-if="inspectorRefUrls[id]" :src="inspectorRefUrls[id]" alt="" />
-            <button type="button" class="insp-ref-del" title="移除这张参考图" @click="removeInspectorRef(id)">×</button>
+            <button type="button" class="insp-ref-del" :title="$t('common.removeReference')" @click="removeInspectorRef(id)">×</button>
           </div>
         </div>
-        <p v-else class="hint">还没有参考图。在节点上点「库」或「＋」添加。</p>
+        <p v-else class="hint">{{ $t('nodeInspector.noReferenceHint') }}</p>
       </div>
 
       <template v-else-if="node.type === 'audio' && shot">
-        <label>人声方案</label>
+        <label>{{ $t('common.narrationMode') }}</label>
         <select
           :value="effectiveShotAudioMode(shot)"
           @change="project.setShotAudioMode(shot.id, ($event.target as HTMLSelectElement).value as ShotAudioMode)"
         >
-          <option value="h3-dialogue">H3 出镜对白 + 对口型</option>
-          <option value="h3-voiceover">H3 画外口播</option>
-          <option value="tts">后期 TTS</option>
-          <option value="none">无口播</option>
+          <option value="h3-dialogue">{{ $t('common.h3Dialogue') }}</option>
+          <option value="h3-voiceover">{{ $t('nodeInspector.h3Offscreen') }}</option>
+          <option value="tts">{{ $t('common.postTts') }}</option>
+          <option value="none">{{ $t('common.noNarration') }}</option>
         </select>
-        <label>口播文案</label>
+        <label>{{ $t('common.narrationText') }}</label>
         <textarea
           rows="4"
           :value="shot.voiceover"
-          placeholder="这一镜要说的话"
+          :placeholder="$t('nodeInspector.dialogue')"
           @input="project.updateShot(shot.id, { voiceover: ($event.target as HTMLTextAreaElement).value })"
         />
         <TtsModelSelect v-if="effectiveShotAudioMode(shot) === 'tts'" />
-        <label>说话音色</label>
+        <label>{{ $t('nodeInspector.speakingVoice') }}</label>
         <textarea
           rows="2"
           :value="shotSpeakerVoice"
           :placeholder="
             shotSpeakerName
-              ? `尚未绑定「${shotSpeakerName}」的音色。在人物卡的「音色描述」里填一句，重跑提炼即自动带入`
-              : '口播写成「人物名：台词」后，会自动带上该角色的音色'
+              ? $t('nodeInspector.noVoiceForCharacter', { p0: shotSpeakerName })
+              : $t('nodeInspector.voiceHint')
           "
           @input="project.updateShot(shot.id, { speakerVoice: ($event.target as HTMLTextAreaElement).value })"
         />
         <p class="hint">
           {{
             shotSpeakerVoice
-              ? '生成视频和后期配音都会带上这句音色。改人物卡的音色描述会立即覆盖这里。'
-              : '同一角色全片一个声线，填一次就够。'
+              ? $t('nodeInspector.voiceDescriptionHint')
+              : $t('nodeInspector.oneVoice')
           }}
         </p>
       </template>
 
       <div v-if="historyIds.length" class="hist">
-        <span>历史版本（点一下切回）</span>
+        <span>{{ $t('nodeInspector.historyHint') }}</span>
         <div class="hist-row">
           <div v-for="hid in historyIds" :key="hid" class="hist-item">
             <button
               class="hist-thumb"
               type="button"
-              title="查看大图"
+              :title="$t('common.fullImage')"
               @click="openLightbox(historyUrls[hid], 'image')"
             >
               <img v-if="historyUrls[hid]" :src="historyUrls[hid]" alt="" />
             </button>
-            <button class="hist-use" type="button" @click="restoreHistory(hid)">切回</button>
+            <button class="hist-use" type="button" @click="restoreHistory(hid)">{{ $t('nodeInspector.restore') }}</button>
           </div>
         </div>
       </div>
@@ -1181,11 +1181,11 @@ async function optimizeVideoPrompt() {
         />
       </div>
       <template v-if="node.type === 'script' && isPlayReady(project.current?.script)">
-        <label>续写方向（可选）</label>
+        <label>{{ $t('common.continueDirection') }}</label>
         <textarea
           rows="3"
           :value="continueHint"
-          placeholder="例如：再写两场，写父亲回家之后。不填则顺着往下写 2–3 场。"
+          :placeholder="$t('nodeInspector.continueExample')"
           @input="continueHint = ($event.target as HTMLTextAreaElement).value"
         />
       </template>
@@ -1196,7 +1196,7 @@ async function optimizeVideoPrompt() {
         :disabled="running"
         @click="runContinue"
       >
-        续写剧本
+        {{ $t('common.continueScript') }}
       </GradientButton>
       <GradientButton
         v-if="node.type === 'script'"
@@ -1215,7 +1215,7 @@ async function optimizeVideoPrompt() {
         :disabled="running"
         @click="pickerOpen = true"
       >
-        从资源库选用
+        {{ $t('nodeInspector.chooseFromLibrary') }}
       </GradientButton>
       <template v-if="node.type === 'script' && isImg2Video">
         <GradientButton
@@ -1225,7 +1225,7 @@ async function optimizeVideoPrompt() {
           :disabled="running || !((project.current?.script?.content || '').trim())"
           @click="runExtract('subjects')"
         >
-          提炼角色
+          {{ $t('common.extractCharacters') }}
         </GradientButton>
         <GradientButton
           block
@@ -1234,7 +1234,7 @@ async function optimizeVideoPrompt() {
           :disabled="running || !((project.current?.script?.content || '').trim())"
           @click="runExtract('scenes')"
         >
-          提炼场景
+          {{ $t('common.extractScenes') }}
         </GradientButton>
         <GradientButton
           block
@@ -1243,7 +1243,7 @@ async function optimizeVideoPrompt() {
           :disabled="running || !canExtractShots"
           @click="runExtract('shots')"
         >
-          提炼分镜
+          {{ $t('common.extractStoryboard') }}
         </GradientButton>
       </template>
       <GradientButton
@@ -1263,7 +1263,7 @@ async function optimizeVideoPrompt() {
         :disabled="!canRun"
         @click="run"
       >
-        {{ gateBlocked ? '请先验收剧本' : actionLabel }}
+        {{ gateBlocked ? $t('nodeInspector.approveScriptFirst') : actionLabel }}
       </GradientButton>
       <GradientButton
         v-if="node.type === 'final' && hasAsset"
@@ -1271,14 +1271,14 @@ async function optimizeVideoPrompt() {
         type="secondary"
         @click="downloadFinal"
       >
-        下载视频
+        {{ $t('common.videoDownload') }}
       </GradientButton>
-      <button class="ghost" type="button" @click="refreshPreview">刷新预览</button>
+      <button class="ghost" type="button" @click="refreshPreview">{{ $t('common.previewRefresh') }}</button>
     </template>
     <AssetPicker
       :open="pickerOpen"
       kind="image"
-      title="选用已有图片作为本节点结果"
+      :title="$t('common.useImageForNode')"
       show-library
       default-tab="page"
       :selected-ids="currentAssetId ? [currentAssetId] : []"

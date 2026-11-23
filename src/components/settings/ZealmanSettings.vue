@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { t as translate } from '@/i18n'
+
 import { computed, ref } from 'vue'
 import { useSettingsStore, useToastStore } from '@/stores'
 import { ZEALMAN_IMAGE_WORKFLOWS, ZEALMAN_WORKFLOWS, normalizeZealmanBaseUrl } from '@/services/ai/zealman'
@@ -11,7 +13,7 @@ const baseUrl = ref(settings.config.zealmanBaseUrl || existing.value?.baseUrl ||
 function apply() {
   const normalized = normalizeZealmanBaseUrl(baseUrl.value)
   if (!normalized) {
-    toast.error('请填写有效的 Zealman Base URL（http:// 或 https://）')
+    toast.error(translate('zealmanSettings.invalidUrl'))
     return
   }
   const previous = settings.config.activeVideoId
@@ -45,7 +47,7 @@ function apply() {
         (item.model === workflow.id || item.model === workflow.name || item.model === workflow.id.replace(/^API-/, ''))
     )
     const values = {
-      name: `Zealman 生图 · ${workflow.name}`,
+      get name() { return translate('zealmanSettings.imageProfileName', { p0: workflow.name }) },
       baseUrl: normalized,
       apiKey: '',
       model: workflow.id,
@@ -62,7 +64,7 @@ function apply() {
   }
   if (settings.config.images.some((item) => item.id === previousImageId)) settings.selectImage(previousImageId)
   baseUrl.value = normalized
-  toast.success('Zealman 镜像已配置，内置视频工作流和文生图已加入模型列表')
+  toast.success(translate('zealmanSettings.configured'))
 }
 </script>
 
@@ -70,33 +72,33 @@ function apply() {
   <div class="zealman-settings">
     <section class="panel">
       <div class="heading">
-        <div><h2>Zealman 镜像接口</h2><p>生图和视频都只用这一页的 Base URL。应用后，对应模型会出现在图像生成和视频列表里，地址以这里为准。图像生成页里的本地 ComfyUI 是你自己电脑上的另一套。</p></div>
-        <span class="badge">内置工作流</span>
+        <div><h2>{{ $t('zealmanSettings.api') }}</h2><p>{{ $t('zealmanSettings.hint') }}</p></div>
+        <span class="badge">{{ $t('common.builtinWorkflow') }}</span>
       </div>
       <label for="zealman-base-url">Base URL</label>
       <div class="url-row">
         <input id="zealman-base-url" v-model="baseUrl" placeholder="https://example.seetacloud.com:8443" @keyup.enter="apply" />
-        <button type="button" @click="apply">应用配置</button>
+        <button type="button" @click="apply">{{ $t('common.applyConfig') }}</button>
       </div>
-      <p class="hint">程序会调用 /api/workflow/generate 和 /api/workflow/result，并在任务完成后立即保存视频。</p>
+      <p class="hint">{{ $t('zealmanSettings.endpoints') }}</p>
     </section>
     <section class="panel">
-      <h2>内置 Zealman 生图</h2>
+      <h2>{{ $t('zealmanSettings.builtInImage') }}</h2>
       <div class="workflow-list">
         <article v-for="workflow in ZEALMAN_IMAGE_WORKFLOWS" :key="workflow.id">
           <strong>{{ workflow.name }}</strong>
-          <span>文生图</span>
-          <small>默认 {{ workflow.defaultWidth }}×{{ workflow.defaultHeight }} · 提交后轮询 /api/workflow/result 取图</small>
+          <span>{{ $t('zealmanSettings.textToImage') }}</span>
+          <small>{{ $t('common.default') }} {{ workflow.defaultWidth }}×{{ workflow.defaultHeight }} {{ $t('zealmanSettings.pollResult') }}</small>
         </article>
       </div>
     </section>
     <section class="panel">
-      <h2>内置 Zealman 工作流</h2>
+      <h2>{{ $t('zealmanSettings.builtInWorkflow') }}</h2>
       <div class="workflow-list">
         <article v-for="workflow in ZEALMAN_WORKFLOWS" :key="workflow.id">
           <strong>{{ workflow.name }}</strong>
-          <span>{{ workflow.mode === 'fl2va' ? '首尾帧图生视频' : '多图参考生视频' }}</span>
-          <small>最长 {{ workflow.maxDuration }} 秒 · 最多 {{ workflow.maxImages }} 张输入图</small>
+          <span>{{ workflow.mode === 'fl2va' ? $t('zealmanSettings.firstLast') : $t('zealmanSettings.multiReference') }}</span>
+          <small>{{ $t('zealmanSettings.maximum') }} {{ workflow.maxDuration }} {{ $t('zealmanSettings.secondsMaximum') }} {{ workflow.maxImages }} {{ $t('zealmanSettings.inputImages') }}</small>
         </article>
       </div>
     </section>

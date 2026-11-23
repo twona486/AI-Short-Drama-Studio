@@ -8,10 +8,10 @@ const emit = defineEmits<{ 'update:modelValue': [value: boolean] }>()
     type="button"
     class="audio-toggle"
     :class="{ on: modelValue }"
-    :title="modelValue ? '这一镜出视频带音频' : '这一镜出视频不带音频'"
+    :title="modelValue ? $t('docAudioToggle.include') : $t('docAudioToggle.exclude')"
     @click="emit('update:modelValue', !modelValue)"
   >
-    {{ modelValue ? '有声' : '无声' }}
+    {{ modelValue ? $t('docAudioToggle.withSound') : $t('docAudioToggle.muted') }}
   </button>
 </template>
 

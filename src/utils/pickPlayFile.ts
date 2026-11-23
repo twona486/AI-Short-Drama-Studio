@@ -1,10 +1,11 @@
+import { t } from '@/i18n'
 import { desktop, isDesktop } from '@/services/desktop'
 
 /** 选一份剧本文件（.md / .markdown / .txt）。取消选择时返回 null。 */
 export async function pickPlayMarkdownFile(): Promise<{ text: string; filename: string } | null> {
   if (isDesktop()) {
     const paths = await desktop().pickFiles([
-      { name: 'Markdown 剧本', extensions: ['md', 'markdown', 'txt'] }
+      { name: t('common.markdownScript'), extensions: ['md', 'markdown', 'txt'] }
     ])
     const path = paths[0]
     if (!path) return null

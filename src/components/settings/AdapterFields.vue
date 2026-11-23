@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { t as translate } from '@/i18n'
+
 import { computed, ref } from 'vue'
 import type { AdapterConfig, AdapterType } from '@/services/ai/adapters'
 import { analyzeWorkflowWithLlm, validateInputMap } from '@/services/ai/comfyInputMap'
@@ -21,12 +23,12 @@ const emit = defineEmits<{
 const expanded = ref(false)
 
 const typeOptions: { value: AdapterType | ''; label: string; kinds: string[] }[] = [
-  { value: '', label: '自动（按地址推断）', kinds: ['llm', 'vision', 'image', 'tts', 'video'] },
-  { value: 'openai-compatible', label: 'OpenAI 兼容（聊天）', kinds: ['llm', 'vision', 'tts'] },
+  { value: '', get label() { return translate('adapterFields.auto') }, kinds: ['llm', 'vision', 'image', 'tts', 'video'] },
+  { value: 'openai-compatible', get label() { return translate('adapterFields.openAiChat') }, kinds: ['llm', 'vision', 'tts'] },
   { value: 'openai-images', label: 'OpenAI Images', kinds: ['image'] },
-  { value: 'http-custom', label: '自定义 HTTP（POST + JSON 路径）', kinds: ['image', 'video', 'tts'] },
-  { value: 'comfyui-workflow', label: 'ComfyUI 工作流 API（AutoDL 风格）', kinds: ['image', 'video'] },
-  { value: 'comfyui-prompt', label: '自建 ComfyUI（/prompt）', kinds: ['image', 'video'] }
+  { value: 'http-custom', get label() { return translate('adapterFields.http') }, kinds: ['image', 'video', 'tts'] },
+  { value: 'comfyui-workflow', get label() { return translate('adapterFields.comfyWorkflowApi') }, kinds: ['image', 'video'] },
+  { value: 'comfyui-prompt', get label() { return translate('adapterFields.comfyLocal') }, kinds: ['image', 'video'] }
 ]
 
 const options = computed(() => typeOptions.filter((o) => o.kinds.includes(props.kind)))
@@ -125,25 +127,25 @@ async function analyzeMap(template: string) {
 <template>
   <section class="adapter">
     <button type="button" class="advanced-toggle" @click="expanded = !expanded">
-      <span><strong>高级接口兼容</strong><small>大多数官方接口和中转站不需要设置</small></span>
-      <b>{{ expanded ? '收起' : '展开' }}</b>
+      <span><strong>{{ $t('adapterFields.advanced') }}</strong><small>{{ $t('adapterFields.usualHint') }}</small></span>
+      <b>{{ expanded ? $t('common.collapse') : $t('common.expand') }}</b>
     </button>
 
     <template v-if="expanded">
-    <p class="hint">仅当接口文档明确要求自定义请求路径、鉴权头或 ComfyUI 工作流 JSON 时才修改这里。</p>
+    <p class="hint">{{ $t('adapterFields.advancedHint') }}</p>
 
-    <label>接口协议</label>
+    <label>{{ $t('adapterFields.protocol') }}</label>
     <select v-model="typeModel">
       <option v-for="o in options" :key="o.value || 'auto'" :value="o.value">{{ o.label }}</option>
     </select>
 
     <template v-if="showWorkflowId">
-      <label>工作流 ID</label>
-      <input v-model="workflowIdModel" placeholder="AutoDL 工作流名，或自建占位名" />
+      <label>{{ $t('adapterFields.workflowId') }}</label>
+      <input v-model="workflowIdModel" :placeholder="$t('adapterFields.workflowPlaceholder')" />
     </template>
 
     <template v-if="showAdvanced || showHttpCustom || showComfyWorkflow || showComfyTemplate">
-      <label>请求路径 path</label>
+      <label>{{ $t('adapterFields.path') }}</label>
       <input
         v-model="pathModel"
         :placeholder="
@@ -153,44 +155,44 @@ async function analyzeMap(template: string) {
               ? kind === 'video'
                 ? '/v1/videos/generations'
                 : '/images/generations'
-              : '相对 baseUrl，可留空用默认'
+              : $t('adapterFields.requestPathHint')
         "
       />
 
-      <label v-if="showHttpCustom || showComfyTemplate">轮询路径 pollUrl / pollPath</label>
+      <label v-if="showHttpCustom || showComfyTemplate">{{ $t('adapterFields.pollPath') }}</label>
       <input
         v-if="showHttpCustom || showComfyTemplate"
         v-model="pollPathModel"
-        :placeholder="showComfyTemplate ? '/history/{id}' : '可选，含 {id}，如 /tasks/{id}'"
+        :placeholder="showComfyTemplate ? '/history/{id}' : $t('adapterFields.pollUrlHint', { id: '{id}' })"
       />
 
-      <label v-if="showHttpCustom">提交响应里的任务 ID 路径 taskIdJsonPath</label>
+      <label v-if="showHttpCustom">{{ $t('adapterFields.taskId') }}</label>
       <input
         v-if="showHttpCustom"
         v-model="taskIdPathModel"
-        placeholder="可选，如 data.id / task_id"
+        :placeholder="$t('adapterFields.taskIdHint')"
       />
 
-      <label v-if="showHttpCustom">轮询 JSON 路径 pollJsonPath</label>
+      <label v-if="showHttpCustom">{{ $t('adapterFields.pollJson') }}</label>
       <input
         v-if="showHttpCustom"
         v-model="pollJsonPathModel"
-        placeholder="可选，轮询里取状态或结果的路径"
+        :placeholder="$t('adapterFields.pollJsonHint')"
       />
 
-      <label v-if="showHttpCustom || showComfyTemplate">结果 URL 路径 resultJsonPath</label>
+      <label v-if="showHttpCustom || showComfyTemplate">{{ $t('adapterFields.resultPath') }}</label>
       <input
         v-if="showHttpCustom || showComfyTemplate"
         v-model="resultPathModel"
-        placeholder="如 data.0.url 或 output.video_url"
+        :placeholder="$t('adapterFields.resultHint')"
       />
 
-      <label>鉴权头名 authHeader</label>
-      <input v-model="authHeaderModel" placeholder="默认 Authorization，可改 X-API-Key" />
+      <label>{{ $t('adapterFields.authHeader') }}</label>
+      <input v-model="authHeaderModel" :placeholder="$t('adapterFields.authHeaderHint')" />
 
-      <label>鉴权前缀 authPrefix</label>
-      <input v-model="authPrefixModel" placeholder="默认 Bearer （本机 Comfy 可填空）" />
-      <p class="hint">前缀会直接拼在 Key 前面。AutoDL / 部分网关需要留空（不带 Bearer）。</p>
+      <label>{{ $t('adapterFields.authPrefix') }}</label>
+      <input v-model="authPrefixModel" :placeholder="$t('adapterFields.authPrefixHint')" />
+      <p class="hint">{{ $t('adapterFields.prefixHint') }}</p>
     </template>
 
     <ComfyWorkflowPanel

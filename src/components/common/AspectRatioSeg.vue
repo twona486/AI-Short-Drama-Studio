@@ -25,7 +25,7 @@ function pick(ar: AspectRatio) {
 <template>
   <ParamSelect
     v-if="compact"
-    label="比例"
+    :label="$t('common.aspectRatio')"
     width="104px"
     :model-value="current"
     @update:model-value="pick($event as AspectRatio)"
@@ -35,7 +35,7 @@ function pick(ar: AspectRatio) {
     </option>
   </ParamSelect>
   <div v-else class="ar-full">
-    <div class="ar-head">画面比例</div>
+    <div class="ar-head">{{ $t('common.frameRatio') }}</div>
     <div class="ar-seg">
       <button
         v-for="a in ASPECT_PRESETS"
@@ -51,7 +51,7 @@ function pick(ar: AspectRatio) {
         <small>{{ a.value }}</small>
       </button>
     </div>
-    <p class="ar-hint">节点可独立设置；项目比例只作为新节点的默认值。</p>
+    <p class="ar-hint">{{ $t('aspectRatioSeg.hint') }}</p>
   </div>
 </template>
 

@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { t as translate } from '@/i18n'
+
 import { computed, ref } from 'vue'
 import { endpointReady, useSettingsStore, useToastStore } from '@/stores'
 import { AUTODL_BASE_URL, AUTODL_WORKFLOWS } from '@/services/ai/autodl'
@@ -14,7 +16,7 @@ const configured = computed(() => Boolean(settings.config.autodlToken) && existi
 function apply() {
   const key = token.value.trim()
   if (!key) {
-    toast.error('请填写 AutoDL Token（在 AutoDL 控制台 → API 界面创建/复制）')
+    toast.error(translate('autodlSettings.requireToken'))
     return
   }
   settings.setAutodlToken(key)
@@ -48,7 +50,7 @@ function apply() {
     )
     if (fallback) settings.selectVideo(fallback.id)
   }
-  toast.success('AutoDL 已配置，H3 系列模型可以直接用了')
+  toast.success(translate('autodlSettings.configured'))
 }
 </script>
 
@@ -56,8 +58,8 @@ function apply() {
   <div class="autodl-settings">
     <section class="panel">
       <div class="heading">
-        <div><h2>AutoDL 算力</h2><p>H3 系列图生视频都走 AutoDL。只需填写一个 AutoDL Token，内置工作流自动配好，地址不用改。</p></div>
-        <span class="badge" :class="{ ok: configured }">{{ configured ? '已配置' : '待配置' }}</span>
+        <div><h2>{{ $t('autodlSettings.heading') }}</h2><p>{{ $t('autodlSettings.h3Hint') }}</p></div>
+        <span class="badge" :class="{ ok: configured }">{{ configured ? $t('common.configured') : $t('common.unconfigured') }}</span>
       </div>
       <label for="autodl-token">AutoDL Token</label>
       <div class="url-row">
@@ -66,29 +68,29 @@ function apply() {
           v-model="token"
           type="password"
           autocomplete="off"
-          placeholder="在 AutoDL 控制台 → API 界面复制令牌"
+          :placeholder="$t('autodlSettings.copyToken')"
           @keyup.enter="apply"
         />
-        <button type="button" @click="apply">应用配置</button>
+        <button type="button" @click="apply">{{ $t('common.applyConfig') }}</button>
       </div>
       <p class="hint">
-        Token 只保存在本机，且只用于 AutoDL 接入。获取方式：登录
+        {{ $t('autodlSettings.tokenStorage') }}
         <a href="https://www.autodl.com" target="_blank" rel="noopener">autodl.com</a>
-        → 控制台 → API 界面 → 复制令牌。
+        {{ $t('autodlSettings.tokenSteps') }}
       </p>
     </section>
     <section class="panel">
-      <h2>内置 H3 工作流（填完 Token 自动可用）</h2>
+      <h2>{{ $t('autodlSettings.builtIn') }}</h2>
       <div class="workflow-list">
         <article v-for="workflow in AUTODL_WORKFLOWS" :key="workflow.id">
           <strong>{{ workflow.name }}</strong>
-          <span>{{ workflow.mode === 'fl2va' ? '首尾帧' : workflow.mode === 'audio-sync' ? '口播' : '图生视频' }}</span>
-          <small>{{ workflow.note }} · 最长 {{ workflow.maxDuration }} 秒</small>
+          <span>{{ workflow.mode === 'fl2va' ? $t('common.firstLastFrame') : workflow.mode === 'audio-sync' ? $t('common.narration') : $t('common.imageToVideo') }}</span>
+          <small>{{ workflow.note }} {{ $t('autodlSettings.maximum') }} {{ workflow.maxDuration }} {{ $t('common.seconds') }}</small>
         </article>
       </div>
     </section>
     <section v-if="configured" class="panel">
-      <h2>已接入</h2>
+      <h2>{{ $t('common.connected') }}</h2>
       <ul class="ready-list">
         <li v-for="profile in existing" :key="profile.id">
           <b>{{ profile.name }}</b>

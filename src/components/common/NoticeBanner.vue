@@ -1,8 +1,10 @@
 <script setup lang="ts">
-import { onMounted, ref } from 'vue'
+import { computed, onMounted, ref } from 'vue'
+import { t } from '@/i18n'
 
 interface NoticePayload {
   enabled?: boolean
+  message?: string
   title?: string
   body?: string
   updatedAt?: string
@@ -11,8 +13,13 @@ interface NoticePayload {
 const STORAGE_PREFIX = 'ai-cut:notice-dismissed:'
 
 const visible = ref(false)
-const title = ref('')
-const body = ref('')
+const notice = ref<NoticePayload>()
+const title = computed(() => notice.value?.message === 'providerSetup'
+  ? t('noticeBanner.providerSetupTitle')
+  : String(notice.value?.title || t('noticeBanner.defaultTitle')).trim())
+const body = computed(() => notice.value?.message === 'providerSetup'
+  ? t('noticeBanner.providerSetupBody')
+  : String(notice.value?.body || '').trim())
 const updatedAt = ref('')
 
 onMounted(async () => {
@@ -21,11 +28,10 @@ onMounted(async () => {
     if (!res.ok) return
     const data = (await res.json()) as NoticePayload
     if (!data?.enabled) return
-    const stamp = String(data.updatedAt || data.title || data.body || '').trim()
+    const stamp = String(data.updatedAt || data.message || data.title || data.body || '').trim()
     if (!stamp) return
     if (localStorage.getItem(STORAGE_PREFIX + stamp) === '1') return
-    title.value = String(data.title || '公告').trim()
-    body.value = String(data.body || '').trim()
+    notice.value = data
     updatedAt.value = stamp
     visible.value = Boolean(title.value || body.value)
   } catch {
@@ -48,7 +54,7 @@ function dismiss() {
         <strong class="notice-title">{{ title }}</strong>
         <p v-if="body" class="notice-body">{{ body }}</p>
       </div>
-      <button type="button" class="notice-close" title="关闭" aria-label="关闭公告" @click="dismiss">
+      <button type="button" class="notice-close" :title="$t('common.close')" :aria-label="$t('noticeBanner.dismiss')" @click="dismiss">
         ×
       </button>
     </div>

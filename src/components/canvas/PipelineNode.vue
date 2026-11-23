@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { t as translate } from '@/i18n'
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { Handle, Position, useVueFlow } from '@vue-flow/core'
@@ -123,20 +124,20 @@ const voiceUploading = ref(false)
 
 const subjectKindText = computed(() => {
   const k = subject.value?.kind
-  if (k === 'person') return '人物'
-  if (k === 'animal') return '动物'
-  if (k === 'other') return '物体'
+  if (k === 'person') return translate('pipelineNode.person')
+  if (k === 'animal') return translate('pipelineNode.animal')
+  if (k === 'other') return translate('pipelineNode.object')
   return ''
 })
 
 const voiceSummary = computed(() => {
   const s = subject.value
   if (!s) return ''
-  if (s.clonedVoiceId) return '音色已复刻'
-  if (s.voiceRefAssetId) return '参考音频已上传'
+  if (s.clonedVoiceId) return translate('pipelineNode.voiceCloned')
+  if (s.voiceRefAssetId) return translate('pipelineNode.referenceAudioUploaded')
   const vp = s.voicePrompt?.trim()
   if (vp) return vp.length > 20 ? `${vp.slice(0, 20)}…` : vp
-  return '未设置语音'
+  return translate('pipelineNode.voiceMissing')
 })
 const voiceConfigured = computed(() => {
   const s = subject.value
@@ -153,7 +154,7 @@ watch(
       return
     }
     voiceRefUrl.value = (await assets.getUrl(id)) || ''
-    voiceRefName.value = assets.getMeta(id)?.filename || '参考音频'
+    voiceRefName.value = assets.getMeta(id)?.filename || translate('pipelineNode.referenceAudio')
   },
   { immediate: true }
 )
@@ -168,7 +169,7 @@ async function onVoiceRefChange(ev: Event) {
   input.value = ''
   if (!file || !subject.value) return
   if (file.size > 10 * 1024 * 1024) {
-    toast.error('参考音频不能超过 10 MB')
+    toast.error(translate('pipelineNode.audioLimit'))
     return
   }
   voiceUploading.value = true
@@ -184,9 +185,9 @@ async function onVoiceRefChange(ev: Event) {
       clonedVoiceModel: undefined
     })
     await project.save()
-    toast.success('参考音频已上传，生成口播时会自动复刻音色')
+    toast.success(translate('pipelineNode.audioUploaded'))
   } catch (e: any) {
-    toast.error(e?.message || '上传失败')
+    toast.error(e?.message || translate('common.uploadFailed'))
   } finally {
     voiceUploading.value = false
   }
@@ -229,28 +230,28 @@ const durationLabel = computed(() => {
 })
 
 const title = computed(() => {
-  if (type.value === 'script') return project.current?.script?.topic || project.current?.name || '文案'
+  if (type.value === 'script') return project.current?.script?.topic || project.current?.name || translate('pipelineNode.script')
   if (subject.value) return subject.value.name
   if (propItem.value) return propItem.value.name
   if (scene.value) return scene.value.name
   if (shot.value) return `${shot.value.index + 1}. ${shot.value.title}`
-  if (type.value === 'export') return '合成视频'
-  if (type.value === 'final') return '视频预览'
+  if (type.value === 'export') return translate('pipelineNode.compose')
+  if (type.value === 'final') return translate('pipelineNode.videoPreview')
   return props.data.label || type.value
 })
 
 const kindLabel = computed(() => {
-  if (type.value === 'subject') return '四视图'
-  if (type.value === 'prop') return '道具多角度'
-  if (type.value === 'sceneProps') return '关键道具'
-  if (type.value === 'scene') return '锚点图'
-  if (type.value === 'shotBoard') return '看板'
-  if (type.value === 'shotImage') return videoRequiresStoryboard(project.current) ? '配图' : '四宫格'
-  if (type.value === 'shotFrames') return '首尾帧'
-  if (type.value === 'shotVideo') return '视频'
-  if (type.value === 'audio') return '口播'
-  if (type.value === 'export') return '合成'
-  if (type.value === 'final') return '预览'
+  if (type.value === 'subject') return translate('pipelineNode.fourViews')
+  if (type.value === 'prop') return translate('pipelineNode.propView')
+  if (type.value === 'sceneProps') return translate('pipelineNode.keyProps')
+  if (type.value === 'scene') return translate('pipelineNode.anchorImage')
+  if (type.value === 'shotBoard') return translate('pipelineNode.board')
+  if (type.value === 'shotImage') return videoRequiresStoryboard(project.current) ? translate('pipelineNode.illustration') : translate('pipelineNode.grid')
+  if (type.value === 'shotFrames') return translate('pipelineNode.firstLast')
+  if (type.value === 'shotVideo') return translate('pipelineNode.video')
+  if (type.value === 'audio') return translate('pipelineNode.narration')
+  if (type.value === 'export') return translate('pipelineNode.composite')
+  if (type.value === 'final') return translate('pipelineNode.preview')
   return ''
 })
 
@@ -366,9 +367,9 @@ const isH3Fl2va = computed(() => isH3VideoNode.value && h3GenMode.value === 'fl2
 const videoStillHint = computed(() => {
   if (type.value !== 'shotVideo') return ''
   const mode = stillModeFromNode(nodeMeta.value)
-  if (mode === 'identity') return '只传人设和场景'
-  if (mode === 'keyframe') return '需四宫格关键帧'
-  return '需故事看板'
+  if (mode === 'identity') return translate('pipelineNode.identityOnly')
+  if (mode === 'keyframe') return translate('pipelineNode.keyframeRequired')
+  return translate('pipelineNode.boardRequired')
 })
 const showPrompt = computed(
   () =>
@@ -447,9 +448,9 @@ const promptValue = computed({
 })
 
 const promptHint = computed(() => {
-  if (type.value === 'audio') return '改口播后重新合成配音'
-  if (type.value === 'shotVideo') return '这里完全由你编辑。清空后不会回填；可自己填写，或主动点“优化提示词 / 按分镜重铺”。'
-  return '这里就是实际发出去的全文。改完原样发送，不会再背后加词。'
+  if (type.value === 'audio') return translate('pipelineNode.redubHint')
+  if (type.value === 'shotVideo') return translate('pipelineNode.editVideoPrompt')
+  return translate('pipelineNode.sendAsIs')
 })
 
 const metaLine = computed(() => {
@@ -458,34 +459,34 @@ const metaLine = computed(() => {
   const h = project.current?.settings.height ?? 720
   if (type.value === 'shotVideo') return `MiniMax H3 · ${ar}`
   if (type.value === 'audio') {
-    if (!shot.value) return '口播'
-    return effectiveShotAudioMode(shot.value) === 'tts' ? '后期 TTS' : 'H3 人声'
+    if (!shot.value) return translate('pipelineNode.narration')
+    return effectiveShotAudioMode(shot.value) === 'tts' ? translate('pipelineNode.postTts') : translate('pipelineNode.h3Voice')
   }
-  const model = settings.config.image.model || '出图'
+  const model = settings.config.image.model || translate('pipelineNode.imageGeneration')
   return `${model} · ${ar} · ${w}×${h}`
 })
 
 const genLabel = computed(() => {
-  if (gateBlocked.value) return '先验收剧本'
+  if (gateBlocked.value) return translate('pipelineNode.approveFirst')
   const again = hasAsset.value
-  if (type.value === 'subject') return again ? '重新生成' : '生成四视图'
-  if (type.value === 'prop') return again ? '重新生成' : '生成多角度图'
-  if (type.value === 'sceneProps') return again ? '重新生成' : '生成关键道具图'
-  if (type.value === 'scene') return again ? '重新生成' : '生成锚点图'
-  if (type.value === 'shotBoard') return again ? '重新生成' : '生成看板'
+  if (type.value === 'subject') return again ? translate('pipelineNode.regenerate') : translate('pipelineNode.generateFourViews')
+  if (type.value === 'prop') return again ? translate('pipelineNode.regenerate') : translate('pipelineNode.generatePropViews')
+  if (type.value === 'sceneProps') return again ? translate('pipelineNode.regenerate') : translate('pipelineNode.generateKeyProps')
+  if (type.value === 'scene') return again ? translate('pipelineNode.regenerate') : translate('pipelineNode.generateAnchor')
+  if (type.value === 'shotBoard') return again ? translate('pipelineNode.regenerate') : translate('pipelineNode.generateBoard')
   if (type.value === 'shotImage') {
-    return again ? '重新生成' : videoRequiresStoryboard(project.current) ? '生成配图' : '生成四宫格'
+    return again ? translate('pipelineNode.regenerate') : videoRequiresStoryboard(project.current) ? translate('pipelineNode.generateIllustration') : translate('pipelineNode.generateGrid')
   }
-  if (type.value === 'shotFrames') return again ? '重画首尾帧' : '画首尾帧'
-  if (type.value === 'shotVideo') return again ? '重新生成' : '生成视频'
+  if (type.value === 'shotFrames') return again ? translate('pipelineNode.redrawFrames') : translate('pipelineNode.drawFrames')
+  if (type.value === 'shotVideo') return again ? translate('pipelineNode.regenerate') : translate('pipelineNode.generateVideo')
   if (type.value === 'audio') {
     if (!shot.value || !needsExternalTts(shot.value, project.current)) return ''
-    return again ? '重新生成' : '生成口播'
+    return again ? translate('pipelineNode.regenerate') : translate('pipelineNode.generateNarration')
   }
   if (type.value === 'export' || type.value === 'final') {
-    return again || project.current?.finalVideoAssetId ? '重新合成' : '合成视频'
+    return again || project.current?.finalVideoAssetId ? translate('pipelineNode.composeAgain') : translate('pipelineNode.compose')
   }
-  return again ? '重新生成' : '生成'
+  return again ? translate('pipelineNode.regenerate') : translate('pipelineNode.generate')
 })
 
 const { findNode, removeSelectedNodes } = useVueFlow()
@@ -572,9 +573,9 @@ async function redrawFrame(which: 'start' | 'end') {
       undefined
     )
     await loadFrames()
-    toast.success(which === 'start' ? '起始帧已重画' : '结束帧已重画')
+    toast.success(which === 'start' ? translate('common.startFrameRedrawn') : translate('common.endFrameRedrawn'))
   } catch (e: any) {
-    toast.error(friendlyAiError(e) || '重画失败')
+    toast.error(friendlyAiError(e) || translate('common.redrawFailed'))
   } finally {
     toolBusy.value = ''
   }
@@ -619,9 +620,9 @@ async function publishToLibrary() {
       filename: meta?.filename || title.value,
       prompt: promptValue.value
     })
-    toast.success('已加入公共资产库')
+    toast.success(translate('common.addedToPublicAssets'))
   } catch (e: any) {
-    toast.error(e?.message || '入库失败')
+    toast.error(e?.message || translate('common.libraryAddFailed'))
   }
 }
 
@@ -653,9 +654,9 @@ async function optimizePrompt(ev?: Event) {
   optimizingPrompt.value = true
   try {
     await optimizeShotVideoPrompt(shot.value)
-    toast.success('已优化提示词')
+    toast.success(translate('common.optimized'))
   } catch (e: any) {
-    toast.error(friendlyAiError(e) || '优化失败')
+    toast.error(friendlyAiError(e) || translate('common.optimizationFailed'))
   } finally {
     optimizingPrompt.value = false
   }
@@ -665,7 +666,7 @@ async function generateThis(ev?: Event, hd = false) {
   ev?.stopPropagation()
   if (generating.value || gateBlocked.value || toolBusy.value) return
   if ((type.value === 'export' || type.value === 'final') && !canBuildExport(project.current)) {
-    toast.warn('还没有可导出的视频或图片，请先生成分镜视频')
+    toast.warn(translate('pipelineNode.noExport'))
     return
   }
   if (type.value === 'export' || type.value === 'final') {
@@ -685,10 +686,10 @@ async function generateThis(ev?: Event, hd = false) {
       hd ? { hd: true } : undefined
     )
     await loadMedia()
-    if (hd) toast.success('已按更高分辨率重新生成')
+    if (hd) toast.success(translate('pipelineNode.upscaled'))
   } catch (e: any) {
     // 节点上只有一个小红点，失败原因必须直接弹出来，否则表现为「点了生成，什么都没出来」
-    if (shouldToastAiError(e)) toast.error(friendlyAiError(e) || '生成失败')
+    if (shouldToastAiError(e)) toast.error(friendlyAiError(e) || translate('common.generateFailed'))
   } finally {
     toolBusy.value = ''
   }
@@ -773,7 +774,7 @@ function onAudioEnded() {
 
 function startCrop() {
   if (!hasAsset.value) {
-    toast.warn('先生成图片再裁剪')
+    toast.warn(translate('pipelineNode.generateBeforeCrop'))
     return
   }
   trimOn.value = false
@@ -785,19 +786,19 @@ function startCrop() {
 async function grabLastFrame() {
   if (toolBusy.value) return
   if (!assetId.value) {
-    toast.warn('先生成视频再截取尾帧')
+    toast.warn(translate('pipelineNode.generateBeforeExtract'))
     return
   }
   cropOn.value = false
   trimOn.value = false
-  toolBusy.value = '截取尾帧…'
+  toolBusy.value = translate('pipelineNode.extractingEnd')
   try {
     await grabVideoLastFrameNode(props.id, (msg) => {
       toolBusy.value = msg
     })
-    toast.success('尾帧已截出，放在视频右侧的图片节点里')
+    toast.success(translate('pipelineNode.frameExtracted'))
   } catch (e: any) {
-    toast.error(e?.message || '截取尾帧失败')
+    toast.error(e?.message || translate('pipelineNode.extractFrameFailed'))
   } finally {
     toolBusy.value = ''
   }
@@ -805,7 +806,7 @@ async function grabLastFrame() {
 
 function startTrim() {
   if (!videoUrl.value) {
-    toast.warn('先生成视频再剪辑')
+    toast.warn(translate('pipelineNode.generateBeforeTrim'))
     return
   }
   cropOn.value = false
@@ -867,16 +868,16 @@ async function applyCrop() {
   const id = assetId.value
   const box = mediaBox.value
   if (!id || !box) return
-  toolBusy.value = '裁剪中…'
+  toolBusy.value = translate('pipelineNode.cropping')
   try {
     const blob = await assets.getBlob(id)
-    if (!blob) throw new Error('原图读取失败')
+    if (!blob) throw new Error(translate('pipelineNode.imageReadFailed'))
     const out = await cropContainedImage(blob, { width: box.clientWidth, height: box.clientHeight }, crop.value)
     await replaceImage(out, `crop_${Date.now().toString(36)}`)
     cropOn.value = false
-    toast.success('已裁剪并替换当前图')
+    toast.success(translate('pipelineNode.cropped'))
   } catch (e: any) {
-    toast.error(e?.message || '裁剪失败')
+    toast.error(e?.message || translate('pipelineNode.cropFailed'))
   } finally {
     toolBusy.value = ''
   }
@@ -887,10 +888,10 @@ async function applyTrim() {
   if (!id) return
   const start = Math.max(0, trimStart.value)
   const end = Math.max(start + 0.2, trimEnd.value)
-  toolBusy.value = '剪辑中…'
+  toolBusy.value = translate('pipelineNode.trimming')
   try {
     const blob = await assets.getBlob(id)
-    if (!blob) throw new Error('视频读取失败')
+    if (!blob) throw new Error(translate('pipelineNode.videoReadFailed'))
     const w = project.current?.settings.width ?? 1280
     const h = project.current?.settings.height ?? 720
     const fps = project.current?.settings.fps ?? 30
@@ -910,9 +911,9 @@ async function applyTrim() {
     await project.save()
     trimOn.value = false
     await loadMedia()
-    toast.success('已剪辑并替换当前视频')
+    toast.success(translate('pipelineNode.trimmed'))
   } catch (e: any) {
-    toast.error(e?.message || '剪辑失败')
+    toast.error(e?.message || translate('pipelineNode.trimFailed'))
   } finally {
     toolBusy.value = ''
   }
@@ -950,21 +951,21 @@ async function onPickerConfirm(ids: ID[]) {
     project.assignCanvasNodeAsset(props.id, asset.id)
     await project.save()
     await loadMedia()
-    toast.success('已选用该图片')
+    toast.success(translate('common.imageSelected'))
   } catch (e: any) {
-    toast.error(e?.message || '选用失败')
+    toast.error(e?.message || translate('common.useFailed'))
   }
 }
 
 async function downloadAsset() {
   const id = assetId.value
   if (!id) {
-    toast.warn('还没有可下载的素材')
+    toast.warn(translate('pipelineNode.noDownload'))
     return
   }
   const blob = await assets.getBlob(id)
   if (!blob) {
-    toast.error('素材读取失败')
+    toast.error(translate('common.assetReadFailed'))
     return
   }
   const url = URL.createObjectURL(blob)
@@ -978,12 +979,12 @@ async function downloadAsset() {
 function copyPrompt() {
   const t = promptValue.value.trim()
   if (!t) {
-    toast.warn('没有提示词')
+    toast.warn(translate('common.noPrompt'))
     return
   }
   navigator.clipboard.writeText(t).then(
-    () => toast.success('已复制提示词'),
-    () => toast.error('复制失败')
+    () => toast.success(translate('common.promptCopied')),
+    () => toast.error(translate('common.copyFailed'))
   )
 }
 
@@ -1030,59 +1031,59 @@ const cropStyle = computed(() => ({
       <div v-if="selected && panelOpen" class="toolbar-wrap nodrag nowheel" @mousedown.stop @click.stop>
         <div class="toolbar">
           <button v-if="isImageNode && hasAsset" type="button" :disabled="!!toolBusy" @click="startCrop">
-            <span>✂</span>裁剪
+            <span>✂</span>{{ $t('common.crop') }}
           </button>
           <button v-if="isImageNode" type="button" :disabled="generating || gateBlocked || !!toolBusy" @click="generateThis($event, true)">
-            <span>HD</span>高清
+            <span>HD</span>{{ $t('pipelineNode.hd') }}
           </button>
           <button v-if="isVideoNode && hasAsset" type="button" :disabled="!!toolBusy" @click="startTrim">
-            <span>🎞</span>剪辑
+            <span>🎞</span>{{ $t('common.trim') }}
           </button>
           <button
             v-if="isVideoNode && hasAsset"
             type="button"
             :disabled="!!toolBusy"
-            title="截取视频最后一帧，在旁边生成一张图片节点"
+            :title="$t('pipelineNode.extractFrameHint')"
             @click="grabLastFrame"
           >
-            <span>◫</span>截取尾帧
+            <span>◫</span>{{ $t('pipelineNode.extractFrame') }}
           </button>
           <button v-if="genLabel" type="button" :disabled="generating || gateBlocked || !!toolBusy" @click="generateThis">
-            <span>↺</span>{{ hasAsset ? '重绘' : genLabel }}
+            <span>↺</span>{{ hasAsset ? $t('pipelineNode.redraw') : genLabel }}
           </button>
           <button
             v-if="type === 'shotVideo' && isH3VideoNode"
             type="button"
             :disabled="generating || gateBlocked || !!toolBusy || optimizingPrompt"
-            title="只优化当前节点的提示词"
+            :title="$t('common.optimizeCurrent')"
             @click="optimizePrompt"
           >
-            <span>✦</span>{{ optimizingPrompt ? '优化中…' : '优化提示词' }}
+            <span>✦</span>{{ optimizingPrompt ? $t('common.optimizing') : $t('common.optimizePrompt') }}
           </button>
           <button
             v-if="isImageNode"
             type="button"
             :disabled="generating || !!toolBusy"
-            title="选用已有图片，不重新生成"
+            :title="$t('pipelineNode.reuseImage')"
             @click="openOutputPicker"
           >
-            <span>▣</span>选用
+            <span>▣</span>{{ $t('common.useSelection') }}
           </button>
           <button v-if="hasAsset" type="button" @click="downloadAsset">
-            <span>⬇</span>下载
+            <span>⬇</span>{{ $t('common.download') }}
           </button>
-          <button type="button" class="icon" title="更多" @click="moreOpen = !moreOpen"><CanvasToolbarIcon name="more" :size="17" /></button>
-          <button v-if="hasAsset" type="button" class="icon" title="查看大图" @click="previewFull"><CanvasToolbarIcon name="expand" :size="17" /></button>
+          <button type="button" class="icon" :title="$t('common.more')" @click="moreOpen = !moreOpen"><CanvasToolbarIcon name="more" :size="17" /></button>
+          <button v-if="hasAsset" type="button" class="icon" :title="$t('common.fullImage')" @click="previewFull"><CanvasToolbarIcon name="expand" :size="17" /></button>
           <div v-if="moreOpen" class="more">
-            <button v-if="showPrompt" type="button" @click="copyPrompt(); moreOpen = false">复制提示词</button>
+            <button v-if="showPrompt" type="button" @click="copyPrompt(); moreOpen = false">{{ $t('common.copyPrompt') }}</button>
             <button
               v-if="isImageNode && hasAsset"
               type="button"
               @click="publishToLibrary"
             >
-              加入公共资产库
+              {{ $t('common.addToPublicLibrary') }}
             </button>
-            <button type="button" @click="openDetail(); moreOpen = false">打开右侧详情</button>
+            <button type="button" @click="openDetail(); moreOpen = false">{{ $t('pipelineNode.details') }}</button>
           </div>
         </div>
       </div>
@@ -1104,10 +1105,10 @@ const cropStyle = computed(() => ({
           <button v-if="mediaUrl" class="vo-play nodrag" type="button" @click.stop="togglePlay" @mousedown.stop>
             {{ playing ? '❚❚' : '▶' }}
           </button>
-          <span>{{ shot?.voiceover?.slice(0, 36) || (mediaUrl ? '口播' : '无口播') }}</span>
+          <span>{{ shot?.voiceover?.slice(0, 36) || (mediaUrl ? $t('common.narration') : $t('common.noNarration')) }}</span>
         </div>
       </template>
-      <div v-else-if="type === 'export'" class="ph text">合成视频</div>
+      <div v-else-if="type === 'export'" class="ph text">{{ $t('pipelineNode.compose') }}</div>
       <template v-else-if="isVideoNode && videoUrl">
         <video
           ref="videoEl"
@@ -1123,31 +1124,31 @@ const cropStyle = computed(() => ({
           @ended="onVideoEnded"
           @click.stop="togglePlay"
         />
-        <button v-if="!playing" class="play-btn nodrag" type="button" title="播放" @click.stop="togglePlay" @mousedown.stop>
+        <button v-if="!playing" class="play-btn nodrag" type="button" :title="$t('common.play')" @click.stop="togglePlay" @mousedown.stop>
           ▶
         </button>
       </template>
       <div v-else-if="type === 'shotFrames'" class="frame-pair">
         <div class="fp-cell">
-          <img v-if="frameUrls.start" :src="frameUrls.start" alt="起始帧" />
+          <img v-if="frameUrls.start" :src="frameUrls.start" :alt="$t('common.startFrame')" />
           <div v-else class="fp-ph">＋</div>
-          <span class="fp-tag">起</span>
+          <span class="fp-tag">{{ $t('pipelineNode.start') }}</span>
           <button
             v-if="frameUrls.start && !generating && !toolBusy"
             class="fp-redo"
-            title="重画起始帧"
+            :title="$t('pipelineNode.redrawStart')"
             @click.stop="redrawFrame('start')"
           >↺</button>
         </div>
         <span class="fp-arrow">→</span>
         <div class="fp-cell">
-          <img v-if="frameUrls.end" :src="frameUrls.end" alt="结束帧" />
+          <img v-if="frameUrls.end" :src="frameUrls.end" :alt="$t('common.endFrame')" />
           <div v-else class="fp-ph">＋</div>
-          <span class="fp-tag">末</span>
+          <span class="fp-tag">{{ $t('pipelineNode.end') }}</span>
           <button
             v-if="frameUrls.end && !generating && !toolBusy"
             class="fp-redo"
-            title="重画结束帧"
+            :title="$t('pipelineNode.redrawEnd')"
             @click.stop="redrawFrame('end')"
           >↺</button>
         </div>
@@ -1157,13 +1158,13 @@ const cropStyle = computed(() => ({
         v-else
         class="ph"
         :class="{ pick: isImageNode }"
-        :title="isImageNode ? '选用已有图片' : undefined"
+        :title="isImageNode ? $t('common.useExistingImage') : undefined"
         @click="onEmptyClick"
       >
         {{ isVideoNode ? '▶' : '＋' }}
       </div>
       <span v-if="isVideoNode && durationLabel && !trimOn && !generating && !toolBusy" class="dur">{{ durationLabel }}</span>
-      <NodeBusyOverlay v-if="generating || toolBusy" :label="toolBusy || '生成中'" />
+      <NodeBusyOverlay v-if="generating || toolBusy" :label="toolBusy || $t('common.generating')" />
       <div v-if="status === 'failed' && nodeMeta?.error && !selected" class="fail-dot" :title="nodeMeta.error" />
 
       <div v-if="cropOn" class="crop-mask nodrag nowheel" @mousedown.stop>
@@ -1174,8 +1175,8 @@ const cropStyle = computed(() => ({
           <i class="h se" @pointerdown.stop="onCropDown('se', $event)" />
         </div>
         <div class="crop-actions">
-          <button type="button" @click="cropOn = false">取消</button>
-          <button type="button" class="ok" @click="applyCrop">应用裁剪</button>
+          <button type="button" @click="cropOn = false">{{ $t('common.cancel') }}</button>
+          <button type="button" class="ok" @click="applyCrop">{{ $t('pipelineNode.applyCrop') }}</button>
         </div>
       </div>
 
@@ -1198,8 +1199,8 @@ const cropStyle = computed(() => ({
           @input="onTrimEnd(Number(($event.target as HTMLInputElement).value))"
         />
         <div class="crop-actions">
-          <button type="button" @click="trimOn = false">取消</button>
-          <button type="button" class="ok" :disabled="!!toolBusy" @click="applyTrim">应用剪辑</button>
+          <button type="button" @click="trimOn = false">{{ $t('common.cancel') }}</button>
+          <button type="button" class="ok" :disabled="!!toolBusy" @click="applyTrim">{{ $t('pipelineNode.applyTrim') }}</button>
         </div>
       </div>
     </div>
@@ -1207,7 +1208,7 @@ const cropStyle = computed(() => ({
     <div v-if="type === 'subject' && subject" class="subject-card">
       <div class="sc-head">
         <span class="sc-name" :title="title">{{ title }}</span>
-        <span class="sc-role">{{ subject.role || subjectKindText || '角色' }}</span>
+        <span class="sc-role">{{ subject.role || subjectKindText || $t('common.character') }}</span>
       </div>
       <p v-if="subject.description" class="sc-desc" :title="subject.description">
         {{ subject.description }}
@@ -1235,19 +1236,19 @@ const cropStyle = computed(() => ({
           :disabled="generating || gateBlocked || !!toolBusy || optimizingPrompt"
           @click="optimizePrompt"
         >
-          {{ optimizingPrompt ? '优化中…' : '优化提示词' }}
+          {{ optimizingPrompt ? $t('common.optimizing') : $t('common.optimizePrompt') }}
         </button>
       </div>
       <div v-if="type === 'subject' && subject" class="voice-sec">
         <div class="voice-sec-head">
-          <span class="voice-sec-title">角色语音</span>
-          <span class="voice-sec-tag">提炼人物时自动生成 · 出镜对白与配音都用它</span>
+          <span class="voice-sec-title">{{ $t('pipelineNode.characterVoice') }}</span>
+          <span class="voice-sec-tag">{{ $t('pipelineNode.extractedVoice') }}</span>
         </div>
         <textarea
           class="voice-input"
           rows="2"
           :value="voicePromptText"
-          placeholder="用一句话描述音色，如：低沉磁性的中年男声，语速偏慢，带一点沙哑"
+          :placeholder="$t('pipelineNode.voiceDescriptionPlaceholder')"
           @input="voicePromptText = ($event.target as HTMLTextAreaElement).value"
         />
         <div class="voice-ref">
@@ -1255,14 +1256,14 @@ const cropStyle = computed(() => ({
             <button
               type="button"
               class="voice-play"
-              :title="voiceRefPlaying ? '暂停' : '试听参考音频'"
+              :title="voiceRefPlaying ? $t('common.pause') : $t('pipelineNode.listenAudio')"
               @click="toggleVoiceRefPlay"
             >
               {{ voiceRefPlaying ? '❚❚' : '▶' }}
             </button>
             <span class="voice-ref-name" :title="voiceRefName">{{ voiceRefName }}</span>
-            <span v-if="subject.clonedVoiceId" class="voice-cloned">已复刻</span>
-            <button type="button" class="voice-del" title="移除参考音频" @click="removeVoiceRef">✕</button>
+            <span v-if="subject.clonedVoiceId" class="voice-cloned">{{ $t('pipelineNode.cloned') }}</span>
+            <button type="button" class="voice-del" :title="$t('pipelineNode.removeAudio')" @click="removeVoiceRef">✕</button>
           </template>
           <button
             v-else
@@ -1275,11 +1276,11 @@ const cropStyle = computed(() => ({
               <path d="M12 16V4.5M7.5 9 12 4.5 16.5 9" />
               <path d="M4.5 16.5v2.5a1.5 1.5 0 0 0 1.5 1.5h12a1.5 1.5 0 0 0 1.5-1.5v-2.5" />
             </svg>
-            {{ voiceUploading ? '上传中…' : '上传参考音频' }}
+            {{ voiceUploading ? $t('common.uploading') : $t('pipelineNode.uploadAudio') }}
           </button>
         </div>
         <p class="voice-sec-hint">
-          参考音频仅在支持声音复刻的模型上生效（当前为百炼 Qwen3-TTS-VC）；音色描述对普通 TTS 也会生效。口播文案以「角色名：台词」开头时自动套用。
+          {{ $t('pipelineNode.voiceCloneHint') }}
         </p>
         <audio
           v-if="voiceRefUrl"
@@ -1299,20 +1300,20 @@ const cropStyle = computed(() => ({
       </div>
       <div v-if="isFrameNode && shot" class="fp-prompts">
         <p class="fp-tip">
-          两张帧各用一段画面词：起始帧画开场那一瞬，结束帧画动作走完的末态。画的时候会带上本镜的人物和场景参考图。
+          {{ $t('pipelineNode.framePromptHint') }}
         </p>
-        <label>起始帧画面词</label>
+        <label>{{ $t('common.startFramePrompt') }}</label>
         <textarea
           rows="6"
           :value="startFramePromptValue"
-          placeholder="留空则按分镜描述与连续性自动拼"
+          :placeholder="$t('common.startFramePromptHint')"
           @input="startFramePromptValue = ($event.target as HTMLTextAreaElement).value"
         />
-        <label>结束帧画面词</label>
+        <label>{{ $t('common.endFramePrompt') }}</label>
         <textarea
           rows="6"
           :value="endFramePromptValue"
-          placeholder="留空则按「起始 → 末态」里的末态自动拼"
+          :placeholder="$t('common.endFramePromptHint')"
           @input="endFramePromptValue = ($event.target as HTMLTextAreaElement).value"
         />
       </div>
@@ -1329,7 +1330,7 @@ const cropStyle = computed(() => ({
         v-model:first-id="firstFrameId"
         v-model:last-id="lastFrameId"
         :last-required="lastFrameRequired"
-        :first-hint="shot?.imageAssetId ? '空则用本镜配图' : '请选择首帧'"
+        :first-hint="shot?.imageAssetId ? $t('common.useShotImage') : $t('common.chooseFirstFrame')"
       />
       <ShotRefStrip
         v-else-if="shot && (type === 'shotBoard' || type === 'shotImage' || type === 'shotVideo')"
@@ -1370,11 +1371,11 @@ const cropStyle = computed(() => ({
           v-if="type === 'shotVideo' && shot"
           class="dur-edit"
           width="76px"
-          title="时长"
+          :title="$t('common.length')"
           :model-value="String(shotDurationValue)"
           @update:model-value="setShotDuration(Number($event))"
         >
-          <option v-for="n in durationOptions" :key="n" :value="String(n)">{{ n }} 秒</option>
+          <option v-for="n in durationOptions" :key="n" :value="String(n)">{{ n }} {{ $t('common.seconds') }}</option>
         </ParamSelect>
         <button
           v-if="genLabel"
@@ -1395,7 +1396,7 @@ const cropStyle = computed(() => ({
     <AssetPicker
       :open="pickerOpen"
       kind="image"
-      :title="`选用已有图片作为${kindLabel || '本节点'}结果`"
+      :title="$t('pipelineNode.useExistingResult', { p0: kindLabel || $t('pipelineNode.thisNode') })"
       show-library
       default-tab="page"
       :selected-ids="assetId ? [assetId] : []"

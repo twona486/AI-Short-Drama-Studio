@@ -1,3 +1,5 @@
+import { t } from '@/i18n'
+import zh from '@/locales/zh'
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
 import {
@@ -42,8 +44,10 @@ export const useLibraryStore = defineStore('library', () => {
   }
 
   function folderName(folderId?: string): string {
-    if (!folderId) return '公共资产'
-    return folders.value.find((f) => f.id === folderId)?.name ?? '公共资产'
+    const name = folders.value.find((f) => f.id === folderId)?.name
+    if (!name) return t('common.publicAssets')
+    const category = Object.entries(zh.library.category).find(([, label]) => label === name)
+    return category ? t(`library.category.${category[0]}`) : name
   }
 
   async function add(
@@ -80,7 +84,7 @@ export const useLibraryStore = defineStore('library', () => {
     meta?: { filename?: string; prompt?: string }
   ): Promise<Asset> {
     const blob = await loadAssetBlob(assetId)
-    if (!blob) throw new Error('读不到这张图')
+    if (!blob) throw new Error(t('library.imageUnreadable'))
     return add(blob, 'ai-generated', {
       filename: meta?.filename,
       prompt: meta?.prompt
@@ -123,12 +127,12 @@ export const useLibraryStore = defineStore('library', () => {
 
   function assertFolderName(name: string, exceptId?: string) {
     const trimmed = name.trim()
-    if (!trimmed) throw new Error('请输入文件夹名称')
+    if (!trimmed) throw new Error(t('library.folderNameRequired'))
     if (trimmed === '公共资产' || trimmed === '公共资产库') {
-      throw new Error('这个名字留给公共资产库用')
+      throw new Error(t('library.reservedName'))
     }
     if (folders.value.some((f) => f.name === trimmed && f.id !== exceptId)) {
-      throw new Error('已有同名文件夹')
+      throw new Error(t('library.duplicateName'))
     }
     return trimmed
   }
@@ -177,7 +181,7 @@ export const useLibraryStore = defineStore('library', () => {
   async function renameFolder(id: string, name: string): Promise<void> {
     const trimmed = assertFolderName(name, id)
     const next = folders.value.map((f) => (f.id === id ? { ...f, name: trimmed } : f))
-    if (!next.some((f) => f.id === id)) throw new Error('找不到这个文件夹')
+    if (!next.some((f) => f.id === id)) throw new Error(t('library.folderMissing'))
     folders.value = next
     await saveLibraryFolders(folders.value)
   }

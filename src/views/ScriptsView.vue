@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { t as translate } from '@/i18n'
 /**
  * 剧本管理
  *
@@ -65,7 +66,7 @@ function fmtTime(ts: number) {
 }
 
 function sourceLabel(source: string) {
-  return source === 'ai-generated' ? 'AI 生成' : source === 'imported' ? '导入' : '手建'
+  return source === 'ai-generated' ? translate('scripts.sourceAi') : source === 'imported' ? translate('scripts.sourceImport') : translate('scripts.sourceManual')
 }
 
 async function loadContent(id: string, force = false) {
@@ -96,7 +97,7 @@ async function select(id: string) {
 }
 
 function confirmDiscard(): boolean {
-  return window.confirm('当前剧本有未保存的修改，要放弃吗？')
+  return window.confirm(translate('scripts.unsavedConfirm'))
 }
 
 function markDirty() {
@@ -116,7 +117,7 @@ function flushDraft() {
   if (!draft.value || !activeId.value) return
   const { index, title, content } = draft.value
   markdown.value = updateEpisode(markdown.value, index, {
-    title: title.trim() || `第 ${index + 1} 集`,
+    title: title.trim() || translate('common.episodeNumber', { p0: index + 1 }),
     content
   })
   void persistQuiet()
@@ -133,9 +134,9 @@ async function commitTitle() {
     await scripts.rename(activeId.value, clean)
     markdown.value = await scripts.readContent(activeId.value, true)
     dirty.value = false
-    toast.success('已改名')
+    toast.success(translate('scripts.renamed'))
   } catch (e: any) {
-    toast.error(`改名失败：${e?.message ?? e}`)
+    toast.error(translate('scripts.renameFailed', { p0: e?.message ?? e }))
   }
 }
 
@@ -146,7 +147,7 @@ async function persistQuiet() {
     await scripts.setContent(activeId.value, markdown.value)
     dirty.value = false
   } catch (e: any) {
-    toast.error(`保存失败：${e?.message ?? e}`)
+    toast.error(translate('scripts.saveFailed', { p0: e?.message ?? e }))
   } finally {
     saving.value = false
   }
@@ -156,7 +157,7 @@ async function saveNow() {
   if (!activeId.value) return
   flushDraft()
   await persistQuiet()
-  toast.success('已保存到本地 Markdown')
+  toast.success(translate('scripts.savedLocally'))
 }
 
 /** 改某一集的标题：写草稿，延迟回流到 Markdown */
@@ -173,7 +174,7 @@ async function addEpisode() {
   const index = await scripts.addEpisode(activeId.value)
   await loadContent(activeId.value, true)
   activeTab.value = 'episodes'
-  toast.success(`已新增第 ${index + 1} 集`)
+  toast.success(translate('scripts.episodeAdded', { p0: index + 1 }))
   await nextTick()
   scrollEpisodeIntoView(index)
 }
@@ -188,26 +189,26 @@ async function insertEpisodeAfter(index: number) {
   flushDraft()
   const at = await scripts.insertEpisodeAt(activeId.value, index + 1)
   await loadContent(activeId.value, true)
-  toast.success('已插入新的一集')
+  toast.success(translate('scripts.episodeInserted'))
 }
 
 async function removeEpisode(index: number) {
   if (!activeId.value) return
   if (episodes.value.length <= 1) {
-    toast.warn('至少保留一集')
+    toast.warn(translate('common.keepOneEpisode'))
     return
   }
   const target = episodes.value[index]
-  if (!confirm(`删除「${target?.title ?? `第 ${index + 1} 集`}」？`)) return
+  if (!confirm(translate('scripts.deleteConfirm', { p0: target?.title ?? translate('common.episodeNumber', { p0: index + 1 }) }))) return
   draft.value = null
   try {
     await scripts.removeEpisodeAt(activeId.value, index)
   } catch (e: any) {
-    toast.error(e?.message ?? '删除失败')
+    toast.error(e?.message ?? translate('common.deleteFailed'))
     return
   }
   await loadContent(activeId.value, true)
-  toast.success('已删除该集')
+  toast.success(translate('scripts.episodeDeleted'))
 }
 
 async function moveEpisode(index: number, offset: -1 | 1) {
@@ -223,13 +224,13 @@ async function moveEpisode(index: number, offset: -1 | 1) {
 async function createScript() {
   await scripts.ensureLoaded()
   const doc = await scripts.create({
-    title: `未命名剧本 ${scripts.docs.length + 1}`,
+    title: translate('scripts.untitled', { p0: scripts.docs.length + 1 }),
     source: 'manual'
   })
   activeId.value = doc.id
   await loadContent(doc.id, true)
   activeTab.value = 'episodes'
-  toast.success('已新建剧本')
+  toast.success(translate('scripts.created'))
 }
 
 /* ── AI 写剧本：直接在这里提要求，写完自动入库 ── */
@@ -283,20 +284,20 @@ async function submitGenerate() {
   const topic = genTopic.value.trim()
   const brief = genBrief.value.trim()
   if (!topic && !brief) {
-    toast.warn('先写点要求或基本内容')
+    toast.warn(translate('scripts.needDirection'))
     return
   }
   if (!llmModel.value) {
-    toast.warn('请先在设置里添加并选择模型')
+    toast.warn(translate('scripts.needModel'))
     return
   }
   generating.value = true
-  genProgress.value = '正在写剧本…'
+  genProgress.value = translate('scripts.generating')
   genAbort = new AbortController()
   try {
     const run = await generatePlay(
       {
-        topic: topic || '未命名剧本',
+        topic: topic || translate('scripts.untitledName'),
         content: brief,
         style: genStyle.value,
         shotDuration: 5,
@@ -310,9 +311,9 @@ async function submitGenerate() {
       },
       genAbort.signal
     )
-    if (!run.result.playMarkdown?.trim()) throw new Error('模型没有返回剧本内容，换个说法再试')
-    genProgress.value = '正在保存到本地…'
-    const title = (run.result.topic || topic || 'AI 剧本').trim()
+    if (!run.result.playMarkdown?.trim()) throw new Error(translate('scripts.noGeneratedContent'))
+    genProgress.value = translate('scripts.savingLocally')
+    const title = (run.result.topic || topic || translate('scripts.aiScript')).trim()
     const doc = await scripts.create({
       title,
       markdown: run.result.playMarkdown,
@@ -325,11 +326,11 @@ async function submitGenerate() {
     genOpen.value = false
     genTopic.value = ''
     genBrief.value = ''
-    toast.success(`剧本写好了：${doc.title}`)
+    toast.success(translate('scripts.generated', { p0: doc.title }))
   } catch (e: any) {
     const msg = e?.message ?? String(e)
-    if (genAbort?.signal.aborted) toast.warn('已取消，本次没有保存')
-    else toast.error(msg.startsWith('写剧本') ? msg : `写剧本失败：${msg}`)
+    if (genAbort?.signal.aborted) toast.warn(translate('scripts.cancelled'))
+    else toast.error(msg.startsWith(translate('common.writeScript')) ? msg : translate('scripts.writeFailed', { p0: msg }))
   } finally {
     generating.value = false
     genAbort = null
@@ -347,22 +348,22 @@ async function importScript() {
     const doc = await scripts.importMarkdown(picked.text, picked.filename)
     activeId.value = doc.id
     await loadContent(doc.id, true)
-    toast.success(`已导入：${doc.title}`)
+    toast.success(translate('scripts.imported', { p0: doc.title }))
   } catch (e: any) {
-    toast.error(e?.message ?? '导入失败')
+    toast.error(e?.message ?? translate('common.importFailed'))
   }
 }
 
 async function downloadActive() {
   if (!activeId.value) return
   const ok = await scripts.download(activeId.value)
-  if (ok) toast.success('已导出 Markdown')
+  if (ok) toast.success(translate('common.markdownExported'))
 }
 
 async function revealActive() {
   if (!activeId.value) return
   const ok = await scripts.revealFile(activeId.value)
-  if (!ok) toast.warn('暂时打不开（仅桌面端支持）')
+  if (!ok) toast.warn(translate('scripts.desktopOnly'))
 }
 
 async function reloadFromDisk() {
@@ -371,18 +372,18 @@ async function reloadFromDisk() {
   await scripts.reloadFromDisk(activeId.value)
   draft.value = null
   await loadContent(activeId.value, true)
-  toast.success('已读取磁盘上的最新内容')
+  toast.success(translate('scripts.loadedFromDisk'))
 }
 
 async function applyToProject() {
   flushDraft()
   await persistQuiet()
   if (!activeDoc.value || !markdown.value.trim()) {
-    toast.warn('剧本是空的')
+    toast.warn(translate('common.emptyScriptContent'))
     return
   }
   if (!project.current) {
-    toast.warn('请先打开一个项目')
+    toast.warn(translate('common.chooseProjectFirst'))
     return
   }
   const doc = activeDoc.value
@@ -401,25 +402,25 @@ async function applyToProject() {
   project.applyPlayTitle(doc.title)
   project.setPlayApproved(false)
   await project.save()
-  toast.success('已写入当前项目，可去提炼分镜')
+  toast.success(translate('scripts.sentToProject'))
   router.push('/studio')
 }
 
 async function removeActive() {
   const doc = activeDoc.value
   if (!doc) return
-  if (!confirm(`从剧本库删除「${doc.title}」？本地 Markdown 文件也会一起删除。`)) return
+  if (!confirm(translate('common.deleteNamedScript', { p0: doc.title }))) return
   await scripts.remove(doc.id)
   activeId.value = ''
   markdown.value = ''
   dirty.value = false
-  toast.success('已删除')
+  toast.success(translate('common.deleted'))
 }
 
 function copyMarkdown() {
   navigator.clipboard.writeText(markdown.value).then(
-    () => toast.success('已复制全文'),
-    () => toast.error('复制失败')
+    () => toast.success(translate('scripts.copiedFull')),
+    () => toast.error(translate('common.copyFailed'))
   )
 }
 
@@ -456,17 +457,17 @@ onMounted(async () => {
   <div class="page">
     <header class="page-head">
       <div>
-        <div class="kicker">剧本管理</div>
-        <h1>本地剧本库</h1>
+        <div class="kicker">{{ $t('scripts.manage') }}</div>
+        <h1>{{ $t('scripts.localLibrary') }}</h1>
         <p>
-          每次生成的剧本都会自动存成 Markdown 并收进这里，可以直接改内容、加集数，也能导出或送进项目。
+          {{ $t('scripts.libraryHint') }}
         </p>
       </div>
       <div class="head-actions">
-        <GradientButton icon="✨" @click="openGenerate">AI 写剧本</GradientButton>
-        <GradientButton type="ghost" @click="router.push('/drafts')">资源库</GradientButton>
-        <GradientButton type="secondary" icon="📥" @click="importScript">导入 Markdown</GradientButton>
-        <GradientButton type="secondary" icon="＋" @click="createScript">新建剧本</GradientButton>
+        <GradientButton icon="✨" @click="openGenerate">{{ $t('scripts.aiWrite') }}</GradientButton>
+        <GradientButton type="ghost" @click="router.push('/drafts')">{{ $t('common.resourceLibrary') }}</GradientButton>
+        <GradientButton type="secondary" icon="📥" @click="importScript">{{ $t('common.importMarkdown') }}</GradientButton>
+        <GradientButton type="secondary" icon="＋" @click="createScript">{{ $t('common.newScript') }}</GradientButton>
       </div>
     </header>
 
@@ -474,12 +475,12 @@ onMounted(async () => {
       <!-- 列表 -->
       <aside class="side">
         <div class="side-head">
-          <input v-model="keyword" class="search" placeholder="搜索剧本名…" />
-          <span class="count">{{ filteredDocs.length }} 份</span>
+          <input v-model="keyword" class="search" :placeholder="$t('scripts.search')" />
+          <span class="count">{{ filteredDocs.length }} {{ $t('scripts.count') }}</span>
         </div>
         <div class="list">
           <div v-if="!filteredDocs.length" class="empty-mini">
-            还没有剧本。生成一次剧本，或点右上角导入。
+            {{ $t('scripts.emptyLibraryHint') }}
           </div>
           <button
             v-for="d in filteredDocs"
@@ -491,13 +492,13 @@ onMounted(async () => {
             <div class="si-title">{{ d.title }}</div>
             <div class="si-meta">
               <Tag size="sm">{{ sourceLabel(d.source) }}</Tag>
-              {{ d.episodeCount }} 集 · {{ d.totalWords }} 字
+              {{ d.episodeCount }} {{ $t('common.chapterUnitSeparator') }} {{ d.totalWords }} {{ $t('common.characters') }}
             </div>
             <div class="si-time">{{ fmtTime(d.updatedAt) }}</div>
           </button>
         </div>
         <button v-if="scripts.docs.length" class="side-foot" @click="scripts.openFolder()">
-          在文件夹里打开
+          {{ $t('scripts.openFolder') }}
         </button>
       </aside>
 
@@ -512,31 +513,31 @@ onMounted(async () => {
               @keydown.enter.prevent="commitTitle"
             />
             <div class="ed-meta">
-              <span>{{ episodes.length }} 集</span>
+              <span>{{ episodes.length }} {{ $t('common.chapterUnit') }}</span>
               <span>·</span>
-              <span>{{ totalWords }} 字</span>
+              <span>{{ totalWords }} {{ $t('common.characters') }}</span>
               <span>·</span>
-              <span v-if="saving">保存中…</span>
-              <span v-else-if="dirty" class="unsaved">未保存</span>
-              <span v-else>已保存 · {{ fmtTime(activeDoc.updatedAt) }}</span>
+              <span v-if="saving">{{ $t('common.saving') }}</span>
+              <span v-else-if="dirty" class="unsaved">{{ $t('common.unsaved') }}</span>
+              <span v-else>{{ $t('scripts.savedAt') }} {{ fmtTime(activeDoc.updatedAt) }}</span>
             </div>
             <div class="ed-actions">
-              <button class="mini-btn" @click="downloadActive">⬇ 导出 MD</button>
-              <button class="mini-btn" @click="revealActive">📂 打开文件</button>
-              <button v-if="dirty" class="mini-btn primary" @click="saveNow">保存</button>
-              <button class="mini-btn danger" @click="removeActive">删除</button>
+              <button class="mini-btn" @click="downloadActive">{{ $t('scripts.exportMd') }}</button>
+              <button class="mini-btn" @click="revealActive">{{ $t('scripts.openFile') }}</button>
+              <button v-if="dirty" class="mini-btn primary" @click="saveNow">{{ $t('common.save') }}</button>
+              <button class="mini-btn danger" @click="removeActive">{{ $t('common.delete') }}</button>
             </div>
           </div>
 
           <div class="tabs">
             <button :class="{ on: activeTab === 'episodes' }" @click="activeTab = 'episodes'">
-              按集编辑
+              {{ $t('scripts.editEpisodes') }}
             </button>
             <button :class="{ on: activeTab === 'markdown' }" @click="activeTab = 'markdown'">
-              Markdown 全文
+              {{ $t('scripts.markdownFull') }}
             </button>
             <button :class="{ on: activeTab === 'preview' }" @click="activeTab = 'preview'">
-              预览
+              {{ $t('common.preview') }}
             </button>
           </div>
 
@@ -558,29 +559,29 @@ onMounted(async () => {
                     @input="onTitleInput(i, $event)"
                     @click.stop
                   />
-                  <span class="ep-words">{{ ep.wordCount }} 字</span>
+                  <span class="ep-words">{{ ep.wordCount }} {{ $t('common.characters') }}</span>
                   <div class="ep-tools" @click.stop>
-                    <button title="上移" :disabled="i === 0" @click="moveEpisode(i, -1)">↑</button>
+                    <button :title="$t('common.moveUp')" :disabled="i === 0" @click="moveEpisode(i, -1)">↑</button>
                     <button
-                      title="下移"
+                      :title="$t('common.moveDown')"
                       :disabled="i === episodes.length - 1"
                       @click="moveEpisode(i, 1)"
                     >
                       ↓
                     </button>
-                    <button title="在后面插入一集" @click="insertEpisodeAfter(i)">＋</button>
-                    <button title="删除这一集" class="danger" @click="removeEpisode(i)">✕</button>
+                    <button :title="$t('scripts.insertEpisode')" @click="insertEpisodeAfter(i)">＋</button>
+                    <button :title="$t('scripts.deleteEpisode')" class="danger" @click="removeEpisode(i)">✕</button>
                   </div>
                 </div>
                 <textarea
                   v-if="draft && draft.index === i"
                   v-model="draft.content"
                   class="ep-body"
-                  placeholder="写这一集的正文，支持 Markdown"
+                  :placeholder="$t('scripts.episodePlaceholder')"
                   @input="scheduleFlush"
                 />
               </div>
-              <button class="add-ep" @click="addEpisode">＋ 新增一集</button>
+              <button class="add-ep" @click="addEpisode">{{ $t('scripts.newEpisode') }}</button>
             </div>
 
             <!-- 全文 -->
@@ -592,9 +593,9 @@ onMounted(async () => {
                 @input="markDirty"
               />
               <div class="md-foot">
-                <button class="mini-btn" @click="saveNow">保存修改</button>
-                <button class="mini-btn" @click="reloadFromDisk">↻ 读取磁盘版本</button>
-                <button class="mini-btn" @click="copyMarkdown">📋 复制全文</button>
+                <button class="mini-btn" @click="saveNow">{{ $t('scripts.saveChanges') }}</button>
+                <button class="mini-btn" @click="reloadFromDisk">{{ $t('scripts.reloadDisk') }}</button>
+                <button class="mini-btn" @click="copyMarkdown">{{ $t('scripts.copyFull') }}</button>
               </div>
             </div>
 
@@ -603,9 +604,9 @@ onMounted(async () => {
           </div>
 
           <div class="ed-foot">
-            <span class="foot-tip">文件：_scripts/{{ activeDoc.filename }}</span>
+            <span class="foot-tip">{{ $t('scripts.filePath') }}{{ activeDoc.filename }}</span>
             <GradientButton size="sm" type="primary" icon="→" @click="applyToProject">
-              送入当前项目
+              {{ $t('scripts.sendToProject') }}
             </GradientButton>
           </div>
         </GlassCard>
@@ -613,14 +614,14 @@ onMounted(async () => {
         <GlassCard v-else padding="lg" class="editor-card center">
           <div class="blank">
             <div class="blank-icon">📜</div>
-            <div class="blank-title">还没有剧本</div>
+            <div class="blank-title">{{ $t('scripts.emptyLibrary') }}</div>
             <div class="blank-desc">
-              直接在这里让 AI 按你的要求写一篇，写完自动存成 Markdown；也可以导入已有文件，或去画布写。
+              {{ $t('scripts.startHint') }}
             </div>
             <div class="blank-actions">
-              <GradientButton icon="✨" @click="openGenerate">让 AI 写一篇</GradientButton>
-              <GradientButton type="secondary" @click="createScript">新建空白剧本</GradientButton>
-              <GradientButton type="ghost" @click="router.push('/studio')">去画布写</GradientButton>
+              <GradientButton icon="✨" @click="openGenerate">{{ $t('scripts.writeWithAi') }}</GradientButton>
+              <GradientButton type="secondary" @click="createScript">{{ $t('scripts.createBlank') }}</GradientButton>
+              <GradientButton type="ghost" @click="router.push('/studio')">{{ $t('scripts.openCanvas') }}</GradientButton>
             </div>
           </div>
         </GlassCard>
@@ -632,44 +633,44 @@ onMounted(async () => {
       <div v-if="genOpen" class="gen-mask" @click.self="closeGenerate">
         <div class="gen-modal">
           <div class="gen-head">
-            <strong>✨ AI 写剧本</strong>
-            <button class="gen-close" :disabled="generating" title="关闭" @click="closeGenerate">
+            <strong>{{ $t('scripts.aiWriteIcon') }}</strong>
+            <button class="gen-close" :disabled="generating" :title="$t('common.close')" @click="closeGenerate">
               ✕
             </button>
           </div>
           <div class="gen-form">
-            <label class="gen-label">想写什么</label>
+            <label class="gen-label">{{ $t('scripts.subject') }}</label>
             <input
               v-model="genTopic"
               class="gen-input"
-              placeholder="一句话说清题材和看点，例如：都市玄幻，外卖小哥觉醒雷电异能，三十集短剧"
+              :placeholder="$t('scripts.topicExample')"
               :disabled="generating"
             />
-            <label class="gen-label">基本内容 / 已有想法 <em>（可选）</em></label>
+            <label class="gen-label">{{ $t('scripts.outline') }} <em>{{ $t('common.optional') }}</em></label>
             <textarea
               v-model="genBrief"
               class="gen-textarea"
               rows="5"
-              placeholder="已有的梗概、大纲、人物设定或桥段……没有就空着，AI 按上面那句话发挥"
+              :placeholder="$t('scripts.outlinePlaceholder')"
               :disabled="generating"
             />
             <div class="gen-row">
               <div class="gen-field">
-                <label class="gen-label">目标成片时长</label>
+                <label class="gen-label">{{ $t('common.targetDuration') }}</label>
                 <select v-model.number="genDuration" class="gen-input" :disabled="generating">
-                  <option :value="0">不限（按内容自然长度）</option>
-                  <option v-for="s in durationOptions" :key="s" :value="s">{{ s }} 秒</option>
+                  <option :value="0">{{ $t('common.unlimitedDuration') }}</option>
+                  <option v-for="s in durationOptions" :key="s" :value="s">{{ s }} {{ $t('common.seconds') }}</option>
                 </select>
                 <p class="gen-hint">
                   {{
                     genDuration
-                      ? `剧本按 ${genDuration} 秒定规模：约 ${durationScenes(genDuration)} 场、${durationChars(genDuration)} 字正文，后面约拆 ${durationShots(genDuration)} 镜`
-                      : '不限时长时剧本会写满完整结构，分镜也会更多'
+                      ? $t('scripts.budget', { p0: genDuration, p1: durationScenes(genDuration), p2: durationChars(genDuration), p3: durationShots(genDuration) })
+                      : $t('scripts.unlimitedHint')
                   }}
                 </p>
               </div>
               <div class="gen-field">
-                <label class="gen-label">画风</label>
+                <label class="gen-label">{{ $t('scripts.visualStyle') }}</label>
                 <select v-model="genStyle" class="gen-input" :disabled="generating">
                   <option v-for="s in styleOptions" :key="s.value" :value="s.value">
                     {{ s.label }}
@@ -677,10 +678,10 @@ onMounted(async () => {
                 </select>
               </div>
               <div class="gen-field">
-                <label class="gen-label">模型</label>
+                <label class="gen-label">{{ $t('common.model') }}</label>
                 <select v-model="genChoice" class="gen-input" :disabled="generating">
                   <option v-if="!llmGroups.some((g) => g.models.length)" value="">
-                    请先在设置里添加模型
+                    {{ $t('common.noModel') }}
                   </option>
                   <optgroup v-for="g in llmGroups" :key="g.id" :label="g.name">
                     <option v-for="m in g.models" :key="`${g.id}::${m}`" :value="`${g.id}::${m}`">
@@ -694,15 +695,15 @@ onMounted(async () => {
           </div>
           <div class="gen-foot">
             <button v-if="generating" class="mini-btn danger" @click="cancelGenerate">
-              取消生成
+              {{ $t('scripts.cancelGeneration') }}
             </button>
-            <button v-else class="mini-btn" @click="closeGenerate">先不写了</button>
+            <button v-else class="mini-btn" @click="closeGenerate">{{ $t('scripts.deferWriting') }}</button>
             <button
               class="mini-btn primary"
               :disabled="generating || !llmModel || (!genTopic.trim() && !genBrief.trim())"
               @click="submitGenerate"
             >
-              {{ generating ? '写作中…' : '开始写' }}
+              {{ generating ? $t('scripts.writing') : $t('scripts.startWriting') }}
             </button>
           </div>
         </div>

@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { t as translate } from '@/i18n'
+
 import { computed, ref } from 'vue'
 import type { Shot, TimelineClip, TransitionType } from '@/types'
 import EditIcon from '@/components/edit/EditIcon.vue'
@@ -42,8 +44,8 @@ function clipLeft(clip: TimelineClip) {
 function transitionLabel(t: TransitionType) {
   return {
     none: '',
-    fade: '↔ 淡入淡出',
-    'fade-black': '↔ 黑场',
+    fade: translate('timeline.fade'),
+    'fade-black': translate('timeline.fadeBlack'),
     'slide-left': '←',
     'slide-right': '→',
     'zoom-in': '⊕',
@@ -145,13 +147,13 @@ function startPlayheadDrag(evt: MouseEvent) {
   <div class="timeline">
     <div class="timeline-head">
       <div class="tl-info">
-        <span class="tl-label"><EditIcon name="clock" :size="14" />总时长</span>
+        <span class="tl-label"><EditIcon name="clock" :size="14" />{{ $t('common.totalLength') }}</span>
         <span class="tl-value gradient-text">{{ totalDuration }}s</span>
         <span class="tl-divider">·</span>
-        <span class="tl-label">片段</span>
+        <span class="tl-label">{{ $t('timeline.clip') }}</span>
         <span class="tl-value">{{ clips.length }}</span>
       </div>
-      <div class="tl-tip">拖动片段可换顺序；拖动右边缘可调时长</div>
+      <div class="tl-tip">{{ $t('timeline.reorderAndResize') }}</div>
     </div>
 
     <div class="timeline-scroll">
@@ -171,7 +173,7 @@ function startPlayheadDrag(evt: MouseEvent) {
         <div
           class="playhead"
           :style="{ left: Math.max(0, Math.min(totalDuration, playhead || 0)) * PX_PER_SECOND + 'px' }"
-          title="拖动播放头定位"
+          :title="$t('timeline.seek')"
           @mousedown="startPlayheadDrag"
         >
           <span class="playhead-cap" />
@@ -199,45 +201,45 @@ function startPlayheadDrag(evt: MouseEvent) {
             @drop.prevent="dropOn(clip, $event)"
           >
             <div class="clip-head">
-              <span class="clip-drag" title="拖动调整顺序"><EditIcon name="grip" :size="14" /></span>
+              <span class="clip-drag" :title="$t('timeline.reorder')"><EditIcon name="grip" :size="14" /></span>
               <span class="clip-num">#{{ shotOf(clip) ? (shotOf(clip)!.index + 1) : (clips.findIndex(c => c.id === clip.id) + 1) }}</span>
-              <span class="clip-title">{{ shotOf(clip)?.title || clip.label || '视频素材' }}</span>
+              <span class="clip-title">{{ shotOf(clip)?.title || clip.label || $t('common.videoAssets') }}</span>
               <button
                 class="clip-remove"
                 @click.stop="emit('remove', clip.id)"
-                title="删除"
+                :title="$t('common.delete')"
               ><EditIcon name="close" :size="12" /></button>
             </div>
             <div class="clip-body">
               <div
                 class="clip-handle clip-handle-left"
-                title="向右拖动，裁掉片段开头"
+                :title="$t('timeline.trimStart')"
                 @mousedown="(e) => startTrim(clip, 'left', e)"
               />
               <div
                 v-if="clip.transitionIn !== 'none'"
                 class="clip-transition"
-                :title="`转场：${clip.transitionIn}`"
+                :title="$t('timeline.transition', { p0: clip.transitionIn })"
               >
                 {{ transitionLabel(clip.transitionIn) }}
               </div>
               <div class="clip-duration">
                 <span>{{ clip.duration.toFixed(1) }}s</span>
-                <span v-if="clip.sourceIn > 0.01" class="trim-badge">入点 {{ clip.sourceIn.toFixed(1) }}s</span>
+                <span v-if="clip.sourceIn > 0.01" class="trim-badge">{{ $t('timeline.inPoint') }} {{ clip.sourceIn.toFixed(1) }}s</span>
                 <span v-if="clip.speed !== 1" class="speed-badge">
                   {{ clip.speed }}x
                 </span>
               </div>
               <div
                 class="clip-handle clip-handle-right"
-                title="向左拖动，裁掉片段结尾"
+                :title="$t('timeline.trimEnd')"
                 @mousedown="(e) => startTrim(clip, 'right', e)"
               />
             </div>
           </div>
 
           <div v-if="clips.length === 0" class="track-empty">
-            时间线是空的。从左侧分镜库点 "+" 加入，或点「重建时间线」自动加入所有分镜
+            {{ $t('timeline.emptyHint') }}
           </div>
         </div>
       </div>

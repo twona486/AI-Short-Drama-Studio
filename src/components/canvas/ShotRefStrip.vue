@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { t as translate } from '@/i18n'
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { useAssetsStore, useLibraryStore, useProjectStore, useToastStore } from '@/stores'
 import { imageRefSlots, videoRefSlots, boardRefSlots, boundSubjectIds } from '@/utils/consistency'
@@ -38,7 +39,7 @@ const slots = computed(() => {
     if (props.mode === 'board') return boardRefSlots(props.shot, project.current)
     return imageRefSlots(props.shot, project.current)
   }
-  return (props.extraIds ?? []).map((id) => ({ id, label: '参考', locked: false }))
+  return (props.extraIds ?? []).map((id) => ({ id, get label() { return translate('shotRefStrip.reference') }, locked: false }))
 })
 
 watch(
@@ -92,7 +93,7 @@ function removeExtra(id: ID, ev?: Event) {
     const omitted = [...new Set([...(props.shot.omittedRefAssetIds ?? []), id])]
     project.updateShot(props.shot.id, { omittedRefAssetIds: omitted })
   }
-  toast.success('已移除这张参考图')
+  toast.success(translate('common.referenceRemoved'))
 }
 
 async function onPickerConfirm(ids: ID[]) {
@@ -118,7 +119,7 @@ async function pickAndAddRefs() {
   try {
     files = await pickLocalFiles({ kind: 'image', multiple: true })
   } catch (err: any) {
-    toast.error(err?.message || '读取参考图失败')
+    toast.error(err?.message || translate('common.referenceReadFailed'))
     return
   }
   if (!files.length) return
@@ -135,7 +136,7 @@ async function pickAndAddRefs() {
     count++
   }
   if (added.length) addExtraIds(added)
-  if (count) toast.success(`已添加 ${count} 张参考图`)
+  if (count) toast.success(translate('shotRefStrip.added', { p0: count }))
 }
 
 onBeforeUnmount(() => {
@@ -146,10 +147,10 @@ onBeforeUnmount(() => {
 <template>
   <div class="ref-strip nodrag nopan nowheel" @pointerdown.stop @mousedown.stop @click.stop>
     <div class="ref-head">
-      <span>参考图</span>
+      <span>{{ $t('common.referenceImage') }}</span>
       <div class="ref-acts">
-        <button type="button" @click="pickerOpen = true">资源库</button>
-        <button type="button" @click="triggerUpload">＋ 添加</button>
+        <button type="button" @click="pickerOpen = true">{{ $t('common.resourceLibrary') }}</button>
+        <button type="button" @click="triggerUpload">{{ $t('shotRefStrip.add') }}</button>
       </div>
     </div>
     <div class="ref-list">
@@ -166,29 +167,29 @@ onBeforeUnmount(() => {
           alt=""
           @click="openLightbox(urls[slot.id])"
         />
-        <div v-else class="ph">图</div>
+        <div v-else class="ph">{{ $t('shotRefStrip.imageSuffix') }}</div>
         <em>{{ slot.label }}</em>
         <button
           type="button"
           class="del nodrag nopan nowheel"
-          title="移除这张参考图"
+          :title="$t('common.removeReference')"
           @pointerdown.stop.prevent="removeExtra(slot.id, $event)"
         >
           ×
         </button>
       </div>
-      <button type="button" class="ref-add" title="添加参考图" @click="pickerOpen = true">＋</button>
+      <button type="button" class="ref-add" :title="$t('shotRefStrip.addReference')" @click="pickerOpen = true">＋</button>
     </div>
     <p v-if="mode === 'image' && unboundCast" class="hint">
-      这镜还没绑人物，人设图不会进关键帧。到「人物」分组点重新提取，或在画面描述里写出角色名字。
+      {{ $t('shotRefStrip.noCharacter') }}
     </p>
-    <p v-else-if="mode === 'image' && !slots.length" class="hint">关键帧是 2×2 四宫格（正好四格）。用人设图和场景图来画这一镜正在发生的事。</p>
-    <p v-else-if="mode === 'video' && !slots.length" class="hint">先做人设图和场景图，再出视频。本镜会带上绑定场景的场景图。</p>
+    <p v-else-if="mode === 'image' && !slots.length" class="hint">{{ $t('shotRefStrip.gridHint') }}</p>
+    <p v-else-if="mode === 'video' && !slots.length" class="hint">{{ $t('shotRefStrip.videoHint') }}</p>
     <AssetPicker
       :open="pickerOpen"
       kind="image"
       multiple
-      title="添加参考图"
+      :title="$t('shotRefStrip.addReference')"
       show-library
       @close="pickerOpen = false"
       @confirm="onPickerConfirm"

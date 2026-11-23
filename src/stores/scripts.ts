@@ -1,3 +1,4 @@
+import { t } from '@/i18n'
 /**
  * 剧本库 store
  *
@@ -31,11 +32,11 @@ import {
 
 function sanitizeFilename(name: string): string {
   return (
-    (name || '未命名剧本')
+    (name || t('scripts.untitledName'))
       .replace(/[\\/:*?"<>|]+/g, ' ')
       .replace(/\s+/g, ' ')
       .trim()
-      .slice(0, 60) || '未命名剧本'
+      .slice(0, 60) || t('scripts.untitledName')
   )
 }
 
@@ -118,11 +119,11 @@ export const useScriptsStore = defineStore('scripts', () => {
     const now = Date.now()
     const id = newId()
     const raw = normalizeImportedMarkdown(options.markdown || '')
-    const markdown = raw || buildScriptMarkdown(options.title || '未命名剧本', '')
+    const markdown = raw || buildScriptMarkdown(options.title || t('scripts.untitledName'), '')
     const title =
       options.title?.trim() ||
       (raw ? inferMarkdownTitle(raw) : '') ||
-      '未命名剧本'
+      t('scripts.untitledName')
     const stats = statsOf(markdown)
     const doc: ScriptDoc = {
       id,
@@ -144,7 +145,7 @@ export const useScriptsStore = defineStore('scripts', () => {
   /** 导入一份 Markdown 剧本文件 */
   async function importMarkdown(text: string, filename = '', options: { projectId?: ID } = {}) {
     const raw = normalizeImportedMarkdown(text)
-    if (!raw.trim()) throw new Error('剧本文件是空的')
+    if (!raw.trim()) throw new Error(t('common.emptyScript'))
     const title = inferMarkdownTitle(raw, filename)
     return create({ title, markdown: raw, source: 'imported', projectId: options.projectId })
   }
@@ -162,10 +163,10 @@ export const useScriptsStore = defineStore('scripts', () => {
     if (!script?.content?.trim()) return undefined
     await ensureLoaded()
     const markdown = buildScriptMarkdown(
-      script.topic || project.name || '未命名剧本',
+      script.topic || project.name || t('scripts.untitledName'),
       script.content
     )
-    const title = (script.topic || project.name || '未命名剧本').trim()
+    const title = (script.topic || project.name || t('scripts.untitledName')).trim()
     const existing = docs.value.find(
       (d) =>
         d.projectId === project.id &&
@@ -260,7 +261,7 @@ export const useScriptsStore = defineStore('scripts', () => {
 
   async function removeEpisodeAt(id: ID, index: number) {
     const md = await readContent(id)
-    if (parseScriptDoc(md).episodes.length <= 1) throw new Error('至少保留一集')
+    if (parseScriptDoc(md).episodes.length <= 1) throw new Error(t('common.keepOneEpisode'))
     const { markdown } = removeEpisode(md, index)
     await write(id, markdown)
   }
@@ -292,7 +293,7 @@ export const useScriptsStore = defineStore('scripts', () => {
     const markdown = await readContent(id, true)
     if (isDesktop()) {
       const saved = await desktop().saveTextFile({
-        defaultName: doc?.filename || '剧本.md',
+        defaultName: doc?.filename || t('scripts.fallbackFilename'),
         text: markdown,
         filters: [{ name: 'Markdown', extensions: ['md'] }]
       })
@@ -302,7 +303,7 @@ export const useScriptsStore = defineStore('scripts', () => {
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a')
     a.href = url
-    a.download = doc?.filename || '剧本.md'
+    a.download = doc?.filename || t('scripts.fallbackFilename')
     a.click()
     setTimeout(() => URL.revokeObjectURL(url), 1000)
     return true

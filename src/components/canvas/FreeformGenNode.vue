@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { t as translate } from '@/i18n'
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { Handle, Position, useVueFlow } from '@vue-flow/core'
 import { useAssetsStore, useLibraryStore, useProjectStore, useSettingsStore, useToastStore } from '@/stores'
@@ -85,7 +86,7 @@ const refs = computed(() => {
 const outputId = computed(() => node.value?.data.outputAssetId || props.data.outputAssetId)
 const hasAsset = computed(() => Boolean(outputId.value))
 const generating = computed(() => isNodeRunning(props.id))
-const title = computed(() => node.value?.data.label || (isVideo.value ? '视频' : '图片'))
+const title = computed(() => node.value?.data.label || (isVideo.value ? translate('freeformGenNode.video') : translate('freeformGenNode.image')))
 const prompt = computed({
   get: () => node.value?.data.prompt ?? '',
   set: (v: string) => project.setCanvasNodePrompt(props.id, v)
@@ -166,17 +167,17 @@ function profileDisplayName(p?: { name?: string; provider?: string; adapter?: { 
 }
 /** 节点副标题：跟着实际用的那条线路走，别再一律写 H3 */
 const videoKindLabel = computed(() => {
-  if (!isVideo.value) return '图片生成'
-  if (videoModel.value === 'wan-prime') return `图生视频 · 万相 ${duration.value}s`
+  if (!isVideo.value) return translate('freeformGenNode.imageGeneration')
+  if (videoModel.value === 'wan-prime') return translate('freeformGenNode.wanVideo', { p0: duration.value })
   const p = effectiveVideoProfile.value
   // 非 AutoDL 接入（Zealman、自建 ComfyUI 等）跑的不是 H3，直接显示接入名
   if (p && !profileIsAutodl(p)) {
-    return `图生视频 · ${profileDisplayName(p) || '自定义接入'}`
+    return translate('freeformGenNode.profileVideo', { p0: profileDisplayName(p) || translate('freeformGenNode.customProfile') })
   }
   // 只有 AutoDL 线路才是 H3，时长跟随节点的实际设置，不再写死 15s
   return videoModel.value === 'h3-v5'
-    ? `图生视频 · H3 v5 ${duration.value}s${videoResolution.value === '1080p' ? ' 1080p' : ''}`
-    : `图生视频 · H3 v5 ${duration.value}s`
+    ? translate('freeformGenNode.h3VideoResolution', { p0: duration.value, p1: videoResolution.value === '1080p' ? ' 1080p' : '' })
+    : translate('freeformGenNode.h3Video', { p0: duration.value })
 })
 const isH3Fl2va = computed(() => isH3Video.value && h3GenMode.value === 'fl2va')
 const durationOptions = computed(() => videoDurationOptions(videoModel.value))
@@ -204,9 +205,9 @@ function pickDuration(n: number) {
   duration.value = n
   durOpen.value = ''
 }
-const genLabel = computed(() => (hasAsset.value ? '重绘' : isVideo.value ? '出视频' : '出图'))
+const genLabel = computed(() => (hasAsset.value ? translate('freeformGenNode.redraw') : isVideo.value ? translate('freeformGenNode.generateVideo') : translate('freeformGenNode.generateImage')))
 const failMsg = computed(() =>
-  node.value?.status === 'failed' ? node.value.error || '生成失败' : ''
+  node.value?.status === 'failed' ? node.value.error || translate('freeformGenNode.failed') : ''
 )
 
 const pageImageIds = computed(() => {
@@ -322,7 +323,7 @@ function removeRef(id: ID, ev?: Event) {
     referenceAssetIds: n?.data.referenceAssetIds ?? [],
     nodeType: type.value
   })
-  toast.success('已移除这张参考图')
+  toast.success(translate('common.referenceRemoved'))
 }
 
 async function onPickerConfirm(ids: ID[]) {
@@ -339,7 +340,7 @@ async function onPickerConfirm(ids: ID[]) {
         nodeType: type.value
       })
       await loadMedia()
-      toast.success(isVideo.value ? '已选用该视频' : '已选用该图片')
+      toast.success(isVideo.value ? translate('freeformGenNode.appliedVideo') : translate('common.imageSelected'))
       return
     }
     const resolved: ID[] = []
@@ -353,7 +354,7 @@ async function onPickerConfirm(ids: ID[]) {
     }
     setRefs([...refs.value, ...resolved])
   } catch (e: any) {
-    toast.error(e?.message || '选用失败')
+    toast.error(e?.message || translate('common.useFailed'))
   }
 }
 
@@ -381,7 +382,7 @@ async function pickAndAddRefs() {
   try {
     files = await pickLocalFiles({ kind: 'image', multiple: true })
   } catch (err: any) {
-    toast.error(err?.message || '读取参考图失败')
+    toast.error(err?.message || translate('common.referenceReadFailed'))
     return
   }
   const added: ID[] = []
@@ -408,27 +409,27 @@ function previewFull() {
 async function generate() {
   if (generating.value) return
   if (!prompt.value.trim()) {
-    toast.warn('请先写提示词')
+    toast.warn(translate('common.enterPromptFirst'))
     return
   }
   if (isVideo.value) {
     if (isH3Fl2va.value) {
       if (!firstFrameId.value && !refs.value[0]) {
-        toast.warn('请先选首帧')
+        toast.warn(translate('freeformGenNode.requireFirstFrame'))
         return
       }
       if (lastFrameRequired.value && !lastFrameId.value && !refs.value[1]) {
-        toast.warn('请先选尾帧')
+        toast.warn(translate('freeformGenNode.requireLastFrame'))
         return
       }
     } else if (!refs.value.length) {
-      toast.warn('请先选至少一张参考图')
+      toast.warn(translate('freeformGenNode.requireReference'))
       return
     }
   }
   moreOpen.value = false
   durOpen.value = ''
-  busyLabel.value = isVideo.value ? '出视频…' : '出图…'
+  busyLabel.value = isVideo.value ? translate('freeformGenNode.generatingVideo') : translate('freeformGenNode.generatingImage')
   try {
     await runCanvasNode(props.id, (_id, msg) => {
       busyLabel.value = msg
@@ -443,12 +444,12 @@ async function generate() {
     }
     await loadMedia()
     if (isVideo.value && !outputId.value) {
-      toast.error('生成结束，但视频没有写进节点。请看节点上的红字错误。', 10000)
+      toast.error(translate('freeformGenNode.videoNotSaved'), 10000)
     } else {
-      toast.success(isVideo.value ? '视频已生成' : '图片已生成')
+      toast.success(isVideo.value ? translate('common.videoGenerated') : translate('common.imageGenerated'))
     }
   } catch (e: unknown) {
-    if (shouldToastAiError(e)) toast.error(friendlyAiError(e) || '生成失败', 10000)
+    if (shouldToastAiError(e)) toast.error(friendlyAiError(e) || translate('common.generateFailed'), 10000)
   } finally {
     busyLabel.value = ''
   }
@@ -462,9 +463,9 @@ async function publish() {
       filename: title.value,
       prompt: prompt.value
     })
-    toast.success('已加入公共资产库')
+    toast.success(translate('common.addedToPublicAssets'))
   } catch (e: any) {
-    toast.error(e?.message || '入库失败')
+    toast.error(e?.message || translate('common.libraryAddFailed'))
   }
 }
 
@@ -472,7 +473,7 @@ async function downloadAsset() {
   if (!outputId.value) return
   const blob = await assets.getBlob(outputId.value)
   if (!blob) {
-    toast.error('素材读取失败')
+    toast.error(translate('common.assetReadFailed'))
     return
   }
   const url = URL.createObjectURL(blob)
@@ -486,12 +487,12 @@ async function downloadAsset() {
 function copyPrompt() {
   const t = prompt.value.trim()
   if (!t) {
-    toast.warn('没有提示词')
+    toast.warn(translate('common.noPrompt'))
     return
   }
   navigator.clipboard.writeText(t).then(
-    () => toast.success('已复制提示词'),
-    () => toast.error('复制失败')
+    () => toast.success(translate('common.promptCopied')),
+    () => toast.error(translate('common.copyFailed'))
   )
   moreOpen.value = false
 }
@@ -500,15 +501,15 @@ async function optimizePrompt(ev?: Event) {
   ev?.stopPropagation()
   if (!isH3Video.value || optimizingPrompt.value || generating.value) return
   if (!prompt.value.trim()) {
-    toast.warn('请先写提示词')
+    toast.warn(translate('common.enterPromptFirst'))
     return
   }
   optimizingPrompt.value = true
   try {
     await optimizeFreeformVideoPrompt(props.id)
-    toast.success('已优化提示词')
+    toast.success(translate('common.optimized'))
   } catch (e: unknown) {
-    toast.error(friendlyAiError(e) || '优化失败')
+    toast.error(friendlyAiError(e) || translate('common.optimizationFailed'))
   } finally {
     optimizingPrompt.value = false
   }
@@ -519,16 +520,16 @@ function duplicateSelf() {
   durOpen.value = ''
   const nid = project.duplicateCanvasNode(props.id)
   if (!nid) {
-    toast.warn('复制失败')
+    toast.warn(translate('common.copyFailed'))
     return
   }
-  toast.success('已复制节点')
+  toast.success(translate('common.duplicateNode'))
   selectCanvasNode(nid)
 }
 
 function removeSelf() {
   moreOpen.value = false
-  if (!confirm('删除这个节点？')) return
+  if (!confirm(translate('common.confirmDeleteNode'))) return
   project.removeCanvasNode(props.id)
 }
 </script>
@@ -547,20 +548,20 @@ function removeSelf() {
             v-if="isH3Video"
             type="button"
             :disabled="generating || optimizingPrompt"
-            title="只优化当前节点的提示词"
+            :title="$t('common.optimizeCurrent')"
             @click="optimizePrompt"
           >
-            <span>✦</span>{{ optimizingPrompt ? '优化中…' : '优化提示词' }}
+            <span>✦</span>{{ optimizingPrompt ? $t('common.optimizing') : $t('common.optimizePrompt') }}
           </button>
-          <button type="button" :disabled="generating" title="选用已有资源，不重新生成" @click="openOutputPicker">
-            <span>▣</span>选用
+          <button type="button" :disabled="generating" :title="$t('freeformGenNode.reuseAsset')" @click="openOutputPicker">
+            <span>▣</span>{{ $t('common.useSelection') }}
           </button>
           <button type="button" @click="duplicateSelf">
-            <span>❐</span>复制
+            <span>❐</span>{{ $t('common.copy') }}
           </button>
           <div v-if="isVideo" class="dur-edit">
             <button type="button" class="dur-btn" @click="durOpen = durOpen === 'bar' ? '' : 'bar'">
-              {{ duration }} 秒
+              {{ duration }} {{ $t('common.seconds') }}
             </button>
             <div v-if="durOpen === 'bar'" class="dur-menu">
               <button
@@ -571,20 +572,20 @@ function removeSelf() {
                 @mousedown.prevent.stop
                 @click.stop="pickDuration(n)"
               >
-                {{ n }} 秒
+                {{ n }} {{ $t('common.seconds') }}
               </button>
             </div>
           </div>
           <button v-if="hasAsset" type="button" @click="downloadAsset">
-            <span>⬇</span>下载
+            <span>⬇</span>{{ $t('common.download') }}
           </button>
-          <button type="button" class="icon" title="更多" @click="moreOpen = !moreOpen"><CanvasToolbarIcon name="more" :size="17" /></button>
-          <button v-if="hasAsset" type="button" class="icon" title="查看大图" @click="previewFull"><CanvasToolbarIcon name="expand" :size="17" /></button>
+          <button type="button" class="icon" :title="$t('common.more')" @click="moreOpen = !moreOpen"><CanvasToolbarIcon name="more" :size="17" /></button>
+          <button v-if="hasAsset" type="button" class="icon" :title="$t('common.fullImage')" @click="previewFull"><CanvasToolbarIcon name="expand" :size="17" /></button>
           <div v-if="moreOpen" class="more">
-            <button type="button" @click="copyPrompt">复制提示词</button>
-            <button type="button" @click="duplicateSelf">复制节点</button>
-            <button v-if="!isVideo && hasAsset" type="button" @click="publish">加入公共资产库</button>
-            <button type="button" @click="removeSelf">删除节点</button>
+            <button type="button" @click="copyPrompt">{{ $t('common.copyPrompt') }}</button>
+            <button type="button" @click="duplicateSelf">{{ $t('common.copyNode') }}</button>
+            <button v-if="!isVideo && hasAsset" type="button" @click="publish">{{ $t('common.addToPublicLibrary') }}</button>
+            <button type="button" @click="removeSelf">{{ $t('common.deleteNode') }}</button>
           </div>
         </div>
       </div>
@@ -598,11 +599,11 @@ function removeSelf() {
           :src="posterUrl"
           alt=""
         />
-        <div v-else class="ready">视频已生成</div>
+        <div v-else class="ready">{{ $t('common.videoGenerated') }}</div>
         <button
           class="play-btn nodrag"
           type="button"
-          title="播放"
+          :title="$t('common.play')"
           @click.stop="previewFull"
           @mousedown.stop
         >
@@ -618,13 +619,13 @@ function removeSelf() {
       <div
         v-else
         class="ph pick"
-        :title="isVideo ? '选用已有视频' : '选用已有图片'"
+        :title="isVideo ? $t('common.useExistingVideo') : $t('common.useExistingImage')"
         @click="onEmptyClick"
       >
         {{ isVideo ? '▶' : '＋' }}
       </div>
       <span v-if="isVideo && duration" class="dur-tag">{{ duration }}s</span>
-      <NodeBusyOverlay v-if="generating" :label="busyLabel || (isVideo ? '出视频…' : '出图…')" />
+      <NodeBusyOverlay v-if="generating" :label="busyLabel || (isVideo ? $t('freeformGenNode.generatingVideo') : $t('freeformGenNode.generatingImage'))" />
       <div v-if="failMsg && !generating" class="fail" :title="failMsg">{{ failMsg }}</div>
     </div>
 
@@ -650,20 +651,20 @@ function removeSelf() {
         />
         <div v-else class="refs">
           <div v-for="id in refs" :key="id" class="thumb nodrag nopan nowheel">
-            <button type="button" class="thumb-preview nodrag" title="查看大图" @pointerdown.stop @click.stop="previewRef(id)">
+            <button type="button" class="thumb-preview nodrag" :title="$t('common.fullImage')" @pointerdown.stop @click.stop="previewRef(id)">
               <img v-if="refUrls[id]" :src="refUrls[id]" alt="" />
             </button>
             <button
               type="button"
               class="thumb-del nodrag nopan nowheel"
-              title="移除这张参考图"
+              :title="$t('common.removeReference')"
               @pointerdown.stop.prevent="removeRef(id, $event)"
             >
               ×
             </button>
           </div>
-          <button type="button" class="add nodrag" title="上传参考图" @click="uploadRefs">＋</button>
-          <button type="button" class="add nodrag" title="从本页或资产库选择参考图" @click="openRefPicker">库</button>
+          <button type="button" class="add nodrag" :title="$t('common.uploadReference')" @click="uploadRefs">＋</button>
+          <button type="button" class="add nodrag" :title="$t('freeformGenNode.referenceSource')" @click="openRefPicker">{{ $t('common.assetPickerShort') }}</button>
         </div>
         <div v-if="isH3Video" class="prompt-tools">
           <button
@@ -672,7 +673,7 @@ function removeSelf() {
             :disabled="generating || optimizingPrompt"
             @click="optimizePrompt"
           >
-            {{ optimizingPrompt ? '优化中…' : '优化提示词' }}
+            {{ optimizingPrompt ? $t('common.optimizing') : $t('common.optimizePrompt') }}
           </button>
         </div>
         <textarea
@@ -681,9 +682,9 @@ function removeSelf() {
           :placeholder="
             isVideo
               ? videoModel === 'wan-prime'
-                ? '写视频提示词。多张参考图时可用图1、图2指代人物/场景…'
-                : '写视频提示词，描述动作、镜头和声音。点「优化提示词」会直接改写成正文。'
-              : '写提示词，可加参考图做图生图…'
+                ? $t('freeformGenNode.multiReferencePrompt')
+                : $t('freeformGenNode.videoPlaceholder')
+              : $t('freeformGenNode.imagePlaceholder')
           "
         />
         <div class="prompt-foot">
@@ -709,7 +710,7 @@ function removeSelf() {
           />
           <div v-if="isVideo" class="dur-edit">
             <button type="button" class="dur-btn" @click="durOpen = durOpen === 'foot' ? '' : 'foot'">
-              {{ duration }} 秒
+              {{ duration }} {{ $t('common.seconds') }}
             </button>
             <div v-if="durOpen === 'foot'" class="dur-menu">
               <button
@@ -720,7 +721,7 @@ function removeSelf() {
                 @mousedown.prevent.stop
                 @click.stop="pickDuration(n)"
               >
-                {{ n }} 秒
+                {{ n }} {{ $t('common.seconds') }}
               </button>
             </div>
           </div>
@@ -738,13 +739,13 @@ function removeSelf() {
       :title="
         pickerMode === 'output'
           ? isVideo
-            ? '选用已有视频作为本节点结果'
-            : '选用已有图片作为本节点结果'
+            ? $t('freeformGenNode.videoForNode')
+            : $t('common.useImageForNode')
           : isVideo
             ? videoModel === 'wan-prime'
-              ? '选择参考图（最多 10 张，提示词里可用图1、图2）'
-              : '选择参考图（本页或公共库）'
-            : '选择参考图'
+              ? $t('freeformGenNode.pickReferences')
+              : $t('freeformGenNode.pickReferenceFromLibrary')
+            : $t('common.selectReference')
       "
       :page-ids="pickerMode === 'ref' ? pageImageIds : undefined"
       :show-library="pickerMode === 'ref' || !isVideo"

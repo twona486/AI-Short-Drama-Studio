@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { t as translate } from '@/i18n'
 import { ref, onMounted, onBeforeUnmount, computed, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { useProjectStore, useToastStore, useLibraryStore, LIBRARY_PUBLIC_ID } from '@/stores'
@@ -141,7 +142,7 @@ async function quickCreate() {
   try {
     const now = new Date()
     const pad = (n: number) => String(n).padStart(2, '0')
-    const label = `新项目 ${now.getMonth() + 1}-${now.getDate()} ${pad(now.getHours())}:${pad(now.getMinutes())}`
+    const label = translate('home.newProjectName', { p0: now.getMonth() + 1, p1: now.getDate(), p2: pad(now.getHours()), p3: pad(now.getMinutes()) })
     const p = await project.createNamed(label)
     p.pipelineMode = 'standard'
     p.script = {
@@ -159,16 +160,16 @@ async function quickCreate() {
     await project.save()
     router.push('/studio')
   } catch (e: any) {
-    toast.error(e?.message || '创建失败，请重试')
+    toast.error(e?.message || translate('home.cannotCreate'))
   } finally {
     creating.value = false
   }
 }
 
 function deleteProject(id: string) {
-  if (!confirm('确定要删除该项目吗？素材也会被一起删除。')) return
+  if (!confirm(translate('home.confirmDeleteProject'))) return
   project.remove(id)
-  toast.success('项目已删除')
+  toast.success(translate('home.projectDeleted'))
 }
 
 async function openProjectFolder(projectId?: string) {
@@ -178,23 +179,23 @@ async function openProjectFolder(projectId?: string) {
     : project.current
   const dir = target?.folderPath
   if (!dir) {
-    toast.warn(target ? '这个旧项目没有本地目录记录' : '请先创建或打开一个项目')
+    toast.warn(target ? translate('home.noLegacyFolder') : translate('common.createOrOpenProject'))
     return
   }
   const error = await desktop().openPath(dir)
-  if (error) toast.error(`无法打开项目目录：${error}`)
+  if (error) toast.error(translate('home.openFolderFailed', { p0: error }))
 }
 
 async function openQuickEditor() {
   if (!project.current) {
     const now = new Date()
     const label = `${now.getMonth() + 1}-${now.getDate()} ${String(now.getHours()).padStart(2, '0')}${String(now.getMinutes()).padStart(2, '0')}`
-    const p = await project.createNamed(`自由剪辑 ${label}`)
+    const p = await project.createNamed(translate('home.freeEditName', { p0: label }))
     p.pipelineMode = 'img2video'
     p.playApproved = true
     p.script = {
       id: 's_' + Date.now().toString(36),
-      topic: '自由剪辑',
+      topic: translate('home.freeEdit'),
       content: '',
       keywords: [],
       style: 'cinematic',
@@ -220,15 +221,15 @@ function fmtDuration(sec: number) {
 }
 
 const statItems = computed(() => [
-  { value: String(project.allProjects.length), label: '项目' },
-  { value: String(totalShots.value), label: '分镜' },
-  { value: fmtDuration(totalDuration.value), label: '视频总时长', accent: true }
+  { value: String(project.allProjects.length), get label() { return translate('home.projectLabel') } },
+  { value: String(totalShots.value), get label() { return translate('home.storyboardLabel') } },
+  { value: fmtDuration(totalDuration.value), get label() { return translate('home.videoDuration') }, accent: true }
 ])
 
 const visibleLibraryAssets = computed(() => library.inFolder(libFolderId.value))
 
 const currentFolderLabel = computed(() =>
-  libFolderId.value === LIBRARY_PUBLIC_ID ? '公共资产' : library.folderName(libFolderId.value)
+  libFolderId.value === LIBRARY_PUBLIC_ID ? translate('home.publicAssets') : library.folderName(libFolderId.value)
 )
 
 function selectLibFolder(id: string) {
@@ -269,7 +270,7 @@ async function uploadLibraryImages() {
       f.type.startsWith('image/')
     )
   } catch (err: any) {
-    toast.error(err?.message || '读取图片失败')
+    toast.error(err?.message || translate('common.imageReadFailed'))
     return
   }
   if (!files.length) return
@@ -282,22 +283,22 @@ async function uploadLibraryImages() {
       })
     }
     await loadLibraryThumbs()
-    toast.success(`已上传 ${files.length} 张到${currentFolderLabel.value}`)
+    toast.success(translate('home.uploaded', { p0: files.length, p1: currentFolderLabel.value }))
   } catch (err: any) {
-    toast.error(err?.message || '上传失败')
+    toast.error(err?.message || translate('common.uploadFailed'))
   } finally {
     libUploading.value = false
   }
 }
 
 async function removeLibraryItem(id: string) {
-  if (!confirm('从资产库删除这张图？')) return
+  if (!confirm(translate('home.deleteImageConfirm'))) return
   await library.remove(id)
   delete libUrls.value[id]
   const next = new Set(libSelected.value)
   next.delete(id)
   libSelected.value = next
-  toast.success('已删除')
+  toast.success(translate('common.deleted'))
 }
 
 async function createLibFolder() {
@@ -306,9 +307,9 @@ async function createLibFolder() {
     const folder = await library.createFolder(folderDraft.value)
     folderDraft.value = ''
     libFolderId.value = folder.id
-    toast.success(`已创建「${folder.name}」`)
+    toast.success(translate('common.created', { p0: folder.name }))
   } catch (err: any) {
-    toast.error(err?.message || '创建失败')
+    toast.error(err?.message || translate('common.createFailed'))
   } finally {
     creatingFolder.value = false
   }
@@ -325,9 +326,9 @@ async function commitRenameFolder() {
   try {
     await library.renameFolder(id, renameDraft.value)
     renamingId.value = ''
-    toast.success('已重命名')
+    toast.success(translate('common.renamed'))
   } catch (err: any) {
-    toast.error(err?.message || '重命名失败')
+    toast.error(err?.message || translate('common.renameFailed'))
   }
 }
 
@@ -335,16 +336,16 @@ async function removeLibFolder(id: string, name: string) {
   const n = library.folderCount(id)
   const msg =
     n > 0
-      ? `删除「${name}」后，里面的 ${n} 张图会回到公共资产。确定删除？`
-      : `删除文件夹「${name}」？`
+      ? translate('home.deleteNonEmptyFolderConfirm', { p0: name, p1: n })
+      : translate('home.deleteFolderConfirm', { p0: name })
   if (!confirm(msg)) return
   try {
     await library.deleteFolder(id)
     if (libFolderId.value === id) libFolderId.value = LIBRARY_PUBLIC_ID
     libSelected.value = new Set()
-    toast.success('已删除文件夹')
+    toast.success(translate('common.folderDeleted'))
   } catch (err: any) {
-    toast.error(err?.message || '删除失败')
+    toast.error(err?.message || translate('common.deleteFailed'))
   }
 }
 
@@ -356,11 +357,11 @@ async function moveSelectedLibrary() {
     libSelected.value = new Set()
     const label =
       libMoveTarget.value === LIBRARY_PUBLIC_ID
-        ? '公共资产'
+        ? translate('home.publicAssets')
         : library.folderName(libMoveTarget.value)
-    toast.success(`已转移到「${label}」`)
+    toast.success(translate('common.moved', { p0: label }))
   } catch (err: any) {
-    toast.error(err?.message || '转移失败')
+    toast.error(err?.message || translate('common.moveFailed'))
   }
 }
 </script>
@@ -371,59 +372,59 @@ async function moveSelectedLibrary() {
       <div class="hero-grid" />
       <div class="hero-glow" />
       <div class="hero-content">
-        <span class="hero-badge"><i class="dot" />剧流 Studio · AI 短剧工作台</span>
+        <span class="hero-badge"><i class="dot" />{{ $t('home.heroBadge') }}</span>
         <h1 class="title">
-          一句话，<span class="gradient-text">一条 AI 流水线</span>，<br />
-          输出一条视频
+          {{ $t('home.heroIntro') }} <span class="gradient-text">{{ $t('home.heroPipeline') }}</span>{{ $t('home.heroPunctuation') }}<br />
+          {{ $t('home.heroResult') }}
         </h1>
         <p class="subtitle">
-          桌面端无限画布 + 智能体：人设、分镜、配图、视频都在一张图上连起来。资源存在本地文件夹。
+          {{ $t('home.heroDescription') }}
         </p>
         <div class="hero-actions">
           <GradientButton size="lg" type="secondary" @click="openQuickEditor">
             <template #icon><HomeIcon name="scissors" :size="18" /></template>
-            视频剪辑
+            {{ $t('common.videoEditing') }}
           </GradientButton>
           <GradientButton size="lg" type="secondary" @click="router.push({ name: 'smart-speech', query: { new: '1' } })">
             <template #icon><HomeIcon name="mic" :size="18" /></template>
-            智能口播
+            {{ $t('common.smartSpeech') }}
           </GradientButton>
           <GradientButton size="lg" :loading="creating" :disabled="creating" @click="quickCreate">
             <template #icon><HomeIcon name="plus" :size="18" /></template>
-            新建
+            {{ $t('common.new') }}
           </GradientButton>
           <GradientButton
             size="lg"
             type="ghost"
-            title="本地 Markdown 剧本库：编辑正文、增删集数、导入导出"
+            :title="$t('home.scriptLibraryHint')"
             @click="router.push('/scripts')"
           >
             <template #icon><HomeIcon name="script" :size="18" /></template>
-            剧本库
+            {{ $t('common.scriptLibrary') }}
           </GradientButton>
           <GradientButton
             size="lg"
             type="ghost"
-            title="按 剧本 → 分镜 → 图片 → 视频 → 剪辑 的分步流程制作"
+            :title="$t('home.classicStartHint')"
             @click="goClassicFlow"
           >
             <template #icon><HomeIcon name="wand" :size="18" /></template>
-            经典步骤
+            {{ $t('common.classicWorkflow') }}
           </GradientButton>
           <GradientButton
             v-if="isDesktop()"
             size="lg"
             type="ghost"
             :disabled="!project.current?.folderPath"
-            :title="project.current?.folderPath || '请先创建或打开一个项目'"
+            :title="project.current?.folderPath || $t('common.createOrOpenProject')"
             @click="openProjectFolder()"
           >
             <template #icon><HomeIcon name="folder" :size="18" /></template>
-            打开当前项目目录
+            {{ $t('home.openCurrentFolder') }}
           </GradientButton>
           <GradientButton size="lg" type="ghost" @click="router.push('/settings')">
             <template #icon><HomeIcon name="settings" :size="18" /></template>
-            接入 AI 能力
+            {{ $t('home.connectAi') }}
           </GradientButton>
         </div>
         <div class="stats">
@@ -445,7 +446,7 @@ async function moveSelectedLibrary() {
             :aria-selected="homeTab === 'projects'"
             @click="homeTab = 'projects'"
           >
-            我的项目
+            {{ $t('home.myProjects') }}
             <em>{{ project.allProjects.length }}</em>
           </button>
           <button
@@ -455,31 +456,31 @@ async function moveSelectedLibrary() {
             :aria-selected="homeTab === 'library'"
             @click="homeTab = 'library'"
           >
-            资产库
+            {{ $t('common.assetLibrary') }}
             <em>{{ library.all.length }}</em>
           </button>
         </div>
         <div v-if="homeTab === 'projects'" class="filter">
           <HomeIcon class="search-icon" name="search" :size="17" />
-          <input v-model="search" class="search" placeholder="搜索项目" />
+          <input v-model="search" class="search" :placeholder="$t('home.searchProjects')" />
         </div>
         <button v-else type="button" class="lib-upload" :disabled="libUploading" @click="uploadLibraryImages">
           <HomeIcon name="upload" :size="16" />
-          {{ libUploading ? '上传中…' : `上传到${currentFolderLabel}` }}
+          {{ libUploading ? $t('common.uploading') : $t('home.uploadTo', { p0: currentFolderLabel }) }}
         </button>
       </div>
 
       <div v-if="homeTab === 'projects'">
       <EmptyState
         v-if="filteredProjects.length === 0"
-        title="还没有项目"
-        description="点击「新建」直接开一张画布，告诉左侧智能体想做什么就行"
+        :title="$t('home.noProjects')"
+        :description="$t('home.noProjectsHelp')"
       >
         <template #icon><HomeIcon name="film" :size="44" /></template>
         <template #action>
           <GradientButton :loading="creating" :disabled="creating" @click="quickCreate">
             <template #icon><HomeIcon name="plus" :size="16" /></template>
-            新建
+            {{ $t('common.new') }}
           </GradientButton>
         </template>
       </EmptyState>
@@ -503,41 +504,41 @@ async function moveSelectedLibrary() {
               <button
                 type="button"
                 class="open-btn primary"
-                title="在无限画布里继续"
+                :title="$t('home.resumeCanvas')"
                 @click.stop="openProjectAs(p.id, 'studio')"
               >
-                画布<em>→</em>
+                {{ $t('common.canvas') }}<em>→</em>
               </button>
               <button
                 type="button"
                 class="open-btn"
-                title="按 剧本 → 分镜 → 图片 → 视频 → 剪辑 的分步流程继续"
+                :title="$t('home.classicResumeHint')"
                 @click.stop="openProjectAs(p.id, 'script')"
               >
-                经典步骤<em>→</em>
+                {{ $t('common.classicWorkflow') }}<em>→</em>
               </button>
             </div>
             <div class="proj-meta-top">
-              <Tag v-if="p.pipelineMode === 'remake'" type="warning" size="sm">复刻</Tag>
-              <Tag v-else-if="p.pipelineMode === 'img2video'" type="info" size="sm">自由模式</Tag>
-              <Tag v-else-if="p.pipelineMode === 'smart-speech'" type="success" size="sm">智能口播</Tag>
-              <Tag v-else-if="p.pipelineMode === 'drama'" type="accent" size="sm">AI 短剧 · {{ p.chapters?.length || 0 }} 章</Tag>
+              <Tag v-if="p.pipelineMode === 'remake'" type="warning" size="sm">{{ $t('common.recreate') }}</Tag>
+              <Tag v-else-if="p.pipelineMode === 'img2video'" type="info" size="sm">{{ $t('common.freeMode') }}</Tag>
+              <Tag v-else-if="p.pipelineMode === 'smart-speech'" type="success" size="sm">{{ $t('common.smartSpeech') }}</Tag>
+              <Tag v-else-if="p.pipelineMode === 'drama'" type="accent" size="sm">{{ $t('home.dramaMode') }} {{ p.chapters?.length || 0 }} {{ $t('common.chapterCount') }}</Tag>
               <Tag v-if="p.shots.length > 0" type="accent" size="sm">
-                <HomeIcon name="film" :size="12" />{{ p.shots.length }} 个分镜
+                <HomeIcon name="film" :size="12" />{{ p.shots.length }} {{ $t('home.storyboardCount') }}
               </Tag>
               <Tag
                 v-if="p.shots.some((s) => s.imageAssetId)"
                 type="info"
                 size="sm"
               >
-                <HomeIcon name="image" :size="12" />{{ p.shots.filter((s) => s.imageAssetId).length }} 张图
+                <HomeIcon name="image" :size="12" />{{ p.shots.filter((s) => s.imageAssetId).length }} {{ $t('home.imageCount') }}
               </Tag>
               <Tag
                 v-if="p.shots.some((s) => s.videoAssetId)"
                 type="success"
                 size="sm"
               >
-                <HomeIcon name="video" :size="12" />{{ p.shots.filter((s) => s.videoAssetId).length }} 段视频
+                <HomeIcon name="video" :size="12" />{{ p.shots.filter((s) => s.videoAssetId).length }} {{ $t('home.videoCount') }}
               </Tag>
             </div>
           </div>
@@ -553,14 +554,14 @@ async function moveSelectedLibrary() {
                   v-if="isDesktop()"
                   class="proj-folder"
                   :disabled="!p.folderPath"
-                  :title="p.folderPath ? '打开项目目录' : '该项目没有本地目录记录'"
+                  :title="p.folderPath ? $t('home.openProjectFolder') : $t('home.noProjectFolder')"
                   @click="openProjectFolder(p.id)"
                 >
                   <HomeIcon name="folder" :size="16" />
                 </button>
                 <button
                   class="proj-del"
-                  title="删除"
+                  :title="$t('common.delete')"
                   @click="deleteProject(p.id)"
                 >
                   <HomeIcon name="trash" :size="16" />
@@ -574,7 +575,7 @@ async function moveSelectedLibrary() {
 
       <div v-else class="lib-layout">
         <aside class="lib-side">
-          <div class="lib-side-title">分类</div>
+          <div class="lib-side-title">{{ $t('common.folderCategory') }}</div>
           <button
             type="button"
             class="lib-folder"
@@ -582,7 +583,7 @@ async function moveSelectedLibrary() {
             @click="selectLibFolder(LIBRARY_PUBLIC_ID)"
           >
             <HomeIcon name="library" :size="16" />
-            <span>公共资产</span>
+            <span>{{ $t('home.publicAssets') }}</span>
             <em>{{ library.folderCount(LIBRARY_PUBLIC_ID) }}</em>
           </button>
           <div v-for="f in library.folders" :key="f.id" class="lib-folder-row">
@@ -593,17 +594,17 @@ async function moveSelectedLibrary() {
               :class="{ on: libFolderId === f.id }"
               @click="selectLibFolder(f.id)"
             >
-              <span>{{ f.name }}</span>
+              <span>{{ library.folderName(f.id) }}</span>
               <em>{{ library.folderCount(f.id) }}</em>
             </button>
             <form v-else class="lib-rename" @submit.prevent="commitRenameFolder">
               <input v-model="renameDraft" maxlength="24" @keydown.esc="renamingId = ''" />
-              <button type="submit">好</button>
+              <button type="submit">{{ $t('common.ok') }}</button>
             </form>
             <button
               type="button"
               class="lib-folder-act"
-              title="重命名"
+              :title="$t('common.rename')"
               @click="startRenameFolder(f.id, f.name)"
             >
               <HomeIcon name="edit" :size="14" />
@@ -611,8 +612,8 @@ async function moveSelectedLibrary() {
             <button
               type="button"
               class="lib-folder-act danger"
-              title="删除文件夹"
-              @click="removeLibFolder(f.id, f.name)"
+              :title="$t('common.deleteFolder')"
+              @click="removeLibFolder(f.id, library.folderName(f.id))"
             >
               <HomeIcon name="trash" :size="14" />
             </button>
@@ -621,37 +622,37 @@ async function moveSelectedLibrary() {
             <input
               v-model="folderDraft"
               maxlength="24"
-              placeholder="新文件夹名称"
+              :placeholder="$t('home.newFolderName')"
               :disabled="creatingFolder"
             />
-            <button type="submit" :disabled="creatingFolder || !folderDraft.trim()">创建</button>
+            <button type="submit" :disabled="creatingFolder || !folderDraft.trim()">{{ $t('common.create') }}</button>
           </form>
         </aside>
 
         <div class="lib-main">
           <p class="lib-hint">
-            公共资产可转移到自己的文件夹分类。选图时也能从公共资产或这些文件夹里挑。
+            {{ $t('home.publicAssetsHelp') }}
           </p>
           <div v-if="libSelected.size" class="lib-move-bar">
-            <span>已选 {{ libSelected.size }} 张</span>
+            <span>{{ $t('common.selectionCount') }} {{ libSelected.size }} {{ $t('common.imageCounter') }}</span>
             <select v-model="libMoveTarget">
-              <option :value="LIBRARY_PUBLIC_ID">公共资产</option>
-              <option v-for="f in library.folders" :key="f.id" :value="f.id">{{ f.name }}</option>
+              <option :value="LIBRARY_PUBLIC_ID">{{ $t('home.publicAssets') }}</option>
+              <option v-for="f in library.folders" :key="f.id" :value="f.id">{{ library.folderName(f.id) }}</option>
             </select>
-            <button type="button" @click="moveSelectedLibrary">转移</button>
-            <button type="button" class="ghost" @click="clearLibSelected">取消</button>
+            <button type="button" @click="moveSelectedLibrary">{{ $t('common.move') }}</button>
+            <button type="button" class="ghost" @click="clearLibSelected">{{ $t('common.cancel') }}</button>
           </div>
           <EmptyState
             v-if="visibleLibraryAssets.length === 0"
             :title="
               library.all.length === 0 && libFolderId === LIBRARY_PUBLIC_ID
-                ? '资产库还是空的'
-                : `${currentFolderLabel}还是空的`
+                ? $t('home.noAssets')
+                : $t('home.noAssetsInFolder', { p0: currentFolderLabel })
             "
             :description="
               library.all.length === 0 && libFolderId === LIBRARY_PUBLIC_ID
-                ? '上传图片，或在项目画布里把生成图加入公共库'
-                : '上传到这里，或从公共资产勾选后点「转移」'
+                ? $t('home.noAssetsHelp')
+                : $t('home.noAssetsInFolderHelp')
             "
           >
             <template #icon>
@@ -678,7 +679,7 @@ async function moveSelectedLibrary() {
               </button>
               <div class="lib-meta">
                 <span>{{ a.filename }}</span>
-                <button type="button" title="删除" @click="removeLibraryItem(a.id)"><HomeIcon name="trash" :size="14" /></button>
+                <button type="button" :title="$t('common.delete')" @click="removeLibraryItem(a.id)"><HomeIcon name="trash" :size="14" /></button>
               </div>
             </div>
           </div>

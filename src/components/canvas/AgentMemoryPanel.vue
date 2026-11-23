@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { t as translate } from '@/i18n'
+
 import { onMounted, ref } from 'vue'
 import {
   clearMemories,
@@ -19,9 +21,9 @@ const draftScope = ref<MemoryScope>('project')
 const adding = ref(false)
 
 const KIND_LABEL: Record<string, string> = {
-  preference: '偏好',
-  fact: '事实',
-  note: '笔记'
+  preference: translate('agentMemoryPanel.preference'),
+  fact: translate('agentMemoryPanel.fact'),
+  note: translate('agentMemoryPanel.notes')
 }
 
 async function reload() {
@@ -65,38 +67,38 @@ onMounted(reload)
 <template>
   <div class="mem-panel" @click.stop>
     <header class="mem-head">
-      <strong>记忆</strong>
-      <button type="button" class="mem-close" title="关闭" @click="emit('close')">
+      <strong>{{ $t('agentMemoryPanel.memory') }}</strong>
+      <button type="button" class="mem-close" :title="$t('common.close')" @click="emit('close')">
         <svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18" /></svg>
       </button>
     </header>
 
     <div class="mem-body">
-      <p v-if="loading" class="mem-empty">读取中…</p>
+      <p v-if="loading" class="mem-empty">{{ $t('agentMemoryPanel.loading') }}</p>
       <template v-else>
         <section class="mem-group">
           <div class="mem-group-head">
-            <span>本项目</span>
+            <span>{{ $t('agentMemoryPanel.projectScope') }}</span>
             <button
               v-if="byScope('project').length"
               type="button"
               class="mem-clear"
               @click="clear('project')"
             >
-              清空
+              {{ $t('common.empty') }}
             </button>
           </div>
           <p v-if="!byScope('project').length" class="mem-empty">
-            还没有。对我说「在这个项目里记住…」就会记在这里。
+            {{ $t('agentMemoryPanel.noProjectMemory') }}
           </p>
           <div v-for="m in byScope('project')" :key="m.id" class="mem-item" :class="{ pinned: m.pinned }">
-            <span class="mem-kind">{{ KIND_LABEL[m.kind] || '笔记' }}</span>
+            <span class="mem-kind">{{ KIND_LABEL[m.kind] || $t('agentMemoryPanel.notes') }}</span>
             <p>{{ m.content }}</p>
             <div class="mem-acts">
-              <button type="button" :title="m.pinned ? '取消置顶' : '置顶'" @click="pin(m.id)">
+              <button type="button" :title="m.pinned ? $t('agentMemoryPanel.unpin') : $t('agentMemoryPanel.pin')" @click="pin(m.id)">
                 <svg viewBox="0 0 24 24"><path d="M12 3l2.4 5.3 5.6.6-4.2 3.9 1.2 5.6-5-2.9-5 2.9 1.2-5.6L4 8.9l5.6-.6z" /></svg>
               </button>
-              <button type="button" title="删除" @click="remove(m.id)">
+              <button type="button" :title="$t('common.delete')" @click="remove(m.id)">
                 <svg viewBox="0 0 24 24"><path d="M4 7h16M9 7V5h6v2m-8 0l1 13h8l1-13" /></svg>
               </button>
             </div>
@@ -105,27 +107,27 @@ onMounted(reload)
 
         <section class="mem-group">
           <div class="mem-group-head">
-            <span>长期记忆</span>
+            <span>{{ $t('agentMemoryPanel.longTermMemory') }}</span>
             <button
               v-if="byScope('global').length"
               type="button"
               class="mem-clear"
               @click="clear('global')"
             >
-              清空
+              {{ $t('common.empty') }}
             </button>
           </div>
           <p v-if="!byScope('global').length" class="mem-empty">
-            跨项目通用。对我说「记住我喜欢竖屏暗色调」就会记在这里。
+            {{ $t('agentMemoryPanel.crossProjectHint') }}
           </p>
           <div v-for="m in byScope('global')" :key="m.id" class="mem-item" :class="{ pinned: m.pinned }">
-            <span class="mem-kind">{{ KIND_LABEL[m.kind] || '笔记' }}</span>
+            <span class="mem-kind">{{ KIND_LABEL[m.kind] || $t('agentMemoryPanel.notes') }}</span>
             <p>{{ m.content }}</p>
             <div class="mem-acts">
-              <button type="button" :title="m.pinned ? '取消置顶' : '置顶'" @click="pin(m.id)">
+              <button type="button" :title="m.pinned ? $t('agentMemoryPanel.unpin') : $t('agentMemoryPanel.pin')" @click="pin(m.id)">
                 <svg viewBox="0 0 24 24"><path d="M12 3l2.4 5.3 5.6.6-4.2 3.9 1.2 5.6-5-2.9-5 2.9 1.2-5.6L4 8.9l5.6-.6z" /></svg>
               </button>
-              <button type="button" title="删除" @click="remove(m.id)">
+              <button type="button" :title="$t('common.delete')" @click="remove(m.id)">
                 <svg viewBox="0 0 24 24"><path d="M4 7h16M9 7V5h6v2m-8 0l1 13h8l1-13" /></svg>
               </button>
             </div>
@@ -141,24 +143,24 @@ onMounted(reload)
           :class="{ on: draftScope === 'project' }"
           @click="draftScope = 'project'"
         >
-          本项目
+          {{ $t('agentMemoryPanel.projectScope') }}
         </button>
         <button
           type="button"
           :class="{ on: draftScope === 'global' }"
           @click="draftScope = 'global'"
         >
-          长期
+          {{ $t('agentMemoryPanel.longTerm') }}
         </button>
       </div>
       <div class="mem-input">
         <input
           v-model="draft"
           type="text"
-          placeholder="手动记一条，例如：默认竖屏 9:16"
+          :placeholder="$t('agentMemoryPanel.notePlaceholder')"
           @keydown.enter.prevent="add"
         />
-        <button type="button" :disabled="!draft.trim() || adding" @click="add">记下</button>
+        <button type="button" :disabled="!draft.trim() || adding" @click="add">{{ $t('agentMemoryPanel.addNote') }}</button>
       </div>
     </footer>
   </div>

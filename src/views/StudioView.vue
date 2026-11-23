@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { t as translate } from '@/i18n'
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { VueFlow, useVueFlow, type Connection, type Edge, type Node, type NodeMouseEvent } from '@vue-flow/core'
@@ -233,7 +234,7 @@ const selectedId = ref<string | null>(null)
 
 onMounted(async () => {
   if (!project.current) {
-    toast.warn('请先打开项目')
+    toast.warn(translate('studio.openProjectFirst'))
     router.push('/')
     return
   }
@@ -291,7 +292,7 @@ onConnect((c: Connection) => {
     (target.type === 'imageGen' || target.type === 'videoGen') &&
     !appendCanvasReferenceSource(project.current, target.id, source.id)
   ) {
-    toast.warn('参考图数量已达到当前模型上限')
+    toast.warn(translate('studio.referenceLimit'))
     return
   }
   const id = `e-${c.source}-${c.target}-${c.targetHandle || 'in'}`
@@ -381,7 +382,7 @@ async function optimizeAllVideoPrompts() {
       return ai - bi || a.position.y - b.position.y || a.position.x - b.position.x
     })
   if (!nodes.length) {
-    toast.warn('画布上没有可优化的 H3 视频节点')
+    toast.warn(translate('studio.noOptimizableNodes'))
     return
   }
   optimizingAllVideos.value = true
@@ -392,13 +393,13 @@ async function optimizeAllVideoPrompts() {
   try {
     for (let offset = 0; offset < nodes.length; offset += concurrency) {
       const batch = nodes.slice(offset, offset + concurrency)
-      optimizeAllProgress.value = `${processed}/${nodes.length} · 本批 ${batch.length} 个`
+      optimizeAllProgress.value = translate('studio.batchProgress', { p0: processed, p1: nodes.length, p2: batch.length })
       const results = await Promise.all(
         batch.map(async (node) => {
           try {
             if (node.type === 'shotVideo' && node.data.shotId) {
               const shot = project.current?.shots.find((item) => item.id === node.data.shotId)
-              if (!shot) throw new Error('找不到分镜')
+              if (!shot) throw new Error(translate('studio.shotNotFound'))
               await optimizeShotVideoPrompt(shot)
             } else {
               await optimizeFreeformVideoPrompt(node.id)
@@ -424,16 +425,16 @@ async function optimizeAllVideoPrompts() {
       }
       if (stoppedByAuth) {
         const authMessage = results.find((result) => !result.ok && /401|鉴权失败|Authentication Fails|invalid.*api.?key/i.test(result.message))?.message || ''
-        toast.error(`语言模型鉴权失败，当前批完成后已停止队列。${authMessage}`, 12000)
+        toast.error(translate('studio.authFailed', { p0: authMessage }), 12000)
         break
       }
     }
     if (failed.length) {
       const succeeded = processed - failed.length
-      const stopped = processed < nodes.length ? `；已停止，剩余 ${nodes.length - processed} 个未请求` : ''
-      toast.warn(`已完成 ${succeeded}/${nodes.length} 个；${failed.length} 个失败${stopped}：${failed.slice(0, 2).join('；')}`, 10000)
+      const stopped = processed < nodes.length ? translate('studio.remainingStopped', { p0: nodes.length - processed }) : ''
+      toast.warn(translate('studio.optimizeStatus', { p0: succeeded, p1: nodes.length, p2: failed.length, p3: stopped, p4: failed.slice(0, 2).join('；') }), 10000)
     } else {
-      toast.success(`已按每批最多 ${concurrency} 个完成全部 ${nodes.length} 个视频提示词`)
+      toast.success(translate('studio.optimizedAll', { p0: concurrency, p1: nodes.length }))
     }
   } finally {
     optimizingAllVideos.value = false
@@ -471,17 +472,17 @@ function canDeleteNode(id: string | null | undefined): boolean {
 
 function duplicateNode(id: string | null | undefined) {
   if (!id) {
-    toast.warn('请先选中要复制的图片或视频节点')
+    toast.warn(translate('studio.selectNodeToCopy'))
     return
   }
   const nid = project.duplicateCanvasNode(id)
   closeCtxMenu()
   if (!nid) {
-    toast.warn('只能复制图片或视频节点')
+    toast.warn(translate('studio.copyRestricted'))
     return
   }
   selectedId.value = nid
-  toast.success('已复制节点')
+  toast.success(translate('common.duplicateNode'))
   nextTick(() => {
     fitView({ nodes: [nid], padding: 0.35, duration: 280 })
   })
@@ -494,7 +495,7 @@ function deleteCtxNode(id: string | null | undefined) {
     closeCtxMenu()
     return
   }
-  if (!confirm('删除这个节点？')) {
+  if (!confirm(translate('studio.deleteNodeConfirm'))) {
     closeCtxMenu()
     return
   }
@@ -543,7 +544,7 @@ function deleteCtxNode(id: string | null | undefined) {
   }
   if (selectedId.value === id) selectedId.value = null
   closeCtxMenu()
-  toast.success('已删除节点')
+  toast.success(translate('studio.nodeDeleted'))
 }
 
 function onDupKey(e: KeyboardEvent) {
@@ -614,7 +615,7 @@ function addFreeform(type: 'imageGen' | 'videoGen') {
     type,
     position: { x: pos.x, y: pos.y },
     data: {
-      label: type === 'imageGen' ? `图片 ${count}` : `视频 ${count}`,
+      label: type === 'imageGen' ? translate('studio.imageNodeName', { p0: count }) : translate('studio.videoNodeName', { p0: count }),
       prompt: '',
       referenceAssetIds: [],
       referenceSourceNodeIds: inheritsSource && sourceId ? [sourceId] : [],
@@ -639,7 +640,7 @@ function addFreeform(type: 'imageGen' | 'videoGen') {
   }
   selectedId.value = id
   closeCtxMenu()
-  toast.success(type === 'videoGen' ? '已添加视频节点' : '已添加图片节点')
+  toast.success(type === 'videoGen' ? translate('studio.videoNodeAdded') : translate('studio.imageNodeAdded'))
   nextTick(() => {
     fitView({ nodes: [id], padding: 0.35, duration: 280 })
   })
@@ -651,7 +652,7 @@ function addScriptNode() {
   if (existing) {
     selectedId.value = existing.id
     closeCtxMenu()
-    toast.warn('已经有剧本节点')
+    toast.warn(translate('studio.scriptNodeExists'))
     return
   }
   const pos = ctxMenu.value?.flow ?? { x: 120, y: 120 }
@@ -660,7 +661,7 @@ function addScriptNode() {
     type: 'script',
     position: pos,
     data: {
-      label: project.current.script?.topic || project.current.name || '剧本',
+      label: project.current.script?.topic || project.current.name || translate('common.scripts'),
       width: 460,
       height: 720,
       kind: 'scriptDoc'
@@ -682,7 +683,7 @@ function addPipelineEntity(kind: 'subject' | 'scene' | 'shot' | 'prop') {
     const id = `sub_${stamp}`
     project.setSubjects([
       ...(project.current.subjects ?? []),
-      { id, name: `角色 ${n}`, kind: 'person', description: '' }
+      { id, name: translate('studio.characterName', { p0: n }), kind: 'person', description: '' }
     ])
     selectId = `subject:${id}`
   } else if (kind === 'prop') {
@@ -690,7 +691,7 @@ function addPipelineEntity(kind: 'subject' | 'scene' | 'shot' | 'prop') {
     const id = `prop_${stamp}`
     project.setProps([
       ...(project.current.props ?? []),
-      { id, name: `道具 ${n}`, description: '' }
+      { id, name: translate('studio.propName', { p0: n }), description: '' }
     ])
     selectId = `prop:${id}`
   } else if (kind === 'scene') {
@@ -698,7 +699,7 @@ function addPipelineEntity(kind: 'subject' | 'scene' | 'shot' | 'prop') {
     const id = `scn_${stamp}`
     project.setScenes([
       ...(project.current.scenes ?? []),
-      { id, name: `场景 ${n}`, description: '' }
+      { id, name: translate('studio.sceneName', { p0: n }), description: '' }
     ])
     selectId = `scene:${id}`
   } else {
@@ -708,7 +709,7 @@ function addPipelineEntity(kind: 'subject' | 'scene' | 'shot' | 'prop') {
     const shot: Shot = {
       id,
       index: shots.length,
-      title: `镜头 ${n}`,
+      title: translate('common.shotNumber', { p0: n }),
       visualPrompt: '',
       audioDescription: '',
       voiceover: '',
@@ -747,71 +748,71 @@ function goClassic() {
 <template>
   <div class="studio">
     <header class="bar">
-      <button class="icon-btn" title="返回项目" @click="router.push('/')">
+      <button class="icon-btn" :title="$t('studio.backToProjects')" @click="router.push('/')">
         <CanvasToolbarIcon name="back" />
       </button>
-      <strong>{{ project.current?.name || '画布' }}</strong>
+      <strong>{{ project.current?.name || $t('common.canvas') }}</strong>
       <span class="dim">{{
-        `${project.current?.shots.length || 0} 个分镜 · ${project.current?.canvas?.nodes.length || 0} 个节点`
+        $t('studio.counts', { p0: project.current?.shots.length || 0, p1: project.current?.canvas?.nodes.length || 0 })
       }}</span>
       <span v-if="project.current?.folderPath" class="dim path" :title="project.current.folderPath">
         {{ project.current.folderPath }}
       </span>
       <div class="spacer" />
-      <button class="icon-btn" title="再看一遍新手引导" @click="guideOpen = true">
+      <button class="icon-btn" :title="$t('studio.guide')" @click="guideOpen = true">
         <span class="guide-mark">?</span>
       </button>
       <button
         class="mode-switch-btn script-lib-btn"
         type="button"
-        title="打开剧本库：所有剧本都存在本地 Markdown，可以编辑、增删集数"
+        :title="$t('studio.openScriptLibrary')"
         @click="router.push('/scripts')"
       >
         <CanvasToolbarIcon name="script" :size="15" />
-        剧本
+        {{ $t('common.scripts') }}
         <em>→</em>
       </button>
       <button
         class="mode-switch-btn"
         type="button"
-        title="切到经典分步流程：剧本 → 分镜 → 图片 → 视频 → 剪辑 → 字幕 → 导出"
+        :title="$t('studio.classicHint')"
         @click="goClassic"
       >
         <CanvasToolbarIcon name="steps" :size="15" />
-        经典步骤
+        {{ $t('common.classicWorkflow') }}
         <em>→</em>
       </button>
       <button
         class="bulk-optimize-btn"
         type="button"
         :disabled="optimizingAllVideos"
-        title="按分镜顺序逐个优化所有 H3 视频节点提示词"
+        :title="$t('studio.optimizeAllHint')"
         @click="optimizeAllVideoPrompts"
       >
         <CanvasToolbarIcon name="sparkles" :size="16" />
-        {{ optimizingAllVideos ? `优化中 ${optimizeAllProgress}` : '一键优化全部视频提示词' }}
+        {{ optimizingAllVideos ? $t('studio.optimizing', { p0: optimizeAllProgress }) : $t('studio.optimizeAll') }}
       </button>
       <button
         class="icon-btn"
         :class="{ on: agentOpen }"
-        :title="agentOpen ? '收起对话' : '打开智能体'"
+        :title="agentOpen ? $t('studio.closeChat') : $t('studio.openAgent')"
         @click="agentOpen = !agentOpen"
       >
         <CanvasToolbarIcon name="assistant" />
       </button>
-      <button class="icon-btn" title="重整布局" @click="relayout">
+      <button class="icon-btn" :title="$t('studio.rearrange')" @click="relayout">
         <CanvasToolbarIcon name="layout" />
       </button>
-      <button v-if="isDesktop()" class="icon-btn" title="打开文件夹" @click="openFolder">
+      <button v-if="isDesktop()" class="icon-btn" :title="$t('common.openFolder')" @click="openFolder">
         <CanvasToolbarIcon name="folder" />
       </button>
-      <button class="icon-btn" title="设置" @click="openSettings">
+      <button class="icon-btn" :title="$t('common.settings')" @click="openSettings">
         <CanvasToolbarIcon name="settings" />
       </button>
       <button
         class="icon-btn"
         :class="{ on: rightOpen }"
-        :title="rightOpen ? '收起右侧' : '打开右侧'"
+        :title="rightOpen ? $t('studio.closeRightPanel') : $t('studio.openRightPanel')"
         @click="rightOpen = !rightOpen"
       >
         <CanvasToolbarIcon name="panel" />
@@ -835,13 +836,13 @@ function goClassic() {
         <div
           class="agent-resizer"
           role="separator"
-          aria-label="调整智能体聊天窗口宽度"
+          :aria-label="$t('studio.resizeAgent')"
           aria-orientation="vertical"
           :aria-valuemin="AGENT_MIN_WIDTH"
           :aria-valuemax="maxAgentWidth()"
           :aria-valuenow="agentWidth"
           tabindex="0"
-          title="左右拖动调整聊天窗口宽度"
+          :title="$t('studio.dragResize')"
           @pointerdown="startAgentResize"
           @keydown.left.prevent="nudgeAgentWidth(-24)"
           @keydown.right.prevent="nudgeAgentWidth(24)"
@@ -865,7 +866,7 @@ function goClassic() {
           <Controls position="bottom-left" :show-interactive="false" />
         </VueFlow>
         <div v-if="!project.current?.canvas?.nodes.length" class="empty-hint">
-          在左边说一句话让我开工，或在空白处右键添加图片 / 视频 / 剧本 / 角色 / 道具 / 场景 / 分镜
+          {{ $t('studio.emptyCanvas') }}
         </div>
       </div>
       <Teleport to="body">
@@ -887,14 +888,14 @@ function goClassic() {
               <path d="M8 13.5 10.2 11l3.3 3.2 2-1.8L20 16" />
               <circle cx="9" cy="9" r="1.1" />
             </svg>
-            {{ ctxMenu.nodeId ? '追加图片节点' : '添加图片节点' }}
+            {{ ctxMenu.nodeId ? $t('studio.appendImage') : $t('studio.addImage') }}
           </button>
           <button type="button" @mousedown.prevent.stop="addFreeform('videoGen')">
             <svg viewBox="0 0 24 24" aria-hidden="true">
               <rect x="3.5" y="5.5" width="17" height="13" rx="2" />
               <path d="M10 9.5v5l5-2.5-5-2.5Z" />
             </svg>
-            {{ ctxMenu.nodeId ? '追加视频节点' : '添加视频节点' }}
+            {{ ctxMenu.nodeId ? $t('studio.appendVideo') : $t('studio.addVideo') }}
           </button>
           <div class="ctx-sep" />
           <button type="button" @mousedown.prevent.stop="addScriptNode">
@@ -903,21 +904,21 @@ function goClassic() {
               <path d="M14 4.5V9h4.5" />
               <path d="M9.5 12.5h5M9.5 15.5h5" />
             </svg>
-            {{ ctxMenu.nodeId ? '追加剧本节点' : '添加剧本节点' }}
+            {{ ctxMenu.nodeId ? $t('studio.appendScript') : $t('studio.addScript') }}
           </button>
           <button type="button" @mousedown.prevent.stop="addPipelineEntity('subject')">
             <svg viewBox="0 0 24 24" aria-hidden="true">
               <circle cx="12" cy="8" r="2.6" />
               <path d="M6.5 18.5c.8-3.2 2.8-4.8 5.5-4.8s4.7 1.6 5.5 4.8" />
             </svg>
-            {{ ctxMenu.nodeId ? '追加角色节点' : '添加角色节点' }}
+            {{ ctxMenu.nodeId ? $t('studio.appendCharacter') : $t('studio.addCharacter') }}
           </button>
           <button type="button" @mousedown.prevent.stop="addPipelineEntity('prop')">
             <svg viewBox="0 0 24 24" aria-hidden="true">
               <path d="M8 8.5h8l1.2 2.2H18a2 2 0 0 1 2 2V17a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2v-4.3a2 2 0 0 1 2-2h.8L8 8.5Z" />
               <path d="M9 8.5V7.2A1.2 1.2 0 0 1 10.2 6h3.6A1.2 1.2 0 0 1 15 7.2v1.3" />
             </svg>
-            {{ ctxMenu.nodeId ? '追加道具节点' : '添加道具节点' }}
+            {{ ctxMenu.nodeId ? $t('studio.appendProp') : $t('studio.addProp') }}
           </button>
           <button type="button" @mousedown.prevent.stop="addPipelineEntity('scene')">
             <svg viewBox="0 0 24 24" aria-hidden="true">
@@ -925,14 +926,14 @@ function goClassic() {
               <path d="M4.5 6.5h15v12h-15z" />
               <path d="M4.5 18.5h15" />
             </svg>
-            {{ ctxMenu.nodeId ? '追加场景节点' : '添加场景节点' }}
+            {{ ctxMenu.nodeId ? $t('studio.appendScene') : $t('studio.addScene') }}
           </button>
           <button type="button" @mousedown.prevent.stop="addPipelineEntity('shot')">
             <svg viewBox="0 0 24 24" aria-hidden="true">
               <rect x="4" y="6.5" width="16" height="11" rx="1.5" />
               <path d="M8 6.5v11M16 6.5v11M4 10.5h16M4 13.5h16" />
             </svg>
-            {{ ctxMenu.nodeId ? '追加分镜节点' : '添加分镜节点' }}
+            {{ ctxMenu.nodeId ? $t('studio.appendStoryboard') : $t('studio.addStoryboard') }}
           </button>
           <template v-if="ctxMenu.onNode && (canDuplicate(ctxMenu.nodeId) || canDeleteNode(ctxMenu.nodeId))">
             <div class="ctx-sep" />
@@ -945,7 +946,7 @@ function goClassic() {
                 <rect x="8" y="8" width="11" height="11" rx="1.5" />
                 <path d="M6 16V5.5A1.5 1.5 0 0 1 7.5 4H16" />
               </svg>
-              复制此节点
+              {{ $t('studio.copyNode') }}
             </button>
             <button
               v-if="canDeleteNode(ctxMenu.nodeId)"
@@ -959,13 +960,13 @@ function goClassic() {
                 <path d="M8 7.5V18a1.5 1.5 0 0 0 1.5 1.5h5A1.5 1.5 0 0 0 16 18V7.5" />
                 <path d="M10.5 11v5M13.5 11v5" />
               </svg>
-              删除此节点
+              {{ $t('studio.deleteNode') }}
             </button>
           </template>
         </div>
       </Teleport>
       <aside v-if="rightOpen" class="dock">
-        <div class="dock-title">节点</div>
+        <div class="dock-title">{{ $t('studio.node') }}</div>
         <NodeInspector :node="selected" />
       </aside>
     </div>

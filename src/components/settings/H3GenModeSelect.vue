@@ -16,22 +16,22 @@ function setMode(mode: H3VideoGenMode) {
 </script>
 
 <template>
-  <div class="h3-mode nodrag nowheel" role="group" aria-label="H3 生成模式">
+  <div class="h3-mode nodrag nowheel" role="group" :aria-label="$t('h3GenModeSelect.mode')">
     <button
       type="button"
       :class="{ on: value === 'reference' }"
-      title="多模态参考：人设、场景、看板按官方六段写，不是首帧"
+      :title="$t('h3GenModeSelect.multimodalHint')"
       @click="setMode('reference')"
     >
-      多模态参考
+      {{ $t('h3GenModeSelect.multimodal') }}
     </button>
     <button
       type="button"
       :class="{ on: value === 'fl2va' }"
-      title="用首帧和尾帧插值成一条连续镜头"
+      :title="$t('h3GenModeSelect.interpolateHint')"
       @click="setMode('fl2va')"
     >
-      首尾帧
+      {{ $t('common.firstLastFrame') }}
     </button>
   </div>
 </template>

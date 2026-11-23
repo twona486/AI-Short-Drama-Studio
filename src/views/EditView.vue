@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { t as translate } from '@/i18n'
 import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { useProjectStore, useAssetsStore, useToastStore } from '@/stores'
@@ -68,7 +69,7 @@ const selectedShot = computed(() => {
 const isDigitalHuman = computed(() => isDigitalHumanSpeechProject(project.current))
 const bgmName = computed(() => {
   const id = project.current?.bgmAssetId
-  return id ? assets.getMeta(id)?.filename || '已选择背景音乐' : '未添加背景音乐'
+  return id ? assets.getMeta(id)?.filename || translate('edit.musicSelected') : translate('edit.noMusic')
 })
 const textOverlays = computed(() => project.current?.textOverlays || [])
 const selectedText = computed(() => textOverlays.value.find((item) => item.id === selectedTextId.value) || null)
@@ -87,7 +88,7 @@ const clipSourceDurations = computed<Record<string, number>>(() => {
 
 function clipTitle(clip: TimelineClip, index: number) {
   const shot = shots.value.find((item) => item.id === clip.shotId)
-  return shot?.title || clip.label || `视频片段 ${index + 1}`
+  return shot?.title || clip.label || translate('edit.clipNumber', { p0: index + 1 })
 }
 
 async function loadClipThumbs() {
@@ -107,12 +108,12 @@ async function playClip(clip: TimelineClip, index: number) {
   if (!project.current) return
   const assetId = timelineClipAssetId(project.current, clip)
   if (!assetId) {
-    toast.warn('这个片段没有可播放的视频素材')
+    toast.warn(translate('edit.clipNoVideo'))
     return
   }
   const url = await assets.getUrl(assetId)
   if (!url) {
-    toast.error('视频素材读取失败')
+    toast.error(translate('edit.cannotReadVideo'))
     return
   }
   selectedClipId.value = clip.id
@@ -171,13 +172,13 @@ function autoBuildTimeline() {
   if (!project.current) return
   const clips = buildTimelineFromShots(project.current)
   project.setTimeline(clips)
-  toast.success(`已自动构建 ${clips.length} 个片段的时间线`)
+  toast.success(translate('edit.timelineBuilt', { p0: clips.length }))
 }
 
 function addShotToTimeline(shot: Shot) {
   if (!project.current) return
   if (timeline.value.find((c) => c.shotId === shot.id)) {
-    toast.warn('该分镜已在时间线上')
+    toast.warn(translate('edit.shotExists'))
     return
   }
   const lastEnd = timeline.value.reduce(
@@ -197,7 +198,7 @@ function addShotToTimeline(shot: Shot) {
     enabled: true
   }
   project.addClip(newClip)
-  toast.success(`已加入：${shot.title}`)
+  toast.success(translate('edit.addedNamed', { p0: shot.title }))
 }
 
 function addAllShots() {
@@ -232,7 +233,7 @@ function appendMissingShots() {
     return clip
   })
   project.setTimeline([...timeline.value, ...additions])
-  toast.info(`已补入 ${additions.length} 个新生成的视频片段`)
+  toast.info(translate('edit.clipsAppended', { p0: additions.length }))
 }
 
 function addVideoAssets(ids: string[]) {
@@ -248,7 +249,7 @@ function addVideoAssets(ids: string[]) {
       id: `tc_asset_${stamp}_${additions.length}`,
       shotId: `asset_${assetId}_${stamp}_${additions.length}`,
       assetId,
-      label: meta.filename || `视频 ${timeline.value.length + additions.length + 1}`,
+      label: meta.filename || translate('common.videoNumber', { p0: timeline.value.length + additions.length + 1 }),
       startTime: cursor,
       duration,
       sourceIn: 0,
@@ -263,7 +264,7 @@ function addVideoAssets(ids: string[]) {
   if (!additions.length) return
   project.setTimeline([...timeline.value, ...additions])
   selectedClipId.value = additions[0].id
-  toast.success(`已加入 ${additions.length} 个视频片段`)
+  toast.success(translate('edit.addedClips', { p0: additions.length }))
 }
 
 async function importVideos() {
@@ -281,7 +282,7 @@ async function importVideos() {
     }
     addVideoAssets(ids)
   } catch (e: any) {
-    toast.error(`导入视频失败：${e?.message || String(e)}`)
+    toast.error(translate('edit.importVideoFailed', { p0: e?.message || String(e) }))
   } finally {
     importingVideo.value = false
   }
@@ -300,7 +301,7 @@ function chooseBgm(ids: string[]) {
     duration: Math.max(0.5, Math.min(audioDuration || total, total)),
     volume: project.current?.settings.bgmVolume ?? 0.25
   })
-  toast.success('背景音乐已投入音乐轨，可调整位置和长度')
+  toast.success(translate('edit.musicAdded'))
 }
 
 function updateBgmClip(patch: Partial<AudioTimelineClip>) {
@@ -317,7 +318,7 @@ function addTextOverlay() {
   const total = Number(totalDuration.value) || start + 3
   const item: TextOverlay = {
     id: `txt_${Date.now().toString(36)}`,
-    text: '输入文字',
+    text: translate('edit.newText'),
     startTime: start,
     duration: Math.max(0.5, Math.min(3, total - start || 3)),
     fontFamily: project.current.settings.captionStyle.fontFamily || 'Microsoft YaHei',
@@ -399,7 +400,7 @@ async function importBgm() {
     })
     chooseBgm([asset.id])
   } catch (e: any) {
-    toast.error(`导入音乐失败：${e?.message || String(e)}`)
+    toast.error(translate('edit.importMusicFailed', { p0: e?.message || String(e) }))
   } finally {
     importingAudio.value = false
   }
@@ -457,15 +458,15 @@ async function preview() {
   if (!project.current) return
   if (merging.value) return
   if (timeline.value.length === 0) {
-    toast.warn('时间线是空的')
+    toast.warn(translate('common.emptyTimeline'))
     return
   }
   merging.value = true
   try {
-    toast.info('开始预览合成（用 FFmpeg 拼接）...')
+    toast.info(translate('edit.startPreview'))
     const segments = await buildSegments()
     if (segments.length === 0) {
-      toast.error('没有可用的视频片段')
+      toast.error(translate('edit.noClips'))
       return
     }
     const blob = await concatVideos(segments, {
@@ -480,9 +481,9 @@ async function preview() {
     if (previewingUrl.value) URL.revokeObjectURL(previewingUrl.value)
     previewingUrl.value = URL.createObjectURL(blob)
     previewing_.value = true
-    toast.success('预览就绪')
+    toast.success(translate('edit.previewReady'))
   } catch (e: any) {
-    toast.error('预览失败：' + e.message)
+    toast.error(translate('edit.previewFailed', { error: e.message }))
   } finally {
     merging.value = false
   }
@@ -491,12 +492,12 @@ async function preview() {
 async function confirmMerge() {
   if (!project.current || merging.value) return
   if (!timeline.value.some((clip) => clip.enabled)) {
-    toast.warn('时间线上没有启用的视频片段')
+    toast.warn(translate('edit.noEnabledClips'))
     return
   }
   const node = project.current.canvas?.nodes.find((item) => item.type === 'export' || item.type === 'final')
   merging.value = true
-  mergeProgress.value = '准备正式合成…'
+  mergeProgress.value = translate('edit.preparingFinal')
   try {
     if (node) {
       await runCanvasNode(node.id, (_id, message) => {
@@ -513,9 +514,9 @@ async function confirmMerge() {
       previewingUrl.value = (await assets.getUrl(assetId)) || null
       previewing_.value = Boolean(previewingUrl.value)
     }
-    toast.success('正式视频已合成，可以预览或返回画布查看')
+    toast.success(translate('edit.finalReady'))
   } catch (e: any) {
-    toast.error(`合成失败：${e?.message || String(e)}`)
+    toast.error(translate('edit.composeFailed', { p0: e?.message || String(e) }))
   } finally {
     merging.value = false
     mergeProgress.value = ''
@@ -555,13 +556,13 @@ function goBack() {
   <div class="edit-page">
     <header class="page-head">
       <div class="page-title-area">
-        <button type="button" class="back-button" title="返回上一步" aria-label="返回上一步" @click="goBack">
+        <button type="button" class="back-button" :title="$t('edit.previous')" :aria-label="$t('edit.previous')" @click="goBack">
           <EditIcon name="back" :size="20" />
         </button>
         <div>
-        <h1>视频剪辑</h1>
-        <p v-if="isDigitalHuman">各段视频已经带声音，按顺序拼接即可。下一步去确认字幕和划重点，不必再配音。</p>
-        <p v-else>把分镜视频片段按顺序拼接，可调时长、加转场、变速</p>
+        <h1>{{ $t('common.videoEditing') }}</h1>
+        <p v-if="isDigitalHuman">{{ $t('edit.withVoiceHint') }}</p>
+        <p v-else>{{ $t('edit.workflowHint') }}</p>
         </div>
       </div>
       <div class="head-actions">
@@ -570,19 +571,19 @@ function goBack() {
           @click="autoBuildTimeline"
         >
           <template #icon><EditIcon name="refresh" /></template>
-          重建时间线
+          {{ $t('edit.rebuildTimeline') }}
         </GradientButton>
         <GradientButton
           :loading="merging"
           @click="preview"
         >
           <template #icon><EditIcon name="play" /></template>
-          预览
+          {{ $t('common.preview') }}
         </GradientButton>
-        <GradientButton type="secondary" @click="next"><template #icon><EditIcon name="next" /></template>字幕设置</GradientButton>
+        <GradientButton type="secondary" @click="next"><template #icon><EditIcon name="next" /></template>{{ $t('edit.captionOptions') }}</GradientButton>
         <GradientButton :loading="merging" :disabled="merging" @click="confirmMerge">
           <template #icon><EditIcon name="check" /></template>
-          {{ merging ? (mergeProgress || '合成中…') : '确认并正式合成' }}
+          {{ merging ? (mergeProgress || $t('edit.composing')) : $t('edit.composeFinal') }}
         </GradientButton>
       </div>
     </header>
@@ -591,13 +592,13 @@ function goBack() {
       <aside class="left-panel">
         <GlassCard padding="md">
           <div class="panel-head">
-            <h3>分镜库</h3>
-            <button class="add-all" @click="addAllShots">全部加入</button>
+            <h3>{{ $t('edit.storyboardLibrary') }}</h3>
+            <button class="add-all" @click="addAllShots">{{ $t('edit.addAll') }}</button>
           </div>
           <div class="media-add-row">
-            <button type="button" @click="videoPickerOpen = true"><EditIcon name="video" :size="15" />项目视频</button>
+            <button type="button" @click="videoPickerOpen = true"><EditIcon name="video" :size="15" />{{ $t('edit.projectVideos') }}</button>
             <button type="button" :disabled="importingVideo" @click="importVideos">
-              <EditIcon name="upload" :size="15" />{{ importingVideo ? '导入中…' : '本地视频' }}
+              <EditIcon name="upload" :size="15" />{{ importingVideo ? $t('edit.importing') : $t('edit.localVideo') }}
             </button>
           </div>
           <div class="shot-list">
@@ -616,7 +617,7 @@ function goBack() {
                 <div class="shot-item-title">{{ shot.title }}</div>
                 <div class="shot-item-meta">
                   {{ shot.duration }}s
-                  <span v-if="!shot.videoAssetId && !shot.imageAssetId">· 无素材</span>
+                  <span v-if="!shot.videoAssetId && !shot.imageAssetId">{{ $t('edit.noClipAsset') }}</span>
                 </div>
               </div>
               <div class="shot-item-add">
@@ -631,8 +632,8 @@ function goBack() {
         <GlassCard padding="md" class="source-preview-card">
           <div class="source-preview-head">
             <div>
-              <h3>片段预览</h3>
-              <p>{{ sourcePreviewTitle || '点击下方任一视频片段即可播放' }}</p>
+              <h3>{{ $t('edit.clipPreview') }}</h3>
+              <p>{{ sourcePreviewTitle || $t('edit.playHint') }}</p>
             </div>
           </div>
           <div class="source-player-wrap">
@@ -646,7 +647,7 @@ function goBack() {
               @loadedmetadata="applyPendingSeek"
               @timeupdate="syncPlayheadFromPlayer"
             />
-            <div v-if="!sourcePreviewUrl" class="source-player-empty"><EditIcon name="play" :size="26" /><span>选择一个片段开始预览</span></div>
+            <div v-if="!sourcePreviewUrl" class="source-player-empty"><EditIcon name="play" :size="26" /><span>{{ $t('edit.selectClip') }}</span></div>
             <div
               v-for="text in activeTexts"
               :key="text.id"
@@ -659,7 +660,7 @@ function goBack() {
             </div>
           </div>
 
-          <div class="filmstrip" aria-label="按合成顺序排列的视频预览">
+          <div class="filmstrip" :aria-label="$t('edit.orderedPreview')">
             <button
               v-for="(clip, index) in timeline"
               :key="clip.id"
@@ -679,7 +680,7 @@ function goBack() {
             </button>
             <button type="button" class="filmstrip-add" @click="videoPickerOpen = true">
               <strong><EditIcon name="plus" :size="22" /></strong>
-              <span>添加视频</span>
+              <span>{{ $t('common.addVideo') }}</span>
             </button>
           </div>
         </GlassCard>
@@ -700,7 +701,7 @@ function goBack() {
           />
           <div class="editor-tracks">
             <div class="track-row">
-              <div class="track-name">音乐</div>
+              <div class="track-name">{{ $t('edit.music') }}</div>
               <div class="track-lane">
                 <button
                   v-if="project.current?.bgmClip"
@@ -710,11 +711,11 @@ function goBack() {
                 >
                   <EditIcon name="music" :size="13" /> {{ bgmName }}
                 </button>
-                <button v-else type="button" class="track-empty-add" @click="audioPickerOpen = true"><EditIcon name="plus" :size="14" />投入音乐</button>
+                <button v-else type="button" class="track-empty-add" @click="audioPickerOpen = true"><EditIcon name="plus" :size="14" />{{ $t('edit.addMusic') }}</button>
               </div>
             </div>
             <div class="track-row">
-              <div class="track-name">文字</div>
+              <div class="track-name">{{ $t('edit.text') }}</div>
               <div class="track-lane">
                 <button
                   v-for="item in textOverlays"
@@ -727,7 +728,7 @@ function goBack() {
                 >
                   <EditIcon name="text" :size="13" /> {{ item.text }}
                 </button>
-                <button v-if="!textOverlays.length" type="button" class="track-empty-add" @click="addTextOverlay"><EditIcon name="plus" :size="14" />添加文字</button>
+                <button v-if="!textOverlays.length" type="button" class="track-empty-add" @click="addTextOverlay"><EditIcon name="plus" :size="14" />{{ $t('edit.addText') }}</button>
               </div>
             </div>
           </div>
@@ -737,8 +738,8 @@ function goBack() {
           <div v-if="previewing_ && previewingUrl" class="preview-wrap">
             <GlassCard padding="md">
               <div class="preview-head">
-                <h3><EditIcon name="play" :size="16" />预览</h3>
-                <button @click="previewing_ = false"><EditIcon name="close" :size="15" />关闭</button>
+                <h3><EditIcon name="play" :size="16" />{{ $t('common.preview') }}</h3>
+                <button @click="previewing_ = false"><EditIcon name="close" :size="15" />{{ $t('common.close') }}</button>
               </div>
               <video
                 :src="previewingUrl"
@@ -753,14 +754,14 @@ function goBack() {
 
       <aside class="right-panel">
         <GlassCard v-if="selectedClip" padding="md">
-          <h3>片段属性</h3>
+          <h3>{{ $t('edit.clipProperties') }}</h3>
           <div class="clip-prop-head">
             <div class="prop-num">#{{ selectedShot ? selectedShot.index + 1 : timeline.findIndex(c => c.id === selectedClip?.id) + 1 }}</div>
-            <div class="prop-title">{{ selectedShot?.title || selectedClip.label || '视频素材' }}</div>
+            <div class="prop-title">{{ selectedShot?.title || selectedClip.label || $t('common.videoAssets') }}</div>
           </div>
 
           <label class="prop-field">
-            <span>时长 (秒)</span>
+            <span>{{ $t('edit.clipSeconds') }}</span>
             <div class="row">
               <input
                 type="range"
@@ -784,7 +785,7 @@ function goBack() {
           </label>
 
           <label class="prop-field">
-            <span>素材入点 (秒)</span>
+            <span>{{ $t('edit.sourceInPoint') }}</span>
             <input
               type="number"
               min="0"
@@ -795,7 +796,7 @@ function goBack() {
           </label>
 
           <label class="prop-field">
-            <span>播放速度</span>
+            <span>{{ $t('edit.playbackRate') }}</span>
             <div class="row">
               <input
                 type="range"
@@ -811,7 +812,7 @@ function goBack() {
           </label>
 
           <label class="prop-field">
-            <span>音量</span>
+            <span>{{ $t('edit.volume') }}</span>
             <div class="row">
               <input
                 type="range"
@@ -827,22 +828,22 @@ function goBack() {
           </label>
 
           <label class="prop-field">
-            <span>入镜转场</span>
+            <span>{{ $t('edit.transitionIn') }}</span>
             <select
               :value="selectedClip.transitionIn"
               @change="updateClip(selectedClip.id, { transitionIn: ($event.target as HTMLSelectElement).value as TransitionType })"
               class="prop-input"
             >
-              <option value="none">无</option>
-              <option value="fade">淡入淡出</option>
-              <option value="fade-black">黑场淡入淡出</option>
-              <option value="zoom-in">放大</option>
-              <option value="zoom-out">缩小</option>
+              <option value="none">{{ $t('common.none') }}</option>
+              <option value="fade">{{ $t('edit.crossfade') }}</option>
+              <option value="fade-black">{{ $t('edit.fadeToBlack') }}</option>
+              <option value="zoom-in">{{ $t('common.enlarge') }}</option>
+              <option value="zoom-out">{{ $t('common.zoomOut') }}</option>
             </select>
           </label>
 
           <label class="prop-field" v-if="selectedClip.transitionIn !== 'none'">
-            <span>转场时长 (秒)</span>
+            <span>{{ $t('edit.transitionDuration') }}</span>
             <input
               type="number"
               min="0"
@@ -862,78 +863,78 @@ function goBack() {
               @click="removeClip(selectedClip.id)"
             >
               <template #icon><EditIcon name="trash" :size="16" /></template>
-              移除该片段
+              {{ $t('edit.removeClip') }}
             </GradientButton>
           </div>
         </GlassCard>
 
         <GlassCard v-else padding="md">
-          <h3 class="section-title"><EditIcon name="info" :size="16" />提示</h3>
-          <p class="hint">点击时间线上的片段可以在这里编辑它的属性。</p>
+          <h3 class="section-title"><EditIcon name="info" :size="16" />{{ $t('edit.hint') }}</h3>
+          <p class="hint">{{ $t('edit.clipPropertiesHint') }}</p>
           <p class="hint">
-            <Tag size="sm" type="accent">时长</Tag> 决定该片段在最终视频里持续多久。
+            <Tag size="sm" type="accent">{{ $t('common.length') }}</Tag> {{ $t('edit.clipDurationHint') }}
           </p>
           <p class="hint">
-            <Tag size="sm" type="accent">转场</Tag> 让片段之间更平滑。
+            <Tag size="sm" type="accent">{{ $t('edit.transition') }}</Tag> {{ $t('edit.transitionHint') }}
           </p>
           <p class="hint">
-            <Tag size="sm" type="accent">速度</Tag> 0.5x = 慢动作，2x = 2 倍快进。
+            <Tag size="sm" type="accent">{{ $t('edit.speed') }}</Tag> {{ $t('edit.speedHint') }}
           </p>
         </GlassCard>
 
         <GlassCard padding="md" class="media-settings">
           <div class="property-title-row">
-            <h3>音乐轨</h3>
-            <button type="button" @click="audioPickerOpen = true"><EditIcon name="plus" :size="14" />投入音乐</button>
+            <h3>{{ $t('edit.musicTrack') }}</h3>
+            <button type="button" @click="audioPickerOpen = true"><EditIcon name="plus" :size="14" />{{ $t('edit.addMusic') }}</button>
           </div>
           <p class="current-media" :title="bgmName">{{ bgmName }}</p>
           <div class="media-add-row">
-            <button type="button" @click="audioPickerOpen = true">更换音乐</button>
+            <button type="button" @click="audioPickerOpen = true">{{ $t('edit.replaceMusic') }}</button>
             <button type="button" :disabled="importingAudio" @click="importBgm">
-              {{ importingAudio ? '导入中…' : '本地音乐' }}
+              {{ importingAudio ? $t('edit.importing') : $t('edit.localMusic') }}
             </button>
-            <button v-if="project.current?.bgmClip" type="button" class="danger-text" @click="project.setBgmClip(undefined)">移除</button>
+            <button v-if="project.current?.bgmClip" type="button" class="danger-text" @click="project.setBgmClip(undefined)">{{ $t('common.remove') }}</button>
           </div>
           <template v-if="project.current?.bgmClip">
             <div class="inline-fields">
-              <label class="prop-field"><span>开始（秒）</span><input class="prop-input" type="number" min="0" step="0.1" :value="project.current.bgmClip.startTime" @change="updateBgmClip({ startTime: Number(($event.target as HTMLInputElement).value) })" /></label>
-              <label class="prop-field"><span>长度（秒）</span><input class="prop-input" type="number" min="0.5" step="0.1" :value="project.current.bgmClip.duration" @change="updateBgmClip({ duration: Number(($event.target as HTMLInputElement).value) })" /></label>
+              <label class="prop-field"><span>{{ $t('edit.startSeconds') }}</span><input class="prop-input" type="number" min="0" step="0.1" :value="project.current.bgmClip.startTime" @change="updateBgmClip({ startTime: Number(($event.target as HTMLInputElement).value) })" /></label>
+              <label class="prop-field"><span>{{ $t('edit.lengthSeconds') }}</span><input class="prop-input" type="number" min="0.5" step="0.1" :value="project.current.bgmClip.duration" @change="updateBgmClip({ duration: Number(($event.target as HTMLInputElement).value) })" /></label>
             </div>
-            <label class="prop-field"><span>音乐入点（秒）</span><input class="prop-input" type="number" min="0" step="0.1" :value="project.current.bgmClip.sourceIn" @change="updateBgmClip({ sourceIn: Number(($event.target as HTMLInputElement).value) })" /></label>
+            <label class="prop-field"><span>{{ $t('edit.musicInPoint') }}</span><input class="prop-input" type="number" min="0" step="0.1" :value="project.current.bgmClip.sourceIn" @change="updateBgmClip({ sourceIn: Number(($event.target as HTMLInputElement).value) })" /></label>
             <label class="prop-field bgm-volume">
-              <span>音量 {{ Math.round(project.current.bgmClip.volume * 100) }}%</span>
+              <span>{{ $t('edit.volume') }} {{ Math.round(project.current.bgmClip.volume * 100) }}%</span>
               <input class="range" type="range" min="0" max="1" step="0.05" :value="project.current.bgmClip.volume" @input="updateBgmClip({ volume: Number(($event.target as HTMLInputElement).value) })" />
             </label>
           </template>
 
           <div class="property-title-row text-property-title">
-            <h3>文字轨</h3>
-            <button type="button" @click="addTextOverlay"><EditIcon name="plus" :size="14" />添加文字</button>
+            <h3>{{ $t('edit.textTrack') }}</h3>
+            <button type="button" @click="addTextOverlay"><EditIcon name="plus" :size="14" />{{ $t('edit.addText') }}</button>
           </div>
           <template v-if="selectedText">
             <label class="prop-field">
-              <span>文字内容</span>
+              <span>{{ $t('edit.textContent') }}</span>
               <textarea class="text-content-editor" rows="3" :value="selectedText.text" @input="updateTextOverlay({ text: ($event.target as HTMLTextAreaElement).value })" />
             </label>
             <label class="prop-field">
-              <span>字体</span>
+              <span>{{ $t('common.font') }}</span>
               <select class="prop-input" :value="selectedText.fontFamily" @change="updateTextOverlay({ fontFamily: ($event.target as HTMLSelectElement).value })">
-                <option value="Microsoft YaHei">微软雅黑</option><option value="SimHei">黑体</option><option value="SimSun">宋体</option><option value="KaiTi">楷体</option><option value="Arial">Arial</option>
+                <option value="Microsoft YaHei">{{ $t('edit.yaheiFont') }}</option><option value="SimHei">{{ $t('edit.heiFont') }}</option><option value="SimSun">{{ $t('edit.songFont') }}</option><option value="KaiTi">{{ $t('edit.kaiFont') }}</option><option value="Arial">Arial</option>
               </select>
             </label>
             <div class="inline-fields">
-              <label class="prop-field"><span>字号</span><input class="prop-input" type="number" min="12" max="96" step="1" :value="Math.round(selectedText.fontSizeRatio * 720)" @input="updateTextOverlay({ fontSizeRatio: Number(($event.target as HTMLInputElement).value) / 720 })" /></label>
-              <label class="prop-field"><span>颜色</span><input class="color-input" type="color" :value="selectedText.color" @input="updateTextOverlay({ color: ($event.target as HTMLInputElement).value })" /></label>
+              <label class="prop-field"><span>{{ $t('common.fontSize') }}</span><input class="prop-input" type="number" min="12" max="96" step="1" :value="Math.round(selectedText.fontSizeRatio * 720)" @input="updateTextOverlay({ fontSizeRatio: Number(($event.target as HTMLInputElement).value) / 720 })" /></label>
+              <label class="prop-field"><span>{{ $t('common.color') }}</span><input class="color-input" type="color" :value="selectedText.color" @input="updateTextOverlay({ color: ($event.target as HTMLInputElement).value })" /></label>
             </div>
             <div class="inline-fields">
-              <label class="prop-field"><span>开始（秒）</span><input class="prop-input" type="number" min="0" step="0.1" :value="selectedText.startTime" @change="updateTextOverlay({ startTime: Number(($event.target as HTMLInputElement).value) })" /></label>
-              <label class="prop-field"><span>长度（秒）</span><input class="prop-input" type="number" min="0.5" step="0.1" :value="selectedText.duration" @change="updateTextOverlay({ duration: Number(($event.target as HTMLInputElement).value) })" /></label>
+              <label class="prop-field"><span>{{ $t('edit.startSeconds') }}</span><input class="prop-input" type="number" min="0" step="0.1" :value="selectedText.startTime" @change="updateTextOverlay({ startTime: Number(($event.target as HTMLInputElement).value) })" /></label>
+              <label class="prop-field"><span>{{ $t('edit.lengthSeconds') }}</span><input class="prop-input" type="number" min="0.5" step="0.1" :value="selectedText.duration" @change="updateTextOverlay({ duration: Number(($event.target as HTMLInputElement).value) })" /></label>
             </div>
-            <label class="prop-field"><span>位置预设（也可直接在画面拖动）</span><select class="prop-input" :value="selectedText.position" @change="setTextPositionPreset(($event.target as HTMLSelectElement).value as TextOverlay['position'])"><option value="top">顶部</option><option value="center">居中</option><option value="bottom">底部</option></select></label>
-            <label class="subtitle-toggle"><input type="checkbox" :checked="selectedText.bold" @change="updateTextOverlay({ bold: ($event.target as HTMLInputElement).checked })" />加粗</label>
-            <button type="button" class="remove-text-button" @click="removeTextOverlay(selectedText.id)">删除这段文字</button>
+            <label class="prop-field"><span>{{ $t('edit.positionPreset') }}</span><select class="prop-input" :value="selectedText.position" @change="setTextPositionPreset(($event.target as HTMLSelectElement).value as TextOverlay['position'])"><option value="top">{{ $t('common.top') }}</option><option value="center">{{ $t('common.center') }}</option><option value="bottom">{{ $t('common.bottom') }}</option></select></label>
+            <label class="subtitle-toggle"><input type="checkbox" :checked="selectedText.bold" @change="updateTextOverlay({ bold: ($event.target as HTMLInputElement).checked })" />{{ $t('edit.bold') }}</label>
+            <button type="button" class="remove-text-button" @click="removeTextOverlay(selectedText.id)">{{ $t('edit.deleteText') }}</button>
           </template>
-          <p v-else class="property-empty">点击“添加文字”，或在时间轴选择一段文字后编辑。</p>
+          <p v-else class="property-empty">{{ $t('edit.textEditingHint') }}</p>
 
           <label class="subtitle-toggle burn-toggle">
             <input
@@ -941,7 +942,7 @@ function goBack() {
               :checked="project.current?.settings.burnCaptions !== false"
               @change="project.setSettings({ burnCaptions: ($event.target as HTMLInputElement).checked })"
             />
-            导出时把文字烧录到画面
+            {{ $t('edit.burnTextHint') }}
           </label>
         </GlassCard>
       </aside>
@@ -951,14 +952,14 @@ function goBack() {
       :open="videoPickerOpen"
       kind="video"
       multiple
-      title="选择要加入时间线的视频"
+      :title="$t('edit.selectVideo')"
       @close="videoPickerOpen = false"
       @confirm="addVideoAssets"
     />
     <AssetPicker
       :open="audioPickerOpen"
       kind="audio"
-      title="选择背景音乐"
+      :title="$t('edit.selectMusic')"
       @close="audioPickerOpen = false"
       @confirm="chooseBgm"
     />

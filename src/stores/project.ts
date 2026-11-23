@@ -7,6 +7,7 @@
  */
 
 import { defineStore } from 'pinia'
+import { t } from '@/i18n'
 import { ref, computed, watch } from 'vue'
 import {
   saveProject,
@@ -92,7 +93,7 @@ function newProject(): Project {
   const now = Date.now()
   return {
     id: 'p_' + now.toString(36),
-    name: '未命名项目',
+    name: t('common.untitledProject'),
     script: null,
     shots: [],
     subjects: [],
@@ -226,7 +227,7 @@ export const useProjectStore = defineStore('project', () => {
   }
 
   /** 新建项目 */
-  function create(name = '未命名项目'): Project {
+  function create(name = t('common.untitledProject')): Project {
     if (current.value && dirty.value) {
       saveProject(current.value).catch(() => {})
     }
@@ -673,7 +674,7 @@ export const useProjectStore = defineStore('project', () => {
         y: src.position.y
       },
       data: {
-        label: type === 'imageGen' ? `图片 ${count}` : `视频 ${count}`,
+        label: t(type === 'imageGen' ? 'project.imageNodeName' : 'project.videoNodeName', { count }),
         prompt: src.data.prompt || '',
         referenceAssetIds: [...(src.data.referenceAssetIds ?? [])],
         referenceSourceNodeIds: [...(src.data.referenceSourceNodeIds ?? [])],

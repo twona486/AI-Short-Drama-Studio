@@ -13,7 +13,7 @@ const emit = defineEmits<{ 'update:modelValue': [value: VideoResolution] }>()
 <template>
   <ParamSelect
     v-if="compact"
-    label="清晰度"
+    :label="$t('common.resolution')"
     width="92px"
     :model-value="modelValue"
     @update:model-value="emit('update:modelValue', $event as VideoResolution)"

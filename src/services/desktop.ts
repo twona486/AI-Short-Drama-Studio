@@ -1,5 +1,7 @@
+import { t } from '@/i18n'
 export type DesktopAPI = {
   isDesktop: true
+  setLocale: (locale: 'ko' | 'zh') => Promise<void>
   getRoot: () => Promise<string>
   setRoot: (root: string) => Promise<string>
   getVersion: () => Promise<string>
@@ -72,7 +74,7 @@ export function isDesktop(): boolean {
 }
 
 export function desktop(): DesktopAPI {
-  if (!window.desktop) throw new Error('当前不是桌面端')
+  if (!window.desktop) throw new Error(t('desktop.required'))
   return window.desktop
 }
 

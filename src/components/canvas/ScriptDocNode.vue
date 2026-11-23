@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { t as translate } from '@/i18n'
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { Handle, Position, useVueFlow } from '@vue-flow/core'
 import { useProjectStore, useSettingsStore, useToastStore } from '@/stores'
@@ -79,7 +80,7 @@ const status = computed(() => nodeMeta.value?.status ?? 'idle')
 const waitingReview = computed(() => needsPlayReview(project.current))
 const approved = computed(() => Boolean(project.current?.shots.length) && !waitingReview.value)
 const playReady = computed(() => isPlayReady(project.current?.script))
-const playLabel = computed(() => (playReady.value ? '重新写剧本' : '写剧本'))
+const playLabel = computed(() => (playReady.value ? translate('scriptDocNode.rewriteScript') : translate('scriptDocNode.writeScript')))
 const canExtractShots = computed(
   () => Boolean((project.current?.subjects ?? []).length && (project.current?.scenes ?? []).length)
 )
@@ -107,7 +108,7 @@ async function submitGenerate(ev: Event) {
   const topic = genTopic.value.trim()
   const brief = genBrief.value.trim()
   if (!topic && !brief) {
-    toast.warn('先写点要求或基本内容')
+    toast.warn(translate('common.enterRequirements'))
     return
   }
   const p = project.current
@@ -116,7 +117,7 @@ async function submitGenerate(ev: Event) {
   project.setScript({
     ...base,
     id: base?.id ?? `s_${Date.now().toString(36)}`,
-    topic: topic || base?.topic || p.name || '剧本',
+    topic: topic || base?.topic || p.name || translate('common.scripts'),
     content: brief,
     keywords: base?.keywords ?? [],
     style: base?.style ?? 'cinematic',
@@ -131,7 +132,7 @@ async function submitGenerate(ev: Event) {
 }
 
 const markdown = computed(() => {
-  if (!project.current) return '# 剧本\n\n*还没有打开项目。*'
+  if (!project.current) return translate('scriptDocNode.noProjectMarkdown')
   return composeProjectPlayMarkdown(project.current)
 })
 const html = computed(() => markdownToHtml(markdown.value))
@@ -180,9 +181,9 @@ async function saveEdit(ev?: Event) {
     await project.save()
     editing.value = false
     dirty.value = false
-    toast.success('剧本已保存，可继续改或点确认通过')
+    toast.success(translate('scriptDocNode.saved'))
   } catch (e: any) {
-    toast.error('保存失败：' + (e?.message || String(e)))
+    toast.error(translate('scriptDocNode.saveFailed', { error: (e?.message || String(e)) }))
   }
 }
 
@@ -198,7 +199,7 @@ async function approvePlay(ev: Event) {
 async function applyImportedMarkdown(text: string, filename: string) {
   if (!project.current) return
   const existing = (project.current.script?.content || '').trim()
-  if (existing && !confirm('导入会替换当前剧本正文，确定吗？')) return
+  if (existing && !confirm(translate('common.replaceScriptConfirm'))) return
   try {
     const script = scriptFromImportedPlay(project.current, text, filename)
     project.setScript(script)
@@ -207,9 +208,9 @@ async function applyImportedMarkdown(text: string, filename: string) {
     await project.save()
     editing.value = false
     dirty.value = false
-    toast.success(`已导入「${script.topic}」`)
+    toast.success(translate('common.importedNamed', { p0: script.topic }))
   } catch (e: any) {
-    toast.error(e?.message || '导入失败')
+    toast.error(e?.message || translate('common.importFailed'))
   }
 }
 
@@ -221,7 +222,7 @@ async function importMarkdown(ev?: Event) {
     if (!picked) return
     await applyImportedMarkdown(picked.text, picked.filename)
   } catch (e: any) {
-    toast.error(e?.message || '导入失败')
+    toast.error(e?.message || translate('common.importFailed'))
   }
 }
 
@@ -239,7 +240,7 @@ async function onPlayDrop(ev: DragEvent) {
     /\.(md|markdown|txt)$/i.test(item.name) || item.type.includes('markdown') || item.type === 'text/plain'
   )
   if (!file) {
-    toast.warn('请拖入 .md / .markdown / .txt 剧本文件')
+    toast.warn(translate('scriptDocNode.dropFiles'))
     return
   }
   await applyImportedMarkdown(await file.text(), file.name)
@@ -324,19 +325,19 @@ async function generateThis(ev: Event, kind: 'play' | 'extract' | 'continue' = '
   ev.stopPropagation()
   if (generating.value) return
   if (editing.value) {
-    toast.warn('请先保存或取消剧本编辑')
+    toast.warn(translate('scriptDocNode.endEditing'))
     return
   }
   if (kind === 'extract' && !playReady.value && !(project.current?.script?.content || '').trim()) {
-    toast.warn('请先写完整剧本，再提炼节点')
+    toast.warn(translate('scriptDocNode.needScriptToExtract'))
     return
   }
   if (kind === 'extract' && stage === 'shots' && !canExtractShots.value) {
-    toast.warn('请先提炼角色和场景，再拆分镜')
+    toast.warn(translate('common.extractBeforeShots'))
     return
   }
   if (kind === 'continue' && !playReady.value) {
-    toast.warn('请先写好完整剧本，再续写')
+    toast.warn(translate('scriptDocNode.needScriptToContinue'))
     return
   }
   dismissPanel()
@@ -357,19 +358,19 @@ async function generateThis(ev: Event, kind: 'play' | 'extract' | 'continue' = '
     >
     <div class="sdoc-head">
       <div class="sdoc-titles">
-        <span class="sdoc-k">完整剧本</span>
-        <strong>{{ project.current?.script?.topic || project.current?.name || '剧本' }}</strong>
+        <span class="sdoc-k">{{ $t('common.completeScript') }}</span>
+        <strong>{{ project.current?.script?.topic || project.current?.name || $t('common.scripts') }}</strong>
       </div>
       <div class="sdoc-actions nodrag">
         <template v-if="editing">
-          <button type="button" class="sdoc-btn ghost" @click="cancelEdit" @mousedown.stop>取消</button>
+          <button type="button" class="sdoc-btn ghost" @click="cancelEdit" @mousedown.stop>{{ $t('common.cancel') }}</button>
           <button type="button" class="sdoc-btn primary" @click="saveEdit" @mousedown.stop>
-            保存{{ dirty ? '*' : '' }}
+            {{ $t('common.save') }}{{ dirty ? '*' : '' }}
           </button>
         </template>
         <template v-else-if="!emptyState">
           <button type="button" class="sdoc-btn" :disabled="generating" @click="importMarkdown" @mousedown.stop>
-            导入
+            {{ $t('common.import') }}
           </button>
           <button
             v-if="playReady"
@@ -379,9 +380,9 @@ async function generateThis(ev: Event, kind: 'play' | 'extract' | 'continue' = '
             @click="generateThis($event, 'continue')"
             @mousedown.stop
           >
-            续写
+            {{ $t('common.continueWriting') }}
           </button>
-          <button type="button" class="sdoc-btn" @click="startEdit" @mousedown.stop>✎ 编辑</button>
+          <button type="button" class="sdoc-btn" @click="startEdit" @mousedown.stop>{{ $t('common.editWithIcon') }}</button>
         </template>
       </div>
     </div>
@@ -396,58 +397,58 @@ async function generateThis(ev: Event, kind: 'play' | 'extract' | 'continue' = '
     />
     <div v-else-if="emptyState" class="sdoc-empty nowheel nodrag" @mousedown.stop>
       <template v-if="emptyMode === 'pick'">
-        <p class="empty-title">这个节点还没有剧本</p>
+        <p class="empty-title">{{ $t('scriptDocNode.noScript') }}</p>
         <div class="empty-cards">
           <button type="button" class="empty-card" :disabled="generating" @click="importMarkdown">
             <svg viewBox="0 0 24 24" aria-hidden="true">
               <path d="M12 4.5V16M7.5 11 12 15.5 16.5 11" />
               <path d="M4.5 16.5v2.5a1.5 1.5 0 0 0 1.5 1.5h12a1.5 1.5 0 0 0 1.5-1.5v-2.5" />
             </svg>
-            <strong>导入剧本</strong>
-            <span>.md / .txt 文件，也可以直接拖到这张卡片上</span>
+            <strong>{{ $t('scriptDocNode.import') }}</strong>
+            <span>{{ $t('scriptDocNode.dropHint') }}</span>
           </button>
           <button type="button" class="empty-card accent" :disabled="generating" @click="emptyMode = 'gen'">
             <svg viewBox="0 0 24 24" aria-hidden="true">
               <path d="M12 3.5 13.8 9 19.5 10.8 13.8 12.6 12 18.5 10.2 12.6 4.5 10.8 10.2 9 12 3.5Z" />
               <path d="M18.5 15.5l.8 2.2 2.2.8-2.2.8-.8 2.2-.8-2.2-2.2-.8 2.2-.8.8-2.2Z" />
             </svg>
-            <strong>AI 生成</strong>
-            <span>写下要求和基本内容，自动写出完整剧本</span>
+            <strong>{{ $t('scriptDocNode.generateAi') }}</strong>
+            <span>{{ $t('scriptDocNode.writeHint') }}</span>
           </button>
         </div>
       </template>
       <template v-else>
         <div class="gen-form">
-          <label>要求 / 主题</label>
+          <label>{{ $t('scriptDocNode.requirements') }}</label>
           <textarea
             v-model="genTopic"
             rows="3"
-            placeholder="想拍什么：题材、风格、时长、大概几场戏……例如「修仙渡劫短剧，8 场，燃向」"
+            :placeholder="$t('scriptDocNode.promptExample')"
           />
-          <label>基本内容（可选）</label>
+          <label>{{ $t('scriptDocNode.baseContent') }}</label>
           <textarea
             v-model="genBrief"
             rows="5"
-            placeholder="已有的故事梗概、大纲、人物设定或部分台词，会一起交给模型"
+            :placeholder="$t('scriptDocNode.productionOutlineHint')"
           />
           <div class="gen-foot">
             <label class="model-pick">
               <span>LLM</span>
               <select v-model="llmChoice">
-                <option v-if="!llmGroups.some((g) => g.models.length)" value="">请先在设置里添加模型</option>
+                <option v-if="!llmGroups.some((g) => g.models.length)" value="">{{ $t('common.noModel') }}</option>
                 <optgroup v-for="g in llmGroups" :key="g.id" :label="g.name">
                   <option v-for="m in g.models" :key="`${g.id}::${m}`" :value="`${g.id}::${m}`">{{ m }}</option>
                 </optgroup>
               </select>
             </label>
-            <button type="button" class="ghost" :disabled="generating" @click="emptyMode = 'pick'">返回</button>
+            <button type="button" class="ghost" :disabled="generating" @click="emptyMode = 'pick'">{{ $t('common.back') }}</button>
             <button
               type="button"
               class="primary"
               :disabled="generating || !llmModel || (!genTopic.trim() && !genBrief.trim())"
               @click="submitGenerate"
             >
-              生成剧本
+              {{ $t('scriptDocNode.generate') }}
             </button>
           </div>
         </div>
@@ -456,44 +457,44 @@ async function generateThis(ev: Event, kind: 'play' | 'extract' | 'continue' = '
     <div v-else class="sdoc-md nowheel nodrag" :class="{ 'has-panel': selected && panelOpen }" v-html="html" />
 
     <div v-if="!playReady && !emptyState && !editing" class="sdoc-gate nodrag">
-      <span>现在还是草稿，不是完整剧本。生成完整剧本后才能提炼角色、场景和分镜。</span>
+      <span>{{ $t('scriptDocNode.draftHint') }}</span>
       <button type="button" :disabled="generating || !llmModel" @click="generateThis($event, 'play')" @mousedown.stop>
-        生成完整剧本
+        {{ $t('scriptDocNode.generateFull') }}
       </button>
     </div>
     <div v-else-if="playReady && !project.current?.shots.length && !editing" class="sdoc-gate nodrag">
-      <span>从这份剧本提炼到画布。角色、场景、分镜可以分开选，也可以一步一步来。</span>
+      <span>{{ $t('scriptDocNode.extractionHint') }}</span>
       <div class="sdoc-extracts">
         <button type="button" :disabled="generating" @click="generateThis($event, 'extract', 'subjects')" @mousedown.stop>
-          提炼角色
+          {{ $t('common.extractCharacters') }}
         </button>
         <button type="button" :disabled="generating" @click="generateThis($event, 'extract', 'scenes')" @mousedown.stop>
-          提炼场景
+          {{ $t('common.extractScenes') }}
         </button>
         <button
           type="button"
           :disabled="generating || !canExtractShots"
-          :title="canExtractShots ? '按剧本拆分镜' : '请先提炼角色和场景'"
+          :title="canExtractShots ? $t('scriptDocNode.makeStoryboard') : $t('scriptDocNode.extractFirst')"
           @click="generateThis($event, 'extract', 'shots')"
           @mousedown.stop
         >
-          提炼分镜
+          {{ $t('common.extractStoryboard') }}
         </button>
       </div>
     </div>
     <div v-else-if="waitingReview && !editing" class="sdoc-gate nodrag">
-      <span>请先验收这份剧本。可点「编辑」或「续写」后再确认。确认后才做人设、配图、视频。</span>
-      <button type="button" @click="approvePlay" @mousedown.stop>确认通过</button>
+      <span>{{ $t('scriptDocNode.needApproval') }}</span>
+      <button type="button" @click="approvePlay" @mousedown.stop>{{ $t('scriptDocNode.approve') }}</button>
     </div>
     <div v-else-if="approved && !editing" class="sdoc-ok nodrag">
-      剧本已确认。仍可点「续写」往后加场，或点「编辑」改字；改完需重新确认。
+      {{ $t('scriptDocNode.approvedHint') }}
     </div>
     <p v-if="nodeMeta?.error" class="sdoc-err">{{ nodeMeta.error }}</p>
-    <NodeBusyOverlay v-if="generating" label="生成中" />
+    <NodeBusyOverlay v-if="generating" :label="$t('common.generating')" />
     <Handle id="out" type="source" :position="Position.Right" class="hndl" />
-    <div class="rz rz-e nodrag nopan" title="横向缩放" @pointerdown="onResizeStart('e', $event)" />
-    <div class="rz rz-s nodrag nopan" title="纵向缩放" @pointerdown="onResizeStart('s', $event)" />
-    <div class="rz rz-se nodrag nopan" title="拖动缩放" @pointerdown="onResizeStart('se', $event)" />
+    <div class="rz rz-e nodrag nopan" :title="$t('scriptDocNode.resizeHorizontally')" @pointerdown="onResizeStart('e', $event)" />
+    <div class="rz rz-s nodrag nopan" :title="$t('scriptDocNode.resizeVertically')" @pointerdown="onResizeStart('s', $event)" />
+    <div class="rz rz-se nodrag nopan" :title="$t('scriptDocNode.resize')" @pointerdown="onResizeStart('se', $event)" />
     </div>
 
     <transition name="float-down">
@@ -503,29 +504,29 @@ async function generateThis(ev: Event, kind: 'play' | 'extract' | 'continue' = '
         @mousedown.stop
         @click.stop
       >
-        <label>主题 / 你想拍什么</label>
+        <label>{{ $t('scriptDocNode.topic') }}</label>
         <textarea
           rows="4"
           :value="project.current?.script?.topic || ''"
-          placeholder="主题、故事、风格、时长……想拍什么就写什么"
+          :placeholder="$t('scriptDocNode.topicHint')"
           @input="patchTopic(($event.target as HTMLTextAreaElement).value)"
         />
         <template v-if="!playReady">
-          <label>草稿（可选）</label>
+          <label>{{ $t('scriptDocNode.draft') }}</label>
           <textarea
             rows="3"
             :value="project.current?.script?.content || ''"
-            placeholder="已有大纲、台词或 .md 正文，会一起交给模型"
+            :placeholder="$t('scriptDocNode.outlineHint')"
             @input="patchDraftBrief(($event.target as HTMLTextAreaElement).value)"
           />
         </template>
-        <p v-else class="prompt-hint">写剧本会先写故事背景、人物、环境和分场，不是口播填空表。也可以随时导入 .md。续写只往后加。重新写会整篇重来并清空节点。</p>
+        <p v-else class="prompt-hint">{{ $t('scriptDocNode.scriptGuide') }}</p>
         <template v-if="playReady">
-          <label>续写方向（可选）</label>
+          <label>{{ $t('common.continueDirection') }}</label>
           <textarea
             rows="3"
             :value="continueHint"
-            placeholder="例如：再写两场，写父亲回家之后怎么说。不填则顺着往下写 2–3 场。"
+            :placeholder="$t('scriptDocNode.continueExample')"
             @input="continueHint = ($event.target as HTMLTextAreaElement).value"
           />
         </template>
@@ -533,14 +534,14 @@ async function generateThis(ev: Event, kind: 'play' | 'extract' | 'continue' = '
           <label class="model-pick">
             <span>LLM</span>
             <select v-model="llmChoice">
-              <option v-if="!llmGroups.some((g) => g.models.length)" value="">请先在设置里添加模型</option>
+              <option v-if="!llmGroups.some((g) => g.models.length)" value="">{{ $t('common.noModel') }}</option>
               <optgroup v-for="g in llmGroups" :key="g.id" :label="g.name">
                 <option v-for="m in g.models" :key="`${g.id}::${m}`" :value="`${g.id}::${m}`">{{ m }}</option>
               </optgroup>
             </select>
           </label>
           <button type="button" class="ghost" :disabled="generating" @click="importMarkdown">
-            导入.md
+            {{ $t('scriptDocNode.importMd') }}
           </button>
           <button
             type="button"
@@ -548,7 +549,7 @@ async function generateThis(ev: Event, kind: 'play' | 'extract' | 'continue' = '
             :disabled="generating || (!playReady && !(project.current?.script?.content || '').trim())"
             @click="generateThis($event, 'extract', 'subjects')"
           >
-            提炼角色
+            {{ $t('common.extractCharacters') }}
           </button>
           <button
             type="button"
@@ -556,7 +557,7 @@ async function generateThis(ev: Event, kind: 'play' | 'extract' | 'continue' = '
             :disabled="generating || (!playReady && !(project.current?.script?.content || '').trim())"
             @click="generateThis($event, 'extract', 'scenes')"
           >
-            提炼场景
+            {{ $t('common.extractScenes') }}
           </button>
           <button
             type="button"
@@ -564,7 +565,7 @@ async function generateThis(ev: Event, kind: 'play' | 'extract' | 'continue' = '
             :disabled="generating || !canExtractShots"
             @click="generateThis($event, 'extract', 'shots')"
           >
-            提炼分镜
+            {{ $t('common.extractStoryboard') }}
           </button>
           <button
             v-if="playReady"
@@ -574,13 +575,13 @@ async function generateThis(ev: Event, kind: 'play' | 'extract' | 'continue' = '
             :title="playLabel"
             @click="generateThis($event, 'play')"
           >
-            重写
+            {{ $t('common.rewrite') }}
           </button>
           <button
             type="button"
             class="go"
             :disabled="generating || !llmModel"
-            :title="playReady ? '续写剧本' : playLabel"
+            :title="playReady ? $t('common.continueScript') : playLabel"
             @click="generateThis($event, playReady ? 'continue' : 'play')"
           >
             ↑

@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { t as translate } from '@/i18n'
 import { computed, ref } from 'vue'
 
 const props = withDefaults(
@@ -17,33 +18,33 @@ type GuideArea = 'agent' | 'canvas' | null
 const steps = [
   {
     area: 'agent' as GuideArea,
-    title: '左边：一句话让 AI 开工',
-    sub: '把这里当成会干活的搭档，不是问答机器人',
+    get title() { return translate('canvasGuide.agentSide') },
+    get sub() { return translate('canvasGuide.agentIntro') },
     items: [
-      '用大白话说就行：「写一个修仙渡劫短剧，拆 8 个分镜」，它会自己排出步骤再动手。',
-      '写 / 改 / 续写剧本，提炼角色、场景、分镜，出人设图、关键帧和分镜视频都能在这儿说。',
-      '它有记忆：说「记住我偏好电影感暗调」，之后每次创作都会自动带上。',
-      '想精细改某一镜，先在画布上点选那个节点，再告诉它改什么。'
+      'canvasGuide.agentExample',
+      'canvasGuide.agentTasks',
+      'canvasGuide.memoryTip',
+      'canvasGuide.shotTip'
     ]
   },
   {
     area: 'canvas' as GuideArea,
-    title: '右边：画布是你手动操作的地方',
-    sub: '想精确控制的时候，直接在这儿加东西',
+    get title() { return translate('canvasGuide.canvasSide') },
+    get sub() { return translate('canvasGuide.manualIntro') },
     items: [
-      '空白处右键：添加剧本、角色、道具、场景、分镜、图片或视频节点。',
-      '每个节点可以单独生成，也能重跑失败的那一个，不用整个项目重来。',
-      '选中节点后右侧能改提示词、时长、模型；拖动可以排布节点。',
-      '节点之间的连线是「参考关系」：上游的图会给下游当参考。'
+      'canvasGuide.contextMenu',
+      'canvasGuide.independentNodes',
+      'canvasGuide.inspector',
+      'canvasGuide.edges'
     ]
   },
   {
     area: null as GuideArea,
-    title: '两个提示',
-    sub: '怎么用都行，不用二选一',
+    get title() { return translate('canvasGuide.tips') },
+    get sub() { return translate('canvasGuide.combineIntro') },
     items: [
-      '左右两边可以随时混用：先让 AI 打底，再手动改细节，反过来也成立。',
-      '顶栏可以切到「经典步骤」，按 文案 → 剧本 → 素材 → 视频 的顺序分步做。'
+      'canvasGuide.combine',
+      'canvasGuide.classic'
     ]
   }
 ]
@@ -86,15 +87,15 @@ function finish() {
           <h3>{{ step.title }}</h3>
           <p class="sub">{{ step.sub }}</p>
           <ul>
-            <li v-for="item in step.items" :key="item">{{ item }}</li>
+            <li v-for="item in step.items" :key="item">{{ $t(item) }}</li>
           </ul>
           <div class="foot">
             <span class="count">{{ index + 1 }} / {{ steps.length }}</span>
             <div class="btns">
-              <button v-if="index > 0" type="button" class="ghost" @click="prev">上一步</button>
-              <button type="button" class="ghost" @click="finish">跳过</button>
+              <button v-if="index > 0" type="button" class="ghost" @click="prev">{{ $t('canvasGuide.previous') }}</button>
+              <button type="button" class="ghost" @click="finish">{{ $t('canvasGuide.skip') }}</button>
               <button type="button" class="primary" @click="next">
-                {{ index === steps.length - 1 ? '开始使用' : '下一步' }}
+                {{ index === steps.length - 1 ? $t('canvasGuide.start') : $t('canvasGuide.next') }}
               </button>
             </div>
           </div>
@@ -108,13 +109,13 @@ function finish() {
       <h3>{{ step.title }}</h3>
       <p class="sub">{{ step.sub }}</p>
       <ul>
-        <li v-for="item in step.items" :key="item">{{ item }}</li>
+        <li v-for="item in step.items" :key="item">{{ $t(item) }}</li>
       </ul>
       <div class="foot">
         <span class="count">{{ index + 1 }} / {{ steps.length }}</span>
         <div class="btns">
-          <button type="button" class="ghost" @click="prev">上一步</button>
-          <button type="button" class="primary" @click="next">开始使用</button>
+          <button type="button" class="ghost" @click="prev">{{ $t('canvasGuide.previous') }}</button>
+          <button type="button" class="primary" @click="next">{{ $t('canvasGuide.start') }}</button>
         </div>
       </div>
     </div>
