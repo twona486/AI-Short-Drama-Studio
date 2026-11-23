@@ -1,6 +1,6 @@
 /**
- * 桌面端本地 SQLite（node:sqlite），库文件位于用户选择的保存目录。
- * 用来存模型密钥等用户配置，不走浏览器 localStorage。
+ * 데스크톱 SQLite 데이터베이스 파일은 사용자가 선택한 폴더에 저장한다.
+ * 모델 API 키 등 사용자 설정을 브라우저 localStorage 대신 여기에 보관한다.
  */
 import path from 'node:path'
 import { existsSync, readFileSync } from 'node:fs'
@@ -59,7 +59,7 @@ export function kvGet(key: string): string | null {
 }
 
 export function kvSet(key: string, value: string) {
-  if (!db) throw new Error('sqlite 未打开')
+  if (!db) throw new Error('SQLite database is closed')
   db.prepare(
     `INSERT INTO kv (key, value, updated_at) VALUES (?, ?, ?)
      ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at`

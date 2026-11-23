@@ -1,7 +1,7 @@
 /**
- * 验证 AutoDL 结果解析 + COS 视频下载（Node 无 CORS）。
- * 用法：node scripts/test-video-result.mjs
- * 可选：AUTODL_TOKEN=xxx TASK_ID=xxx node scripts/test-video-result.mjs
+ * AutoDL 결과 파싱과 Node에서의 COS 영상 다운로드를 검증한다.
+ * 실행 방법은 node scripts/test-video-result.mjs이다.
+ * 선택 사항으로 AUTODL_TOKEN=xxx TASK_ID=xxx를 지정한다.
  */
 import { writeFileSync, mkdirSync, existsSync, readFileSync, readdirSync } from 'node:fs'
 import { join } from 'node:path'
@@ -13,7 +13,7 @@ const SAMPLE_RESULTS = [
     url: 'https://codewithgpu-image-1310972338.cos.ap-beijing.myqcloud.com/comfyui/outputs/2026/08/25/fbb7ef58-20a5-48e7-b984-9da4ea88203e/b81b3c26-68f3-45e9-9b50-8fe86f3df053.mp4',
     file_type: 'mp4',
     alias: 'final_video',
-    description: '最终生成的视频'
+    description: 'Final generated video'
   }
 ]
 
@@ -144,7 +144,7 @@ async function main() {
   const outDir = join(process.cwd(), 'tmp')
   mkdirSync(outDir, { recursive: true })
 
-  console.log('\n=== 1) 解析你贴过的 results 数组 ===')
+  console.log('\n=== 1) Parse the sample results array ===')
   const pickedRaw = pickWorkflowVideoResult(SAMPLE_RESULTS)
   console.log('pick raw array:', pickedRaw)
 
@@ -161,29 +161,29 @@ async function main() {
   }
 
   const videoUrl = SAMPLE_RESULTS[0].url
-  console.log('\n=== 2) Node 下载 COS mp4（无 CORS）===')
+  console.log('\n=== 2) Download COS MP4 from Node ===')
   console.log('url:', videoUrl)
   try {
     const info = await downloadHead(videoUrl)
     console.log(info)
     writeFileSync(join(outDir, 'video-result-test.json'), JSON.stringify(info, null, 2))
-    if (info.ok && info.isMp4) console.log('结论：这条结果地址在 Node 里可以下载，是有效 mp4。')
-    else if (info.ok) console.log('结论：下到了文件，但文件头不是 mp4。')
-    else console.log('结论：下载失败。')
+    if (info.ok && info.isMp4) console.log('Downloaded a valid MP4.')
+    else if (info.ok) console.log('Downloaded the file, but its header is not MP4.')
+    else console.log('Download failed.')
   } catch (e) {
-    console.log('下载抛错:', e?.message || e)
+    console.log('Download error:', e?.message || e)
   }
 
   const token = process.env.AUTODL_TOKEN || findTokenFromLocalStorage()
   const taskId = process.env.TASK_ID || ''
-  console.log('\n=== 3) AutoDL 轮询 ===')
+  console.log('\n=== 3) Poll AutoDL ===')
   console.log('token:', mask(token))
   if (!token) {
-    console.log('没有 Token，跳过轮询。可设 AUTODL_TOKEN 再跑。')
+    console.log('Skipping polling. Set AUTODL_TOKEN to run it.')
     return
   }
   if (!taskId) {
-    console.log('没有 TASK_ID，只测 Token 是否能打到 AutoDL。')
+    console.log('No TASK_ID set. Checking the AutoDL token only.')
     const ping = await fetch('https://autodl.art/api/v1/comfyui/comfyui_workflow/result/ping-test', {
       headers: { Authorization: token }
     })
@@ -205,7 +205,7 @@ async function main() {
     console.log('parsed status:', unwrapTaskPayload(json)?.status)
     console.log('picked:', picked)
   } catch {
-    console.log('poll body 不是 JSON')
+    console.log('Poll response was not JSON')
   }
 }
 

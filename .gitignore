@@ -27,7 +27,7 @@ output
 diagnostics
 *.zip
 
-# FFmpeg 核心（大文件，让用户自己下）
+# FFmpeg 코어는 용량이 커서 사용자 환경에서 다운로드한다.
 public/ffmpeg/ffmpeg-core.js
 public/ffmpeg/ffmpeg-core.wasm
 public/ffmpeg/ffmpeg-core.worker.js

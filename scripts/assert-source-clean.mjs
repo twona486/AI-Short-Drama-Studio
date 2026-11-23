@@ -77,8 +77,8 @@ for (const relative of tracked) {
 
 const unique = [...new Set(findings)]
 if (unique.length) {
-  console.error('[assert-source-clean] 疑似硬编码凭据，已中止：\n  ' + unique.join('\n  '))
+  console.error('[assert-source-clean] Suspected hardcoded credentials:\n  ' + unique.join('\n  '))
   process.exit(1)
 }
 
-console.log(`[assert-source-clean] 已检查 ${tracked.length} 个 Git 跟踪文件，未发现硬编码凭据`)
+console.log(`[assert-source-clean] Checked ${tracked.length} tracked files. No hardcoded credentials found.`)

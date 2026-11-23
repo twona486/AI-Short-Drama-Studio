@@ -1,4 +1,4 @@
-name: Windows 安装包
+name: Windows 설치 패키지
 
 on:
   workflow_dispatch:
@@ -11,46 +11,46 @@ permissions:
 
 jobs:
   build-windows:
-    name: 打包 Windows 安装程序
+    name: Windows 설치 프로그램 패키징
     runs-on: windows-latest
     timeout-minutes: 30
 
     steps:
-      - name: 检出源码
+      - name: 소스 체크아웃
         uses: actions/checkout@v4
 
-      - name: 安装 Node.js
+      - name: Node.js 설치
         uses: actions/setup-node@v4
         with:
           node-version: '22'
           cache: npm
 
-      - name: 安装依赖
+      - name: 의존성 설치
         run: npm ci
 
-      - name: 准备 Electron Windows 运行时
+      - name: Windows용 Electron 런타임 준비
         shell: pwsh
         run: |
           node node_modules/electron/install.js
           if (-not (Test-Path 'node_modules/electron/dist/electron.exe')) {
-            throw 'Electron Windows 运行时下载失败'
+            throw 'Windows용 Electron 런타임을 다운로드하지 못했습니다.'
           }
 
-      - name: 下载离线 FFmpeg 核心
+      - name: 오프라인 FFmpeg 코어 다운로드
         run: node scripts/download-ffmpeg-core.cjs --source=jsdelivr
 
-      - name: 构建 Windows 安装包
+      - name: Windows 설치 패키지 빌드
         run: npm run electron:build
 
-      - name: 查找安装包
+      - name: 설치 패키지 찾기
         id: installers
         shell: pwsh
         run: |
           $files = Get-ChildItem -Path release -Recurse -Filter *Setup*.exe
-          if (-not $files) { throw '没有生成 Windows 安装包' }
-          $files | ForEach-Object { Write-Host "安装包：$($_.FullName)" }
+          if (-not $files) { throw 'Windows 설치 패키지가 생성되지 않았습니다.' }
+          $files | ForEach-Object { Write-Host "설치 패키지 $($_.FullName)" }
 
-      - name: 保存 Actions 构建产物
+      - name: Actions 빌드 산출물 저장
         uses: actions/upload-artifact@v4
         with:
           name: AI-Short-Drama-Studio-Windows-${{ github.ref_name }}
@@ -58,7 +58,7 @@ jobs:
           if-no-files-found: error
           retention-days: 30
 
-      - name: 发布到 GitHub Releases
+      - name: GitHub Releases에 게시
         if: startsWith(github.ref, 'refs/tags/v')
         shell: pwsh
         env:
@@ -68,5 +68,5 @@ jobs:
           $files = @(Get-ChildItem -Path release -Recurse -Filter *Setup*.exe | ForEach-Object { $_.FullName })
           gh release create $tag @files `
             --repo '${{ github.repository }}' `
-            --title "剧流 Studio $tag" `
+            --title "드라마 플로우 Studio $tag" `
             --generate-notes

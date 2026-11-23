@@ -25,9 +25,9 @@ function removeDir(target) {
     }
   }
   const hint = [
-    `[clean-unpacked] 删不掉 ${target}`,
-    'Windows 报 EPERM，通常是 Cursor / 资源管理器 / 杀毒还握着上次打包的文件（常见是 resources/default_app.asar）。',
-    '处理：把 release 加进文件监视排除后重载 Cursor 窗口，或关掉占用后再打包。'
+    `[clean-unpacked] Could not remove ${target}`,
+    'On Windows, EPERM can mean an editor, file browser, or antivirus is holding a previous build file such as resources/default_app.asar.',
+    'Exclude release from editor file watching and reload the editor, or close the process holding the file before trying again.'
   ].join('\n')
   const err = new Error(hint)
   err.cause = last

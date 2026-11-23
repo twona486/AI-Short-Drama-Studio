@@ -8,13 +8,13 @@ const electronDist = path.join(root, 'node_modules', 'electron', 'dist')
 const electronExe = path.join(electronDist, 'electron.exe')
 
 /**
- * electron-builder 默认会把 zip 解到 win-unpacked.tmp，再 rename 成 win-unpacked。
- * Windows 搜索 / Defender 会立刻锁住里面的 default_app.asar，rename 必 EPERM。
- * 改用本机已解压的 Electron 做文件复制，并每次打到全新输出目录，避开改名和清残留。
+ * electron-builder는 ZIP을 win-unpacked.tmp에 푼 뒤 win-unpacked로 이름을 바꾼다.
+ * Windows 검색이나 Defender가 default_app.asar를 열어 둔 경우 이름 변경 시 EPERM이 발생할 수 있다.
+ * 이미 압축을 푼 Electron을 새 출력 폴더에 복사해 이름 변경과 이전 파일 정리를 피한다.
  */
 if (!fs.existsSync(electronExe)) {
-  console.error(`[pack] 找不到已解压的 Electron：${electronExe}`)
-  console.error('[pack] 请先执行 npm install')
+  console.error(`[pack] Unpacked Electron executable not found: ${electronExe}`)
+  console.error('[pack] Run npm install first')
   process.exit(1)
 }
 
@@ -22,7 +22,7 @@ const stamp = new Date().toISOString().replace(/[-:]/g, '').replace('T', '-').sl
 const output = path.posix.join('release', `pack-${stamp}`)
 fs.mkdirSync(path.join(root, output), { recursive: true })
 
-console.log('[pack] 跳过 zip 解压改名，复制 node_modules/electron/dist')
+console.log('[pack] Copying node_modules/electron/dist directly')
 console.log(`[pack] electronDist = ${electronDist}`)
 console.log(`[pack] output = ${output}`)
 
@@ -46,7 +46,7 @@ if (code === 0) {
   const absOut = path.join(root, output)
   const installers = fs.readdirSync(absOut).filter((name) => name.toLowerCase().endsWith('.exe'))
   if (installers.length) {
-    console.log('[pack] 安装包：')
+    console.log('[pack] Installer files:')
     for (const name of installers) console.log(`  ${path.join(absOut, name)}`)
   }
 }

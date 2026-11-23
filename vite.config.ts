@@ -64,13 +64,13 @@ export default defineConfig(({ command }) => ({
   server: {
     port: 5173,
     host: '0.0.0.0',
-    // FFmpeg.wasm 需要 cross-origin isolation 启用 SharedArrayBuffer
+    // FFmpeg.wasm의 SharedArrayBuffer를 사용하려면 교차 출처 격리가 필요하다.
     headers: {
       'Cross-Origin-Opener-Policy': 'same-origin',
       'Cross-Origin-Embedder-Policy': 'require-corp'
     },
     fs: {
-      // 允许 serve public/ 目录
+      // public 폴더의 파일을 제공할 수 있도록 허용한다.
       strict: false
     }
   },
@@ -82,11 +82,11 @@ export default defineConfig(({ command }) => ({
       'Cross-Origin-Embedder-Policy': 'require-corp'
     }
   },
-  // FFmpeg core 的 wasm 不应该被 Vite 拦截处理
+  // FFmpeg 코어 WASM 파일이 Vite의 변환을 거치지 않게 한다.
   assetsInclude: ['**/*.wasm'],
   optimizeDeps: {
     exclude: ['@ffmpeg/ffmpeg', '@ffmpeg/util', '@ffmpeg/core']
   }
-  // ⚠️ 不要设置 worker.format='es'：ffmpeg-core UMD 用 importScripts 加载，
-  //    module worker 不支持，会导致 core 永远加载不出来。
+  // FFmpeg 코어의 UMD 로더는 importScripts를 사용하므로
+  // 모듈 워커를 사용하면 코어를 불러올 수 없다.
 }))
