@@ -50,7 +50,7 @@ function hasSectionData(p: Project, key: SectionKey): boolean {
 
 function truncate(text: string | undefined, limit: number): string | null {
   if (!text) return null
-  return text.length > limit ? `${text.slice(0, limit)}…(已截断，全文在项目里，工具执行时会读实时数据)` : text
+  return text.length > limit ? `${text.slice(0, limit)}…(Truncated. The full text is in the project. Tools read current project data.)` : text
 }
 
 function shotContext(shot: Shot) {
