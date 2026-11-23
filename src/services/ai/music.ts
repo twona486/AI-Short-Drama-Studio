@@ -72,7 +72,7 @@ export async function refineMusicPrompt(project: Project): Promise<string> {
         {
           role: 'system',
           content:
-            '你是专业的短视频配乐导演。根据项目信息用简体中文写一段 80-180 字的纯音乐提示词。必须强调：仅器乐、无人声、无歌词，适合口播铺底。只输出提示词本身，不要解释。'
+            '당신은 숏폼 영상의 음악 감독입니다. 프로젝트 정보를 바탕으로 음악 생성 모델에 전달할 중국어 프롬프트를 80–180자로 작성하세요. 기악만 사용하며 사람 음성과 가사가 없고 내레이션의 배경음으로 어울려야 한다고 명시하세요. 설명 없이 프롬프트 본문만 출력하세요.'
         },
         { role: 'user', content: fallback }
       ],
@@ -82,7 +82,7 @@ export async function refineMusicPrompt(project: Project): Promise<string> {
     const text = (resp.content || '').replace(/```[\s\S]*?```/g, '').trim()
     if (text.length >= 20 && text.length <= 2000) return text
   } catch (e) {
-    log(`润色提示词失败，用模板：${e}`)
+    log(`프롬프트를 다듬지 못해 기본 프롬프트를 사용합니다. ${e}`)
   }
   return fallback
 }
@@ -94,7 +94,7 @@ function musicConfig() {
 function hexToBytes(hex: string): Uint8Array {
   const clean = hex.replace(/^0x/i, '').replace(/\s/g, '')
   if (clean.length < 8 || clean.length % 2 !== 0) {
-    throw new Error('[music] hex 音频数据异常')
+    throw new Error('[music] 16진수 오디오 데이터가 유효하지 않습니다.')
   }
   const bytes = new Uint8Array(clean.length / 2)
   for (let i = 0; i < bytes.length; i++) {
@@ -140,7 +140,7 @@ function mockBgm(durationSec: number): Blob {
 
 async function downloadAudio(url: string): Promise<Blob> {
   const resp = await fetch(url)
-  if (!resp.ok) throw new Error(`[music] 下载失败 ${resp.status}`)
+  if (!resp.ok) throw new Error(`[music] 다운로드에 실패했습니다. ${resp.status}`)
   const buf = await resp.arrayBuffer()
   const ct = (resp.headers.get('content-type') || '').toLowerCase()
   return new Blob([buf], {
@@ -163,8 +163,8 @@ async function realMinimaxMusic(prompt: string, model: string): Promise<MusicGen
   const { apiKey, baseUrl } = musicConfig()
   if (!apiKey) {
     throw new Error(
-      '[music] 未配置 VITE_MUSIC_API_KEY（MiniMax API Key）\n' +
-        '在 .env 里填写后重启 npm run dev'
+      '[music] VITE_MUSIC_API_KEY(MiniMax API 키)가 설정되지 않았습니다.\n' +
+        '.env에 입력한 뒤 npm run dev를 다시 실행하세요.'
     )
   }
 
@@ -209,24 +209,24 @@ async function realMinimaxMusic(prompt: string, model: string): Promise<MusicGen
   const audio = data.data?.audio ?? data.audio
   const status = data.data?.status
   if (status === 1) {
-    throw new Error('[music] 配乐仍在合成中，请稍后重试')
+    throw new Error('[music] 배경음악을 합성하고 있습니다. 잠시 후 다시 시도하세요.')
   }
   if (!audio) {
-    throw new Error(`[music] 响应无音频：${raw.slice(0, 240)}`)
+    throw new Error(`[music] 응답에 오디오가 없습니다. ${raw.slice(0, 240)}`)
   }
 
   const blob = await audioFromPayload(String(audio), format)
-  if (blob.size < 400) throw new Error('[music] 音频过短，可能失败')
+  if (blob.size < 400) throw new Error('[music] 오디오가 너무 짧습니다. 생성이 실패했을 수 있습니다.')
   log(`✓ ${(blob.size / 1024).toFixed(1)} KB`)
   return { blob, mimeType: blob.type, prompt, model }
 }
 
 export async function generateMusic(input: MusicGenInput): Promise<MusicGenOutput> {
   const prompt = input.prompt.trim()
-  if (!prompt) throw new Error('没有配乐提示词')
+  if (!prompt) throw new Error('배경음악 프롬프트가 없습니다.')
 
   if (getAIMode() !== 'real') {
-    log('演示模式：生成占位配乐')
+    log('데모 모드에서 임시 배경음악을 생성합니다.')
     const blob = mockBgm(input.duration ?? 24)
     return { blob, mimeType: blob.type, prompt, model: 'mock-music' }
   }
@@ -240,7 +240,7 @@ export async function generateMusic(input: MusicGenInput): Promise<MusicGenOutpu
     } catch (e: any) {
       const msg = e?.message ?? String(e)
       errors.push(`${model}: ${msg}`)
-      log(`${model} 失败：${msg}`)
+      log(`${model} 실패 ${msg}`)
     }
   }
   throw new Error(errors.join('\n'))
