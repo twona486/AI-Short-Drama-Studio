@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { t as translate } from '@/i18n'
 /**
  * 资源库
  *
@@ -34,7 +35,7 @@ const previewTitle = ref('')
 
 onMounted(async () => {
   if (!project.current) {
-    toast.warn('没有打开的项目')
+    toast.warn(translate('common.emptyProject'))
     router.push('/')
     return
   }
@@ -151,7 +152,7 @@ function goTo(step: string) {
 async function downloadAsset(assetId: string, filename: string) {
   const blob = await assets.getBlob(assetId)
   if (!blob) {
-    toast.error('下载失败：素材不存在')
+    toast.error(translate('drafts.assetMissing'))
     return
   }
   const url = URL.createObjectURL(blob)
@@ -160,7 +161,7 @@ async function downloadAsset(assetId: string, filename: string) {
   a.download = filename
   a.click()
   setTimeout(() => URL.revokeObjectURL(url), 1000)
-  toast.success('已下载')
+  toast.success(translate('drafts.downloaded'))
 }
 
 async function deleteImage(shotId: string) {
@@ -169,7 +170,7 @@ async function deleteImage(shotId: string) {
   if (!shot || !shot.imageAssetId) return
   project.updateShot(shotId, { imageAssetId: undefined })
   delete imageUrls.value[shotId]
-  toast.success('已从分镜移除，图片仍在资源库')
+  toast.success(translate('drafts.imageDetached'))
 }
 
 async function deleteVideo(shotId: string) {
@@ -178,11 +179,11 @@ async function deleteVideo(shotId: string) {
   if (!shot || !shot.videoAssetId) return
   project.updateShot(shotId, { videoAssetId: undefined })
   delete videoUrls.value[shotId]
-  toast.success('已从分镜移除，视频仍在资源库')
+  toast.success(translate('drafts.videoDetached'))
 }
 
 async function deleteLibraryAsset(id: string) {
-  if (!confirm('从资源库永久删除该素材？使用它的分镜会取消关联。')) return
+  if (!confirm(translate('drafts.deleteAssetConfirm'))) return
   for (const s of shots.value) {
     const patch: Record<string, unknown> = {}
     if (s.imageAssetId === id) patch.imageAssetId = undefined
@@ -210,7 +211,7 @@ async function deleteLibraryAsset(id: string) {
   }
   await assets.remove(id)
   await loadAssets()
-  toast.success('已从资源库删除')
+  toast.success(translate('drafts.assetDeleted'))
 }
 
 function previewImage(shotId: string) {
@@ -295,26 +296,26 @@ async function previewLibrary(id: string) {
 
 function copyText(text: string, label: string) {
   navigator.clipboard.writeText(text).then(
-    () => toast.success(`${label} 已复制`),
-    () => toast.error('复制失败')
+    () => toast.success(translate('drafts.copied', { p0: label })),
+    () => toast.error(translate('common.copyFailed'))
   )
 }
 
 function scriptSourceLabel(source: string) {
-  return source === 'ai-generated' ? 'AI 生成' : source === 'imported' ? '导入' : '手建'
+  return source === 'ai-generated' ? translate('drafts.sourceAi') : source === 'imported' ? translate('drafts.sourceImport') : translate('drafts.sourceManual')
 }
 
 async function downloadScript(id: string) {
   const ok = await scripts.download(id)
-  if (ok) toast.success('已导出 Markdown')
+  if (ok) toast.success(translate('common.markdownExported'))
 }
 
 async function removeScript(id: string) {
   const doc = scripts.docs.find((d) => d.id === id)
   if (!doc) return
-  if (!confirm(`从剧本库删除「${doc.title}」？本地 Markdown 文件也会一起删除。`)) return
+  if (!confirm(translate('common.deleteNamedScript', { p0: doc.title }))) return
   await scripts.remove(id)
-  toast.success('已删除')
+  toast.success(translate('common.deleted'))
 }
 
 function downloadProjectJson() {
@@ -328,7 +329,7 @@ function downloadProjectJson() {
   a.download = `${project.current.name}-${new Date().toISOString().slice(0, 10)}.json`
   a.click()
   setTimeout(() => URL.revokeObjectURL(url), 1000)
-  toast.success('项目 JSON 已下载')
+  toast.success(translate('drafts.jsonDownloaded'))
 }
 </script>
 
@@ -336,13 +337,13 @@ function downloadProjectJson() {
   <div class="page" v-if="project_">
     <header class="page-head">
       <div>
-        <h1>📦 资源库</h1>
-        <p>每一步的图片、视频都会存下来。重新生成只换当前选用，旧文件仍在这里。</p>
+        <h1>{{ $t('drafts.heading') }}</h1>
+        <p>{{ $t('drafts.preservationHint') }}</p>
       </div>
       <div class="head-actions">
-        <GradientButton type="ghost" @click="router.push('/')">← 返回</GradientButton>
+        <GradientButton type="ghost" @click="router.push('/')">{{ $t('drafts.back') }}</GradientButton>
         <GradientButton type="secondary" icon="📥" @click="downloadProjectJson">
-          导出项目 JSON
+          {{ $t('drafts.exportJson') }}
         </GradientButton>
       </div>
     </header>
@@ -351,42 +352,42 @@ function downloadProjectJson() {
     <GlassCard padding="md" class="meta-card">
       <div class="meta-grid">
         <div>
-          <div class="meta-label">项目名</div>
+          <div class="meta-label">{{ $t('common.projectName') }}</div>
           <div class="meta-value">{{ project_.name }}</div>
         </div>
         <div>
-          <div class="meta-label">比例</div>
+          <div class="meta-label">{{ $t('common.aspectRatio') }}</div>
           <div class="meta-value">
             {{ settings?.aspectRatio }}
             <span class="meta-dim">· {{ settings?.width }}×{{ settings?.height }}</span>
           </div>
         </div>
         <div>
-          <div class="meta-label">风格</div>
+          <div class="meta-label">{{ $t('common.style') }}</div>
           <div class="meta-value">{{ script?.style }}</div>
         </div>
         <div>
-          <div class="meta-label">最后修改</div>
+          <div class="meta-label">{{ $t('drafts.modified') }}</div>
           <div class="meta-value">{{ fmtTime(project_.updatedAt) }}</div>
         </div>
       </div>
       <div class="progress-bar">
-        <div class="progress-segment" :style="{ width: filledProgress.images + '%' }" :title="`图片 ${filledProgress.images}%`" />
-        <div class="progress-segment videos" :style="{ width: filledProgress.videos + '%' }" :title="`视频 ${filledProgress.videos}%`" />
+        <div class="progress-segment" :style="{ width: filledProgress.images + '%' }" :title="$t('drafts.imageProgress', { p0: filledProgress.images })" />
+        <div class="progress-segment videos" :style="{ width: filledProgress.videos + '%' }" :title="$t('drafts.videoProgress', { p0: filledProgress.videos })" />
       </div>
       <div class="progress-legend">
-        <span><span class="dot dot-img" /> 图片 {{ imageShots.length }}/{{ shots.length }}</span>
-        <span><span class="dot dot-vid" /> 视频 {{ videoShots.length }}/{{ shots.length }}</span>
-        <span><span class="dot dot-tl" /> 时间线 {{ timeline.length }} 条</span>
+        <span><span class="dot dot-img" /> {{ $t('common.image') }} {{ imageShots.length }}/{{ shots.length }}</span>
+        <span><span class="dot dot-vid" /> {{ $t('common.video') }} {{ videoShots.length }}/{{ shots.length }}</span>
+        <span><span class="dot dot-tl" /> {{ $t('common.timeline') }} {{ timeline.length }} {{ $t('drafts.count') }}</span>
       </div>
     </GlassCard>
 
     <!-- 资源库全部素材 -->
     <GlassCard padding="md" class="section-card">
       <div class="card-head">
-        <h3>🖼 资源库图片（{{ libraryImages.length }}）</h3>
+        <h3>{{ $t('drafts.libraryImages') }}{{ libraryImages.length }}）</h3>
       </div>
-      <div v-if="libraryImages.length === 0" class="empty-mini">还没有图片</div>
+      <div v-if="libraryImages.length === 0" class="empty-mini">{{ $t('drafts.emptyImages') }}</div>
       <div v-else class="asset-grid">
         <div v-for="a in libraryImages" :key="a.id" class="asset-card">
           <div class="asset-thumb" @click="previewLibrary(a.id)">
@@ -396,13 +397,13 @@ function downloadProjectJson() {
             <div class="asset-title" :title="assetContext(a).title">{{ assetContext(a).title }}</div>
             <div class="asset-dim">{{ assetContext(a).sub }}</div>
             <div class="asset-dim">
-              <Tag v-if="usedAssetIds.has(a.id)" type="success" size="sm">使用中</Tag>
-              <Tag v-else size="sm">未选用</Tag>
+              <Tag v-if="usedAssetIds.has(a.id)" type="success" size="sm">{{ $t('drafts.inUse') }}</Tag>
+              <Tag v-else size="sm">{{ $t('common.notSelected') }}</Tag>
               · {{ fmtSize(a.size) }}
             </div>
             <div class="asset-actions">
-              <button class="link-btn" @click="downloadAsset(a.id, a.filename || 'image.png')">📥 下载</button>
-              <button class="link-btn danger" @click="deleteLibraryAsset(a.id)">🗑 删除</button>
+              <button class="link-btn" @click="downloadAsset(a.id, a.filename || 'image.png')">{{ $t('common.downloadWithIcon') }}</button>
+              <button class="link-btn danger" @click="deleteLibraryAsset(a.id)">{{ $t('common.deleteWithIcon') }}</button>
             </div>
           </div>
         </div>
@@ -411,10 +412,10 @@ function downloadProjectJson() {
 
     <GlassCard padding="md" class="section-card">
       <div class="card-head">
-        <h3>🎥 资源库视频（{{ libraryVideos.length }}）</h3>
-        <span v-if="thumbsLoading" class="meta-dim">正在生成封面…</span>
+        <h3>{{ $t('drafts.libraryVideos') }}{{ libraryVideos.length }}）</h3>
+        <span v-if="thumbsLoading" class="meta-dim">{{ $t('drafts.generatingThumbnail') }}</span>
       </div>
-      <div v-if="libraryVideos.length === 0" class="empty-mini">还没有视频</div>
+      <div v-if="libraryVideos.length === 0" class="empty-mini">{{ $t('drafts.emptyVideos') }}</div>
       <div v-else class="asset-grid">
         <div v-for="a in libraryVideos" :key="a.id" class="asset-card">
           <div class="asset-thumb" @click="playLibraryVideo(a.id, $event)">
@@ -433,20 +434,20 @@ function downloadProjectJson() {
               :alt="assetContext(a).title"
             />
             <div v-else class="thumb-ph">🎥</div>
-            <div v-if="playingId !== a.id" class="play-badge">▶ 播放</div>
+            <div v-if="playingId !== a.id" class="play-badge">{{ $t('common.playWithIcon') }}</div>
           </div>
           <div class="asset-meta">
             <div class="asset-title" :title="assetContext(a).title">{{ assetContext(a).title }}</div>
             <div class="asset-dim">{{ assetContext(a).sub }}</div>
             <div class="asset-dim">
-              <Tag v-if="usedAssetIds.has(a.id)" type="success" size="sm">使用中</Tag>
-              <Tag v-else size="sm">未选用</Tag>
+              <Tag v-if="usedAssetIds.has(a.id)" type="success" size="sm">{{ $t('drafts.inUse') }}</Tag>
+              <Tag v-else size="sm">{{ $t('common.notSelected') }}</Tag>
               · {{ fmtSize(a.size) }}
             </div>
             <div class="asset-actions">
-              <button class="link-btn" @click="previewLibrary(a.id)">放大预览</button>
-              <button class="link-btn" @click="downloadAsset(a.id, a.filename || 'video.mp4')">📥 下载</button>
-              <button class="link-btn danger" @click="deleteLibraryAsset(a.id)">🗑 删除</button>
+              <button class="link-btn" @click="previewLibrary(a.id)">{{ $t('drafts.enlargePreview') }}</button>
+              <button class="link-btn" @click="downloadAsset(a.id, a.filename || 'video.mp4')">{{ $t('common.downloadWithIcon') }}</button>
+              <button class="link-btn danger" @click="deleteLibraryAsset(a.id)">{{ $t('common.deleteWithIcon') }}</button>
             </div>
           </div>
         </div>
@@ -456,13 +457,13 @@ function downloadProjectJson() {
     <!-- 剧本库 -->
     <GlassCard padding="md" class="section-card">
       <div class="card-head">
-        <h3>📜 剧本（{{ scripts.docs.length }}）</h3>
+        <h3>{{ $t('drafts.scripts') }}{{ scripts.docs.length }}）</h3>
         <div class="head-tools">
-          <button class="mini-btn" @click="router.push('/scripts')">管理剧本 →</button>
+          <button class="mini-btn" @click="router.push('/scripts')">{{ $t('drafts.manageScripts') }}</button>
         </div>
       </div>
       <div v-if="!scripts.docs.length" class="empty-mini">
-        还没有剧本。让 AI 写一篇，或去「剧本」页导入 Markdown。
+        {{ $t('drafts.emptyScriptsHint') }}
       </div>
       <div v-else class="script-list">
         <div v-for="d in scripts.docs" :key="d.id" class="script-row">
@@ -470,13 +471,13 @@ function downloadProjectJson() {
             <div class="script-title">{{ d.title }}</div>
             <div class="script-sub">
               <Tag size="sm">{{ scriptSourceLabel(d.source) }}</Tag>
-              {{ d.episodeCount }} 集 · {{ d.totalWords }} 字 · {{ fmtTime(d.updatedAt) }}
+              {{ d.episodeCount }} {{ $t('common.chapterUnitSeparator') }} {{ d.totalWords }} {{ $t('common.charactersSeparator') }} {{ fmtTime(d.updatedAt) }}
             </div>
           </div>
           <div class="script-acts">
-            <button class="link-btn" @click="router.push('/scripts')">✎ 编辑</button>
-            <button class="link-btn" @click="downloadScript(d.id)">📥 导出 MD</button>
-            <button class="link-btn danger" @click="removeScript(d.id)">🗑 删除</button>
+            <button class="link-btn" @click="router.push('/scripts')">{{ $t('common.editWithIcon') }}</button>
+            <button class="link-btn" @click="downloadScript(d.id)">{{ $t('drafts.exportMarkdown') }}</button>
+            <button class="link-btn danger" @click="removeScript(d.id)">{{ $t('common.deleteWithIcon') }}</button>
           </div>
         </div>
       </div>
@@ -485,10 +486,10 @@ function downloadProjectJson() {
     <!-- Aesthetic -->
     <GlassCard v-if="script?.aesthetic" padding="md" class="section-card">
       <div class="card-head">
-        <h3>🎨 整体氛围（项目级）</h3>
+        <h3>{{ $t('drafts.mood') }}</h3>
         <div class="head-tools">
-          <button class="mini-btn" @click="copyText(script.aesthetic, '整体氛围')">📋 复制</button>
-          <button class="mini-btn" @click="goTo('storyboard')">✎ 编辑</button>
+          <button class="mini-btn" @click="copyText(script.aesthetic, $t('drafts.moodShort'))">{{ $t('drafts.copy') }}</button>
+          <button class="mini-btn" @click="goTo('storyboard')">{{ $t('common.editWithIcon') }}</button>
         </div>
       </div>
       <pre class="aesthetic-text">{{ script.aesthetic }}</pre>
@@ -497,29 +498,29 @@ function downloadProjectJson() {
     <!-- 文案 -->
     <GlassCard v-if="script" padding="md" class="section-card">
       <div class="card-head">
-        <h3>📝 文案</h3>
+        <h3>{{ $t('drafts.narration') }}</h3>
         <div class="head-tools">
-          <button class="mini-btn" @click="copyText(script.content, '文案')">📋 复制</button>
-          <button class="mini-btn" @click="goTo('script')">✎ 编辑</button>
+          <button class="mini-btn" @click="copyText(script.content, $t('drafts.scriptShort'))">{{ $t('drafts.copy') }}</button>
+          <button class="mini-btn" @click="goTo('script')">{{ $t('common.editWithIcon') }}</button>
         </div>
       </div>
       <div class="kv-list">
-        <div class="kv"><span>主题</span><b>{{ script.topic }}</b></div>
-        <div class="kv"><span>风格</span><b>{{ script.style }}</b></div>
-        <div class="kv"><span>关键词</span><b>{{ script.keywords?.join('、') || '—' }}</b></div>
-        <div class="kv"><span>字数</span><b>{{ script.content.length }}</b></div>
+        <div class="kv"><span>{{ $t('common.topic') }}</span><b>{{ script.topic }}</b></div>
+        <div class="kv"><span>{{ $t('common.style') }}</span><b>{{ script.style }}</b></div>
+        <div class="kv"><span>{{ $t('common.keywords') }}</span><b>{{ script.keywords?.join('、') || '—' }}</b></div>
+        <div class="kv"><span>{{ $t('common.words') }}</span><b>{{ script.content.length }}</b></div>
       </div>
-      <pre class="content-text">{{ script.content || '（无）' }}</pre>
+      <pre class="content-text">{{ script.content || $t('drafts.none') }}</pre>
     </GlassCard>
 
     <!-- 分镜列表 -->
     <GlassCard padding="md" class="section-card">
       <div class="card-head">
-        <h3>🎬 分镜（{{ shots.length }} 个）</h3>
-        <button class="mini-btn" @click="goTo('storyboard')">✎ 编辑分镜</button>
+        <h3>{{ $t('drafts.storyboards') }}{{ shots.length }} {{ $t('common.pieces') }}</h3>
+        <button class="mini-btn" @click="goTo('storyboard')">{{ $t('drafts.editShot') }}</button>
       </div>
       <div v-if="shots.length === 0" class="empty-mini">
-        还没有分镜
+        {{ $t('common.noStoryboard') }}
       </div>
       <div v-else class="shot-list">
         <div
@@ -547,12 +548,12 @@ function downloadProjectJson() {
     <!-- 图片网格 -->
     <GlassCard padding="md" class="section-card">
       <div class="card-head">
-        <h3>🖼 已生成图片（{{ allImages.length }} 张）</h3>
-        <button class="mini-btn" @click="goTo('images')">+ 添加 / 重新生成</button>
+        <h3>{{ $t('drafts.generatedImages') }}{{ allImages.length }} {{ $t('common.imageCount') }}</h3>
+        <button class="mini-btn" @click="goTo('images')">{{ $t('drafts.addOrRegenerate') }}</button>
       </div>
       <div v-if="allImages.length === 0" class="empty-mini">
-        还没有图片。
-        <button class="link-btn" @click="goTo('images')">去生成 →</button>
+        {{ $t('drafts.emptyImagesFull') }}
+        <button class="link-btn" @click="goTo('images')">{{ $t('drafts.goGenerate') }}</button>
       </div>
       <div v-else class="asset-grid">
         <div v-for="img in allImages" :key="img.shot.id" class="asset-card">
@@ -568,8 +569,8 @@ function downloadProjectJson() {
               · {{ fmtSize(img.asset?.size ?? 0) }}
             </div>
             <div class="asset-actions">
-              <button class="link-btn" @click="downloadAsset(img.shot.imageAssetId!, `shot_${img.shot.index + 1}_image.png`)">📥 下载</button>
-              <button class="link-btn danger" @click="deleteImage(img.shot.id)">🗑 删除</button>
+              <button class="link-btn" @click="downloadAsset(img.shot.imageAssetId!, `shot_${img.shot.index + 1}_image.png`)">{{ $t('common.downloadWithIcon') }}</button>
+              <button class="link-btn danger" @click="deleteImage(img.shot.id)">{{ $t('common.deleteWithIcon') }}</button>
             </div>
           </div>
         </div>
@@ -579,12 +580,12 @@ function downloadProjectJson() {
     <!-- 视频列表 -->
     <GlassCard padding="md" class="section-card">
       <div class="card-head">
-        <h3>🎥 已生成视频（{{ allVideos.length }} 段）</h3>
-        <button class="mini-btn" @click="goTo('videos')">+ 添加 / 重新生成</button>
+        <h3>{{ $t('drafts.generatedVideos') }}{{ allVideos.length }} {{ $t('common.clips') }}</h3>
+        <button class="mini-btn" @click="goTo('videos')">{{ $t('drafts.addOrRegenerate') }}</button>
       </div>
       <div v-if="allVideos.length === 0" class="empty-mini">
-        还没有视频。
-        <button class="link-btn" @click="goTo('videos')">去生成 →</button>
+        {{ $t('drafts.emptyVideosFull') }}
+        <button class="link-btn" @click="goTo('videos')">{{ $t('drafts.goGenerate') }}</button>
       </div>
       <div v-else class="asset-grid">
         <div v-for="v in allVideos" :key="v.shot.id" class="asset-card">
@@ -602,7 +603,7 @@ function downloadProjectJson() {
               preload="metadata"
             />
             <div v-else class="loading-mini">…</div>
-            <div class="play-badge">▶ 预览</div>
+            <div class="play-badge">{{ $t('common.previewPlay') }}</div>
           </div>
           <div class="asset-meta">
             <div class="asset-title">#{{ v.shot.index + 1 }} {{ v.shot.title }}</div>
@@ -614,8 +615,8 @@ function downloadProjectJson() {
               · {{ fmtSize(v.asset?.size ?? 0) }}
             </div>
             <div class="asset-actions">
-              <button class="link-btn" @click="downloadAsset(v.shot.videoAssetId!, `shot_${v.shot.index + 1}_video.mp4`)">📥 下载</button>
-              <button class="link-btn danger" @click="deleteVideo(v.shot.id)">🗑 删除</button>
+              <button class="link-btn" @click="downloadAsset(v.shot.videoAssetId!, `shot_${v.shot.index + 1}_video.mp4`)">{{ $t('common.downloadWithIcon') }}</button>
+              <button class="link-btn danger" @click="deleteVideo(v.shot.id)">{{ $t('common.deleteWithIcon') }}</button>
             </div>
           </div>
         </div>
@@ -625,30 +626,30 @@ function downloadProjectJson() {
     <!-- 时间线状态 -->
     <GlassCard padding="md" class="section-card">
       <div class="card-head">
-        <h3>✂️ 时间线（{{ timeline.length }} 条 · 总时长 {{ totalDuration }}s）</h3>
-        <button class="mini-btn" @click="goTo('edit')">编辑时间线 →</button>
+        <h3>{{ $t('drafts.timeline') }}{{ timeline.length }} {{ $t('drafts.countDuration') }} {{ totalDuration }}s）</h3>
+        <button class="mini-btn" @click="goTo('edit')">{{ $t('drafts.editTimeline') }}</button>
       </div>
       <div v-if="timeline.length === 0" class="empty-mini">
-        时间线是空的
+        {{ $t('common.emptyTimeline') }}
       </div>
       <div v-else class="tl-summary">
         <Tag v-for="c in timeline.slice(0, 12)" :key="c.id" type="info" size="sm">
           {{ c.duration.toFixed(1) }}s
         </Tag>
-        <span v-if="timeline.length > 12" class="more-mini">+ {{ timeline.length - 12 }} 更多</span>
+        <span v-if="timeline.length > 12" class="more-mini">+ {{ timeline.length - 12 }} {{ $t('common.more') }}</span>
       </div>
     </GlassCard>
 
     <!-- 字幕 -->
     <GlassCard padding="md" class="section-card">
       <div class="card-head">
-        <h3>💬 字幕</h3>
-        <button class="mini-btn" @click="goTo('caption')">编辑字幕 →</button>
+        <h3>{{ $t('drafts.captions') }}</h3>
+        <button class="mini-btn" @click="goTo('caption')">{{ $t('drafts.editCaptions') }}</button>
       </div>
       <div class="caption-summary">
         <div v-for="(s, i) in shots" :key="s.id" class="caption-line">
           <span class="caption-num">{{ i + 1 }}</span>
-          <span class="caption-text">{{ s.voiceover || '（无）' }}</span>
+          <span class="caption-text">{{ s.voiceover || $t('drafts.none') }}</span>
           <span class="caption-audio">{{ s.audioDescription || '' }}</span>
         </div>
       </div>
@@ -691,11 +692,11 @@ function downloadProjectJson() {
   <EmptyState
     v-else
     icon="📦"
-    title="没有打开的项目"
-    description="先创建一个项目"
+    :title="$t('common.emptyProject')"
+    :description="$t('drafts.createFirst')"
   >
     <template #action>
-      <GradientButton @click="router.push('/')">返回首页</GradientButton>
+      <GradientButton @click="router.push('/')">{{ $t('drafts.home') }}</GradientButton>
     </template>
   </EmptyState>
 </template>

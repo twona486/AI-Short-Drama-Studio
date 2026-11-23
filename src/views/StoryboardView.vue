@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { t as translate } from '@/i18n'
 import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useProjectStore, useToastStore, useAssetsStore } from '@/stores'
@@ -22,7 +23,7 @@ const editing = ref<string | null>(null)
 
 onMounted(() => {
   if (!project.current?.script) {
-    toast.warn('请先填写文案')
+    toast.warn(translate('storyboard.enterScriptFirst'))
     router.push('/script')
   }
 })
@@ -35,7 +36,7 @@ const subjects = computed(() => project.current?.subjects ?? [])
 const scenes = computed(() => project.current?.scenes ?? [])
 
 function kindLabel(k: string) {
-  return k === 'animal' ? '动物' : k === 'other' ? '物体' : '人物'
+  return k === 'animal' ? translate('storyboard.animal') : k === 'other' ? translate('storyboard.object') : translate('storyboard.person')
 }
 
 function shotCastLabel(s: Shot) {
@@ -91,7 +92,7 @@ async function generate() {
   if (!project.current?.script) return
   if (shots.value.some((s) => s.imageAssetId || s.videoAssetId)) {
     const ok = confirm(
-      '重新生成分镜会替换镜头列表。\n已生成的图片和视频会留在资源库，之后可在配图/视频步骤重新选用。\n确定继续？'
+      translate('storyboard.regenerateConfirm')
     )
     if (!ok) return
   }
@@ -108,7 +109,7 @@ async function generate() {
       }
     }
     if (productImages.length) {
-      toast.info(`已附带 ${productImages.length} 张产品图给多模态模型`, 2000)
+      toast.info(translate('storyboard.referenceSent', { p0: productImages.length }), 2000)
     }
     const look = lookFromScript(project.current.script)
     const runResult = await generateStoryboard(
@@ -142,10 +143,10 @@ async function generate() {
       })
     }
     toast.success(
-      `已生成 ${newShots.length} 个分镜 · ${runResult.result.subjects?.length ?? 0} 个主体 · ${runResult.result.scenes?.length ?? 0} 个场景`
+      translate('storyboard.generationSummary', { p0: newShots.length, p1: runResult.result.subjects?.length ?? 0, p2: runResult.result.scenes?.length ?? 0 })
     )
   } catch (e: any) {
-    toast.error('生成分镜失败：' + e.message, 8000)
+    toast.error(translate('storyboard.failed', { error: e.message }), 8000)
   } finally {
     generating.value = false
   }
@@ -160,7 +161,7 @@ function addShot() {
   const newShot: Shot = {
     id: 'shot_' + Date.now().toString(36),
     index: shots.value.length,
-    title: `镜头 ${shots.value.length + 1}`,
+    title: translate('common.shotNumber', { p0: shots.value.length + 1 }),
     visualPrompt: '',
     audioDescription: '',
     voiceover: '',
@@ -175,12 +176,12 @@ function addShot() {
 
 function removeShot(id: string) {
   if (!project.current) return
-  if (!confirm('删除该分镜？')) return
+  if (!confirm(translate('storyboard.deleteConfirm'))) return
   const list = shots.value
     .filter((s) => s.id !== id)
     .map((s, i) => ({ ...s, index: i }))
   project.setShots(list)
-  toast.success('分镜已删除')
+  toast.success(translate('storyboard.deleted'))
 }
 
 function moveShot(id: string, dir: -1 | 1) {
@@ -196,7 +197,7 @@ function moveShot(id: string, dir: -1 | 1) {
 
 function next() {
   if (shots.value.length === 0) {
-    toast.warn('请先生成至少一个分镜')
+    toast.warn(translate('storyboard.needOne'))
     return
   }
   router.push('/images')
@@ -204,12 +205,12 @@ function next() {
 
 function movementLabel(m: Shot['cameraMovement']): string {
   return {
-    push: '推',
-    pull: '拉',
-    pan: '摇',
-    tilt: '移',
-    static: '固定',
-    orbit: '环绕'
+    push: translate('storyboard.push'),
+    pull: translate('storyboard.pull'),
+    pan: translate('storyboard.pan'),
+    tilt: translate('storyboard.tilt'),
+    static: translate('storyboard.static'),
+    orbit: translate('storyboard.orbit')
   }[m]
 }
 </script>
@@ -218,20 +219,20 @@ function movementLabel(m: Shot['cameraMovement']): string {
   <div class="page">
     <header class="page-head">
       <div>
-        <h1>🎬 分镜拆解</h1>
-        <p>先锁定整片的人物和场景，再拆镜头。后面配图会用人设图 + 场景底板保证长得一样。</p>
+        <h1>{{ $t('storyboard.breakdown') }}</h1>
+        <p>{{ $t('storyboard.lockSubjects') }}</p>
       </div>
       <div class="head-actions">
-        <GradientButton type="ghost" @click="router.push('/script')">← 上一步</GradientButton>
+        <GradientButton type="ghost" @click="router.push('/script')">{{ $t('common.previousStep') }}</GradientButton>
         <GradientButton
           icon="✨"
           :loading="generating"
           @click="generate"
         >
-          {{ shots.length > 0 ? '重新生成分镜' : 'AI 生成分镜' }}
+          {{ shots.length > 0 ? $t('common.regenerateStoryboard') : $t('common.generateStoryboard') }}
         </GradientButton>
-        <GradientButton icon="+" type="secondary" @click="addShot">手动添加</GradientButton>
-        <GradientButton icon="→" @click="next">下一步：配图</GradientButton>
+        <GradientButton icon="+" type="secondary" @click="addShot">{{ $t('common.manualAdd') }}</GradientButton>
+        <GradientButton icon="→" @click="next">{{ $t('storyboard.next') }}</GradientButton>
       </div>
     </header>
 
@@ -242,62 +243,62 @@ function movementLabel(m: Shot['cameraMovement']): string {
       class="aesthetic-card"
     >
       <div class="aes-head">
-        <h3>🎨 制作计划 · 风格锚点</h3>
-        <span class="aes-hint">整体氛围会拼进配图/视频；风格简报 / 色板 / 光线供全片锁定</span>
+        <h3>{{ $t('storyboard.plan') }}</h3>
+        <span class="aes-hint">{{ $t('storyboard.moodHint') }}</span>
         <button class="aes-toggle" @click="editingAesthetic ? saveAesthetic() : startEditAesthetic()">
-          {{ editingAesthetic ? '✓ 完成' : '✎ 编辑' }}
+          {{ editingAesthetic ? $t('common.doneWithCheck') : $t('common.editWithIcon') }}
         </button>
       </div>
       <template v-if="!editingAesthetic">
         <pre v-if="project.current.script.aesthetic" class="aes-readonly">{{ project.current.script.aesthetic }}</pre>
         <div class="plan-grid">
           <div v-if="project.current.script.styleBrief" class="plan-item">
-            <span class="plan-label">风格简报</span>
+            <span class="plan-label">{{ $t('storyboard.styleBrief') }}</span>
             <p>{{ project.current.script.styleBrief }}</p>
           </div>
           <div v-if="project.current.script.colorPalette" class="plan-item">
-            <span class="plan-label">色彩锚点</span>
+            <span class="plan-label">{{ $t('storyboard.palette') }}</span>
             <p>{{ project.current.script.colorPalette }}</p>
           </div>
           <div v-if="project.current.script.lightingNote" class="plan-item">
-            <span class="plan-label">光线说明</span>
+            <span class="plan-label">{{ $t('storyboard.lightingNotes') }}</span>
             <p>{{ project.current.script.lightingNote }}</p>
           </div>
         </div>
       </template>
       <template v-else>
         <label class="shot-field">
-          <span>整体氛围</span>
+          <span>{{ $t('storyboard.mood') }}</span>
           <textarea v-model="aestheticDraft" class="aes-edit" rows="4" />
         </label>
         <div class="plan-grid edit">
           <label class="shot-field">
-            <span>风格简报</span>
+            <span>{{ $t('storyboard.styleBrief') }}</span>
             <textarea v-model="styleBriefDraft" class="aes-edit" rows="2" />
           </label>
           <label class="shot-field">
-            <span>色彩锚点</span>
+            <span>{{ $t('storyboard.palette') }}</span>
             <textarea v-model="colorPaletteDraft" class="aes-edit" rows="2" />
           </label>
           <label class="shot-field">
-            <span>光线说明</span>
+            <span>{{ $t('storyboard.lightingNotes') }}</span>
             <textarea v-model="lightingNoteDraft" class="aes-edit" rows="2" />
           </label>
         </div>
-        <button class="aes-toggle" style="margin-top: 8px" @click="saveAesthetic">✓ 保存</button>
+        <button class="aes-toggle" style="margin-top: 8px" @click="saveAesthetic">{{ $t('common.savedWithCheck') }}</button>
       </template>
     </GlassCard>
 
     <GlassCard v-if="subjects.length || scenes.length" padding="md" class="cast-card">
       <div class="cast-col">
-        <h3>主体（{{ subjects.length }}）</h3>
-        <p class="cast-hint">全片共用同一套外貌。可编辑功能与状态变体。</p>
+        <h3>{{ $t('storyboard.subject') }}{{ subjects.length }}）</h3>
+        <p class="cast-hint">{{ $t('storyboard.subjectConsistency') }}</p>
         <div v-for="sub in subjects" :key="sub.id" class="cast-item">
           <div class="cast-name">
             {{ sub.name }}
             <Tag size="sm">{{ kindLabel(sub.kind) }}</Tag>
             <Tag v-if="sub.role" type="info" size="sm">{{ sub.role }}</Tag>
-            <Tag v-if="sub.fromReference" type="accent" size="sm">来自参考图</Tag>
+            <Tag v-if="sub.fromReference" type="accent" size="sm">{{ $t('storyboard.derivedFromReference') }}</Tag>
           </div>
           <textarea
             class="cast-desc"
@@ -307,20 +308,20 @@ function movementLabel(m: Shot['cameraMovement']): string {
           />
           <div class="cast-meta">
             <label class="shot-field">
-              <span>功能</span>
+              <span>{{ $t('storyboard.role') }}</span>
               <input
                 class="shot-input"
                 :value="sub.role ?? ''"
-                placeholder="主角 / 反派 / 旁观…"
+                :placeholder="$t('storyboard.subjectRoleExample')"
                 @blur="project.updateSubject(sub.id, { role: ($event.target as HTMLInputElement).value || undefined })"
               />
             </label>
             <label class="shot-field">
-              <span>状态变体</span>
+              <span>{{ $t('storyboard.variants') }}</span>
               <input
                 class="shot-input"
                 :value="sub.stateVariants ?? ''"
-                placeholder="外卖外套 / 西装揭示…"
+                :placeholder="$t('storyboard.costumeExample')"
                 @blur="project.updateSubject(sub.id, { stateVariants: ($event.target as HTMLInputElement).value || undefined })"
               />
             </label>
@@ -328,8 +329,8 @@ function movementLabel(m: Shot['cameraMovement']): string {
         </div>
       </div>
       <div class="cast-col">
-        <h3>场景（{{ scenes.length }}）</h3>
-        <p class="cast-hint">同一地点只建一条。主锚用于站位描述。</p>
+        <h3>{{ $t('storyboard.scene') }}{{ scenes.length }}）</h3>
+        <p class="cast-hint">{{ $t('storyboard.sceneAnchorHint') }}</p>
         <div v-for="scn in scenes" :key="scn.id" class="cast-item">
           <div class="cast-name">{{ scn.name }}</div>
           <textarea
@@ -340,20 +341,20 @@ function movementLabel(m: Shot['cameraMovement']): string {
           />
           <div class="cast-meta">
             <label class="shot-field">
-              <span>主锚</span>
+              <span>{{ $t('storyboard.anchor') }}</span>
               <input
                 class="shot-input"
                 :value="scn.mainAnchor ?? ''"
-                placeholder="前台接待台 / 电梯门…"
+                :placeholder="$t('storyboard.anchorExample')"
                 @blur="project.updateScene(scn.id, { mainAnchor: ($event.target as HTMLInputElement).value || undefined })"
               />
             </label>
             <label class="shot-field">
-              <span>光线</span>
+              <span>{{ $t('common.sceneLight') }}</span>
               <input
                 class="shot-input"
                 :value="scn.lighting ?? ''"
-                placeholder="傍晚侧窗暖光…"
+                :placeholder="$t('storyboard.lightingExample')"
                 @blur="project.updateScene(scn.id, { lighting: ($event.target as HTMLInputElement).value || undefined })"
               />
             </label>
@@ -365,38 +366,38 @@ function movementLabel(m: Shot['cameraMovement']): string {
     <GlassCard v-if="!generating && shots.length > 0" padding="md" class="stats">
       <div class="stat-item">
         <div class="stat-num gradient-text">{{ shots.length }}</div>
-        <div class="stat-label">分镜数</div>
+        <div class="stat-label">{{ $t('storyboard.count') }}</div>
       </div>
       <div class="stat-item">
         <div class="stat-num gradient-text">{{ totalDuration }}s</div>
-        <div class="stat-label">总时长</div>
+        <div class="stat-label">{{ $t('common.totalLength') }}</div>
       </div>
       <div class="stat-item">
         <div class="stat-num">
-          <Tag type="success" size="sm">{{ shots.filter(s => s.imageAssetId).length }} 已配图</Tag>
+          <Tag type="success" size="sm">{{ shots.filter(s => s.imageAssetId).length }} {{ $t('common.imageReady') }}</Tag>
         </div>
-        <div class="stat-label">已配图</div>
+        <div class="stat-label">{{ $t('common.imageReady') }}</div>
       </div>
       <div class="stat-item">
         <div class="stat-num">
-          <Tag type="success" size="sm">{{ shots.filter(s => s.videoAssetId).length }} 已生成视频</Tag>
+          <Tag type="success" size="sm">{{ shots.filter(s => s.videoAssetId).length }} {{ $t('common.videoReady') }}</Tag>
         </div>
-        <div class="stat-label">已生成</div>
+        <div class="stat-label">{{ $t('common.generated') }}</div>
       </div>
     </GlassCard>
 
     <div v-if="generating" class="generating">
-      <LoadingDots text="专业编剧与镜头导演正在撰写分镜与口播..." />
+      <LoadingDots :text="$t('storyboard.writing')" />
     </div>
 
     <EmptyState
       v-if="shots.length === 0"
       icon="🎬"
-      title="还没有分镜"
-      description="点击「AI 生成分镜」让 AI 帮你规划每个镜头的画面和口播"
+      :title="$t('common.noStoryboard')"
+      :description="$t('storyboard.emptyHint')"
     >
       <template #action>
-        <GradientButton icon="✨" @click="generate">AI 生成分镜</GradientButton>
+        <GradientButton icon="✨" @click="generate">{{ $t('common.generateStoryboard') }}</GradientButton>
       </template>
     </EmptyState>
 
@@ -434,95 +435,95 @@ function movementLabel(m: Shot['cameraMovement']): string {
             </div>
           </div>
           <div class="shot-actions">
-            <button :disabled="i === 0" @click="moveShot(s.id, -1)" title="上移">↑</button>
-            <button :disabled="i === shots.length - 1" @click="moveShot(s.id, 1)" title="下移">↓</button>
-            <button @click="editing = editing === s.id ? null : s.id" title="编辑">
-              {{ editing === s.id ? '完成' : '✎' }}
+            <button :disabled="i === 0" @click="moveShot(s.id, -1)" :title="$t('common.moveUp')">↑</button>
+            <button :disabled="i === shots.length - 1" @click="moveShot(s.id, 1)" :title="$t('common.moveDown')">↓</button>
+            <button @click="editing = editing === s.id ? null : s.id" :title="$t('common.edit')">
+              {{ editing === s.id ? $t('common.done') : '✎' }}
             </button>
-            <button class="del" @click="removeShot(s.id)" title="删除">🗑</button>
+            <button class="del" @click="removeShot(s.id)" :title="$t('common.delete')">🗑</button>
           </div>
         </div>
 
         <div class="shot-body">
           <label class="shot-field">
-            <span>画面描述（中文详细）</span>
+            <span>{{ $t('storyboard.visualDescription') }}</span>
             <textarea
               v-model="s.visualPrompt"
               rows="3"
               class="shot-input"
               :readonly="editing !== s.id"
               @blur="updateField(s.id, 'visualPrompt', s.visualPrompt)"
-              placeholder="例如：夜晚薄雾湖面上，木船缓缓漂行，身着红绣汉服的女子轻启口红盖……"
+              :placeholder="$t('storyboard.visualExample')"
             />
           </label>
 
           <div v-if="hasDirectingNotes(s) || editing === s.id" class="directing">
             <button type="button" class="directing-toggle" @click="toggleDirecting(s.id)">
-              {{ directingOpen[s.id] || editing === s.id ? '▾' : '▸' }} 导演备注
-              <span class="directing-hint">站位 · 视线 · 跨镜承接 · 道具</span>
+              {{ directingOpen[s.id] || editing === s.id ? '▾' : '▸' }} {{ $t('storyboard.directorNotes') }}
+              <span class="directing-hint">{{ $t('storyboard.continuitySummary') }}</span>
             </button>
             <div v-if="directingOpen[s.id] || editing === s.id" class="directing-body">
               <div class="directing-row">
                 <label class="shot-field">
-                  <span>戏剧功能</span>
+                  <span>{{ $t('storyboard.beat') }}</span>
                   <input
                     class="shot-input"
                     :value="s.purpose ?? ''"
                     :readonly="editing !== s.id"
-                    placeholder="建立 / 对峙 / 反应 / 揭示…"
+                    :placeholder="$t('storyboard.beatExample')"
                     @blur="updateField(s.id, 'purpose', ($event.target as HTMLInputElement).value || undefined)"
                   />
                 </label>
                 <label class="shot-field">
-                  <span>景别</span>
+                  <span>{{ $t('storyboard.shotSize') }}</span>
                   <input
                     class="shot-input"
                     :value="s.shotSize ?? ''"
                     :readonly="editing !== s.id"
-                    placeholder="大远景 / 全景 / 中景 / 近景 / 特写"
+                    :placeholder="$t('storyboard.shotSizeExample')"
                     @blur="updateField(s.id, 'shotSize', ($event.target as HTMLInputElement).value || undefined)"
                   />
                 </label>
               </div>
               <label class="shot-field">
-                <span>站位（相对场景主锚）</span>
+                <span>{{ $t('storyboard.position') }}</span>
                 <textarea
                   class="shot-input"
                   rows="2"
                   :value="s.blocking ?? ''"
                   :readonly="editing !== s.id"
-                  placeholder="禁止「屏幕左/右」量化坐标；写相对主锚的站位与朝向"
+                  :placeholder="$t('storyboard.positionHint')"
                   @blur="updateField(s.id, 'blocking', ($event.target as HTMLTextAreaElement).value || undefined)"
                 />
               </label>
               <label class="shot-field">
-                <span>视线 / 面向</span>
+                <span>{{ $t('storyboard.gaze') }}</span>
                 <input
                   class="shot-input"
                   :value="s.eyeline ?? ''"
                   :readonly="editing !== s.id"
-                  placeholder="谁看谁、轴线是否保持"
+                  :placeholder="$t('storyboard.gazeExample')"
                   @blur="updateField(s.id, 'eyeline', ($event.target as HTMLInputElement).value || undefined)"
                 />
               </label>
               <label class="shot-field">
-                <span>跨镜承接</span>
+                <span>{{ $t('storyboard.continuity') }}</span>
                 <textarea
                   class="shot-input"
                   rows="2"
                   :value="s.continuity ?? ''"
                   :readonly="editing !== s.id"
-                  placeholder="起始快照 → 本镜可见变化 → 末态"
+                  :placeholder="$t('storyboard.continuityExample')"
                   @blur="updateField(s.id, 'continuity', ($event.target as HTMLTextAreaElement).value || undefined)"
                 />
               </label>
               <label class="shot-field">
-                <span>道具焦点</span>
+                <span>{{ $t('storyboard.propFocus') }}</span>
                 <input
                   class="shot-input"
                   :value="s.propFocus ?? ''"
                   :readonly="editing !== s.id"
-                  placeholder="谁持有、是否亮出、状态变化"
+                  :placeholder="$t('storyboard.propExample')"
                   @blur="updateField(s.id, 'propFocus', ($event.target as HTMLInputElement).value || undefined)"
                 />
               </label>
@@ -530,18 +531,18 @@ function movementLabel(m: Shot['cameraMovement']): string {
           </div>
 
           <label class="shot-field">
-            <span>音效（中文短句，逗号分隔）</span>
+            <span>{{ $t('storyboard.soundEffects') }}</span>
             <input
               :value="s.audioDescription"
               @input="updateField(s.id, 'audioDescription', ($event.target as HTMLInputElement).value)"
               @blur="updateField(s.id, 'audioDescription', s.audioDescription)"
               class="shot-input"
               :readonly="editing !== s.id"
-              placeholder="雨声、木船轻微摇晃声、灯火燃烧声"
+              :placeholder="$t('storyboard.soundExample')"
             />
           </label>
           <label class="shot-field">
-            <span>口播文案 / 字幕（中文）</span>
+            <span>{{ $t('storyboard.narrationCaption') }}</span>
             <textarea
               v-model="s.voiceover"
               rows="2"
@@ -552,18 +553,18 @@ function movementLabel(m: Shot['cameraMovement']): string {
           </label>
           <div v-if="editing === s.id" class="shot-extra">
             <label class="shot-field">
-              <span>镜头运动</span>
+              <span>{{ $t('common.cameraMovement') }}</span>
               <select
                 v-model="s.cameraMovement"
                 class="shot-input"
                 @change="updateField(s.id, 'cameraMovement', s.cameraMovement)"
               >
-                <option value="push">推</option>
-                <option value="pull">拉</option>
-                <option value="pan">摇</option>
-                <option value="tilt">移</option>
-                <option value="orbit">环绕</option>
-                <option value="static">固定</option>
+                <option value="push">{{ $t('common.cameraPush') }}</option>
+                <option value="pull">{{ $t('common.cameraPull') }}</option>
+                <option value="pan">{{ $t('common.cameraPan') }}</option>
+                <option value="tilt">{{ $t('common.cameraTrack') }}</option>
+                <option value="orbit">{{ $t('common.cameraOrbit') }}</option>
+                <option value="static">{{ $t('common.cameraFixed') }}</option>
               </select>
             </label>
           </div>

@@ -4,14 +4,11 @@ import ParamSelect from '@/components/common/ParamSelect.vue'
 import { normalizeVideoGenModel, stillModeForVideoModel, type VideoGenModel } from '@/types'
 import { useSettingsStore } from '@/stores'
 
-const props = withDefaults(
-  defineProps<{
-    modelValue?: VideoGenModel | string
-    profileId?: string
-    label?: string
-  }>(),
-  { label: '模型' }
-)
+const props = defineProps<{
+  modelValue?: VideoGenModel | string
+  profileId?: string
+  label?: string
+}>()
 
 const emit = defineEmits<{
   'update:modelValue': [value: VideoGenModel]
@@ -45,18 +42,18 @@ function onPick(v: string) {
 </script>
 
 <template>
-  <ParamSelect :label="label" max-width="260px" :model-value="value" @update:model-value="onPick">
-    <optgroup v-if="settings.config.videos.length" label="已配置的视频接入">
+  <ParamSelect :label="label ?? $t('common.model')" max-width="260px" :model-value="value" @update:model-value="onPick">
+    <optgroup v-if="settings.config.videos.length" :label="$t('common.configuredVideo')">
       <option v-for="p in settings.config.videos" :key="p.id" :value="p.id">
-        {{ profileLabel(p) }}{{ stillModeForVideoModel('h3', p) === 'keyframe' ? ' · 关键帧' : stillModeForVideoModel('h3', p) === 'storyboard' ? ' · 看板' : '' }}
+        {{ profileLabel(p) }}{{ stillModeForVideoModel('h3', p) === 'keyframe' ? $t('videoModelSelect.keyframeSuffix') : stillModeForVideoModel('h3', p) === 'storyboard' ? $t('videoModelSelect.boardSuffix') : '' }}
       </option>
     </optgroup>
-    <optgroup label="工作流（用设置里的 AutoDL 令牌）">
+    <optgroup :label="$t('common.autoDlWorkflow')">
       <option value="h3">
-        H3 v5 · 15秒{{ stillModeForVideoModel('h3', settings.config.video) === 'keyframe' ? '（需关键帧）' : stillModeForVideoModel('h3', settings.config.video) === 'storyboard' ? '（需看板）' : '（人设+场景）' }}
+        {{ $t('videoModelSelect.h3') }}{{ stillModeForVideoModel('h3', settings.config.video) === 'keyframe' ? $t('videoModelSelect.requiresKeyframe') : stillModeForVideoModel('h3', settings.config.video) === 'storyboard' ? $t('videoModelSelect.requiresBoard') : $t('videoModelSelect.identity') }}
       </option>
-      <option value="h3-v5">H3 v5 · 10秒 1080p（人设+场景）</option>
-      <option value="wan-prime">万相 3.0 Prime（需关键帧）</option>
+      <option value="h3-v5">{{ $t('videoModelSelect.h3v5') }}</option>
+      <option value="wan-prime">{{ $t('videoModelSelect.wan') }}</option>
     </optgroup>
   </ParamSelect>
 </template>

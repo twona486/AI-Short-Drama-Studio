@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { t as translate } from '@/i18n'
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { Handle, Position, useVueFlow } from '@vue-flow/core'
 import { useAssetsStore, useProjectStore, useToastStore } from '@/stores'
@@ -21,10 +22,10 @@ const props = defineProps<{
 }>()
 
 const AUDIO_MODES: { id: ShotAudioMode; label: string }[] = [
-  { id: 'h3-dialogue', label: 'H3 对白' },
-  { id: 'h3-voiceover', label: 'H3 画外' },
-  { id: 'tts', label: '后期 TTS' },
-  { id: 'none', label: '无口播' }
+  { id: 'h3-dialogue', get label() { return translate('audioNode.h3Dialogue') } },
+  { id: 'h3-voiceover', get label() { return translate('audioNode.h3Offscreen') } },
+  { id: 'tts', get label() { return translate('common.postTts') } },
+  { id: 'none', get label() { return translate('common.noNarration') } }
 ]
 
 const project = useProjectStore()
@@ -47,14 +48,14 @@ const mode = computed(() => (shot.value ? effectiveShotAudioMode(shot.value) : '
 const canTts = computed(() => Boolean(shot.value && needsExternalTts(shot.value, project.current)))
 const gateBlocked = computed(() => needsPlayReview(project.current))
 const title = computed(() =>
-  shot.value ? `${shot.value.index + 1}. ${shot.value.title}` : props.data.label || '口播'
+  shot.value ? `${shot.value.index + 1}. ${shot.value.title}` : props.data.label || translate('audioNode.narration')
 )
 const previewLine = computed(() => {
   const t = shot.value?.voiceover?.trim()
   if (t) return t
-  if (mode.value === 'none') return '这一镜没有口播'
-  if (mode.value === 'tts') return '还没有口播文案'
-  return '人声会跟视频一起生成'
+  if (mode.value === 'none') return translate('audioNode.noNarration')
+  if (mode.value === 'tts') return translate('audioNode.emptyNarration')
+  return translate('audioNode.audioFromVideo')
 })
 
 watch(
@@ -109,7 +110,7 @@ async function generateThis(ev?: Event) {
   ev?.stopPropagation()
   if (generating.value || gateBlocked.value) return
   if (!canTts.value) {
-    toast.info('H3 人声会跟视频一起生成，只有后期 TTS 才在这里出配音')
+    toast.info(translate('audioNode.h3Hint'))
     return
   }
   panelOpen.value = false
@@ -132,7 +133,7 @@ function openDetail() {
     <Handle id="in" type="target" :position="Position.Left" class="hndl" />
 
     <div class="anode-top">
-      <span class="kind">口播</span>
+      <span class="kind">{{ $t('common.narration') }}</span>
       <span class="name" :title="title">{{ title }}</span>
       <span class="mode">{{ AUDIO_MODES.find((m) => m.id === mode)?.label }}</span>
     </div>
@@ -159,9 +160,9 @@ function openDetail() {
       >
         {{ playing ? '❚❚' : '▶' }}
       </button>
-      <span v-else class="hint">{{ canTts ? '待合成 TTS' : mode === 'none' ? '无口播' : '随视频出声' }}</span>
+      <span v-else class="hint">{{ canTts ? $t('audioNode.pendingTts') : mode === 'none' ? $t('common.noNarration') : $t('audioNode.embedded') }}</span>
     </div>
-    <NodeBusyOverlay v-if="generating" label="合成中" />
+    <NodeBusyOverlay v-if="generating" :label="$t('audioNode.composing')" />
 
     <transition name="float-down">
       <div v-if="selected && panelOpen" class="panel nodrag nowheel" @mousedown.stop @click.stop>
@@ -179,13 +180,13 @@ function openDetail() {
         <textarea
           rows="4"
           :value="shot?.voiceover || ''"
-          placeholder="这一镜要说的原词"
+          :placeholder="$t('audioNode.dialogue')"
           @input="setVoiceover(($event.target as HTMLTextAreaElement).value)"
         />
         <div class="panel-foot">
           <TtsModelSelect v-if="canTts" />
-          <span v-else>{{ canTts ? '后期独立配音' : '人声走 H3 视频' }}</span>
-          <button type="button" class="ghost" @click="openDetail">详情</button>
+          <span v-else>{{ canTts ? $t('audioNode.dubSeparately') : $t('audioNode.h3VideoVoice') }}</span>
+          <button type="button" class="ghost" @click="openDetail">{{ $t('audioNode.details') }}</button>
           <button
             v-if="canTts"
             type="button"

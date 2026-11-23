@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { t as translate } from '@/i18n'
+
 /**
  * 从资源库挑选已有图片 / 视频
  */
@@ -68,34 +70,34 @@ const list = computed(() => {
   return items
 })
 
-const pageTabLabel = computed(() => (props.pageIds?.length ? '本页图片' : '项目图片'))
+const pageTabLabel = computed(() => (props.pageIds?.length ? translate('assetPicker.pageImages') : translate('assetPicker.projectImages')))
 const pickerHint = computed(() => {
-  if (!showTabs.value) return '已生成/上传的素材都在这里'
+  if (!showTabs.value) return translate('assetPicker.allAssets')
   return props.pageIds?.length
-    ? '可从本页图片、公共资产或自己的分类文件夹选用'
-    : '可从本项目图片、公共资产或自己的分类文件夹选用'
+    ? translate('assetPicker.pageSelection')
+    : translate('assetPicker.projectSelection')
 })
 
 const emptyTitle = computed(() => {
   if (tab.value === 'library') {
-    if (libraryFolder.value === LIBRARY_PUBLIC_ID) return '公共资产还是空的'
-    return `「${library.folderName(libraryFolder.value)}」还是空的`
+    if (libraryFolder.value === LIBRARY_PUBLIC_ID) return translate('assetPicker.noPublicAssets')
+    return translate('assetPicker.emptyFolder', { p0: library.folderName(libraryFolder.value) })
   }
-  if (kind.value === 'video') return '项目里还没有视频'
-  return props.pageIds?.length ? '本页还没有图片' : '项目里还没有图片'
+  if (kind.value === 'video') return translate('assetPicker.noProjectVideos')
+  return props.pageIds?.length ? translate('assetPicker.noPageImages') : translate('assetPicker.noProjectImages')
 })
 
 const emptyDesc = computed(() => {
   if (tab.value === 'library') {
     if (libraryFolder.value === LIBRARY_PUBLIC_ID) {
-      return '去首页资产库上传，或把项目里生成的图加入公共库'
+      return translate('assetPicker.addPublicAssets')
     }
-    return '去首页资产库创建分类，再把公共资产转移进来'
+    return translate('assetPicker.createFolderFirst')
   }
-  if (kind.value === 'video') return '先在画布上出视频，或去资产库上传'
+  if (kind.value === 'video') return translate('assetPicker.noVideosHint')
   return props.pageIds?.length
-    ? '先用图片节点出图，或点节点上的＋上传参考图'
-    : '先生成或上传图片，也可切到资产库选用可复用的图'
+    ? translate('assetPicker.noPageImagesHint')
+    : translate('assetPicker.noProjectImagesHint')
 })
 
 watch(
@@ -176,14 +178,14 @@ function labelOf(a: Asset) {
         <div class="modal">
           <header class="head">
             <div>
-              <h3>{{ title || '从资源库选择' }}</h3>
+              <h3>{{ title || $t('assetPicker.fromLibrary') }}</h3>
               <p>{{ pickerHint }}</p>
             </div>
             <button class="close" @click="emit('close')">×</button>
           </header>
           <div v-if="showTabs" class="tabs">
             <button type="button" :class="{ on: tab === 'page' }" @click="tab = 'page'">{{ pageTabLabel }}</button>
-            <button type="button" :class="{ on: tab === 'library' }" @click="tab = 'library'">资产库</button>
+            <button type="button" :class="{ on: tab === 'library' }" @click="tab = 'library'">{{ $t('common.assetLibrary') }}</button>
           </div>
           <div v-if="showTabs && tab === 'library'" class="folder-rail">
             <button
@@ -191,7 +193,7 @@ function labelOf(a: Asset) {
               :class="{ on: libraryFolder === LIBRARY_PUBLIC_ID }"
               @click="libraryFolder = LIBRARY_PUBLIC_ID"
             >
-              公共资产
+              {{ $t('common.publicAssets') }}
               <em>{{ library.folderCount(LIBRARY_PUBLIC_ID) }}</em>
             </button>
             <button
@@ -201,12 +203,12 @@ function labelOf(a: Asset) {
               :class="{ on: libraryFolder === f.id }"
               @click="libraryFolder = f.id"
             >
-              {{ f.name }}
+              {{ library.folderName(f.id) }}
               <em>{{ library.folderCount(f.id) }}</em>
             </button>
           </div>
 
-          <div v-if="loading" class="loading">加载资源库...</div>
+          <div v-if="loading" class="loading">{{ $t('assetPicker.loading') }}</div>
           <EmptyState
             v-else-if="list.length === 0"
             icon="📦"
@@ -229,17 +231,17 @@ function labelOf(a: Asset) {
                   v-if="urls[a.id]"
                   class="zoom"
                   type="button"
-                  title="查看大图"
+                  :title="$t('common.fullImage')"
                   @click.stop="openLightbox(urls[a.id])"
                 >
-                  放大
+                  {{ $t('common.enlarge') }}
                 </button>
               </div>
               <div class="meta">
                 <div class="name" :title="labelOf(a).title">{{ labelOf(a).title }}</div>
                 <div class="sub">
                   <Tag size="sm" :type="a.source === 'ai-generated' ? 'accent' : 'info'">
-                    {{ a.library ? (a.folderId ? library.folderName(a.folderId) : '公共') : a.source === 'ai-generated' ? 'AI' : '上传' }}
+                    {{ a.library ? (a.folderId ? library.folderName(a.folderId) : $t('assetPicker.public')) : a.source === 'ai-generated' ? 'AI' : $t('common.upload') }}
                   </Tag>
                   {{ a.library ? library.folderName(a.folderId) : labelOf(a).projectName }}
                   · {{ fmtSize(a.size) }}
@@ -250,10 +252,10 @@ function labelOf(a: Asset) {
           </div>
 
           <footer class="foot">
-            <span class="count">已选 {{ picked.size }} 项</span>
-            <GradientButton type="ghost" @click="emit('close')">取消</GradientButton>
+            <span class="count">{{ $t('common.selectionCount') }} {{ picked.size }} {{ $t('assetPicker.items') }}</span>
+            <GradientButton type="ghost" @click="emit('close')">{{ $t('common.cancel') }}</GradientButton>
             <GradientButton :disabled="picked.size === 0" @click="confirm">
-              选用
+              {{ $t('common.useSelection') }}
             </GradientButton>
           </footer>
         </div>

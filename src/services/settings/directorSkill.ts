@@ -1,3 +1,4 @@
+import { t } from '@/i18n'
 import { getSkillBody } from '@/skills'
 import { useSettingsStore, type DirectorSkillDoc } from '@/stores/settings'
 import { desktop, isDesktop } from '@/services/desktop'
@@ -7,8 +8,8 @@ const MAX_BODY = 24_000
 /** 从 SKILL.md 前言或 README 标题里取出手册名和正文。没有前言时整篇 markdown 都是正文。 */
 export function parseDirectorSkill(text: string, filename = ''): DirectorSkillDoc {
   const raw = String(text || '').replace(/^\uFEFF/, '').trim()
-  if (!raw || raw.length < 20) throw new Error('这份手册太短，至少要有一段写法说明')
-  if (/<html[\s>]/i.test(raw.slice(0, 400))) throw new Error('请导入 Markdown 或 README，不是网页')
+  if (!raw || raw.length < 20) throw new Error(t('directorSkill.tooShort'))
+  if (/<html[\s>]/i.test(raw.slice(0, 400))) throw new Error(t('directorSkill.requiresMarkdown'))
 
   const fm = raw.match(/^---\r?\n([\s\S]*?)\r?\n---\r?\n([\s\S]*)$/)
   const yaml = fm?.[1] || ''
@@ -21,7 +22,7 @@ export function parseDirectorSkill(text: string, filename = ''): DirectorSkillDo
   const fileTitle = filename.replace(/\.[^.]+$/, '').replace(/^(readme|skill)$/i, '').trim()
   const name = (pick('name') || (heading && !/^readme$/i.test(heading) ? heading : '') || fileTitle || '导演手册').slice(0, 80)
   const body = rest.slice(0, MAX_BODY)
-  if (body.length < 20) throw new Error('这份手册正文是空的')
+  if (body.length < 20) throw new Error(t('directorSkill.empty'))
   return {
     name,
     filename: filename.slice(0, 180),
@@ -77,7 +78,7 @@ async function readSkillFile(filePath: string): Promise<{ text: string; filename
 export async function pickDirectorSkillFile(): Promise<{ text: string; filename: string } | null> {
   if (isDesktop()) {
     const paths = await desktop().pickFiles([
-      { name: '导演手册', extensions: ['md', 'markdown', 'txt'] }
+      { name: t('settings.director.title'), extensions: ['md', 'markdown', 'txt'] }
     ])
     const path = paths[0]
     if (!path) return null
@@ -101,12 +102,12 @@ export async function pickDirectorSkillFile(): Promise<{ text: string; filename:
 }
 
 export async function pickDirectorSkillFolder(): Promise<{ text: string; filename: string } | null> {
-  if (!isDesktop()) throw new Error('网页版请直接选择 SKILL.md 或 README.md')
+  if (!isDesktop()) throw new Error(t('directorSkill.webFileOnly'))
   const dir = await desktop().pickDirectory()
   if (!dir) return null
   for (const name of SKILL_NAMES) {
     const file = await desktop().join(dir, name)
     if (await desktop().exists(file)) return readSkillFile(file)
   }
-  throw new Error('这个文件夹里没有 SKILL.md 或 README.md')
+  throw new Error(t('directorSkill.missingFile'))
 }

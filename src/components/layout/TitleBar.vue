@@ -34,10 +34,10 @@ function run(fn: () => void) {
   <header v-if="show" class="titlebar win-titlebar">
     <div class="brand">
       <img class="mark" src="/logo.png" alt="" />
-      <span class="name">剧流 Studio</span>
+      <span class="name">{{ $t('common.appName') }}</span>
     </div>
     <div class="controls">
-      <button type="button" class="ctrl" title="最小化" @click="run(() => desktop().minimize())">
+      <button type="button" class="ctrl" :title="$t('common.minimize')" @click="run(() => desktop().minimize())">
         <svg viewBox="0 0 12 12" aria-hidden="true">
           <path d="M2 6h8" />
         </svg>
@@ -45,7 +45,7 @@ function run(fn: () => void) {
       <button
         type="button"
         class="ctrl"
-        :title="maximized ? '还原' : '最大化'"
+        :title="maximized ? $t('common.restore') : $t('common.maximize')"
         @click="run(() => desktop().toggleMaximize())"
       >
         <svg v-if="!maximized" viewBox="0 0 12 12" aria-hidden="true">
@@ -55,7 +55,7 @@ function run(fn: () => void) {
           <path d="M3.5 4.5h5v5h-5zM4 3h5.5v5.5" />
         </svg>
       </button>
-      <button type="button" class="ctrl close" title="关闭" @click="run(() => desktop().closeWindow())">
+      <button type="button" class="ctrl close" :title="$t('common.close')" @click="run(() => desktop().closeWindow())">
         <svg viewBox="0 0 12 12" aria-hidden="true">
           <path d="M3 3l6 6M9 3L3 9" />
         </svg>

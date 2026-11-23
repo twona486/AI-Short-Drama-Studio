@@ -1,3 +1,6 @@
+import { t } from '@/i18n'
+import zh from '@/locales/zh'
+
 /** 写完整剧本 / 提炼节点：长 JSON 很容易超过 2 分钟 */
 export const PLAY_LLM_TIMEOUT_MS = 480_000
 
@@ -41,8 +44,12 @@ export function llmAbortError(e: unknown, signal?: AbortSignal, timeoutMs = 120_
 }
 
 export function friendlyAiError(e: unknown): string {
-  if (isAbortError(e) && !isTimeoutAbort(e)) return '已取消'
-  return errMessage(e) || '生成失败'
+  if (isAbortError(e) && !isTimeoutAbort(e)) return t('common.cancelled')
+  const message = errMessage(e)
+  if (message === zh.common.reviewScript) return t('common.reviewScript')
+  const timeout = /^模型超过 (\d+) 秒还没写完。/.exec(message)
+  if (timeout) return t('aiError.timeout', { seconds: Number(timeout[1]) })
+  return message || t('common.generateFailed')
 }
 
 export function shouldToastAiError(e: unknown): boolean {

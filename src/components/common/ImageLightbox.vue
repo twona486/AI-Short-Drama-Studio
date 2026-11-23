@@ -22,7 +22,7 @@ onUnmounted(() => {
 <template>
   <Teleport to="body">
     <div v-if="src" class="lb" @click.self="close">
-      <button class="lb-close" type="button" title="关闭" @click="close">×</button>
+      <button class="lb-close" type="button" :title="$t('common.close')" @click="close">×</button>
       <img v-if="kind === 'image'" :src="src" :alt="caption" class="lb-media" @click.stop />
       <video
         v-else

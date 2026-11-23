@@ -1,3 +1,4 @@
+import { t } from '@/i18n'
 /**
  * 口播 TTS：按分镜字幕生成人声
  *
@@ -34,12 +35,12 @@ const log = (msg: string) =>
 
 /** qwen-audio-3.0-tts-flash 系统音色（百炼音色列表） */
 export const TTS_VOICES: { id: string; label: string }[] = [
-  { id: 'longanhuan_v3.6', label: '龙安欢（女·自然普通话）' },
-  { id: 'longjielidou_v3.6', label: '龙杰力豆（男童）' },
-  { id: 'longpaopao_v3.6', label: '龙泡泡（女童）' },
-  { id: 'longhuohuo_v3.6', label: '龙火火（顽皮少年）' },
-  { id: 'longchuanshu_v3.6', label: '龙川叔（男）' },
-  { id: 'loongeva_v3.6', label: 'loongeva（女·美音）' }
+  { id: 'longanhuan_v3.6', get label() { return t('voice.longanhuan') } },
+  { id: 'longjielidou_v3.6', get label() { return t('voice.longjielidou') } },
+  { id: 'longpaopao_v3.6', get label() { return t('voice.longpaopao') } },
+  { id: 'longhuohuo_v3.6', get label() { return t('voice.longhuohuo') } },
+  { id: 'longchuanshu_v3.6', get label() { return t('voice.longchuanshu') } },
+  { id: 'loongeva_v3.6', get label() { return t('voice.loongeva') } }
 ]
 
 /** 这些仍按缩写处理（可以逐字母或习惯读法） */

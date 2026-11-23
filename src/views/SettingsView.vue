@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { t as translate } from '@/i18n'
+import { locale, setLocale } from '@/i18n'
 import { computed, onMounted, ref } from 'vue'
 import { useRoute, useRouter, RouterLink } from 'vue-router'
 import { useProjectStore, useSettingsStore, useAssetsStore, useToastStore, endpointReady } from '@/stores'
@@ -54,7 +56,7 @@ async function saveDirectorFile(picked: { text: string; filename: string } | nul
   const doc = parseDirectorSkill(picked.text, picked.filename)
   settings.update({ directorSkill: doc })
   await settings.flush()
-  toast.success(`已导入导演手册「${doc.name}」。拆分镜头和写提示词会按它来。`)
+  toast.success(translate('settings.director.imported', { p0: doc.name }))
 }
 
 async function importDirectorSkill() {
@@ -62,7 +64,7 @@ async function importDirectorSkill() {
   try {
     await saveDirectorFile(await pickDirectorSkillFile())
   } catch (err: any) {
-    toast.error(err?.message || '导入手册失败')
+    toast.error(err?.message || translate('settings.director.failed'))
   } finally {
     importingSkill.value = false
   }
@@ -73,7 +75,7 @@ async function importDirectorFolder() {
   try {
     await saveDirectorFile(await pickDirectorSkillFolder())
   } catch (err: any) {
-    toast.error(err?.message || '导入手册失败')
+    toast.error(err?.message || translate('settings.director.failed'))
   } finally {
     importingSkill.value = false
   }
@@ -82,7 +84,7 @@ async function importDirectorFolder() {
 async function clearDirectorSkill() {
   settings.update({ directorSkill: null })
   await settings.flush()
-  toast.success('已清除导演手册，恢复内置分镜写法')
+  toast.success(translate('settings.director.cleared'))
 }
 
 const llmReady = computed(() => endpointReady(settings.config.llm))
@@ -112,18 +114,18 @@ async function saveSettings() {
   saving.value = true
   try {
     await settings.flush()
-    toast.success('配置已保存到本机')
+    toast.success(translate('settings.configSaved'))
     if (section.value === 'llm' && endpointReady(settings.config.llm)) {
       const needsAssistant = !['vision', 'image', 'video'].every((kind) =>
         endpointReady(settings.config[kind as 'vision' | 'image' | 'video'])
       )
       if (needsAssistant) {
-        toast.success('第 1 步完成，接下来让接入助手配置其他模型')
+        toast.success(translate('settings.onboarding.next'))
         await router.replace('/settings/agent')
       }
     }
   } catch (e: any) {
-    toast.error(e?.message || '保存失败，请再试一次')
+    toast.error(e?.message || translate('settings.saveFailed'))
   } finally {
     saving.value = false
   }
@@ -135,7 +137,7 @@ async function openSettingsFolder() {
     const root = await desktop().getRoot()
     await desktop().openPath(root)
   } catch {
-    toast.error('打不开配置目录')
+    toast.error(translate('settings.storage.openFailed'))
   }
 }
 
@@ -145,16 +147,16 @@ async function chooseStorageFolder() {
     const selected = await desktop().pickDirectory()
     if (!selected || selected === storageRoot.value) return
     const ok = confirm(
-      `要把项目、素材和配置迁移到这里吗？\n\n${selected}\n\n现有资料会复制到新目录，完成后应用将自动刷新。`
+      translate('settings.storage.confirm', { p0: selected })
     )
     if (!ok) return
     changingStorageRoot.value = true
-    toast.info('正在迁移项目与素材，请不要关闭应用…', 10000)
+    toast.info(translate('settings.storage.transfer'), 10000)
     storageRoot.value = await desktop().setRoot(selected)
-    toast.success('保存位置已修改，正在重新载入…')
+    toast.success(translate('settings.storage.changed'))
     setTimeout(() => window.location.reload(), 700)
   } catch (err: any) {
-    toast.error(err?.message || '修改保存位置失败', 8000)
+    toast.error(err?.message || translate('settings.storage.failed'), 8000)
   } finally {
     changingStorageRoot.value = false
   }
@@ -165,9 +167,9 @@ async function grantFileAccess() {
   grantingAccess.value = true
   try {
     await desktop().requestFileAccess()
-    toast.success('已授权。请完全退出后重新打开「剧流 Studio」，再试上传参考图。')
+    toast.success(translate('settings.permissions.granted'))
   } catch (err: any) {
-    toast.error(err?.message || '授权未完成。可用 360 / 火绒把本程序加到信任区。')
+    toast.error(err?.message || translate('settings.permissions.failed'))
   } finally {
     grantingAccess.value = false
   }
@@ -178,7 +180,7 @@ async function openWindowsSecurity() {
   try {
     await desktop().openWindowsSecurity()
   } catch {
-    toast.error('打不开 Windows 安全中心')
+    toast.error(translate('settings.permissions.openFailed'))
   }
 }
 
@@ -215,10 +217,10 @@ async function warmupFFmpeg() {
   try {
     await getFFmpeg((msg) => toast.info(msg, 1500))
     ffmpegReady.value = true
-    toast.success('FFmpeg 已就绪')
+    toast.success(translate('settings.engine.ffmpegReady'))
     await runDiagnostics()
   } catch (e: any) {
-    toast.error('FFmpeg 加载失败：' + e.message, 8000)
+    toast.error(translate('settings.engine.ffmpegError', { error: e.message }), 8000)
   } finally {
     ffmpegLoading.value = false
   }
@@ -227,7 +229,7 @@ async function warmupFFmpeg() {
 function resetAndRetry() {
   resetFFmpeg()
   ffmpegReady.value = false
-  toast.info('已重置，请重新点击「预加载」')
+  toast.info(translate('settings.engine.reset'))
   runDiagnostics()
 }
 
@@ -245,7 +247,7 @@ async function exportProjectData() {
   a.download = `ai-cut-export-${new Date().toISOString().slice(0, 10)}.json`
   a.click()
   setTimeout(() => URL.revokeObjectURL(url), 1000)
-  toast.success('已导出项目数据')
+  toast.success(translate('settings.backup.exported'))
 }
 
 function importProjectData() {
@@ -263,23 +265,23 @@ function importProjectData() {
           await import('@/services/storage').then((m) => m.saveProject(p))
         }
         await project.refreshList()
-        toast.success(`已导入 ${data.projects.length} 个项目`)
+        toast.success(translate('settings.backup.imported', { p0: data.projects.length }))
       } else {
-        toast.error('文件格式不对')
+        toast.error(translate('settings.backup.invalid'))
       }
     } catch (e: any) {
-      toast.error('导入失败：' + e.message)
+      toast.error(translate('settings.backup.failed', { error: e.message }))
     }
   }
   input.click()
 }
 
 async function clearAll() {
-  if (!confirm('确定要清空所有项目数据吗？素材也会被一起删除，无法恢复！')) return
+  if (!confirm(translate('settings.backup.confirm'))) return
   for (const p of project.allProjects) {
     await project.remove(p.id)
   }
-  toast.success('已清空')
+  toast.success(translate('settings.backup.cleared'))
 }
 
 function formatSize(bytes: number) {
@@ -316,57 +318,57 @@ const SECTIONS: SettingsSection[] = ['agent', 'llm', 'vision', 'image', 'tts', '
 const nav = [
   {
     id: 'llm' as const,
-    label: '语言模型',
-    desc: '剧本、智能体、接入助手',
-    lead: '第一步：给 AI 配一个「大脑」。这里填的 Key 决定剧本写作、对话理解和后面的自动配置能不能跑起来。'
+    get label() { return translate('settings.nav.llm.label') },
+    get desc() { return translate('settings.nav.llm.desc') },
+    get lead() { return translate('settings.nav.llm.lead') }
   },
   {
     id: 'agent' as const,
-    label: '接入助手',
-    desc: '用语言模型配置其余能力',
-    lead: '懒得手动填表就走这里：你把厂商给的地址和 Key 贴进去（或口述），助手会自动把视觉、生图、配音、视频都配好。'
+    get label() { return translate('common.setupAssistant') },
+    get desc() { return translate('settings.nav.agent.desc') },
+    get lead() { return translate('settings.nav.agent.lead') }
   },
   {
     id: 'vision' as const,
-    label: '视觉理解',
-    desc: '看图与质检',
-    lead: '第二步：让 AI 「看得懂图」。它负责看懂参考图、检查生成的图片视频是不是符合要求。'
+    get label() { return translate('common.vision') },
+    get desc() { return translate('settings.nav.vision.desc') },
+    get lead() { return translate('settings.nav.vision.lead') }
   },
   {
     id: 'image' as const,
-    label: '图像生成',
-    desc: '云端生图 / 本机 ComfyUI',
-    lead: '第三步：负责画图的模型。人物设定图、场景底板、故事看板、分镜关键帧都用它生成。Zealman 镜像的地址在「Zealman 镜像」填写，这里选中后可以直接出图。'
+    get label() { return translate('common.imageGeneration') },
+    get desc() { return translate('settings.nav.image.desc') },
+    get lead() { return translate('settings.nav.image.lead') }
   },
   {
     id: 'tts' as const,
-    label: '配音',
-    desc: '后期口播 TTS',
-    lead: '第四步：给片子配人声。这里选好音色，台词会按照你写的文案念出来，也可以在角色卡上为每个角色单独设声音。'
+    get label() { return translate('common.voiceover') },
+    get desc() { return translate('settings.nav.tts.desc') },
+    get lead() { return translate('settings.nav.tts.lead') }
   },
   {
     id: 'video' as const,
-    label: '视频',
-    desc: '图生视频',
-    lead: '第五步：让静止的画面动起来。这里填图生视频的接口地址、凭证和模型（或工作流）名称。'
+    get label() { return translate('common.video') },
+    get desc() { return translate('settings.nav.video.desc') },
+    get lead() { return translate('settings.nav.video.lead') }
   },
   {
     id: 'autodl' as const,
-    label: 'AutoDL 算力',
-    desc: 'H3 系列图生视频',
-    lead: 'H3 系列（15 秒 / v5 1080p / 首尾帧 / 数字人口播）都走 AutoDL。只需填一个 AutoDL Token，内置工作流自动配好。'
+    get label() { return translate('settings.nav.autodl.label') },
+    get desc() { return translate('settings.nav.autodl.desc') },
+    get lead() { return translate('settings.nav.autodl.lead') }
   },
   {
     id: 'zealman' as const,
-    label: 'Zealman 镜像',
-    desc: '生图和视频只填地址',
-    lead: 'Zealman 镜像的文生图和视频都在这一页填写 Base URL。填好后到图像生成、视频里选用对应模型即可。'
+    get label() { return translate('settings.nav.zealman.label') },
+    get desc() { return translate('settings.nav.zealman.desc') },
+    get lead() { return translate('settings.nav.zealman.lead') }
   },
   {
     id: 'system' as const,
-    label: '系统',
-    desc: '引擎、存储、导演手册',
-    lead: '剪辑引擎、文件存在哪、项目备份导出，还有版本号和官方交流群。'
+    get label() { return translate('common.system') },
+    get desc() { return translate('settings.nav.system.desc') },
+    get lead() { return translate('settings.nav.system.lead') }
   }
 ]
 
@@ -406,16 +408,23 @@ function navReady(id: SettingsSection) {
 <template>
   <div class="settings">
     <header class="top">
-      <button type="button" class="back" @click="goBack">返回</button>
+      <button type="button" class="back" @click="goBack">{{ $t('common.back') }}</button>
       <div class="brand">
         <h1>{{ currentNav.label }}</h1>
-        <span class="crumb">设置 / {{ currentNav.label }}</span>
+        <span class="crumb">{{ $t('settings.crumb') }} {{ currentNav.label }}</span>
       </div>
+      <label class="language-select">
+        {{ $t('settings.language') }}
+        <select :value="locale" @change="setLocale(($event.target as HTMLSelectElement).value === 'zh' ? 'zh' : 'ko')">
+          <option value="ko">한국어</option>
+          <option value="zh">中文</option>
+        </select>
+      </label>
     </header>
 
     <div class="body">
-      <nav class="side" aria-label="设置分区">
-        <p class="group">AI 能力</p>
+      <nav class="side" :aria-label="$t('settings.sections')">
+        <p class="group">{{ $t('settings.aiGroup') }}</p>
         <RouterLink
           v-for="item in nav.slice(0, 8)"
           :key="item.id"
@@ -430,9 +439,9 @@ function navReady(id: SettingsSection) {
             v-if="item.id !== 'agent'"
             class="state"
             :class="{ ok: navReady(item.id) }"
-          >{{ navReady(item.id) ? '已配置' : '待配置' }}</span>
+          >{{ navReady(item.id) ? $t('common.configured') : $t('common.unconfigured') }}</span>
         </RouterLink>
-        <p class="group">应用</p>
+        <p class="group">{{ $t('settings.appGroup') }}</p>
         <RouterLink
           to="/settings/system"
           replace
@@ -440,7 +449,7 @@ function navReady(id: SettingsSection) {
           exact-active-class=""
           :class="{ on: section === 'system' }"
         >
-          <span class="lab">系统</span>
+          <span class="lab">{{ $t('common.system') }}</span>
         </RouterLink>
       </nav>
 
@@ -454,10 +463,10 @@ function navReady(id: SettingsSection) {
         >
           <div class="onboarding-head">
             <div>
-              <b>第一次用？两步就能配好 AI</b>
-              <p>先填语言模型（写剧本、聊天、理解需求都靠它），剩下的交给第 2 步的接入助手。</p>
+              <b>{{ $t('settings.onboarding.title') }}</b>
+              <p>{{ $t('settings.onboarding.description') }}</p>
             </div>
-            <span v-if="assistantTargetsReady" class="onboarding-done">基础能力已就绪</span>
+            <span v-if="assistantTargetsReady" class="onboarding-done">{{ $t('settings.onboarding.ready') }}</span>
           </div>
           <div class="onboarding-steps">
             <button
@@ -468,8 +477,8 @@ function navReady(id: SettingsSection) {
             >
               <i>{{ llmReady ? '✓' : '1' }}</i>
               <span>
-                <b>填语言模型</b>
-                <small>填接口地址、API Key 和模型名，然后点保存</small>
+                <b>{{ $t('settings.onboarding.setLlm') }}</b>
+                <small>{{ $t('settings.onboarding.setLlmHint') }}</small>
               </span>
             </button>
             <div class="onboarding-arrow">→</div>
@@ -482,8 +491,8 @@ function navReady(id: SettingsSection) {
             >
               <i>{{ assistantTargetsReady ? '✓' : '2' }}</i>
               <span>
-                <b>让助手接管剩下的配置</b>
-                <small>{{ llmReady ? '把厂商给的信息贴给它，自动配好其他模型' : '完成第 1 步后解锁' }}</small>
+                <b>{{ $t('settings.onboarding.setAssistant') }}</b>
+                <small>{{ llmReady ? $t('settings.onboarding.setAssistantHint') : $t('settings.onboarding.locked') }}</small>
               </span>
             </button>
           </div>
@@ -497,54 +506,54 @@ function navReady(id: SettingsSection) {
           :module="section"
         />
         <p v-else-if="!settings.diskReady && section !== 'agent' && section !== 'system'" class="loading">
-          正在读取本机配置…
+          {{ $t('settings.readingConfig') }}
         </p>
 
         <div v-else-if="section === 'system'" class="sys">
           <section class="panel">
-            <h2>导演手册</h2>
+            <h2>{{ $t('settings.director.title') }}</h2>
             <p class="card-desc">
-              导入一份 SKILL.md 或 README.md。之后拆分镜头、写画面提示词和视频提示词都按这份手册来。没有导入时仍用内置分镜导演手册。
+              {{ $t('settings.director.description') }}
             </p>
             <p v-if="directorSkill" class="path">{{ directorSkill.name }}<span v-if="directorSkill.filename"> · {{ directorSkill.filename }}</span></p>
-            <p v-else class="muted">还没有导入。支持带前言的 SKILL，也支持普通 README。</p>
+            <p v-else class="muted">{{ $t('settings.director.empty') }}</p>
             <p v-if="directorSkill" class="muted small skill-preview">{{ directorPreview }}</p>
             <div class="acts">
               <button type="button" class="mini" :disabled="importingSkill" @click="importDirectorSkill">
-                {{ importingSkill ? '正在读取…' : directorSkill ? '更换手册' : '导入手册' }}
+                {{ importingSkill ? $t('common.reading') : directorSkill ? $t('settings.director.replace') : $t('settings.director.import') }}
               </button>
               <button v-if="isDesktop()" type="button" class="mini" :disabled="importingSkill" @click="importDirectorFolder">
-                导入文件夹
+                {{ $t('settings.director.importFolder') }}
               </button>
-              <button v-if="directorSkill" type="button" class="link" @click="clearDirectorSkill">清除</button>
+              <button v-if="directorSkill" type="button" class="link" @click="clearDirectorSkill">{{ $t('common.clear') }}</button>
             </div>
           </section>
 
           <section v-if="isDesktop()" class="panel">
-            <h2>本机文件权限</h2>
+            <h2>{{ $t('settings.permissions.title') }}</h2>
             <p class="card-desc">
-              选参考图、视频素材时走的是系统文件框。正常情况下不需要额外授权；如果被系统拦住了，点下面的按钮放行一次。
+              {{ $t('settings.permissions.description') }}
             </p>
             <p class="muted">
-              放行后请把「剧流 Studio」和你放素材的文件夹加入安全中心的排除项；用 360 / 火绒的话，把它加到信任区。
+              {{ $t('settings.permissions.exclude') }}
             </p>
             <div class="acts">
               <button type="button" class="mini" :disabled="grantingAccess" @click="grantFileAccess">
-                {{ grantingAccess ? '等待系统授权…' : '授权访问本机文件' }}
+                {{ grantingAccess ? $t('settings.permissions.waiting') : $t('settings.permissions.grant') }}
               </button>
-              <button type="button" class="mini" @click="openWindowsSecurity">打开 Windows 安全中心</button>
+              <button type="button" class="mini" @click="openWindowsSecurity">{{ $t('settings.permissions.openSecurity') }}</button>
             </div>
           </section>
 
           <section class="panel">
-            <h2>剪辑引擎</h2>
+            <h2>{{ $t('settings.engine.title') }}</h2>
             <p class="card-desc">
-              素材拼接、转场、烧字幕和成片导出都靠它。首次用到时会自动下载约 30MB 的组件，也可以现在就加载。
+              {{ $t('settings.engine.description') }}
             </p>
             <div class="engine-row">
               <div>
                 <div class="engine-name">FFmpeg</div>
-                <p class="muted small">状态：{{ ffmpegReady ? '可以开始剪辑' : '还没加载' }}</p>
+                <p class="muted small">{{ $t('settings.engine.status') }}{{ ffmpegReady ? $t('settings.engine.ready') : $t('settings.engine.notLoaded') }}</p>
               </div>
               <button
                 v-if="!ffmpegReady"
@@ -553,97 +562,97 @@ function navReady(id: SettingsSection) {
                 :disabled="ffmpegLoading"
                 @click="warmupFFmpeg"
               >
-                {{ ffmpegLoading ? '加载中…' : '现在加载' }}
+                {{ ffmpegLoading ? $t('common.loading') : $t('settings.engine.load') }}
               </button>
-              <button v-else type="button" class="link" @click="resetAndRetry">重置</button>
+              <button v-else type="button" class="link" @click="resetAndRetry">{{ $t('common.reset') }}</button>
             </div>
             <details class="diag">
-              <summary>检测结果（加载不出来时看这里）</summary>
+              <summary>{{ $t('settings.engine.diagnostics') }}</summary>
               <div class="diag-row">
-                <span>浏览器多线程模式<i>加载失败通常是这项没开启</i></span>
-                <Tag :type="diag.crossOriginIsolated ? 'success' : 'error'" size="sm">{{ diag.crossOriginIsolated ? '已开启' : '未开启' }}</Tag>
+                <span>{{ $t('settings.engine.threading') }}<i>{{ $t('settings.engine.threadingHint') }}</i></span>
+                <Tag :type="diag.crossOriginIsolated ? 'success' : 'error'" size="sm">{{ diag.crossOriginIsolated ? $t('common.enabled') : $t('common.disabled') }}</Tag>
               </div>
               <div class="diag-row">
-                <span>共享内存<i>多线程依赖它</i></span>
-                <Tag :type="diag.sharedArrayBuffer ? 'success' : 'error'" size="sm">{{ diag.sharedArrayBuffer ? '支持' : '不支持' }}</Tag>
+                <span>{{ $t('settings.engine.memory') }}<i>{{ $t('settings.engine.memoryHint') }}</i></span>
+                <Tag :type="diag.sharedArrayBuffer ? 'success' : 'error'" size="sm">{{ diag.sharedArrayBuffer ? $t('common.supported') : $t('common.unsupported') }}</Tag>
               </div>
               <div class="diag-row">
-                <span>本机组件<i>有它可以离线加载</i></span>
-                <Tag :type="diag.localCore ? 'success' : 'warning'" size="sm">{{ diag.localCore ? '已有' : '没有，会从网络下载' }}</Tag>
+                <span>{{ $t('settings.engine.local') }}<i>{{ $t('settings.engine.localHint') }}</i></span>
+                <Tag :type="diag.localCore ? 'success' : 'warning'" size="sm">{{ diag.localCore ? $t('common.available') : $t('settings.engine.downloadNeeded') }}</Tag>
               </div>
               <div class="diag-row">
-                <span>CDN 线路一<i>jsDelivr</i></span>
-                <Tag :type="diag.jsDelivrReachable ? 'success' : 'error'" size="sm">{{ diag.jsDelivrReachable ? '通畅' : '连不上' }}</Tag>
+                <span>{{ $t('settings.engine.cdnOne') }}<i>jsDelivr</i></span>
+                <Tag :type="diag.jsDelivrReachable ? 'success' : 'error'" size="sm">{{ diag.jsDelivrReachable ? $t('common.connectedStatus') : $t('common.disconnectedStatus') }}</Tag>
               </div>
               <div class="diag-row">
-                <span>CDN 线路二<i>unpkg</i></span>
-                <Tag :type="diag.unpkgReachable ? 'success' : 'error'" size="sm">{{ diag.unpkgReachable ? '通畅' : '连不上' }}</Tag>
+                <span>{{ $t('settings.engine.cdnTwo') }}<i>unpkg</i></span>
+                <Tag :type="diag.unpkgReachable ? 'success' : 'error'" size="sm">{{ diag.unpkgReachable ? $t('common.connectedStatus') : $t('common.disconnectedStatus') }}</Tag>
               </div>
               <div class="diag-row">
-                <span>国内镜像<i>npmmirror</i></span>
-                <Tag :type="diag.npmmirrorReachable ? 'success' : 'error'" size="sm">{{ diag.npmmirrorReachable ? '通畅' : '连不上' }}</Tag>
+                <span>{{ $t('settings.engine.mirror') }}<i>npmmirror</i></span>
+                <Tag :type="diag.npmmirrorReachable ? 'success' : 'error'" size="sm">{{ diag.npmmirrorReachable ? $t('common.connectedStatus') : $t('common.disconnectedStatus') }}</Tag>
               </div>
-              <button type="button" class="link" @click="runDiagnostics">重新检测</button>
+              <button type="button" class="link" @click="runDiagnostics">{{ $t('settings.engine.recheck') }}</button>
             </details>
           </section>
 
           <section class="panel">
-            <h2>模型配置存在哪</h2>
+            <h2>{{ $t('settings.storage.modelLocation') }}</h2>
             <p class="card-desc">
-              你填的接口地址和密钥只存在这台电脑里，不会上传到任何服务器。想备份就去下面的复制这个文件夹。
+              {{ $t('settings.storage.apiKeys') }}
             </p>
             <p v-if="settings.persistPath" class="path">{{ settings.persistPath }}</p>
-            <p v-else class="muted">浏览器版保存在浏览器自己的本地存储中。</p>
+            <p v-else class="muted">{{ $t('settings.storage.browserLocal') }}</p>
           </section>
 
           <section class="panel">
-            <h2>保存位置</h2>
+            <h2>{{ $t('settings.storage.title') }}</h2>
             <p class="card-desc">
-              项目文件、图片、视频、音频都存在下面这个文件夹。换位置会把现有资料一起搬过去，方便你放到大硬盘或网盘同步目录。
+              {{ $t('settings.storage.description') }}
             </p>
-            <p v-if="isDesktop()" class="path storage-path">{{ storageRoot || '正在读取…' }}</p>
-            <p v-else class="muted">浏览器版由浏览器自己管理存储位置。</p>
+            <p v-if="isDesktop()" class="path storage-path">{{ storageRoot || $t('common.reading') }}</p>
+            <p v-else class="muted">{{ $t('settings.storage.browserManaged') }}</p>
             <div v-if="isDesktop()" class="acts storage-actions">
-              <button type="button" class="mini" @click="openSettingsFolder">打开这个文件夹</button>
+              <button type="button" class="mini" @click="openSettingsFolder">{{ $t('settings.storage.open') }}</button>
               <button
                 type="button"
                 class="mini"
                 :disabled="changingStorageRoot"
                 @click="chooseStorageFolder"
               >
-                {{ changingStorageRoot ? '正在搬家…' : '换一个保存位置' }}
+                {{ changingStorageRoot ? $t('settings.storage.moving') : $t('settings.storage.change') }}
               </button>
             </div>
             <div class="storage-bar"><div class="storage-bar-fill" :style="{ width: storagePct + '%' }" /></div>
             <div class="storage-info">
-              <span>已用 {{ formatSize(storage.usage) }} / 总配额 {{ formatSize(storage.quota) }}</span>
+              <span>{{ $t('settings.storage.used') }} {{ formatSize(storage.usage) }} {{ $t('settings.storage.quota') }} {{ formatSize(storage.quota) }}</span>
               <span>{{ storagePct.toFixed(1) }}%</span>
             </div>
             <div class="ss">
-              <div><b>{{ assetStats.image }}</b><span>图片</span></div>
-              <div><b>{{ assetStats.video }}</b><span>视频</span></div>
-              <div><b>{{ assetStats.audio }}</b><span>音频</span></div>
-              <div><b>{{ assetStats.total }}</b><span>合计</span></div>
+              <div><b>{{ assetStats.image }}</b><span>{{ $t('common.image') }}</span></div>
+              <div><b>{{ assetStats.video }}</b><span>{{ $t('common.video') }}</span></div>
+              <div><b>{{ assetStats.audio }}</b><span>{{ $t('common.audio') }}</span></div>
+              <div><b>{{ assetStats.total }}</b><span>{{ $t('common.total') }}</span></div>
             </div>
           </section>
 
           <section class="panel">
-            <h2>备份与清理</h2>
+            <h2>{{ $t('settings.backup.title') }}</h2>
             <p class="card-desc">
-              导出会把所有项目打包成一个文件，拿到别的电脑上导入就能接着用；清空会连素材一起删除，删之前想清楚。
+              {{ $t('settings.backup.description') }}
             </p>
             <div class="acts">
-              <button type="button" class="mini" @click="exportProjectData">导出所有项目</button>
-              <button type="button" class="mini" @click="importProjectData">从文件导入</button>
-              <button type="button" class="danger" @click="clearAll">清空所有数据</button>
+              <button type="button" class="mini" @click="exportProjectData">{{ $t('settings.backup.export') }}</button>
+              <button type="button" class="mini" @click="importProjectData">{{ $t('settings.backup.import') }}</button>
+              <button type="button" class="danger" @click="clearAll">{{ $t('settings.backup.clearAll') }}</button>
             </div>
           </section>
 
           <section class="panel">
-            <h2>关于</h2>
-            <div class="about-row"><span>版本</span><b>v{{ appVersion }}</b></div>
+            <h2>{{ $t('common.about') }}</h2>
+            <div class="about-row"><span>{{ $t('common.version') }}</span><b>v{{ appVersion }}</b></div>
             <div class="about-row qq-group">
-              <span><i>QQ</i> 官方交流群</span>
+              <span><i>QQ</i> {{ $t('settings.community') }}</span>
               <b>13892383</b>
             </div>
           </section>
@@ -651,9 +660,9 @@ function navReady(id: SettingsSection) {
       </main>
     </div>
     <footer v-if="section !== 'system'" class="save-bar">
-      <span>所有改动都保存在这台电脑上，换台机器不会同步。改完记得点保存。</span>
+      <span>{{ $t('settings.localChangesOnly') }}</span>
       <button type="button" class="save" :disabled="saving || !settings.diskReady" @click="saveSettings">
-        {{ saving ? '保存中…' : '保存改动' }}
+        {{ saving ? $t('common.saving') : $t('settings.saveChanges') }}
       </button>
     </footer>
   </div>
@@ -698,6 +707,22 @@ function navReady(id: SettingsSection) {
   align-items: baseline;
   gap: 10px;
   min-width: 0;
+}
+
+.language-select {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-left: auto;
+  font-size: 13px;
+}
+
+.language-select select {
+  color: inherit;
+  background: var(--bg-2, #191922);
+  border: 1px solid var(--line, #353542);
+  border-radius: 6px;
+  padding: 4px 8px;
 }
 .brand h1 {
   margin: 0;

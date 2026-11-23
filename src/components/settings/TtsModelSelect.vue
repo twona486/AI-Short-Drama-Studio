@@ -2,12 +2,9 @@
 import { computed } from 'vue'
 import { llmChoiceKey, namedModelGroups, parseLlmChoiceKey, useSettingsStore } from '@/stores'
 
-withDefaults(
-  defineProps<{
-    label?: string
-  }>(),
-  { label: '配音' }
-)
+defineProps<{
+  label?: string
+}>()
 
 const settings = useSettingsStore()
 const groups = computed(() => namedModelGroups(settings.config.ttsProfiles ?? []))
@@ -27,9 +24,9 @@ const model = computed({
 
 <template>
   <label class="tts-model">
-    <span>{{ label }}</span>
+    <span>{{ label ?? $t('common.voiceover') }}</span>
     <select v-model="model">
-      <option v-if="!groups.some((g) => g.models.length)" value="">请先在设置里添加配音模型</option>
+      <option v-if="!groups.some((g) => g.models.length)" value="">{{ $t('ttsModelSelect.noModel') }}</option>
       <optgroup v-for="g in groups" :key="g.id" :label="g.name">
         <option v-for="m in g.models" :key="g.id + m" :value="llmChoiceKey(g.id, m)">{{ m }}</option>
       </optgroup>

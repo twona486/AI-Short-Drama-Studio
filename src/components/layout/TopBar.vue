@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { locale, t as translate } from '@/i18n'
 import { computed, ref } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { useProjectStore, useToastStore } from '@/stores'
@@ -12,7 +13,7 @@ const toast = useToastStore()
 const editing = ref(false)
 const nameInput = ref('')
 
-const projectName = computed(() => project.current?.name ?? '未命名项目')
+const projectName = computed(() => project.current?.name ?? translate('common.untitledProject'))
 
 function startEdit() {
   editing.value = true
@@ -36,9 +37,9 @@ function goHome() {
 
 function newProject() {
   project.createNamed(
-    `项目 ${new Date().toLocaleString('zh-CN', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })}`
+    translate('topBar.projectName', { p0: new Date().toLocaleString(locale.value === 'zh' ? 'zh-CN' : 'ko-KR', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' }) })
   ).then(() => {
-    toast.success('新项目已创建')
+    toast.success(translate('common.projectCreated'))
     router.push('/studio')
   })
 }
@@ -49,7 +50,7 @@ function newProject() {
     <div class="left">
       <button class="logo" @click="goHome">
         <img class="logo-mark" src="/logo.png" alt="" />
-        <span class="logo-text">剧流 Studio</span>
+        <span class="logo-text">{{ $t('common.appName') }}</span>
       </button>
 
       <div class="divider" />
@@ -64,44 +65,44 @@ function newProject() {
           autofocus
         />
       </div>
-      <button v-else class="project-name" @click="startEdit" title="点击重命名">
+      <button v-else class="project-name" @click="startEdit" :title="$t('topBar.renameHint')">
         <span>{{ projectName }}</span>
         <span class="pencil">✎</span>
       </button>
 
-      <span v-if="project.dirty" class="dirty-dot" title="未保存"></span>
-      <span v-else-if="project.lastSavedAt" class="saved">已保存</span>
+      <span v-if="project.dirty" class="dirty-dot" :title="$t('common.unsaved')"></span>
+      <span v-else-if="project.lastSavedAt" class="saved">{{ $t('common.saved') }}</span>
     </div>
 
     <div class="right">
-      <button class="text-btn accent" @click="router.push('/studio')" title="回到无限画布">
+      <button class="text-btn accent" @click="router.push('/studio')" :title="$t('topBar.returnToCanvas')">
         <svg viewBox="0 0 24 24" aria-hidden="true">
           <rect x="3" y="4" width="18" height="16" rx="2" />
           <path d="M3 10h18M9 4v16" />
         </svg>
-        无限画布
+        {{ $t('topBar.infiniteCanvas') }}
       </button>
-      <button class="text-btn" @click="router.push('/scripts')" title="剧本库（本地 Markdown）">
+      <button class="text-btn" @click="router.push('/scripts')" :title="$t('topBar.localScripts')">
         <svg viewBox="0 0 24 24" aria-hidden="true">
           <path d="M6 3h9l4 4v14a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1z" />
           <path d="M15 3v5h5M8.5 13h7M8.5 17h4" />
         </svg>
-        剧本
+        {{ $t('common.scripts') }}
       </button>
-      <button class="text-btn" @click="router.push('/')" title="项目列表">
+      <button class="text-btn" @click="router.push('/')" :title="$t('topBar.projects')">
         <svg viewBox="0 0 24 24" aria-hidden="true">
           <path d="M4 10l8-6 8 6v9a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1z" />
         </svg>
-        项目
+        {{ $t('common.project') }}
       </button>
-      <button class="text-btn" @click="router.push('/drafts')" title="资源库（全部图片/视频）">
+      <button class="text-btn" @click="router.push('/drafts')" :title="$t('topBar.allResources')">
         <svg viewBox="0 0 24 24" aria-hidden="true">
           <path d="M4 7l8-4 8 4v10l-8 4-8-4z" />
           <path d="M4 7l8 4 8-4M12 11v10" />
         </svg>
-        资源库
+        {{ $t('common.resourceLibrary') }}
       </button>
-      <button class="icon-btn" @click="router.push('/settings')" title="设置">
+      <button class="icon-btn" @click="router.push('/settings')" :title="$t('common.settings')">
         <svg viewBox="0 0 24 24" aria-hidden="true">
           <circle cx="12" cy="12" r="3" />
           <path
@@ -110,7 +111,7 @@ function newProject() {
         </svg>
       </button>
       <GradientButton size="sm" type="secondary" icon="+" @click="newProject">
-        新项目
+        {{ $t('common.newProject') }}
       </GradientButton>
     </div>
   </header>

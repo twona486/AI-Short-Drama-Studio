@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { t as translate } from '@/i18n'
+
 import { computed, ref, watch } from 'vue'
 import type { AdapterConfig } from '@/services/ai/adapters'
 import {
@@ -81,7 +83,7 @@ function commitTemplate(template: string, detail: string, map?: ComfyInputMap | 
   draft.value = template
   emit('patch', next)
   status.value = detail
-  toast.success('工作流模板已保存到当前接入')
+  toast.success(translate('comfyWorkflowPanel.templateSaved'))
 }
 
 /** 让助手读懂节点图，产出「提示词 / 参考图写到哪个节点」的映射 */
@@ -93,13 +95,16 @@ async function analyzeWithAssistant(payload: any, template: string, silent = fal
     mapInfo.value = checked
     mapDraft.value = JSON.stringify(checked, null, 2)
     if (!checked.bindings.length) {
-      status.value = `助手没能在这个工作流里定位到可注入的输入（${error || '未知原因'}）。可手动编辑映射 JSON。`
+      status.value = translate('comfyWorkflowPanel.noInput', { p0: error || translate('comfyWorkflowPanel.unknownCause') })
       if (!silent) toast.error(status.value)
       return
     }
-    commitTemplate(template, `已接入输入：${describeInputMap(checked)}${error ? `（助手提示：${error}）` : ''}`, checked)
+    commitTemplate(template, translate('comfyWorkflowPanel.mappingSummary', {
+      mapping: describeInputMap(checked),
+      hint: error ? translate('comfyWorkflowPanel.analysisHint', { error }) : ''
+    }), checked)
   } catch (e: any) {
-    status.value = `助手分析失败：${e?.message || e}`
+    status.value = translate('comfyWorkflowPanel.analysisFailed', { p0: e?.message || e })
     if (!silent) toast.error(status.value)
   } finally {
     analyzing.value = false
@@ -114,14 +119,14 @@ async function onValidateAndSave() {
     return
   }
   // 先落盘模板，再让助手分析映射（分析失败也至少保住了工作流本身）
-  commitTemplate(parsed.template, '已识别为 API Format，正在让助手分析输入节点…')
+  commitTemplate(parsed.template, translate('comfyWorkflowPanel.parsedApi'))
   await analyzeWithAssistant(parsed.payload || JSON.parse(parsed.template), parsed.template)
 }
 
 async function onReanalyze() {
   const template = draft.value || props.adapter?.workflowTemplate || ''
   if (!template.trim()) {
-    toast.error('还没有工作流内容')
+    toast.error(translate('comfyWorkflowPanel.workflowMissing'))
     return
   }
   const parsed = parseComfyWorkflowJson(template)
@@ -138,10 +143,10 @@ function onSaveMapJson() {
     const obj = JSON.parse(mapDraft.value) as ComfyInputMap
     mapInfo.value = obj
     emit('patch', { ...(props.adapter || {}), inputMap: obj })
-    status.value = `映射已更新：${describeInputMap(obj)}`
-    toast.success('输入映射已保存')
+    status.value = translate('comfyWorkflowPanel.mappingUpdated', { p0: describeInputMap(obj) })
+    toast.success(translate('comfyWorkflowPanel.mappingSaved'))
   } catch (e: any) {
-    toast.error(`映射 JSON 无效：${e?.message || e}`)
+    toast.error(translate('comfyWorkflowPanel.invalidMapping', { p0: e?.message || e }))
   }
 }
 
@@ -157,7 +162,7 @@ function onPaste(ev: ClipboardEvent) {
 
 async function onDiscover() {
   if (!props.baseUrl?.trim()) {
-    toast.error('请先填写 ComfyUI 地址')
+    toast.error(translate('comfyWorkflowPanel.addressRequired'))
     return
   }
   discovering.value = true
@@ -191,7 +196,7 @@ async function applyParsed(parsed: Awaited<ReturnType<typeof parseComfyWorkflowJ
     toast.error(parsed.detail)
     return
   }
-  commitTemplate(parsed.template, '已载入 API Format，正在让助手分析输入节点…')
+  commitTemplate(parsed.template, translate('comfyWorkflowPanel.loadedApi'))
   await analyzeWithAssistant(parsed.payload || JSON.parse(parsed.template), parsed.template)
 }
 
@@ -233,48 +238,46 @@ function clearTemplate() {
   mapInfo.value = null
   mapDraft.value = ''
   emit('patch', next)
-  status.value = '已清空工作流模板与输入映射'
+  status.value = translate('comfyWorkflowPanel.cleared')
 }
 </script>
 
 <template>
   <section class="wf">
     <header class="head">
-      <h4>Comfy 工作流模板</h4>
+      <h4>{{ $t('comfyWorkflowPanel.template') }}</h4>
       <p class="hint">
-        在 ComfyUI 菜单选择 <strong>Save (API Format)</strong> 导出 JSON，粘贴到下方点「校验并保存」。
-        助手会读完节点结构，判断提示词 / 参考图 / 参数该注入到哪个节点的哪个字段 ——
-        不同工作流的节点命名差异很大，不靠写死规则猜。界面格式（含 nodes/links）无法直接出片。
+        {{ $t('comfyWorkflowPanel.menuHint') }} <strong>Save (API Format)</strong> {{ $t('comfyWorkflowPanel.jsonHint') }}
       </p>
       <p class="badge" :class="{ on: hasTemplate }">
-        {{ hasTemplate ? '已配置 workflowTemplate' : '尚未配置 — 出图/出视频前必须粘贴' }}
+        {{ hasTemplate ? $t('comfyWorkflowPanel.configured') : $t('comfyWorkflowPanel.unconfigured') }}
       </p>
     </header>
 
     <div class="row">
       <button type="button" class="mini" :disabled="discovering || !baseUrl" @click="onDiscover">
-        {{ discovering ? '探测中…' : '从 Comfy 刷新列表' }}
+        {{ discovering ? $t('comfyWorkflowPanel.probing') : $t('comfyWorkflowPanel.refresh') }}
       </button>
-      <button type="button" class="mini ghost" @click="fileInput?.click()">从文件导入</button>
+      <button type="button" class="mini ghost" @click="fileInput?.click()">{{ $t('comfyWorkflowPanel.importFile') }}</button>
       <input ref="fileInput" type="file" accept="application/json,.json" class="hidden" @change="onFileChange" />
     </div>
     <p v-if="discoverMsg" class="hint">{{ discoverMsg }}</p>
 
     <template v-if="discovered.length">
-      <label>已发现的工作流文件</label>
+      <label>{{ $t('comfyWorkflowPanel.discovered') }}</label>
       <div class="row">
         <select v-model="selectedId">
-          <option value="">选择…</option>
+          <option value="">{{ $t('comfyWorkflowPanel.select') }}</option>
           <option v-for="w in discovered" :key="w.id" :value="w.id">{{ w.name }}</option>
         </select>
-        <button type="button" class="mini" :disabled="!selectedId" @click="onPickDiscovered">载入并校验</button>
+        <button type="button" class="mini" :disabled="!selectedId" @click="onPickDiscovered">{{ $t('comfyWorkflowPanel.loadValidate') }}</button>
       </div>
     </template>
 
-    <label>或从 URL 导入</label>
+    <label>{{ $t('comfyWorkflowPanel.importUrl') }}</label>
     <div class="row">
       <input v-model="importUrl" placeholder="https://…/workflow-api.json" />
-      <button type="button" class="mini" @click="onImportUrl">拉取</button>
+      <button type="button" class="mini" @click="onImportUrl">{{ $t('comfyWorkflowPanel.fetch') }}</button>
     </div>
 
     <label>workflowTemplate（API Format JSON）</label>
@@ -287,20 +290,20 @@ function clearTemplate() {
     />
     <div class="row">
       <button type="button" class="go" :disabled="analyzing" @click="onValidateAndSave">
-        {{ analyzing ? '助手分析中…' : '校验并保存' }}
+        {{ analyzing ? $t('comfyWorkflowPanel.assistantAnalyzing') : $t('comfyWorkflowPanel.validateSave') }}
       </button>
       <button type="button" class="mini" :disabled="analyzing || !draft.trim()" @click="onReanalyze">
-        {{ analyzing ? '分析中…' : (hasMap ? '重新让助手分析' : '用助手分析工作流') }}
+        {{ analyzing ? $t('comfyWorkflowPanel.analyzing') : (hasMap ? $t('comfyWorkflowPanel.analyzeAgain') : $t('comfyWorkflowPanel.analyze')) }}
       </button>
-      <button type="button" class="mini ghost" :disabled="!hasTemplate" @click="clearTemplate">清空</button>
+      <button type="button" class="mini ghost" :disabled="!hasTemplate" @click="clearTemplate">{{ $t('common.empty') }}</button>
     </div>
     <p v-if="status" class="status">{{ status }}</p>
 
     <div v-if="mapInfo" class="map">
       <p class="map-head">
-        <span class="tag" :class="{ warn: !hasMap }">{{ hasMap ? '输入已接入' : '未接入输入' }}</span>
+        <span class="tag" :class="{ warn: !hasMap }">{{ hasMap ? $t('comfyWorkflowPanel.inputConnected') : $t('comfyWorkflowPanel.inputMissing') }}</span>
         <span>{{ describeWorkflowKind(mapInfo.kind) }}<template v-if="mapInfo.summary"> · {{ mapInfo.summary }}</template></span>
-        <span v-if="mapInfo.source === 'heuristic'" class="tag warn">规则兜底</span>
+        <span v-if="mapInfo.source === 'heuristic'" class="tag warn">{{ $t('comfyWorkflowPanel.ruleFallback') }}</span>
       </p>
       <ul v-if="hasMap" class="map-list">
         <li v-for="(b, i) in mapInfo.bindings" :key="i">
@@ -309,27 +312,27 @@ function clearTemplate() {
       </ul>
       <p v-if="mapInfo.notes" class="hint">{{ mapInfo.notes }}</p>
       <p v-if="!hasMap" class="hint">
-        助手没定位到输入节点，生成时会跑工作流里写死的内容。可手动改下面的映射，或换一个工作流。
+        {{ $t('comfyWorkflowPanel.noInputHint') }}
       </p>
       <button type="button" class="mini ghost" @click="showMapJson = !showMapJson">
-        {{ showMapJson ? '收起映射 JSON' : '手动编辑映射 JSON' }}
+        {{ showMapJson ? $t('comfyWorkflowPanel.hideMapping') : $t('comfyWorkflowPanel.editMapping') }}
       </button>
       <template v-if="showMapJson">
         <textarea v-model="mapDraft" rows="8" spellcheck="false" />
         <div class="row">
-          <button type="button" class="mini" @click="onSaveMapJson">保存映射</button>
+          <button type="button" class="mini" @click="onSaveMapJson">{{ $t('comfyWorkflowPanel.saveMapping') }}</button>
         </div>
       </template>
     </div>
     <div v-if="triedUrls.length" class="diag">
       <button type="button" class="mini ghost" @click="showTried = !showTried">
-        {{ showTried ? '收起' : '查看尝试过的地址' }}（{{ triedUrls.length }}）
+        {{ showTried ? $t('common.collapse') : $t('comfyWorkflowPanel.addresses') }}（{{ triedUrls.length }}）
       </button>
       <ul v-if="showTried">
         <li v-for="(u, i) in triedUrls" :key="i"><code>{{ u }}</code></li>
       </ul>
       <p v-if="showTried" class="hint">
-        把上面任一地址贴到浏览器地址栏打开：能下载到 JSON 就说明地址对（把那条发我），同样 404 说明该服务不提供按路径读文件。
+        {{ $t('comfyWorkflowPanel.checkUrlHint') }}
       </p>
     </div>
   </section>

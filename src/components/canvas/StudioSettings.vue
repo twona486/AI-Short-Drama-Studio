@@ -1,4 +1,7 @@
 <script setup lang="ts">
+import { t as translate } from '@/i18n'
+
+import { t } from '@/i18n'
 import { computed, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { useProjectStore, useSettingsStore, uniqueProfileName } from '@/stores'
@@ -85,8 +88,8 @@ function onVoice(v: string) {
 function subtitle(p: { models?: string[]; model?: string; workflowId?: string }) {
   if (p.workflowId) return p.workflowId
   const n = p.models?.length || 0
-  if (n) return `${n} 个模型 · ${p.model || '未选'}`
-  return p.model || '未选模型'
+  if (n) return t('studioSettings.modelCount', { count: n, model: p.model || t('studioSettings.noModelSelected') })
+  return p.model || t('studioSettings.noModel')
 }
 
 function createNamed(
@@ -120,7 +123,7 @@ function createVideo(providerId: string) {
   const preset = findProvider(providerId, VIDEO_PROVIDERS)
   const name = uniqueProfileName(
     settings.config.videos.map((p) => p.name),
-    preset.id === 'custom' ? '自定义视频' : preset.name
+    preset.id === 'custom' ? translate('studioSettings.customVideo') : preset.name
   )
   settings.addVideo({
     name,
@@ -154,24 +157,24 @@ function patchAdapter(
   <div class="mods">
     <template v-if="module === 'llm'">
       <ProfileLibrary
-        title="已保存的语言模型"
-        hint="每种接入保存成一项。同一项下面可加多个模型名，智能体和写剧本时就能切换。"
+        :title="$t('studioSettings.savedLlm')"
+        :hint="$t('studioSettings.savedLlmHint')"
         :profiles="settings.config.llms.map((p) => ({ id: p.id, name: p.name, subtitle: subtitle(p) }))"
         :active-id="settings.config.activeLlmId"
         :providers="LLM_PROVIDERS"
         @select="settings.selectLlm"
-        @create="createNamed('llm', $event, LLM_PROVIDERS, settings.config.llms.map((p) => p.name), '自定义 LLM')"
+        @create="createNamed('llm', $event, LLM_PROVIDERS, settings.config.llms.map((p) => p.name), $t('studioSettings.customLlm'))"
         @remove="settings.removeLlm(settings.config.activeLlmId)"
       />
-      <label class="name-label">名称</label>
+      <label class="name-label">{{ $t('common.name') }}</label>
       <input
         class="name-input"
         v-model="llmName"
-        placeholder="例如 DeepSeek 官方"
+        :placeholder="$t('studioSettings.exampleLlm')"
       />
       <EndpointForm
-        title="API 接入"
-        hint="写剧本、提炼分镜、智能体对话都走这一套。不懂选哪个，就在设置页的「接入助手」里把厂商给的信息贴给它。"
+        :title="$t('studioSettings.api')"
+        :hint="$t('studioSettings.llmHint')"
         :presets="LLM_PROVIDERS"
         :base-url="settings.config.llm.baseUrl"
         :api-key="settings.config.llm.apiKey"
@@ -191,24 +194,24 @@ function patchAdapter(
 
     <template v-else-if="module === 'vision'">
       <ProfileLibrary
-        title="已保存的视觉接入"
-        hint="它让 AI 看得懂图：自动挑出能用的参考图，并检查生成的图片视频有没有跑偏。用得多可以换更强的模型。"
+        :title="$t('studioSettings.savedVision')"
+        :hint="$t('studioSettings.savedVisionHint')"
         :profiles="settings.config.visions.map((p) => ({ id: p.id, name: p.name, subtitle: subtitle(p) }))"
         :active-id="settings.config.activeVisionId"
         :providers="VISION_PROVIDERS"
         @select="settings.selectVision"
-        @create="createNamed('vision', $event, VISION_PROVIDERS, settings.config.visions.map((p) => p.name), '自定义视觉')"
+        @create="createNamed('vision', $event, VISION_PROVIDERS, settings.config.visions.map((p) => p.name), $t('studioSettings.customVision'))"
         @remove="settings.removeVision(settings.config.activeVisionId)"
       />
-      <label class="name-label">名称</label>
+      <label class="name-label">{{ $t('common.name') }}</label>
       <input
         class="name-input"
         v-model="visionName"
-        placeholder="例如 阿里云百炼视觉"
+        :placeholder="$t('studioSettings.exampleVision')"
       />
       <EndpointForm
-        title="API 接入"
-        hint="只在看图、对画面做质检时调用，不参与写剧本。"
+        :title="$t('studioSettings.api')"
+        :hint="$t('studioSettings.visionHint')"
         :presets="VISION_PROVIDERS"
         :base-url="settings.config.vision.baseUrl"
         :api-key="settings.config.vision.apiKey"
@@ -228,33 +231,33 @@ function patchAdapter(
 
     <template v-else-if="module === 'image'">
       <section v-if="zealmanImage" class="owned">
-        <h3>这套生图来自 Zealman 镜像</h3>
-        <p class="hint">地址和工作流在「Zealman 镜像」里填写。本页用来接云端生图接口，或添加你自己电脑上的 ComfyUI。</p>
-        <p class="hint">当前地址：{{ settings.config.image.baseUrl || '还没填写' }}</p>
-        <p class="hint">工作流：{{ settings.config.image.model || '内置文生图' }}</p>
-        <button type="button" @click="router.push('/settings/zealman')">打开 Zealman 镜像</button>
+        <h3>{{ $t('studioSettings.zealmanImage') }}</h3>
+        <p class="hint">{{ $t('studioSettings.zealmanImageHint') }}</p>
+        <p class="hint">{{ $t('studioSettings.currentAddress') }}{{ settings.config.image.baseUrl || $t('studioSettings.missing') }}</p>
+        <p class="hint">{{ $t('studioSettings.workflow') }}{{ settings.config.image.model || $t('studioSettings.builtinImage') }}</p>
+        <button type="button" @click="router.push('/settings/zealman')">{{ $t('studioSettings.openZealman') }}</button>
       </section>
       <ComfyQuickAdd />
       <ProfileLibrary
-        title="已保存的生图接入"
-        hint="角色设计、场景图、故事看板。保存多套后，出图节点里可以直接切换。Zealman 文生图会自动出现在这里。"
+        :title="$t('studioSettings.savedImage')"
+        :hint="$t('studioSettings.savedImageHint')"
         :profiles="settings.config.images.map((p) => ({ id: p.id, name: p.name, subtitle: subtitle(p) }))"
         :active-id="settings.config.activeImageId"
         :providers="IMAGE_PROVIDERS"
         @select="settings.selectImage"
-        @create="createNamed('image', $event, IMAGE_PROVIDERS, settings.config.images.map((p) => p.name), '自定义生图')"
+        @create="createNamed('image', $event, IMAGE_PROVIDERS, settings.config.images.map((p) => p.name), $t('studioSettings.customImage'))"
         @remove="settings.removeImage(settings.config.activeImageId)"
       />
       <template v-if="!zealmanImage">
-        <label class="name-label">名称</label>
+        <label class="name-label">{{ $t('common.name') }}</label>
         <input
           class="name-input"
           v-model="imageName"
-          placeholder="例如 火山方舟 Seedream"
+          :placeholder="$t('studioSettings.exampleImage')"
         />
         <EndpointForm
-          title="API 接入"
-          :hint="settings.config.image.provider === 'apimart' ? '只填接口地址和 API Key 就能出图，默认地址 https://api.aishuch.com，默认模型 gpt-image-2。' : '选好厂商，填 API Key，再把要用的模型名加进列表。出图节点里可以随时切换不同的模型。'"
+          :title="$t('studioSettings.api')"
+          :hint="settings.config.image.provider === 'apimart' ? $t('studioSettings.apimartImageHint') : $t('studioSettings.imageHint')"
           :presets="IMAGE_PROVIDERS"
           :base-url="settings.config.image.baseUrl"
           :api-key="settings.config.image.apiKey"
@@ -278,24 +281,24 @@ function patchAdapter(
 
     <template v-else-if="module === 'tts'">
       <ProfileLibrary
-        title="已保存的配音接入"
-        hint="后期独立加的人声。下面选的音色是全片默认；某个角色想要别的声音，去画布的角色卡上单独设置。"
+        :title="$t('studioSettings.savedTts')"
+        :hint="$t('studioSettings.savedTtsHint')"
         :profiles="settings.config.ttsProfiles.map((p) => ({ id: p.id, name: p.name, subtitle: subtitle(p) }))"
         :active-id="settings.config.activeTtsId"
         :providers="TTS_PROVIDERS"
         @select="settings.selectTts"
-        @create="createNamed('tts', $event, TTS_PROVIDERS, settings.config.ttsProfiles.map((p) => p.name), '自定义配音')"
+        @create="createNamed('tts', $event, TTS_PROVIDERS, settings.config.ttsProfiles.map((p) => p.name), $t('studioSettings.customTts'))"
         @remove="settings.removeTts(settings.config.activeTtsId)"
       />
-      <label class="name-label">名称</label>
+      <label class="name-label">{{ $t('common.name') }}</label>
       <input
         class="name-input"
         v-model="ttsName"
-        placeholder="例如 阿里云百炼 TTS"
+        :placeholder="$t('studioSettings.exampleTts')"
       />
       <EndpointForm
-        title="API 接入"
-        hint="后期独立加人声的接口。选好音色后，字幕页和口播节点都能直接生成。"
+        :title="$t('studioSettings.api')"
+        :hint="$t('studioSettings.ttsHint')"
         :presets="TTS_PROVIDERS"
         :base-url="settings.config.tts.baseUrl"
         :api-key="settings.config.tts.apiKey"
@@ -306,7 +309,7 @@ function patchAdapter(
         @add-model="settings.addModel('tts', $event)"
         @remove-model="settings.removeModel('tts', $event)"
       >
-        <label class="extra-label">音色</label>
+        <label class="extra-label">{{ $t('common.voice') }}</label>
         <select v-model="ttsVoice">
           <option v-for="v in TTS_VOICES" :key="v.id" :value="v.id">{{ v.label }}</option>
         </select>
@@ -320,16 +323,16 @@ function patchAdapter(
 
     <template v-else-if="module === 'video'">
       <section v-if="zealmanVideo" class="owned">
-        <h3>这套视频来自 Zealman 镜像</h3>
-        <p class="hint">地址和工作流在「Zealman 镜像」里填写。本页用来接云端视频接口，或添加你自己电脑上的 ComfyUI。</p>
-        <p class="hint">当前地址：{{ settings.config.video.baseUrl || '还没填写' }}</p>
-        <p class="hint">工作流：{{ settings.config.video.workflowId || '内置工作流' }}</p>
-        <button type="button" @click="router.push('/settings/zealman')">打开 Zealman 镜像</button>
+        <h3>{{ $t('studioSettings.zealmanVideo') }}</h3>
+        <p class="hint">{{ $t('studioSettings.zealmanVideoHint') }}</p>
+        <p class="hint">{{ $t('studioSettings.currentAddress') }}{{ settings.config.video.baseUrl || $t('studioSettings.missing') }}</p>
+        <p class="hint">{{ $t('studioSettings.workflow') }}{{ settings.config.video.workflowId || $t('studioSettings.builtinWorkflow') }}</p>
+        <button type="button" @click="router.push('/settings/zealman')">{{ $t('studioSettings.openZealman') }}</button>
       </section>
       <ComfyQuickAdd />
       <ProfileLibrary
-        title="已保存的视频接入"
-        hint="图生视频工作流。多套令牌或工作流可以分开保存，出视频时选用。"
+        :title="$t('studioSettings.savedVideo')"
+        :hint="$t('studioSettings.savedVideoHint')"
         :profiles="settings.config.videos.map((p) => ({ id: p.id, name: p.name, subtitle: subtitle(p) }))"
         :active-id="settings.config.activeVideoId"
         :providers="VIDEO_PROVIDERS"
@@ -338,79 +341,78 @@ function patchAdapter(
         @remove="settings.removeVideo(settings.config.activeVideoId)"
       />
       <template v-if="!zealmanVideo">
-      <label class="name-label">名称</label>
+      <label class="name-label">{{ $t('common.name') }}</label>
       <input
         class="name-input"
         v-model="videoName"
-        placeholder="例如 AutoDL H3"
+        :placeholder="$t('studioSettings.exampleAutoDl')"
       />
       <section class="video">
-        <h3>一键出片设置</h3>
+        <h3>{{ $t('studioSettings.oneClick') }}</h3>
         <p class="hint">
-          这张对应关系参考视频模型自动处理好：用哪个模型、用几张参考图、最长能生成几秒、提示词按什么格式写，都不用你操心。
-          普通情况只要填下面的接口地址、凭证和模型（或工作流）名称。
+          {{ $t('studioSettings.autoRules') }}
         </p>
         <details class="rule-details">
-          <summary>自定义出片规则（高级）</summary>
-          <p class="hint">只有云平台的文档明确要求特殊处理时才需要改。出问题先跳过这节，保持默认即可。</p>
-        <label>参考图方式</label>
+          <summary>{{ $t('studioSettings.advancedGeneration') }}</summary>
+          <p class="hint">{{ $t('studioSettings.advancedHint') }}</p>
+        <label>{{ $t('studioSettings.referenceMode') }}</label>
         <div class="style-cards">
           <button
             type="button"
             :class="{ on: (settings.config.video.stillMode || 'identity') === 'identity' }"
             @click="patchVideoStillMode('identity')"
           >
-            <strong>人设 + 场景</strong>
-            <span>H3 推荐。出视频只传角色设计图和场景图，不经过分镜关键帧或故事看板，减少多人物。</span>
+            <strong>{{ $t('studioSettings.basicReferences') }}</strong>
+            <span>{{ $t('studioSettings.h3Mode') }}</span>
           </button>
           <button
             type="button"
             :class="{ on: settings.config.video.stillMode === 'keyframe' }"
             @click="patchVideoStillMode('keyframe')"
           >
-            <strong>人设 + 场景 + 关键帧</strong>
-            <span>万相及其他模型。画布会铺「分镜关键帧」，出视频前先出四宫格。</span>
+            <strong>{{ $t('studioSettings.keyframeReferences') }}</strong>
+            <span>{{ $t('studioSettings.keyframeStrategy') }}</span>
           </button>
           <button
             type="button"
             :class="{ on: settings.config.video.stillMode === 'storyboard' }"
             @click="patchVideoStillMode('storyboard')"
           >
-            <strong>人设 + 场景 + 故事看板</strong>
-            <span>短剧可选。画布铺看板，出视频带上六格动作计划。</span>
+            <strong>{{ $t('studioSettings.boardReferences') }}</strong>
+            <span>{{ $t('studioSettings.boardStrategy') }}</span>
           </button>
         </div>
-        <label>提示词写法</label>
+        <label>{{ $t('studioSettings.promptFormat') }}</label>
         <div class="style-cards">
           <button
             type="button"
             :class="{ on: (settings.config.video.promptStyle || 'scene-narrative') === 'scene-narrative' }"
             @click="settings.patchVideo({ promptStyle: 'scene-narrative' })"
           >
-            <strong>场景叙事</strong>
-            <span>选 H3 时按 Ref2VA 六段出片：人设/场景/看板不是首帧。[Shot 1] 不加时间戳。台词只进 &lt;d&gt; 标签。选万相不套这套格式。</span>
+            <strong>{{ $t('studioSettings.sceneNarrative') }}</strong>
+            <span>{{ $t('studioSettings.h3Rules', { tag: '<d>' }) }}</span>
           </button>
           <button
             type="button"
             :class="{ on: settings.config.video.promptStyle === 'formatted' }"
             @click="settings.patchVideo({ promptStyle: 'formatted' })"
           >
-            <strong>格式化</strong>
-            <span>人物图 + 空镜底板直接出视频。按 Aesthetic / SHOT / Visual Prompt 结构组装。</span>
+            <strong>{{ $t('studioSettings.structured') }}</strong>
+            <span>{{ $t('studioSettings.directGeneration') }}</span>
           </button>
         </div>
         </details>
-        <h3 class="api-title">中转站 / 云端工作流 API</h3>
-        <p class="hint">大厂官方接口和 API Router、中转站都填写在这里；本机 ComfyUI 请使用页面顶部的“本地 ComfyUI”。</p>
+        <h3 class="api-title">{{ $t('studioSettings.remoteApi') }}</h3>
+        <p class="hint">{{ $t('studioSettings.cloudApiHint') }}</p>
         <p v-if="settings.config.video.provider === 'apimart'" class="hint">
-          只填接口地址和 API Key。默认 https://api.aishuch.com，模型默认 grok-imagine-1.5-video-ext。
+          {{ $t('studioSettings.apimartVideo') }}
         </p>
-        <label>Base URL（接口地址）</label>
+        <label>{{ $t('studioSettings.baseUrl') }}</label>
         <input
           v-model="videoUrl"
           :placeholder="settings.config.video.provider === 'apimart' ? 'https://api.aishuch.com' : 'https://autodl.art'"
         />
-        <label>{{ settings.config.video.provider === 'apimart' ? '模型名' : '模型名 / 工作流 ID' }}</label>
+        <label>{{ settings.config.video.provider === 'apimart' ? $t('studioSettings.modelName') : $t('studioSettings.modelOrWorkflow') }}</label>
         <input
           v-model="videoWorkflow"
           :placeholder="settings.config.video.provider === 'apimart' ? 'grok-imagine-1.5-video-ext' : 'minimax_h3_lightx2v_v5_15s'"
@@ -422,10 +424,10 @@ function patchAdapter(
             :type="showVideoKey ? 'text' : 'password'"
             autocomplete="off"
             v-model="videoKey"
-            placeholder="只填这一家供应商的 API Key 或 Token"
+            :placeholder="$t('studioSettings.providerKey')"
           />
           <button type="button" class="eye" @click="showVideoKey = !showVideoKey">
-            {{ showVideoKey ? '隐藏' : '显示' }}
+            {{ showVideoKey ? $t('common.hide') : $t('common.show') }}
           </button>
         </div>
         <AdapterFields

@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { t as translate } from '@/i18n'
+
 import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useProjectStore, useAssetsStore, useToastStore } from '@/stores'
@@ -54,7 +56,7 @@ function ensureExportTimeline(silent = false) {
   if (built) {
     project.setTimeline(clips)
     if (!silent) {
-      toast.info(`已按分镜自动排时间线（${clips.length} 段），可直接导出`, 4000)
+      toast.info(translate('export.timelineBuilt', { p0: clips.length }), 4000)
     }
     return true
   }
@@ -78,13 +80,13 @@ async function doExport() {
   if (!project.current || !canExport.value) return
   ensureExportTimeline(true)
   if (!timeline.value.some((c) => c.enabled)) {
-    toast.warn('没有可导出的片段：请先为分镜生成视频或图片')
+    toast.warn(translate('export.noClips'))
     return
   }
 
   exporting.value = true
   progress.value = 0
-  progressMsg.value = '准备素材...'
+  progressMsg.value = translate('export.preparingAssets')
   resultUrl.value = null
 
   try {
@@ -103,14 +105,14 @@ async function doExport() {
     }
 
     if (mediaMap.size === 0) {
-      toast.error('没有可用的素材')
+      toast.error(translate('export.noAssets'))
       exporting.value = false
       return
     }
 
     let workingTimeline = timeline.value.filter((c) => c.enabled)
     if (isDigitalHuman.value && project.current.speechWorkflow?.options.removePauses !== false) {
-      progressMsg.value = '正在切掉句首句尾气口...'
+      progressMsg.value = translate('export.trimming')
       workingTimeline = await trimTimelineBySpeech(
         workingTimeline,
         async (shotId) => mediaMap.get(shotId)?.blob
@@ -170,7 +172,7 @@ async function doExport() {
     ].sort((a, b) => a.start - b.start)
 
     if (burnCaptions.value && captionCues.length === 0) {
-      toast.warn('没有字幕文本：请到「字幕」页填写，或在分镜里写口播。将导出无字幕视频。')
+      toast.warn(translate('export.noCaptions'))
     }
 
     let bgmBlob: Blob | undefined
@@ -203,7 +205,7 @@ async function doExport() {
       if (blob) voiceoverAudioMap.set(clip.shotId, blob)
     }
     if (missingVo > 0 && !digitalHuman) {
-      toast.warn(`${missingVo} 个分镜有口播文案但还没配音，视频这些段会没有人声。可回「字幕」页生成口播。`)
+      toast.warn(translate('export.missingVoice', { p0: missingVo }))
     }
 
     let width = project.current.settings.width
@@ -261,14 +263,14 @@ async function doExport() {
     resultUrl.value = URL.createObjectURL(blob)
     resultSize.value = blob.size
     progress.value = 1
-    progressMsg.value = '完成！'
-    toast.success(`导出成功！文件大小 ${formatSize(blob.size)}`)
+    progressMsg.value = translate('export.completed')
+    toast.success(translate('export.fileSize', { p0: formatSize(blob.size) }))
   } catch (e: unknown) {
     console.error('[ExportView] 导出失败:', e)
     const msg = e instanceof Error ? e.message : String(e)
     const displayMsg = msg.length > 600 ? msg.slice(0, 600) + '...' : msg
-    toast.error('导出失败：' + displayMsg, 15000)
-    progressMsg.value = '失败：' + (msg.split('\n')[0] ?? msg).slice(0, 200)
+    toast.error(translate('export.failed', { error: displayMsg }), 15000)
+    progressMsg.value = translate('export.failurePrefix', { error: (msg.split('\n')[0] ?? msg).slice(0, 200) })
   } finally {
     exporting.value = false
   }
@@ -309,12 +311,12 @@ const segmentSummary = computed(() => {
   <div class="page">
     <header class="page-head">
       <div>
-        <h1>🚀 导出视频</h1>
-        <p v-if="isDigitalHuman">各段视频已经带上传音频。导出时自动切掉没声音的气口再拼接，并烧录字幕和划重点，不再另配一层人声。</p>
-        <p v-else>按分镜的人声模式保留 H3 对白/口播，或改用独立 TTS，再叠字幕</p>
+        <h1>{{ $t('export.heading') }}</h1>
+        <p v-if="isDigitalHuman">{{ $t('export.smartSpeechHint') }}</p>
+        <p v-else>{{ $t('export.subtitleHint') }}</p>
       </div>
       <div class="head-actions">
-        <GradientButton type="ghost" @click="router.push('/caption')">← 上一步</GradientButton>
+        <GradientButton type="ghost" @click="router.push('/caption')">{{ $t('common.previousStep') }}</GradientButton>
         <GradientButton
           v-if="!resultUrl"
           icon="🚀"
@@ -322,23 +324,23 @@ const segmentSummary = computed(() => {
           :disabled="!canExport"
           @click="doExport"
         >
-          {{ exporting ? '导出中...' : '开始导出' }}
+          {{ exporting ? $t('export.exporting') : $t('export.start') }}
         </GradientButton>
         <GradientButton
           v-else
           icon="📥"
           @click="download"
-        >下载视频</GradientButton>
+        >{{ $t('export.download') }}</GradientButton>
       </div>
     </header>
 
     <div class="layout">
       <main class="left">
         <GlassCard padding="md" v-if="!exporting && !resultUrl">
-          <h3>📦 导出设置</h3>
+          <h3>{{ $t('export.settings') }}</h3>
 
           <div class="field">
-            <span>视频格式</span>
+            <span>{{ $t('export.videoFormat') }}</span>
             <div class="format-grid">
               <button
                 class="format"
@@ -346,7 +348,7 @@ const segmentSummary = computed(() => {
                 @click="format = 'mp4'"
               >
                 <div class="format-name">MP4</div>
-                <div class="format-desc">H.264，兼容性最好</div>
+                <div class="format-desc">{{ $t('export.h264') }}</div>
               </button>
               <button
                 class="format"
@@ -354,45 +356,45 @@ const segmentSummary = computed(() => {
                 @click="format = 'webm'"
               >
                 <div class="format-name">WebM</div>
-                <div class="format-desc">VP9，体积更小</div>
+                <div class="format-desc">{{ $t('export.vp9') }}</div>
               </button>
             </div>
           </div>
 
           <div class="field">
-            <span>字幕</span>
+            <span>{{ $t('common.caption') }}</span>
             <label class="check">
               <input v-model="burnCaptions" type="checkbox" />
-              <span>将字幕烧录到视频上（无法再编辑）</span>
+              <span>{{ $t('export.burnHint') }}</span>
             </label>
             <label class="check">
               <input v-model="captionHighlight" type="checkbox" :disabled="!burnCaptions" />
-              <span>自动划重点</span>
+              <span>{{ $t('common.autoDelineate') }}</span>
             </label>
           </div>
 
           <div v-if="!isSpeech" class="field">
-            <span>其他分镜原声（环境音效）</span>
+            <span>{{ $t('export.ambient') }}</span>
             <div class="format-grid">
               <button
                 class="format"
                 :class="{ active: keepAmbientAudio }"
                 @click="keepAmbientAudio = true"
               >
-                <div class="format-name">保留每镜声音</div>
-                <div class="format-desc">为 TTS / 无口播镜头留下环境音，再叠口播/BGM</div>
+                <div class="format-name">{{ $t('export.keepAudio') }}</div>
+                <div class="format-desc">{{ $t('export.keepAmbientHint') }}</div>
               </button>
               <button
                 class="format"
                 :class="{ active: !keepAmbientAudio }"
                 @click="keepAmbientAudio = false"
               >
-                <div class="format-name">去掉每镜声音</div>
-                <div class="format-desc">TTS / 无口播镜头静音；H3 自带人声仍会保留</div>
+                <div class="format-name">{{ $t('export.muteAudio') }}</div>
+                <div class="format-desc">{{ $t('export.muteOption') }}</div>
               </button>
             </div>
             <div v-if="keepAmbientAudio" class="ambient-vol">
-              <span class="hint">环境音音量</span>
+              <span class="hint">{{ $t('export.ambientVolume') }}</span>
               <input
                 v-model.number="ambientVolume"
                 type="range"
@@ -405,8 +407,8 @@ const segmentSummary = computed(() => {
             <p class="hint" style="margin-top: 6px;">
               {{
                 keepAmbientAudio
-                  ? 'H3 对白/画外口播始终保留；其他镜头保留环境音。后期 TTS 只叠到选择了 TTS 的镜头。'
-                  : 'H3 对白/画外口播始终保留；仅静音 TTS / 无口播镜头的原声，避免重复人声。'
+                  ? $t('export.keepHint')
+                  : $t('export.muteHint')
               }}
             </p>
           </div>
@@ -416,13 +418,13 @@ const segmentSummary = computed(() => {
           <div class="exporting">
             <ProgressRing :progress="progress" :size="100" :stroke-width="6" show-label />
             <div class="exporting-msg">{{ progressMsg }}</div>
-            <p class="hint">FFmpeg 正在处理，请耐心等待...</p>
+            <p class="hint">{{ $t('export.processing') }}</p>
           </div>
         </GlassCard>
 
         <GlassCard padding="md" v-if="resultUrl">
           <div class="result">
-            <h3>✅ 导出完成</h3>
+            <h3>{{ $t('export.complete') }}</h3>
             <video
               :src="resultUrl"
               controls
@@ -435,21 +437,21 @@ const segmentSummary = computed(() => {
               <span class="result-duration">{{ totalDuration }}s</span>
             </div>
             <div class="result-actions">
-              <GradientButton icon="📥" @click="download">下载视频</GradientButton>
-              <GradientButton type="ghost" @click="resultUrl = null">再次导出</GradientButton>
+              <GradientButton icon="📥" @click="download">{{ $t('export.download') }}</GradientButton>
+              <GradientButton type="ghost" @click="resultUrl = null">{{ $t('export.exportAgain') }}</GradientButton>
             </div>
           </div>
         </GlassCard>
 
         <GlassCard padding="md" v-if="!exporting && !resultUrl">
-          <h3>📋 时间线预览</h3>
+          <h3>{{ $t('export.timelinePreview') }}</h3>
           <div v-if="segmentSummary.length === 0" class="empty">
-            <p>还没有可导出片段。</p>
+            <p>{{ $t('export.empty') }}</p>
             <p class="hint" style="margin: 8px 0;">
-              请先生成分镜视频或图片。从画布进入时会自动按分镜排时间线。
+              {{ $t('export.noClipsHint') }}
             </p>
             <GradientButton size="sm" type="secondary" @click="ensureExportTimeline()">
-              从分镜重建时间线
+              {{ $t('export.rebuildTimeline') }}
             </GradientButton>
           </div>
           <div v-else class="seg-list">
@@ -459,7 +461,7 @@ const segmentSummary = computed(() => {
                 <div class="seg-title">{{ seg.title }}</div>
                 <div class="seg-meta">
                   <Tag size="sm" :type="seg.hasVideo ? 'success' : 'info'">
-                    {{ seg.hasVideo ? '🎥 视频' : '🖼 图片' }}
+                    {{ seg.hasVideo ? $t('export.videoCount') : $t('export.imageCount') }}
                   </Tag>
                   <span>{{ seg.duration }}s</span>
                 </div>
@@ -471,38 +473,38 @@ const segmentSummary = computed(() => {
 
       <aside class="right">
         <GlassCard padding="md">
-          <h3>📊 合成清单</h3>
+          <h3>{{ $t('export.manifest') }}</h3>
           <div class="kv">
-            <span>总片段</span><b>{{ segmentSummary.length }}</b>
+            <span>{{ $t('export.totalClips') }}</span><b>{{ segmentSummary.length }}</b>
           </div>
           <div class="kv">
-            <span>总时长</span><b>{{ totalDuration }}s</b>
+            <span>{{ $t('common.totalLength') }}</span><b>{{ totalDuration }}s</b>
           </div>
           <div class="kv">
-            <span>分辨率</span>
+            <span>{{ $t('common.resolutionLabel') }}</span>
             <b>{{ project.current?.settings.width }}×{{ project.current?.settings.height }}</b>
           </div>
           <div class="kv">
-            <span>帧率</span><b>{{ project.current?.settings.fps }}fps</b>
+            <span>{{ $t('common.frameRate') }}</span><b>{{ project.current?.settings.fps }}fps</b>
           </div>
           <div class="kv">
-            <span>输出格式</span><b>{{ format.toUpperCase() }}</b>
+            <span>{{ $t('export.outputFormat') }}</span><b>{{ format.toUpperCase() }}</b>
           </div>
           <div class="kv">
-            <span>字幕</span>
+            <span>{{ $t('common.caption') }}</span>
             <Tag :type="burnCaptions ? 'success' : 'default'" size="sm">
-              {{ burnCaptions ? (project.current?.settings.captionHighlight ? '烧录 + 划重点' : '烧录') : '不烧录' }}
+              {{ burnCaptions ? (project.current?.settings.captionHighlight ? $t('export.burnKeywords') : $t('export.burn')) : $t('export.noBurn') }}
             </Tag>
           </div>
         </GlassCard>
 
         <GlassCard padding="md">
-          <h3>💡 性能提示</h3>
+          <h3>{{ $t('export.performance') }}</h3>
           <ul class="tips">
-            <li>首跑会下载 FFmpeg 核心（约 30MB）</li>
-            <li>5 分钟以内的视频一般 1-3 分钟合成完</li>
-            <li>长视频建议用 MP4 输出，兼容性更好</li>
-            <li>如需更高质量，可改用 MP4 + 调高 crf</li>
+            <li>{{ $t('export.firstRun') }}</li>
+            <li>{{ $t('export.performanceEstimate') }}</li>
+            <li>{{ $t('export.longVideoHint') }}</li>
+            <li>{{ $t('export.qualityHint') }}</li>
           </ul>
         </GlassCard>
       </aside>

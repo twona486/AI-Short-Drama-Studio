@@ -65,7 +65,7 @@ const progress = computed(() =>
   <aside class="stepnav">
     <div class="nav-head">
       <div class="nav-title">
-        <span class="nav-kicker">制作流程</span>
+        <span class="nav-kicker">{{ $t('stepNav.production') }}</span>
         <span class="nav-count">{{ doneCount }}/{{ steps.length }}</span>
       </div>
       <div class="nav-bar">
@@ -93,8 +93,8 @@ const progress = computed(() =>
             <span v-else class="num">{{ i + 1 }}</span>
           </span>
           <span class="text">
-            <span class="label">{{ s.label }}</span>
-            <span class="desc">{{ s.desc }}</span>
+            <span class="label">{{ $t(s.label) }}</span>
+            <span class="desc">{{ $t(s.desc) }}</span>
           </span>
           <svg v-if="!isStepReachable(i)" class="lock" viewBox="0 0 24 24">
             <rect x="5" y="11" width="14" height="9" rx="2" />

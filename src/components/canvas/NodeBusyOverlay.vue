@@ -9,7 +9,7 @@ defineProps<{
     <i class="bar" />
     <i class="scan" />
     <i class="ring" />
-    <span>{{ label || '生成中' }}</span>
+    <span>{{ label || $t('common.generating') }}</span>
   </div>
 </template>
 

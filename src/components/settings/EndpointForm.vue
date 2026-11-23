@@ -85,14 +85,14 @@ function onAdd() {
       <p v-if="hint" class="hint">{{ hint }}</p>
     </header>
 
-    <label>API 来源</label>
+    <label>{{ $t('endpointForm.provider') }}</label>
     <select v-model="providerId">
       <option v-for="p in presets" :key="p.id" :value="p.id">{{ p.name }}</option>
     </select>
-    <p class="hint">大厂官方和中转站都在这里配置。选择预设会自动填写推荐地址；中转站请选择“自定义”。</p>
+    <p class="hint">{{ $t('endpointForm.providerHint') }}</p>
     <p class="hint">{{ currentPreset.hint }}</p>
 
-    <label>Base URL（接口地址）</label>
+    <label>{{ $t('endpointForm.baseUrl') }}</label>
     <input
       v-model="baseUrlModel"
       :placeholder="currentPreset.baseUrl || 'https://…/v1'"
@@ -107,13 +107,13 @@ function onAdd() {
         :placeholder="currentPreset.keyPlaceholder || 'sk-…'"
       />
       <button type="button" class="eye" @click="showKey = !showKey">
-        {{ showKey ? '隐藏' : '显示' }}
+        {{ showKey ? $t('common.hide') : $t('common.show') }}
       </button>
     </div>
 
-    <label>模型名称</label>
+    <label>{{ $t('endpointForm.modelName') }}</label>
     <p class="hint">
-      点击模型即可设为当前使用。同一地址和 Key 支持多个模型时，也可以继续添加。
+      {{ $t('endpointForm.modelHint') }}
     </p>
     <div class="chips">
       <button
@@ -128,14 +128,14 @@ function onAdd() {
         <span
           v-if="models.length > 1"
           class="x"
-          title="从列表移除"
+          :title="$t('endpointForm.removeModel')"
           @click.stop="emit('removeModel', m)"
         >×</span>
       </button>
-      <span v-if="!models.length" class="hint">还没有模型</span>
+      <span v-if="!models.length" class="hint">{{ $t('endpointForm.noModels') }}</span>
     </div>
     <div v-if="suggested.length" class="suggest">
-      <span>常用，点一下加入</span>
+      <span>{{ $t('endpointForm.popularModels') }}</span>
       <button
         v-for="m in suggested"
         :key="m"
@@ -147,16 +147,16 @@ function onAdd() {
       </button>
     </div>
 
-    <label>添加模型名</label>
+    <label>{{ $t('endpointForm.addModel') }}</label>
     <div class="add-row">
       <input
         v-model="draft"
         :placeholder="currentPreset.id === 'custom' || !currentPreset.models.length
-          ? '填接口要求的模型名'
-          : `例如 ${currentPreset.models[0]}`"
+          ? $t('endpointForm.modelPlaceholder')
+          : $t('endpointForm.modelExample', { p0: currentPreset.models[0] })"
         @keydown.enter.prevent="onAdd"
       />
-      <button class="mini" type="button" @click="onAdd">加入列表</button>
+      <button class="mini" type="button" @click="onAdd">{{ $t('endpointForm.addToList') }}</button>
     </div>
 
     <slot />

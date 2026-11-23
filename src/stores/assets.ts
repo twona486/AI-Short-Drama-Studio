@@ -1,3 +1,4 @@
+import { t } from '@/i18n'
 /**
  * 素材 store
  *
@@ -79,7 +80,7 @@ export const useAssetsStore = defineStore('assets', () => {
       const isGif = head[0] === 0x47 && head[1] === 0x49 && head[2] === 0x46
       if (isJpeg || isPng || isGif || (typed.type || '').startsWith('image/')) {
         throw new Error(
-          '生成结果是图片而不是视频（常见于工作流只输出了预览帧）。请检查图生视频节点是否输出 mp4。'
+          t('assets.imageInsteadOfVideo')
         )
       }
       // 元数据偶尔读成 0 秒，不能因此把已经下好的 mp4 扔掉
@@ -90,7 +91,7 @@ export const useAssetsStore = defineStore('assets', () => {
         info.duration < 0.2
       ) {
         throw new Error(
-          `视频时长异常（${info.duration.toFixed(2)}s），可能只是一张静态帧被标成了视频`
+          t('assets.invalidVideoDuration', { seconds: info.duration.toFixed(2) })
         )
       }
       thumbBlob = await extractVideoThumbnail(typed).catch(() => undefined)
@@ -205,7 +206,7 @@ export const useAssetsStore = defineStore('assets', () => {
       blob = await library.getBlob(id)
       meta = library.getMeta(id)
     }
-    if (!blob) throw new Error('素材读取失败')
+    if (!blob) throw new Error(t('common.assetReadFailed'))
     return add(blob, kind, meta?.source || 'uploaded', {
       filename: meta?.filename,
       prompt: meta?.prompt,

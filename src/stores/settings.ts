@@ -1,3 +1,4 @@
+import { t } from '@/i18n'
 /**
  * 全局应用设置（AI 模式、模型端点、UI 偏好）
  * 桌面端写入用户所选保存目录内的本机 SQLite，不走浏览器存储。
@@ -341,7 +342,7 @@ function hydrateTts(
           p.id
         )
       )
-    : [ttsFromEndpoint(fallback, '默认配音')]
+    : [ttsFromEndpoint(fallback, t('settings.defaults.tts'))]
   const activeId = list.some((p) => p.id === savedActiveId) ? (savedActiveId as string) : list[0].id
   const active = list.find((p) => p.id === activeId) || list[0]
   return { list, activeId: active.id, active: asTts(active) }
@@ -397,7 +398,7 @@ function hydrateVideo(
           p.id
         )
       })
-    : [videoFromEndpoint(normalizeStoredVideoEndpoint(fallback), '默认视频')]
+    : [videoFromEndpoint(normalizeStoredVideoEndpoint(fallback), t('settings.defaults.video'))]
   const isolated = isolateVideoKeys(list)
   const activeId = isolated.some((p) => p.id === savedActiveId) ? (savedActiveId as string) : isolated[0].id
   const active = isolated.find((p) => p.id === activeId) || isolated[0]
@@ -419,16 +420,16 @@ function normalizeDirectorSkill(raw: unknown): DirectorSkillDoc | null {
 function buildDefaults(): AppSettings {
   const env = envDefaults()
   const llm = endpoint(env.llm.baseUrl, env.llm.apiKey, env.llm.model, [])
-  const first = profileFromEndpoint(llm, '默认 LLM', newId('llm'))
+  const first = profileFromEndpoint(llm, t('settings.defaults.llm'), newId('llm'))
   const vision = endpoint(env.vision.baseUrl, env.vision.apiKey, env.vision.model, VISION_PRESETS)
-  const visionFirst = profileFromEndpoint(vision, '默认视觉', newId('vis'))
+  const visionFirst = profileFromEndpoint(vision, t('settings.defaults.vision'), newId('vis'))
   const image = endpoint(env.image.baseUrl, env.image.apiKey, env.image.model, IMAGE_PRESETS)
-  const imageFirst = profileFromEndpoint(image, '默认生图', newId('img'))
+  const imageFirst = profileFromEndpoint(image, t('settings.defaults.image'), newId('img'))
   const tts: TtsEndpoint = {
     ...endpoint(env.tts.baseUrl, env.tts.apiKey, env.tts.model, TTS_PRESETS),
     voice: env.tts.voice
   }
-  const ttsFirst = ttsFromEndpoint(tts, '默认配音')
+  const ttsFirst = ttsFromEndpoint(tts, t('settings.defaults.tts'))
   const video: VideoEndpoint = {
     baseUrl: env.video.baseUrl,
     apiKey: env.video.apiKey,
@@ -436,9 +437,9 @@ function buildDefaults(): AppSettings {
     promptStyle: 'scene-narrative',
     stillMode: 'identity'
   }
-  const videoFirst = videoFromEndpoint(video, '默认视频')
+  const videoFirst = videoFromEndpoint(video, t('settings.defaults.video'))
   const music = endpoint(env.music.baseUrl, env.music.apiKey, env.music.model, MUSIC_PRESETS)
-  const musicFirst = profileFromEndpoint(music, '默认配乐', newId('mus'))
+  const musicFirst = profileFromEndpoint(music, t('settings.defaults.music'), newId('mus'))
   return {
     theme: 'dark',
     aiMode: 'real',
@@ -497,14 +498,14 @@ function parseSettings(raw: string | null): AppSettings {
         (model) => !/^(qwen3\.7|qwen-vl-)/i.test(model)
       )
     }
-    const llmRaw = hydrateNamed(parsed.llms, llmSnap, '默认 LLM', parsed.activeLlmId, 'llm')
+    const llmRaw = hydrateNamed(parsed.llms, llmSnap, t('settings.defaults.llm'), parsed.activeLlmId, 'llm')
     const llmList = llmRaw.list.map((profile) => {
       const models = configuredLlmModels(profile.models, profile.model)
       return { ...profile, models, model: models.includes(profile.model) ? profile.model : models[0] || '' }
     })
     const llmActive = llmList.find((profile) => profile.id === llmRaw.activeId) || llmList[0]
     const llm = { list: llmList, activeId: llmActive.id, active: asEndpoint(llmActive) }
-    const vision = hydrateNamed(parsed.visions, visionSnap, '默认视觉', parsed.activeVisionId, 'vis')
+    const vision = hydrateNamed(parsed.visions, visionSnap, t('settings.defaults.vision'), parsed.activeVisionId, 'vis')
     const image = hydrateNamed(
       parsed.images,
       {
@@ -512,7 +513,7 @@ function parseSettings(raw: string | null): AppSettings {
         ...parsed.image,
         models: uniq([...(parsed.image?.models ?? []), ...defaults.image.models])
       },
-      '默认生图',
+      t('settings.defaults.image'),
       parsed.activeImageId,
       'img'
     )
@@ -560,7 +561,7 @@ function parseSettings(raw: string | null): AppSettings {
         ...parsed.music,
         models: uniq([...(parsed.music?.models ?? []), ...defaults.music.models])
       },
-      '默认配乐',
+      t('settings.defaults.music'),
       parsed.activeMusicId,
       'mus'
     )
@@ -793,7 +794,7 @@ export const useSettingsStore = defineStore('settings', () => {
   function patchLlm(patch: Partial<LlmProfile>) {
     const id = config.value.activeLlmId
     const cur =
-      config.value.llms.find((p) => p.id === id) || profileFromEndpoint(config.value.llm, '默认 LLM', id)
+      config.value.llms.find((p) => p.id === id) || profileFromEndpoint(config.value.llm, t('settings.defaults.llm'), id)
     syncLlm({ ...cur, ...patch, models: uniq(patch.models ?? cur.models) })
   }
 
@@ -854,7 +855,7 @@ export const useSettingsStore = defineStore('settings', () => {
     const id = config.value.activeVisionId
     const cur =
       config.value.visions.find((p) => p.id === id) ||
-      profileFromEndpoint(config.value.vision, '默认视觉', id)
+      profileFromEndpoint(config.value.vision, t('settings.defaults.vision'), id)
     syncVision({ ...cur, ...patch, models: uniq(patch.models ?? cur.models) })
   }
 
@@ -915,7 +916,7 @@ export const useSettingsStore = defineStore('settings', () => {
     const id = config.value.activeImageId
     const cur =
       config.value.images.find((p) => p.id === id) ||
-      profileFromEndpoint(config.value.image, '默认生图', id)
+      profileFromEndpoint(config.value.image, t('settings.defaults.image'), id)
     syncImage({ ...cur, ...patch, models: uniq(patch.models ?? cur.models) })
   }
 
@@ -977,7 +978,7 @@ export const useSettingsStore = defineStore('settings', () => {
   function patchTts(patch: Partial<TtsProfile>) {
     const id = config.value.activeTtsId
     const cur =
-      config.value.ttsProfiles.find((p) => p.id === id) || ttsFromEndpoint(config.value.tts, '默认配音', id)
+      config.value.ttsProfiles.find((p) => p.id === id) || ttsFromEndpoint(config.value.tts, t('settings.defaults.tts'), id)
     syncTts({ ...cur, ...patch, models: uniq(patch.models ?? cur.models) })
   }
 
@@ -1039,7 +1040,7 @@ export const useSettingsStore = defineStore('settings', () => {
   function patchVideo(patch: Partial<VideoProfile>) {
     const id = config.value.activeVideoId
     const cur =
-      config.value.videos.find((p) => p.id === id) || videoFromEndpoint(config.value.video, '默认视频', id)
+      config.value.videos.find((p) => p.id === id) || videoFromEndpoint(config.value.video, t('settings.defaults.video'), id)
     const next = { ...cur, ...patch }
     if (patch.apiKey !== undefined && !isAutodlVideoProfile(next)) {
       const incoming = String(patch.apiKey || '').trim()
@@ -1121,7 +1122,7 @@ export const useSettingsStore = defineStore('settings', () => {
     const id = config.value.activeMusicId
     const cur =
       config.value.musics.find((p) => p.id === id) ||
-      profileFromEndpoint(config.value.music, '默认配乐', id)
+      profileFromEndpoint(config.value.music, t('settings.defaults.music'), id)
     syncMusic({ ...cur, ...patch, models: uniq(patch.models ?? cur.models) })
   }
 

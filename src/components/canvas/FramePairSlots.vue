@@ -59,32 +59,32 @@ function clear(which: 'first' | 'last') {
 <template>
   <div class="frames nodrag nowheel">
     <div class="slot">
-      <span>首帧</span>
+      <span>{{ $t('framePairSlots.start') }}</span>
       <button v-if="firstId && urls[firstId]" type="button" class="thumb" @click="openLightbox(urls[firstId], 'image')">
         <img :src="urls[firstId]" alt="" />
       </button>
       <button v-else type="button" class="empty" @click="openPick('first')">＋</button>
       <div class="row">
-        <button type="button" class="link" @click="openPick('first')">{{ firstId ? '更换' : '选择' }}</button>
-        <button v-if="firstId" type="button" class="link" @click="clear('first')">清除</button>
+        <button type="button" class="link" @click="openPick('first')">{{ firstId ? $t('framePairSlots.replace') : $t('common.select') }}</button>
+        <button v-if="firstId" type="button" class="link" @click="clear('first')">{{ $t('common.clear') }}</button>
       </div>
       <small v-if="firstHint">{{ firstHint }}</small>
     </div>
     <div class="slot">
-      <span>{{ lastRequired ? '尾帧' : '尾帧（可选）' }}</span>
+      <span>{{ lastRequired ? $t('framePairSlots.end') : $t('framePairSlots.optionalEnd') }}</span>
       <button v-if="lastId && urls[lastId]" type="button" class="thumb" @click="openLightbox(urls[lastId], 'image')">
         <img :src="urls[lastId]" alt="" />
       </button>
       <button v-else type="button" class="empty" @click="openPick('last')">＋</button>
       <div class="row">
-        <button type="button" class="link" @click="openPick('last')">{{ lastId ? '更换' : '选择' }}</button>
-        <button v-if="lastId" type="button" class="link" @click="clear('last')">清除</button>
+        <button type="button" class="link" @click="openPick('last')">{{ lastId ? $t('framePairSlots.replace') : $t('common.select') }}</button>
+        <button v-if="lastId" type="button" class="link" @click="clear('last')">{{ $t('common.clear') }}</button>
       </div>
     </div>
     <AssetPicker
       :open="Boolean(picking)"
       kind="image"
-      :title="picking === 'last' ? '选择尾帧' : '选择首帧'"
+      :title="picking === 'last' ? $t('framePairSlots.selectEnd') : $t('framePairSlots.selectStart')"
       show-library
       default-tab="page"
       :selected-ids="picking === 'last' ? (lastId ? [lastId] : []) : firstId ? [firstId] : []"

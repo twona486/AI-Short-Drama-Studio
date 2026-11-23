@@ -1,3 +1,4 @@
+import { t } from '@/i18n'
 import { concatVideos } from '@/services/ffmpeg'
 
 function even(n: number) {
@@ -36,7 +37,7 @@ export async function cropContainedImage(
   const ch = Math.max(2, even(iy2 - iy))
   if (cw < 8 || ch < 8) {
     bitmap.close()
-    throw new Error('裁剪区域太小')
+    throw new Error(t('mediaEdit.cropTooSmall'))
   }
   const canvas = document.createElement('canvas')
   canvas.width = cw
@@ -44,13 +45,13 @@ export async function cropContainedImage(
   const ctx = canvas.getContext('2d')
   if (!ctx) {
     bitmap.close()
-    throw new Error('无法裁剪')
+    throw new Error(t('mediaEdit.cropFailed'))
   }
   ctx.drawImage(bitmap, ix, iy, cw, ch, 0, 0, cw, ch)
   bitmap.close()
   return await new Promise((resolve, reject) => {
     canvas.toBlob(
-      (b) => (b ? resolve(b) : reject(new Error('裁剪转码失败'))),
+      (b) => (b ? resolve(b) : reject(new Error(t('mediaEdit.transcodeFailed')))),
       blob.type.includes('png') ? 'image/png' : 'image/jpeg',
       0.92
     )

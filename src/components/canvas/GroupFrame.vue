@@ -1,11 +1,13 @@
 <script setup lang="ts">
+import { t as translate } from '@/i18n'
+import zh from '@/locales/zh'
 import { computed } from 'vue'
 import { useProjectStore, useToastStore } from '@/stores'
 import { groupGenerateJobId, runExtractGroup, runGenerateGroup } from '@/services/canvas/runner'
 import { isNodeRunning } from '@/services/canvas/jobs'
 import { isPlayReady } from '@/services/ai'
 import { friendlyAiError, shouldToastAiError } from '@/services/ai/abort'
-import { isPlayApproved, PLAY_GATE_MSG } from '@/services/canvas/playGate'
+import { isPlayApproved } from '@/services/canvas/playGate'
 import NodeBusyOverlay from '@/components/canvas/NodeBusyOverlay.vue'
 
 const props = defineProps<{
@@ -18,6 +20,12 @@ const props = defineProps<{
 
 const project = useProjectStore()
 const toast = useToastStore()
+const label = computed(() => {
+  const name = props.data.label
+  if (!name) return translate('groupFrame.group')
+  const entry = Object.entries(zh.groupFrame.names).find(([, value]) => value === name)
+  return entry ? translate(`groupFrame.names.${entry[0]}`) : name
+})
 
 const extractable = computed(() => {
   if (props.data.kind === 'subject' || props.data.kind === 'scene' || props.data.kind === 'shot') return true
@@ -66,15 +74,15 @@ const runningChildCount = computed(
     ).length ?? 0
 )
 const btnLabel = computed(() => {
-  if (running.value) return '提取中'
-  if (props.data.kind === 'subject') return hasItems.value ? '重新提取' : '提取人物'
-  if (props.data.kind === 'scene') return hasItems.value ? '重新提取' : '提取场景'
-  return hasItems.value ? '重新提取' : '提取分镜'
+  if (running.value) return translate('groupFrame.extracting')
+  if (props.data.kind === 'subject') return hasItems.value ? translate('groupFrame.extractAgain') : translate('groupFrame.extractCharacters')
+  if (props.data.kind === 'scene') return hasItems.value ? translate('groupFrame.extractAgain') : translate('groupFrame.extractScenes')
+  return hasItems.value ? translate('groupFrame.extractAgain') : translate('groupFrame.extractShots')
 })
-const genLabel = computed(() => (generating.value ? '生成中' : '一键生成'))
+const genLabel = computed(() => (generating.value ? translate('groupFrame.generating') : translate('groupFrame.generateAll')))
 const overlayLabel = computed(() => {
   if (running.value) return btnLabel.value
-  if (generating.value && childCount.value) return `生成中 ${runningChildCount.value}/${childCount.value}`
+  if (generating.value && childCount.value) return translate('groupFrame.progress', { p0: runningChildCount.value, p1: childCount.value })
   return genLabel.value
 })
 
@@ -82,17 +90,17 @@ async function reextract(ev: Event) {
   ev.stopPropagation()
   if (busy.value || !extractable.value) return
   if (!playReady.value) {
-    toast.warn('请先写完整剧本，再提取')
+    toast.warn(translate('groupFrame.scriptRequired'))
     return
   }
   try {
     await runExtractGroup(props.id)
     toast.success(
       props.data.kind === 'subject'
-        ? '人物已更新，已有四视图按同名保留'
+        ? translate('groupFrame.charactersUpdated')
         : props.data.kind === 'scene'
-          ? '场景描点已更新，已有锚点图按同名保留'
-          : '分镜已更新，已有看板/配图/视频按镜号保留'
+          ? translate('groupFrame.scenesUpdated')
+          : translate('groupFrame.shotsUpdated')
     )
   } catch (e) {
     if (shouldToastAiError(e)) toast.error(friendlyAiError(e))
@@ -106,21 +114,21 @@ async function generateAll(ev: Event) {
     (props.data.kind === 'shot' || props.data.kind === 'frames' || props.data.kind === 'video') &&
     !isPlayApproved(project.current)
   ) {
-    toast.warn(PLAY_GATE_MSG)
+    toast.warn(translate('common.reviewScript'))
     return
   }
   try {
     await runGenerateGroup(props.id)
     toast.success(
       props.data.kind === 'subject'
-        ? '人物四视图已全部跑完'
+        ? translate('groupFrame.charactersReady')
         : props.data.kind === 'prop'
-          ? '道具多角度图已全部跑完'
+          ? translate('groupFrame.propsReady')
         : props.data.kind === 'scene'
-          ? '场景锚点图已全部跑完'
+          ? translate('groupFrame.scenesReady')
           : props.data.kind === 'video'
-            ? '分镜视频已全部跑完'
-            : '分镜关键帧已全部跑完'
+            ? translate('groupFrame.videosReady')
+            : translate('groupFrame.keyframesReady')
     )
   } catch (e) {
     if (shouldToastAiError(e)) toast.error(friendlyAiError(e))
@@ -131,14 +139,14 @@ async function generateAll(ev: Event) {
 <template>
   <div class="gframe" :class="[data.kind ? `tint-${data.kind}` : '', { busy }]">
     <div class="gframe-h">
-      <span>{{ data.label || '分组' }}</span>
+      <span>{{ label }}</span>
       <div v-if="extractable || generatable" class="gframe-actions nodrag nopan">
         <button
           v-if="extractable"
           type="button"
           class="gframe-btn"
           :disabled="busy || !playReady"
-          :title="hasItems ? '只重提这一组，其它组和已生成的图/视频会留下' : '从完整剧本提取这一组'"
+          :title="hasItems ? $t('groupFrame.extractHint') : $t('groupFrame.extract')"
           @click="reextract"
           @mousedown.stop
           @pointerdown.stop
@@ -150,7 +158,7 @@ async function generateAll(ev: Event) {
           type="button"
           class="gframe-btn gen"
           :disabled="busy || !hasItems"
-          title="同时生成这一组下面的全部节点"
+          :title="$t('groupFrame.generateHint')"
           @click="generateAll"
           @mousedown.stop
           @pointerdown.stop

@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { t as translate } from '@/i18n'
 import { ref, computed, onMounted, onBeforeUnmount, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { useProjectStore, useToastStore, useAssetsStore } from '@/stores'
@@ -57,7 +58,7 @@ const selectedReadyChapters = computed(() =>
 
 const presets = [
   {
-    name: '夏日旅行 vlog',
+    get name() { return translate('script.summerVlog') },
     topic: '厦门三日游',
     content: `清晨的鼓浪屿，海风轻拂，远处传来悠扬的钢琴声。
 午后骑行在环岛路，一边是椰林，一边是蔚蓝大海。
@@ -65,7 +66,7 @@ const presets = [
 夜晚的海滩，篝火闪烁，星空格外清澈。`
   },
   {
-    name: '产品发布',
+    get name() { return translate('script.productLaunch') },
     topic: '智能耳机新品上市',
     content: `开场：极简线条勾勒耳机轮廓，金属质感彰显品质。
 核心：降噪技术演示，嘈杂街头瞬间安静。
@@ -74,7 +75,7 @@ const presets = [
 结尾：自由掌控，静享每一刻。`
   },
   {
-    name: '知识科普',
+    get name() { return translate('script.scienceExplainer') },
     topic: '一分钟了解黑洞',
     content: `黑洞是一个引力极强的天体，连光都无法逃脱。
 它由大质量恒星坍缩形成，密度无限大。
@@ -85,22 +86,22 @@ const presets = [
 ]
 
 const styleOptions: { value: VisualStyle; label: string; desc: string }[] = [
-  { value: 'cinematic', label: '🎬 电影', desc: '电影感调色' },
-  { value: 'anime', label: '🌸 动漫', desc: '日系动画' },
-  { value: 'photorealistic', label: '📸 写实', desc: '真实摄影' },
-  { value: '3d-render', label: '💎 3D 渲染', desc: 'C4D/Blender' },
-  { value: 'oil-painting', label: '🎨 油画', desc: '古典油画' },
-  { value: 'watercolor', label: '🖌 水彩', desc: '水彩画' },
-  { value: 'pixel-art', label: '👾 像素', desc: '复古像素' },
-  { value: 'ink-wash', label: '🖋 水墨', desc: '中国水墨' }
+  { value: 'cinematic', get label() { return translate('script.cinematic') }, get desc() { return translate('script.styleCinematic') } },
+  { value: 'anime', get label() { return translate('script.anime') }, get desc() { return translate('script.styleAnime') } },
+  { value: 'photorealistic', get label() { return translate('script.photorealistic') }, get desc() { return translate('script.stylePhoto') } },
+  { value: '3d-render', get label() { return translate('script.render3d') }, desc: 'C4D/Blender' },
+  { value: 'oil-painting', get label() { return translate('script.oilPainting') }, get desc() { return translate('script.styleOil') } },
+  { value: 'watercolor', get label() { return translate('script.watercolor') }, get desc() { return translate('script.styleWatercolor') } },
+  { value: 'pixel-art', get label() { return translate('script.pixel') }, get desc() { return translate('script.stylePixel') } },
+  { value: 'ink-wash', get label() { return translate('script.inkWash') }, get desc() { return translate('script.styleInkWash') } }
 ]
 
 const aspectOptions: { value: AspectRatio; label: string }[] = [
-  { value: '16:9', label: '横屏 16:9' },
-  { value: '9:16', label: '竖屏 9:16' },
-  { value: '1:1', label: '方形 1:1' },
-  { value: '4:3', label: '传统 4:3' },
-  { value: '21:9', label: '影院 21:9' }
+  { value: '16:9', get label() { return translate('common.landscape') } },
+  { value: '9:16', get label() { return translate('common.portrait') } },
+  { value: '1:1', get label() { return translate('common.squareRatio') } },
+  { value: '4:3', get label() { return translate('common.classicRatio') } },
+  { value: '21:9', get label() { return translate('common.cinemaRatio') } }
 ]
 
 onMounted(async () => {
@@ -133,7 +134,7 @@ onMounted(async () => {
       const now = Date.now()
       chapters.value = [{
         id: 'ch_' + now.toString(36),
-        title: '第 1 章',
+        title: translate('script.firstChapter'),
         content: project.current.script?.content ?? '',
         order: 0,
         status: project.current.script?.content?.trim() ? 'ready' : 'draft',
@@ -179,7 +180,7 @@ function addChapter() {
   const now = Date.now()
   const chapter: ScriptChapter = {
     id: `ch_${now.toString(36)}_${chapters.value.length + 1}`,
-    title: `第 ${chapters.value.length + 1} 章`,
+    title: translate('script.chapterNumber', { p0: chapters.value.length + 1 }),
     content: '',
     order: chapters.value.length,
     status: 'draft',
@@ -194,11 +195,11 @@ function addChapter() {
 
 function removeChapter(id: string) {
   if (chapters.value.length <= 1) {
-    toast.warn('至少保留一个章节')
+    toast.warn(translate('script.keepOne'))
     return
   }
   const target = chapters.value.find((chapter) => chapter.id === id)
-  if (!target || !confirm(`确定删除「${target.title}」吗？`)) return
+  if (!target || !confirm(translate('script.confirmDeleteChapter', { p0: target.title }))) return
   chapters.value = chapters.value.filter((chapter) => chapter.id !== id)
   const nextSelected = new Set(selectedChapterIds.value)
   nextSelected.delete(id)
@@ -236,13 +237,13 @@ async function persistDrama(showToast = false) {
   project.setChapters(chapters.value)
   project.setSelectedChapterIds([...selectedChapterIds.value])
   await project.save()
-  if (showToast) toast.success(`已保存 ${chapters.value.length} 个章节`)
+  if (showToast) toast.success(translate('script.savedChapters', { p0: chapters.value.length }))
 }
 
 async function produceSelectedChapters() {
   if (!project.current) return
   if (!selectedReadyChapters.value.length) {
-    toast.warn('请至少勾选一个有内容的章节')
+    toast.warn(translate('script.needChapter'))
     return
   }
   await persistDrama(false)
@@ -274,7 +275,7 @@ async function produceSelectedChapters() {
   project.setPlayApproved(false)
   project.setAspectRatio(aspectRatio.value)
   await project.save()
-  toast.success(`已将 ${selected.length} 个章节送入分镜设计`)
+  toast.success(translate('script.chaptersQueued', { p0: selected.length }))
   router.push('/storyboard')
 }
 
@@ -288,16 +289,16 @@ const estimatedDuration = computed(() => estimatedShots.value * shotDuration.val
 function applyPreset(p: typeof presets[0]) {
   topic.value = p.topic
   content.value = p.content
-  toast.info(`已套用：${p.name}`)
+  toast.info(translate('script.exampleApplied', { p0: p.name }))
 }
 
 async function saveAndNext() {
   if (!content.value.trim() && productIds.value.length === 0) {
-    toast.warn('请填写文案，或上传产品图（电商带货可只传图）')
+    toast.warn(translate('script.needScriptOrImageHint'))
     return
   }
   if (!project.current) {
-    project.create(topic.value || '未命名项目')
+    project.create(topic.value || translate('common.untitledProject'))
   }
 
   const prev = project.current?.script
@@ -324,14 +325,14 @@ async function saveAndNext() {
   project.setScript(script)
   project.setAspectRatio(aspectRatio.value)
   await project.save()
-  toast.success('文案已保存')
+  toast.success(translate('script.saved'))
   router.push('/storyboard')
 }
 
 function applyImportedMarkdown(text: string, filename: string) {
   const normalized = normalizeImportedMarkdown(text)
   if (!normalized) {
-    toast.warn('剧本文件是空的')
+    toast.warn(translate('common.emptyScript'))
     return
   }
   content.value = normalized
@@ -339,17 +340,17 @@ function applyImportedMarkdown(text: string, filename: string) {
   workflowMode.value = 'film-chapter'
   style.value = 'cinematic'
   aspectRatio.value = '16:9'
-  toast.success('已导入 Markdown 剧本，并启用原创电影章节流程')
+  toast.success(translate('script.imported'))
 }
 
 async function importMarkdown() {
   if (project.current?.pipelineMode === 'remake') {
-    toast.warn('视频复刻项目不导入原创电影剧本，请新建普通项目')
+    toast.warn(translate('script.noImportInRemake'))
     return
   }
   if (isDesktop()) {
     const paths = await desktop().pickFiles([
-      { name: '剧本', extensions: ['md', 'markdown', 'txt'] }
+      { get name() { return translate('common.scripts') }, extensions: ['md', 'markdown', 'txt'] }
     ])
     const path = paths[0]
     if (!path) return
@@ -374,9 +375,9 @@ async function exportMarkdown() {
     const path = await desktop().saveTextFile({
       defaultName: filename,
       text: markdown,
-      filters: [{ name: 'Markdown 剧本', extensions: ['md'] }]
+      filters: [{ get name() { return translate('script.markdownScript') }, extensions: ['md'] }]
     })
-    if (path) toast.success(`剧本已导出：${path}`)
+    if (path) toast.success(translate('script.exportedTo', { p0: path }))
     return
   }
   const url = URL.createObjectURL(new Blob([markdown], { type: 'text/markdown;charset=utf-8' }))
@@ -385,12 +386,12 @@ async function exportMarkdown() {
   a.download = filename
   a.click()
   URL.revokeObjectURL(url)
-  toast.success('剧本已导出')
+  toast.success(translate('script.exported'))
 }
 
 async function generateAndNext() {
   if (!content.value.trim() && productIds.value.length === 0) {
-    toast.warn('请填写文案，或上传产品图')
+    toast.warn(translate('script.needScriptOrImage'))
     return
   }
   await saveAndNext()
@@ -399,7 +400,7 @@ async function generateAndNext() {
 async function pickProductImages() {
   const room = MAX_PRODUCT_IMAGES - productIds.value.length
   if (room <= 0) {
-    toast.warn(`最多 ${MAX_PRODUCT_IMAGES} 张产品图`)
+    toast.warn(translate('script.maxProductImages', { p0: MAX_PRODUCT_IMAGES }))
     return
   }
   let files: File[]
@@ -408,7 +409,7 @@ async function pickProductImages() {
       f.type.startsWith('image/')
     )
   } catch (err: any) {
-    toast.error(err?.message || '读取产品图失败')
+    toast.error(err?.message || translate('script.imageReadFailed'))
     return
   }
   if (!files.length) return
@@ -424,7 +425,7 @@ async function pickProductImages() {
     added++
   }
   await persistProductIds()
-  toast.success(`已添加 ${added} 张产品图`)
+  toast.success(translate('script.addedImages', { p0: added }))
 }
 
 async function persistProductIds() {
@@ -446,38 +447,38 @@ async function removeProductImage(id: string) {
   <div class="page">
     <header v-if="isDrama" class="page-head drama-head">
       <div>
-        <div class="drama-eyebrow">AI 短剧 · 剧本模式</div>
-        <h1>先把故事写好，再选择章节制作</h1>
-        <p>章节会独立保存。只有点击“用已选章节设计分镜”才会进入视频生产流程。</p>
+        <div class="drama-eyebrow">{{ $t('script.mode') }}</div>
+        <h1>{{ $t('script.chapterWorkflowHint') }}</h1>
+        <p>{{ $t('script.chapterSaveHint') }}</p>
       </div>
       <div class="head-actions">
-        <GradientButton type="ghost" @click="router.push('/')">← 项目列表</GradientButton>
-        <GradientButton type="ghost" @click="persistDrama(true)">仅保存剧本</GradientButton>
+        <GradientButton type="ghost" @click="router.push('/')">{{ $t('script.backToProjects') }}</GradientButton>
+        <GradientButton type="ghost" @click="persistDrama(true)">{{ $t('script.saveOnly') }}</GradientButton>
         <GradientButton
           icon="🎬"
           :disabled="selectedReadyChapters.length === 0"
           @click="produceSelectedChapters"
         >
-          用已选 {{ selectedReadyChapters.length }} 章设计分镜
+          {{ $t('script.applySelected') }} {{ selectedReadyChapters.length }} {{ $t('script.designChaptersSuffix') }}
         </GradientButton>
       </div>
     </header>
 
     <header v-else class="page-head">
       <div>
-        <span class="kicker">步骤 1 · 文案准备</span>
-        <h1>文案准备</h1>
-        <p>输入主题和文案。电商带货可上传产品图（最多 5 张），分镜会按真实产品来写。</p>
+        <span class="kicker">{{ $t('script.step') }}</span>
+        <h1>{{ $t('script.prepare') }}</h1>
+        <p>{{ $t('script.intro') }}</p>
       </div>
       <div class="head-actions">
-        <GradientButton type="ghost" @click="router.push('/')">← 返回</GradientButton>
+        <GradientButton type="ghost" @click="router.push('/')">{{ $t('script.back') }}</GradientButton>
         <GradientButton
           v-if="project.current?.pipelineMode !== 'remake'"
           type="ghost"
           @click="importMarkdown"
-        >导入 Markdown</GradientButton>
-        <GradientButton type="ghost" @click="exportMarkdown">导出剧本</GradientButton>
-        <GradientButton icon="✨" @click="generateAndNext">保存并生成分镜</GradientButton>
+        >{{ $t('common.importMarkdown') }}</GradientButton>
+        <GradientButton type="ghost" @click="exportMarkdown">{{ $t('script.export') }}</GradientButton>
+        <GradientButton icon="✨" @click="generateAndNext">{{ $t('script.saveGenerate') }}</GradientButton>
       </div>
     </header>
 
@@ -485,15 +486,15 @@ async function removeProductImage(id: string) {
       <aside class="chapter-panel">
         <div class="chapter-panel-head">
           <div>
-            <b>章节</b>
-            <span>{{ chapters.length }} 章 · {{ dramaWordCount }} 字</span>
+            <b>{{ $t('common.chapter') }}</b>
+            <span>{{ chapters.length }} {{ $t('script.chapterSeparator') }} {{ dramaWordCount }} {{ $t('common.characters') }}</span>
           </div>
-          <button type="button" class="chapter-add" @click="addChapter">＋ 新建</button>
+          <button type="button" class="chapter-add" @click="addChapter">{{ $t('script.newChapter') }}</button>
         </div>
 
         <div class="chapter-select-bar">
-          <span>已选 {{ selectedChapterIds.size }} 章</span>
-          <button type="button" @click="selectAllReady">选择全部已写章节</button>
+          <span>{{ $t('common.selectionCount') }} {{ selectedChapterIds.size }} {{ $t('common.chapterCount') }}</span>
+          <button type="button" @click="selectAllReady">{{ $t('script.selectWritten') }}</button>
         </div>
 
         <div class="chapter-list">
@@ -504,7 +505,7 @@ async function removeProductImage(id: string) {
             :class="{ active: chapter.id === activeChapterId, selected: selectedChapterIds.has(chapter.id) }"
             @click="activeChapterId = chapter.id"
           >
-            <label class="chapter-check" title="选择这个章节进入分镜制作" @click.stop>
+            <label class="chapter-check" :title="$t('script.selectChapter')" @click.stop>
               <input
                 type="checkbox"
                 :checked="selectedChapterIds.has(chapter.id)"
@@ -512,14 +513,14 @@ async function removeProductImage(id: string) {
               />
             </label>
             <div class="chapter-item-main">
-              <b>{{ chapter.title || `第 ${index + 1} 章` }}</b>
-              <span>{{ chapter.content.replace(/\s/g, '').length }} 字 · {{ chapter.status === 'ready' ? '已写' : '草稿' }}</span>
-              <p>{{ chapter.content.trim().slice(0, 46) || '还没有内容，点击开始写作' }}</p>
+              <b>{{ chapter.title || $t('script.chapterNumber', { p0: index + 1 }) }}</b>
+              <span>{{ chapter.content.replace(/\s/g, '').length }} {{ $t('common.charactersSeparator') }} {{ chapter.status === 'ready' ? $t('script.written') : $t('script.draft') }}</span>
+              <p>{{ chapter.content.trim().slice(0, 46) || $t('script.emptyChapter') }}</p>
             </div>
             <div class="chapter-actions" @click.stop>
-              <button type="button" title="上移" :disabled="index === 0" @click="moveChapter(chapter.id, -1)">↑</button>
-              <button type="button" title="下移" :disabled="index === chapters.length - 1" @click="moveChapter(chapter.id, 1)">↓</button>
-              <button type="button" class="danger" title="删除章节" @click="removeChapter(chapter.id)">×</button>
+              <button type="button" :title="$t('common.moveUp')" :disabled="index === 0" @click="moveChapter(chapter.id, -1)">↑</button>
+              <button type="button" :title="$t('common.moveDown')" :disabled="index === chapters.length - 1" @click="moveChapter(chapter.id, 1)">↓</button>
+              <button type="button" class="danger" :title="$t('script.deleteChapter')" @click="removeChapter(chapter.id)">×</button>
             </div>
           </article>
         </div>
@@ -527,60 +528,60 @@ async function removeProductImage(id: string) {
 
       <main v-if="activeChapter" class="chapter-editor">
         <div class="chapter-editor-top">
-          <div class="chapter-order">章节 {{ activeChapter.order + 1 }}</div>
-          <div class="save-state">自动保存 · {{ activeChapter.status === 'ready' ? '可投入制作' : '草稿' }}</div>
+          <div class="chapter-order">{{ $t('common.chapter') }} {{ activeChapter.order + 1 }}</div>
+          <div class="save-state">{{ $t('script.autoSaved') }} {{ activeChapter.status === 'ready' ? $t('script.ready') : $t('script.draft') }}</div>
         </div>
         <input
           class="chapter-title-input"
           :value="activeChapter.title"
           maxlength="80"
-          placeholder="章节标题"
+          :placeholder="$t('script.chapterTitle')"
           @input="updateActiveChapter({ title: ($event.target as HTMLInputElement).value })"
         />
         <textarea
           class="chapter-content-input"
           :value="activeChapter.content"
-          placeholder="开始写这一章的剧本。可以写场次、动作、人物和对白……"
+          :placeholder="$t('script.chapterPlaceholder')"
           @input="updateActiveChapter({ content: ($event.target as HTMLTextAreaElement).value })"
         />
         <footer class="chapter-editor-foot">
-          <span>本章 {{ activeChapter.content.replace(/\s/g, '').length }} 字</span>
+          <span>{{ $t('script.thisChapter') }} {{ activeChapter.content.replace(/\s/g, '').length }} {{ $t('common.characters') }}</span>
           <label>
             <input
               type="checkbox"
               :checked="selectedChapterIds.has(activeChapter.id)"
               @change="toggleChapterSelection(activeChapter.id)"
             />
-            完成后将本章加入分镜制作
+            {{ $t('script.includeChapter') }}
           </label>
         </footer>
       </main>
 
       <aside class="production-panel">
-        <h3>本次制作范围</h3>
-        <p>顺序以左侧章节顺序为准。未勾选的章节只保存剧本，不会生成分镜、图片或视频。</p>
+        <h3>{{ $t('script.productionScope') }}</h3>
+        <p>{{ $t('script.chapterOrderHint') }}</p>
         <ol v-if="selectedReadyChapters.length">
           <li v-for="chapter in selectedReadyChapters" :key="chapter.id">
             <span>{{ chapter.title }}</span>
-            <em>{{ chapter.content.replace(/\s/g, '').length }} 字</em>
+            <em>{{ chapter.content.replace(/\s/g, '').length }} {{ $t('common.characters') }}</em>
           </li>
         </ol>
-        <div v-else class="production-empty">勾选至少一个已经写好内容的章节</div>
+        <div v-else class="production-empty">{{ $t('script.needWritten') }}</div>
         <div class="production-settings">
           <label>
-            <span>画面风格</span>
+            <span>{{ $t('common.visualStyle') }}</span>
             <select v-model="style">
               <option v-for="item in styleOptions" :key="item.value" :value="item.value">{{ item.label }}</option>
             </select>
           </label>
           <label>
-            <span>视频比例</span>
+            <span>{{ $t('script.videoRatio') }}</span>
             <select v-model="aspectRatio">
               <option v-for="item in aspectOptions" :key="item.value" :value="item.value">{{ item.label }}</option>
             </select>
           </label>
           <label>
-            <span>单镜参考时长 {{ shotDuration }}s</span>
+            <span>{{ $t('script.shotDuration') }} {{ shotDuration }}s</span>
             <input v-model.number="shotDuration" type="range" min="5" max="10" step="1" />
           </label>
         </div>
@@ -589,7 +590,7 @@ async function removeProductImage(id: string) {
           :disabled="selectedReadyChapters.length === 0"
           @click="produceSelectedChapters"
         >
-          进入分镜设计
+          {{ $t('script.openStoryboard') }}
         </GradientButton>
       </aside>
     </div>
@@ -598,17 +599,17 @@ async function removeProductImage(id: string) {
       <div class="main">
         <GlassCard padding="lg">
           <label class="field">
-            <span class="label">视频主题</span>
-            <input v-model="topic" class="input" placeholder="例如：厦门三日游 / 某品牌口红带货" />
+            <span class="label">{{ $t('script.topic') }}</span>
+            <input v-model="topic" class="input" :placeholder="$t('script.topicExample')" />
           </label>
 
           <div class="field">
             <div class="label">
-              <span>产品图（可选，最多 {{ MAX_PRODUCT_IMAGES }} 张）</span>
-              <span class="counter">{{ productIds.length }}/{{ MAX_PRODUCT_IMAGES }} · 多模态模型会看图写脚本</span>
+              <span>{{ $t('script.optionalImageLimit') }} {{ MAX_PRODUCT_IMAGES }} {{ $t('common.imageCount') }}</span>
+              <span class="counter">{{ productIds.length }}/{{ MAX_PRODUCT_IMAGES }} {{ $t('script.multimodal') }}</span>
             </div>
             <p class="hint" style="margin-bottom: 8px;">
-              电商带货请上传产品实拍/白底图。没有文案也可以，AI 会按产品图撰写口播和分镜。
+              {{ $t('script.productImageHint') }}
             </p>
             <div class="product-row">
               <div v-for="id in productIds" :key="id" class="product-thumb">
@@ -616,35 +617,35 @@ async function removeProductImage(id: string) {
                   v-if="productUrls[id]"
                   class="zoomable"
                   :src="productUrls[id]"
-                  alt="产品图"
-                  title="点击查看大图"
+                  :alt="$t('script.productImage')"
+                  :title="$t('common.clickFullImage')"
                   @click="openLightbox(productUrls[id])"
                 />
-                <button class="product-del" title="移除" @click="removeProductImage(id)">×</button>
+                <button class="product-del" :title="$t('common.remove')" @click="removeProductImage(id)">×</button>
               </div>
               <button
                 v-if="productIds.length < MAX_PRODUCT_IMAGES"
                 class="product-add"
                 @click="pickProductImages"
               >
-                ＋ 上传产品图
+                {{ $t('script.uploadProductImage') }}
               </button>
             </div>
           </div>
 
           <label class="field">
             <span class="label">
-              文案内容
-              <span class="counter">{{ wordCount }} 字 · 预计 {{ estimatedShots }} 个分镜 · 总时长 {{ estimatedDuration }}s</span>
+              {{ $t('script.content') }}
+              <span class="counter">{{ wordCount }} {{ $t('script.charactersEstimated') }} {{ estimatedShots }} {{ $t('script.shotCountDuration') }} {{ estimatedDuration }}s</span>
               <span class="counter-hint" style="margin-left: 8px; color: var(--color-text-4); font-size: 10px;">
-                （每段视频 5-10s，最终被自动 clamp）
+                {{ $t('script.durationLimit') }}
               </span>
             </span>
             <textarea
               v-model="content"
               class="textarea"
               rows="12"
-              placeholder="把视频要讲的内容写在这里。可以分段落，每一段会对应一个或多个分镜..."
+              :placeholder="$t('script.placeholder')"
             />
           </label>
 
@@ -659,20 +660,20 @@ async function removeProductImage(id: string) {
               :false-value="undefined"
             />
             <span>
-              <b>原创电影章节流程</b>
-              <small>角色定妆 → 场景锚点 → 彩色四/八宫格故事板 → H3 分镜提示词 → 视频质检</small>
+              <b>{{ $t('script.originalFilm') }}</b>
+              <small>{{ $t('script.productionSequence') }}</small>
             </span>
           </label>
 
           <label class="field">
-            <span class="label">关键词（可选，用逗号分隔）</span>
-            <input v-model="keywords" class="input" placeholder="例如：日落, 沙滩, 美食" />
+            <span class="label">{{ $t('script.keywords') }}</span>
+            <input v-model="keywords" class="input" :placeholder="$t('script.keywordsExample')" />
           </label>
         </GlassCard>
 
         <GlassCard padding="md" class="presets">
           <div class="presets-head">
-            <span>📋 一键套用示例</span>
+            <span>{{ $t('script.applyExample') }}</span>
           </div>
           <div class="preset-grid">
             <button
@@ -690,7 +691,7 @@ async function removeProductImage(id: string) {
 
       <aside class="side">
         <GlassCard padding="md">
-          <h3>画面风格</h3>
+          <h3>{{ $t('common.visualStyle') }}</h3>
           <div class="style-grid">
             <button
               v-for="s in styleOptions"
@@ -706,7 +707,7 @@ async function removeProductImage(id: string) {
         </GlassCard>
 
         <GlassCard padding="md">
-          <h3>视频比例</h3>
+          <h3>{{ $t('script.videoRatio') }}</h3>
           <div class="aspect-list">
             <button
               v-for="a in aspectOptions"
@@ -724,22 +725,22 @@ async function removeProductImage(id: string) {
         </GlassCard>
 
         <GlassCard padding="md">
-          <h3>🎯 目标成片时长</h3>
+          <h3>{{ $t('script.targetDuration') }}</h3>
           <select v-model.number="targetDurationSec" class="target-select">
-            <option :value="0">不限（按内容自然长度）</option>
-            <option v-for="s in durationOptions" :key="s" :value="s">{{ s }} 秒</option>
+            <option :value="0">{{ $t('script.unlimited') }}</option>
+            <option v-for="s in durationOptions" :key="s" :value="s">{{ s }} {{ $t('common.seconds') }}</option>
           </select>
           <p class="hint">
             {{
               targetDurationSec
-                ? `按 ${targetDurationSec} 秒硬控：约 ${durationScenes(targetDurationSec)} 场、${durationShots(targetDurationSec)} 个分镜。写剧本和拆分镜都会照这个预算收着写。`
-                : '不限时长时，剧本会写满完整结构（背景+人物+多场），分镜通常十几到二十几个。要 40 秒这种短片请务必指定。'
+                ? $t('script.hardBudget', { p0: targetDurationSec, p1: durationScenes(targetDurationSec), p2: durationShots(targetDurationSec) })
+                : $t('script.unlimitedHint')
             }}
           </p>
         </GlassCard>
 
         <GlassCard padding="md">
-          <h3>分镜时长参考</h3>
+          <h3>{{ $t('script.shotDurationHint') }}</h3>
           <div class="slider-row">
             <input
               v-model.number="shotDuration"
@@ -751,24 +752,24 @@ async function removeProductImage(id: string) {
             />
             <div class="slider-value gradient-text">{{ shotDuration }}s</div>
           </div>
-          <p class="hint">整体节奏参考。AI 会按每镜口播与画面单独策划 5–10 秒，不会所有镜头同一秒数。</p>
+          <p class="hint">{{ $t('script.pacing') }}</p>
         </GlassCard>
 
         <GlassCard padding="md" class="summary">
-          <h3>📊 概览</h3>
+          <h3>{{ $t('script.overview') }}</h3>
           <div class="kv">
-            <span>总字数</span><b>{{ wordCount }}</b>
+            <span>{{ $t('script.wordCount') }}</span><b>{{ wordCount }}</b>
           </div>
           <div class="kv">
-            <span>预计分镜数</span><b>{{ estimatedShots }}</b>
+            <span>{{ $t('script.estimatedShots') }}</span><b>{{ estimatedShots }}</b>
           </div>
           <div class="kv">
-            <span>预计总时长</span><b>{{ estimatedDuration }}s</b>
+            <span>{{ $t('script.estimatedDuration') }}</span><b>{{ estimatedDuration }}s</b>
           </div>
           <div v-if="targetDurationSec" class="kv">
-            <span>时长预算</span>
+            <span>{{ $t('script.durationBudget') }}</span>
             <b :class="{ over: Math.abs(estimatedDuration - targetDurationSec) > 10 }">
-              {{ targetDurationSec }}s / {{ durationShots(targetDurationSec) }} 镜
+              {{ targetDurationSec }}s / {{ durationShots(targetDurationSec) }} {{ $t('script.shotCounter') }}
             </b>
           </div>
         </GlassCard>

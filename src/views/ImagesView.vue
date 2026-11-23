@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { t as translate } from '@/i18n'
 import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useProjectStore, useAssetsStore, useToastStore, useLibraryStore } from '@/stores'
@@ -38,7 +39,7 @@ const picker = ref<{ mode: 'main' | 'ref'; shotId: string } | null>(null)
 
 onMounted(async () => {
   if (!project.current?.shots.length) {
-    toast.warn('请先生成分镜')
+    toast.warn(translate('common.makeStoryboardFirst'))
     router.push('/storyboard')
     return
   }
@@ -147,7 +148,7 @@ async function collectRefBlobs(shot: Shot): Promise<{ blobs: Blob[]; labels: str
 }
 
 function kindLabel(k: string) {
-  return k === 'animal' ? '动物' : k === 'other' ? '物体' : '人物'
+  return k === 'animal' ? translate('images.animal') : k === 'other' ? translate('images.object') : translate('images.person')
 }
 
 function shotLockPreview(shot: Shot): { url?: string; label: string }[] {
@@ -172,14 +173,14 @@ function updateImagePrompt(shot: Shot, value: string) {
 
 function resetImagePrompt(shot: Shot) {
   project.updateShot(shot.id, { imagePrompt: shot.visualPrompt })
-  toast.info('已恢复为分镜画面描述')
+  toast.info(translate('images.originalRestored'))
 }
 
 async function generateSubjectSheet(sub: Subject) {
   if (!project.current) return
   generating.value.add(sub.id)
   try {
-    progress.value[sub.id] = '生成人设图...'
+    progress.value[sub.id] = translate('images.progressCharacter')
     const refs = await productRefBlobs()
     const useRefs = refs.length > 0 && (Boolean(sub.fromReference) || sub.kind === 'other')
     const look = lookFromScript(project.current.script)
@@ -219,9 +220,9 @@ async function generateSubjectSheet(sub: Subject) {
     await project.save()
     const url = await assets.getUrl(asset.id)
     if (url) sheetUrls.value = { ...sheetUrls.value, [sub.id]: url }
-    toast.success(`「${sub.name}」多角度人设已生成`)
+    toast.success(translate('images.characterReady', { p0: sub.name }))
   } catch (e: any) {
-    toast.error(`人设「${sub.name}」失败：${e.message}`)
+    toast.error(translate('images.characterFailed', { p0: sub.name, p1: e.message }))
   } finally {
     generating.value.delete(sub.id)
     delete progress.value[sub.id]
@@ -232,7 +233,7 @@ async function generateScenePlate(scn: Scene) {
   if (!project.current) return
   generating.value.add(scn.id)
   try {
-    progress.value[scn.id] = '生成场景底板...'
+    progress.value[scn.id] = translate('images.progressScene')
     const look = lookFromScript(project.current.script)
     const prompt = scenePlatePrompt(scn, look.style, look)
     const result = await generateImage(
@@ -261,9 +262,9 @@ async function generateScenePlate(scn: Scene) {
     await project.save()
     const url = await assets.getUrl(asset.id)
     if (url) plateUrls.value = { ...plateUrls.value, [scn.id]: url }
-    toast.success(`场景「${scn.name}」底板已生成`)
+    toast.success(translate('images.sceneReady', { p0: scn.name }))
   } catch (e: any) {
-    toast.error(`场景「${scn.name}」失败：${e.message}`)
+    toast.error(translate('images.sceneFailed', { p0: scn.name, p1: e.message }))
   } finally {
     generating.value.delete(scn.id)
     delete progress.value[scn.id]
@@ -284,10 +285,10 @@ async function generateOne(shot: Shot) {
   generating.value.add(shot.id)
   try {
     if (missing.value.subjects.length || missing.value.scenes.length) {
-      progress.value[shot.id] = '先生成人设/场景底板...'
+      progress.value[shot.id] = translate('images.progressPrepareRefs')
       await generateMissingCast()
     }
-    progress.value[shot.id] = '准备...'
+    progress.value[shot.id] = translate('images.preparing')
     const { blobs: refBlobs, labels } = await collectRefBlobs(shot)
     const prompt = composeShotImagePrompt(
       shot,
@@ -295,9 +296,9 @@ async function generateOne(shot: Shot) {
       promptOf(shot) || shot.title
     )
     if (refBlobs.length > 0) {
-      progress.value[shot.id] = `图生图（${refBlobs.length} 张：人设+场景）...`
+      progress.value[shot.id] = translate('images.progressImageToImage', { p0: refBlobs.length })
     } else {
-      progress.value[shot.id] = '文生图...'
+      progress.value[shot.id] = translate('images.progressTextToImage')
     }
 
     const result = await generateImage(
@@ -315,7 +316,7 @@ async function generateOne(shot: Shot) {
         progress.value[shot.id] = msg
       }
     )
-    progress.value[shot.id] = '保存到资源库...'
+    progress.value[shot.id] = translate('images.progressSave')
     const asset = await assets.add(result.blob, 'image', 'ai-generated', {
       filename: `shot_${shot.index + 1}_${Date.now().toString(36)}`,
       prompt,
@@ -332,10 +333,10 @@ async function generateOne(shot: Shot) {
     if (url) imageUrls.value[shot.id] = url
     await loadHistory()
     toast.success(
-      `分镜 ${shot.index + 1} 已生成${refBlobs.length > 0 ? `（${refBlobs.length} 张锁定参考）` : ''}`
+      translate('images.shotImageReady', { p0: shot.index + 1, p1: refBlobs.length > 0 ? translate('images.lockedCount', { p0: refBlobs.length }) : '' })
     )
   } catch (e: any) {
-    toast.error(`分镜 ${shot.index + 1} 生成失败：${e.message}`)
+    toast.error(translate('images.shotImageFailed', { p0: shot.index + 1, p1: e.message }))
   } finally {
     generating.value.delete(shot.id)
     delete progress.value[shot.id]
@@ -352,7 +353,7 @@ async function generateAll() {
 }
 
 async function regenerate(shot: Shot) {
-  if (!confirm('重新生成分镜 ' + (shot.index + 1) + ' 的图片？旧图会留在资源库。')) return
+  if (!confirm(translate('images.regenerateConfirm', { number: shot.index + 1 }))) return
   await generateOne(shot)
 }
 
@@ -363,7 +364,7 @@ async function triggerRefUpload(shotId: string) {
   try {
     files = await pickLocalFiles({ kind: 'image', multiple: true })
   } catch (e: any) {
-    toast.error(e?.message || '读取参考图失败')
+    toast.error(e?.message || translate('common.referenceReadFailed'))
     return
   }
   let count = 0
@@ -387,7 +388,7 @@ async function triggerRefUpload(shotId: string) {
       console.error('upload ref failed', e)
     }
   }
-  if (count > 0) toast.success(`已添加 ${count} 张参考图到资源库`)
+  if (count > 0) toast.success(translate('images.referencesAddedToLibrary', { p0: count }))
 }
 
 async function removeRef(shot: Shot, assetId: string) {
@@ -403,14 +404,14 @@ async function removeRef(shot: Shot, assetId: string) {
 
 async function triggerProjectRefUpload() {
   if (!project.current?.script) {
-    toast.warn('没有打开的项目')
+    toast.warn(translate('common.emptyProject'))
     return
   }
   let files: File[]
   try {
     files = await pickLocalFiles({ kind: 'image', multiple: true })
   } catch (e: any) {
-    toast.error(e?.message || '读取参考图失败')
+    toast.error(e?.message || translate('common.referenceReadFailed'))
     return
   }
   const script = project.current.script
@@ -434,7 +435,7 @@ async function triggerProjectRefUpload() {
     }
   }
   project.setScript({ ...script, referenceAssetIds: ids })
-  if (count > 0) toast.success(`已添加 ${count} 张项目级参考图`)
+  if (count > 0) toast.success(translate('images.projectReferencesAdded', { p0: count }))
 }
 
 async function removeProjectRef(assetId: string) {
@@ -463,7 +464,7 @@ async function onPickerConfirm(ids: ID[]) {
     const url = await assets.getUrl(id)
     if (url) imageUrls.value[shot.id] = url
     await loadHistory()
-    toast.success(`分镜 ${shot.index + 1} 已从资源库选用图片`)
+    toast.success(translate('images.shotImageSelected', { p0: shot.index + 1 }))
     return
   }
 
@@ -475,7 +476,7 @@ async function onPickerConfirm(ids: ID[]) {
     if (u) urls.push(u)
   }
   refUrls.value[shot.id] = urls
-  toast.success(`已从资源库添加 ${ids.length} 张参考图`)
+  toast.success(translate('images.referencesFromLibrary', { p0: ids.length }))
 }
 
 async function restoreHistory(shot: Shot, assetId: ID) {
@@ -484,7 +485,7 @@ async function restoreHistory(shot: Shot, assetId: ID) {
   const url = await assets.getUrl(assetId)
   if (url) imageUrls.value[shot.id] = url
   await loadHistory()
-  toast.success('已切回历史版本')
+  toast.success(translate('common.versionRestored'))
 }
 
 function next() {
@@ -496,30 +497,29 @@ function next() {
   <div class="page">
     <header class="page-head">
       <div>
-        <h1>🎨 AI 配图</h1>
-        <p>先生成角色多角度人设和场景底板，再按「人设1 · 人设2 · 场景」三张参考画每一镜</p>
+        <h1>{{ $t('images.heading') }}</h1>
+        <p>{{ $t('images.workflowHint') }}</p>
       </div>
       <div class="head-actions">
-        <GradientButton type="ghost" @click="router.push('/storyboard')">← 上一步</GradientButton>
+        <GradientButton type="ghost" @click="router.push('/storyboard')">{{ $t('common.previousStep') }}</GradientButton>
         <ImageModelSelect />
         <GradientButton
           icon="✨"
           :loading="generating.size > 0"
           @click="generateAll"
         >
-          {{ generating.size > 0 ? `生成中 ${generating.size}` : '先人设/场景，再一键配图' }}
+          {{ generating.size > 0 ? $t('images.generatingCount', { p0: generating.size }) : $t('images.batchGenerate') }}
         </GradientButton>
-        <GradientButton icon="→" @click="next">下一步：AI 视频</GradientButton>
+        <GradientButton icon="→" @click="next">{{ $t('images.next') }}</GradientButton>
       </div>
     </header>
 
     <GlassCard padding="md" class="cast-board">
       <div class="pr-head">
         <div>
-          <h3>🧍 主体人设 · 多角度设计图</h3>
+          <h3>{{ $t('images.characterDesign') }}</h3>
           <p>
-            每个角色一张图，里面包含正面/侧面/背面/表情等多种形态。
-            有参考图时会尽量长得和参考图里的人一样。
+            {{ $t('images.characterTip') }}
           </p>
         </div>
         <GradientButton
@@ -528,11 +528,11 @@ function next() {
           :disabled="!missing.subjects.length && !missing.scenes.length"
           @click="generateMissingCast"
         >
-          {{ missing.subjects.length || missing.scenes.length ? '生成缺失的人设/场景' : '全部已就绪' }}
+          {{ missing.subjects.length || missing.scenes.length ? $t('images.generateMissing') : $t('images.allReady') }}
         </GradientButton>
       </div>
       <div v-if="subjects.length === 0" class="pr-empty">
-        还没有主体。请先回「分镜」让 AI 从文案/参考图里列出人物和动物。
+        {{ $t('images.noSubjects') }}
       </div>
       <div v-else class="cast-grid">
         <div v-for="sub in subjects" :key="sub.id" class="cast-card">
@@ -542,7 +542,7 @@ function next() {
               class="zoomable"
               :src="sheetUrls[sub.id]"
               :alt="sub.name"
-              title="点击查看大图"
+              :title="$t('common.clickFullImage')"
               @click="openLightbox(sheetUrls[sub.id], 'image', sub.name)"
             />
             <div v-else-if="generating.has(sub.id)" class="placeholder generating-placeholder">
@@ -551,14 +551,14 @@ function next() {
             </div>
             <div v-else class="placeholder">
               <div class="placeholder-icon">👤</div>
-              <div class="placeholder-text">待生成人设</div>
+              <div class="placeholder-text">{{ $t('images.pendingCharacter') }}</div>
             </div>
           </div>
           <div class="cast-meta">
             <div class="cast-name">
               {{ sub.name }}
               <Tag size="sm">{{ kindLabel(sub.kind) }}</Tag>
-              <Tag v-if="sub.fromReference" type="accent" size="sm">参考图</Tag>
+              <Tag v-if="sub.fromReference" type="accent" size="sm">{{ $t('common.referenceImage') }}</Tag>
             </div>
             <textarea
               class="cast-desc"
@@ -572,7 +572,7 @@ function next() {
               :loading="generating.has(sub.id)"
               @click="generateSubjectSheet(sub)"
             >
-              {{ sub.designSheetAssetId ? '重新生成人设' : '生成多角度人设' }}
+              {{ sub.designSheetAssetId ? $t('images.regenerateCharacter') : $t('images.generateCharacter') }}
             </GradientButton>
           </div>
         </div>
@@ -580,11 +580,11 @@ function next() {
 
       <div class="pr-head scene-head">
         <div>
-          <h3>🏞 场景底板（空镜）</h3>
-          <p>不含人物。配图工作流的第 3 张图，用来锁地点和光线。</p>
+          <h3>{{ $t('images.scenePlate') }}</h3>
+          <p>{{ $t('images.scenePlateDesc') }}</p>
         </div>
       </div>
-      <div v-if="scenes.length === 0" class="pr-empty">还没有场景。回分镜步骤重新生成。</div>
+      <div v-if="scenes.length === 0" class="pr-empty">{{ $t('images.noScenes') }}</div>
       <div v-else class="cast-grid">
         <div v-for="scn in scenes" :key="scn.id" class="cast-card">
           <div class="cast-thumb">
@@ -593,7 +593,7 @@ function next() {
               class="zoomable"
               :src="plateUrls[scn.id]"
               :alt="scn.name"
-              title="点击查看大图"
+              :title="$t('common.clickFullImage')"
               @click="openLightbox(plateUrls[scn.id], 'image', scn.name)"
             />
             <div v-else-if="generating.has(scn.id)" class="placeholder generating-placeholder">
@@ -602,7 +602,7 @@ function next() {
             </div>
             <div v-else class="placeholder">
               <div class="placeholder-icon">🏞</div>
-              <div class="placeholder-text">待生成底板</div>
+              <div class="placeholder-text">{{ $t('images.pendingScene') }}</div>
             </div>
           </div>
           <div class="cast-meta">
@@ -619,7 +619,7 @@ function next() {
               :loading="generating.has(scn.id)"
               @click="generateScenePlate(scn)"
             >
-              {{ scn.plateAssetId ? '重新生成底板' : '生成场景底板' }}
+              {{ scn.plateAssetId ? $t('images.regenerateScene') : $t('images.generateScene') }}
             </GradientButton>
           </div>
         </div>
@@ -629,15 +629,15 @@ function next() {
     <GlassCard padding="md" class="project-refs">
       <div class="pr-head">
         <div>
-          <h3>📌 产品 / 额外参考图</h3>
-          <p>生成人设时会参考这些图里的人物。分镜配图本身固定用人设 + 场景三张槽位。</p>
+          <h3>{{ $t('images.extraReferences') }}</h3>
+          <p>{{ $t('images.projectReferenceHint') }}</p>
         </div>
         <button class="upload-btn" @click="triggerProjectRefUpload">
-          ＋ 上传
+          {{ $t('images.upload') }}
         </button>
       </div>
       <div v-if="projectRefUrls.length === 0" class="pr-empty">
-        还没有项目级参考图。点「＋ 上传」添加，生成图片时会作为全局参考。
+        {{ $t('images.noProjectReferences') }}
       </div>
       <div v-else class="pr-list">
         <div v-for="(url, i) in projectRefUrls" :key="i" class="pr-item">
@@ -645,13 +645,13 @@ function next() {
             class="zoomable"
             :src="url"
             alt=""
-            title="点击查看大图"
+            :title="$t('common.clickFullImage')"
             @click="openLightbox(url)"
           />
           <button
             class="pr-del"
             @click="removeProjectRef(projectRefIdList[i])"
-            title="从本项目移除（资源库仍保留）"
+            :title="$t('images.removeProjectReference')"
           >×</button>
         </div>
       </div>
@@ -660,8 +660,8 @@ function next() {
     <EmptyState
       v-if="shots.length === 0"
       icon="🎨"
-      title="还没有分镜"
-      description="请先回到分镜步骤"
+      :title="$t('common.noStoryboard')"
+      :description="$t('common.goToStoryboard')"
     />
 
     <div v-else class="grid">
@@ -674,9 +674,9 @@ function next() {
         <div class="shot-head">
           <div class="shot-num">{{ shot.index + 1 }}</div>
           <div class="shot-title">{{ shot.title }}</div>
-          <Tag v-if="shot.imageAssetId" type="success" size="sm">已生成</Tag>
-          <Tag v-else-if="generating.has(shot.id)" type="warning" size="sm">生成中</Tag>
-          <Tag v-else size="sm">待生成</Tag>
+          <Tag v-if="shot.imageAssetId" type="success" size="sm">{{ $t('common.generated') }}</Tag>
+          <Tag v-else-if="generating.has(shot.id)" type="warning" size="sm">{{ $t('common.generating') }}</Tag>
+          <Tag v-else size="sm">{{ $t('common.pendingGeneration') }}</Tag>
         </div>
 
         <div class="shot-image">
@@ -685,16 +685,16 @@ function next() {
             class="zoomable"
             :src="imageUrls[shot.id]"
             :alt="shot.title"
-            title="点击查看大图"
+            :title="$t('common.clickFullImage')"
             @click="openLightbox(imageUrls[shot.id], 'image', shot.title)"
           />
           <div v-else-if="generating.has(shot.id)" class="placeholder generating-placeholder">
             <ProgressRing :progress="0.5" :size="60" :stroke-width="3" />
-            <div class="progress-msg">{{ progress[shot.id] || '准备中...' }}</div>
+            <div class="progress-msg">{{ progress[shot.id] || $t('common.preparing') }}</div>
           </div>
           <div v-else class="placeholder">
             <div class="placeholder-icon">🖼</div>
-            <div class="placeholder-text">未生成</div>
+            <div class="placeholder-text">{{ $t('common.outOfDate') }}</div>
           </div>
         </div>
 
@@ -702,12 +702,12 @@ function next() {
           v-if="(shot.imageHistoryIds?.length ?? 0) > 0"
           class="history"
         >
-          <span class="history-label">历史版本</span>
+          <span class="history-label">{{ $t('common.history') }}</span>
           <button
             v-for="hid in shot.imageHistoryIds"
             :key="hid"
             class="history-item"
-            title="切回这个版本"
+            :title="$t('common.useVersion')"
             @click="restoreHistory(shot, hid)"
           >
             <img
@@ -715,7 +715,7 @@ function next() {
               class="zoomable"
               :src="historyUrls[hid]"
               alt=""
-              title="查看大图并切回这个版本"
+              :title="$t('common.restoreVersion')"
               @click="openLightbox(historyUrls[hid])"
             />
           </button>
@@ -723,14 +723,14 @@ function next() {
 
         <div class="shot-prompt">
           <div class="prompt-bar">
-            <div class="prompt-label">配图提示词（可改）</div>
-            <button class="reset-btn" @click="resetImagePrompt(shot)">恢复分镜原文</button>
+            <div class="prompt-label">{{ $t('images.editablePrompt') }}</div>
+            <button class="reset-btn" @click="resetImagePrompt(shot)">{{ $t('images.restoreOriginal') }}</button>
           </div>
           <textarea
             class="prompt-edit"
             rows="4"
             :value="shot.imagePrompt ?? shot.visualPrompt"
-            placeholder="描述这一镜要生成的画面..."
+            :placeholder="$t('images.promptPlaceholder')"
             @input="updateImagePrompt(shot, ($event.target as HTMLTextAreaElement).value)"
           />
         </div>
@@ -738,9 +738,9 @@ function next() {
         <div class="shot-refs">
           <div class="refs-head">
             <span class="refs-label">
-              锁定参考（人设 ×2 + 场景）
+              {{ $t('images.lockReferences') }}
               <Tag v-if="shotLockPreview(shot).length" type="accent" size="sm">
-                {{ shotLockPreview(shot).length }} 张
+                {{ shotLockPreview(shot).length }} {{ $t('common.imageCounter') }}
               </Tag>
             </span>
           </div>
@@ -756,28 +756,28 @@ function next() {
                 class="zoomable"
                 :src="item.url"
                 alt=""
-                title="点击查看大图"
+                :title="$t('common.clickFullImage')"
                 @click="openLightbox(item.url)"
               />
             </div>
           </div>
-          <div v-else class="refs-empty">还没有人设/场景图。请先在上方生成。</div>
+          <div v-else class="refs-empty">{{ $t('images.noReferences') }}</div>
         </div>
 
         <div class="shot-refs">
           <div class="refs-head">
             <span class="refs-label">
-              🖼 额外参考图
+              {{ $t('images.references') }}
               <Tag v-if="(shot.referenceAssetIds?.length ?? 0) > 0" type="info" size="sm">
-                {{ shot.referenceAssetIds?.length }} 张
+                {{ shot.referenceAssetIds?.length }} {{ $t('common.imageCounter') }}
               </Tag>
             </span>
             <div class="refs-actions">
               <button class="upload-mini" @click="picker = { mode: 'ref', shotId: shot.id }">
-                资源库
+                {{ $t('common.resourceLibrary') }}
               </button>
               <button class="upload-mini" @click="triggerRefUpload(shot.id)">
-                ＋ 上传
+                {{ $t('images.upload') }}
               </button>
             </div>
           </div>
@@ -794,14 +794,14 @@ function next() {
                 class="zoomable"
                 :src="url"
                 alt=""
-                title="点击查看大图"
+                :title="$t('common.clickFullImage')"
                 @click="openLightbox(url)"
               />
               <button
                 v-if="shot.referenceAssetIds?.[i]"
                 class="ref-del"
                 @click="removeRef(shot, shot.referenceAssetIds[i])"
-                title="从本分镜移除"
+                :title="$t('images.removeShotReference')"
               >×</button>
             </div>
           </div>
@@ -815,7 +815,7 @@ function next() {
             :loading="generating.has(shot.id)"
             @click="generateOne(shot)"
           >
-            生成图片
+            {{ $t('common.generateImage') }}
           </GradientButton>
           <template v-else>
             <GradientButton
@@ -825,14 +825,14 @@ function next() {
               :loading="generating.has(shot.id)"
               @click="regenerate(shot)"
             >
-              重新生成
+              {{ $t('common.regenerate') }}
             </GradientButton>
             <GradientButton
               size="sm"
               type="secondary"
               @click="generateOne(shot)"
             >
-              再来一张
+              {{ $t('images.another') }}
             </GradientButton>
           </template>
           <GradientButton
@@ -840,7 +840,7 @@ function next() {
             type="ghost"
             @click="picker = { mode: 'main', shotId: shot.id }"
           >
-            资源库选用
+            {{ $t('common.useFromLibrary') }}
           </GradientButton>
         </div>
       </GlassCard>
@@ -850,7 +850,7 @@ function next() {
       :open="!!picker"
       kind="image"
       :multiple="picker?.mode === 'ref'"
-      :title="picker?.mode === 'ref' ? '从资源库添加参考图' : '从资源库选用配图'"
+      :title="picker?.mode === 'ref' ? $t('images.addReferenceFromLibrary') : $t('images.useImageFromLibrary')"
       show-library
       @close="picker = null"
       @confirm="onPickerConfirm"

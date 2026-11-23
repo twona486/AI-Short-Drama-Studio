@@ -1,11 +1,12 @@
+import { t } from '@/i18n'
 import type { AspectRatio } from '@/types'
 
 export const ASPECT_PRESETS: { value: AspectRatio; label: string; hint: string }[] = [
-  { value: '16:9', label: '16:9', hint: '横版' },
-  { value: '9:16', label: '9:16', hint: '竖版' },
-  { value: '1:1', label: '1:1', hint: '方形' },
-  { value: '4:3', label: '4:3', hint: '传统' },
-  { value: '21:9', label: '21:9', hint: '影院' }
+  { value: '16:9', label: '16:9', get hint() { return t('aspect.landscape') } },
+  { value: '9:16', label: '9:16', get hint() { return t('aspect.portrait') } },
+  { value: '1:1', label: '1:1', get hint() { return t('aspect.square') } },
+  { value: '4:3', label: '4:3', get hint() { return t('aspect.classic') } },
+  { value: '21:9', label: '21:9', get hint() { return t('aspect.cinema') } }
 ]
 
 export function aspectToSize(ar: AspectRatio): { width: number; height: number } {

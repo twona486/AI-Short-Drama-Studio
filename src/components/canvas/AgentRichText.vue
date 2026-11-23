@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { t } from '@/i18n'
 import { computed, ref } from 'vue'
 
 const props = withDefaults(
@@ -194,13 +195,13 @@ const html = computed(() =>
       const isPrompt = !b.lang && (b.raw || '').length > 40
       const foldable = (b.lines || 0) > 12
       const open = !foldable || expanded.value.includes(idx)
-      const title = b.lang || (isPrompt ? '提示词' : '内容')
+      const title = b.lang || t(isPrompt ? 'common.prompt' : 'agentRichText.content')
       return `<div class="code-card${open ? '' : ' fold'}">
   <div class="code-head">
     <span class="code-lang">${escapeHtml(title)}</span>
-    <span class="code-lines">${b.lines || 0} 行</span>
-    <button type="button" class="code-act" data-copy="${idx}">${copiedIdx.value === idx ? '已复制' : '复制'}</button>
-    ${foldable ? `<button type="button" class="code-act" data-fold="${idx}">${open ? '收起' : '展开'}</button>` : ''}
+    <span class="code-lines">${escapeHtml(t('agentRichText.lines', { count: b.lines || 0 }))}</span>
+    <button type="button" class="code-act" data-copy="${idx}">${escapeHtml(t(copiedIdx.value === idx ? 'common.copied' : 'common.copy'))}</button>
+    ${foldable ? `<button type="button" class="code-act" data-fold="${idx}">${escapeHtml(t(open ? 'common.collapse' : 'common.expand'))}</button>` : ''}
   </div>
   <pre class="code-body"><code>${b.html}</code></pre>
 </div>`

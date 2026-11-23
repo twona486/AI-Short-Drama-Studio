@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { t as translate } from '@/i18n'
+import zh from '@/locales/zh'
 import { computed, nextTick, onBeforeUnmount, ref } from 'vue'
 import { llmSetupReady, runSetupAgentTurn, type SetupEvent, type SetupMessage } from '@/services/settings/setupAgent'
 import { friendlyAiError, isAbortError, isTimeoutAbort } from '@/services/ai/abort'
@@ -18,7 +20,7 @@ const settings = useSettingsStore()
 const ready = computed(() => llmSetupReady())
 const llmLabel = computed(() => {
   const p = settings.config.llms.find((x) => x.id === settings.config.activeLlmId)
-  if (!p) return '未配置'
+  if (!p) return translate('setupAgent.notConfigured')
   return p.model ? `${p.name} · ${p.model}` : p.name
 })
 
@@ -27,21 +29,21 @@ const feed = ref<FeedItem[]>([
     id: 'welcome',
     type: 'msg',
     role: 'assistant',
-    content:
-      '语言模型已经就绪，我来帮你完成其余能力。建议按「视觉理解 → 图像生成 → 视频生成 → 配音」配置。你可以告诉我厂家和 Key，也可以直接粘贴中转站或自定义网关的 API 文档；我会解析地址、模型和鉴权并写入设置。密钥只留在这台电脑。'
+    content: zh.setupAgent.welcome
   }
 ])
 const input = ref('')
 const busy = ref(false)
 const log = ref('')
 const trace = ref<TraceRow[]>([])
-const chips = ref<{ label: string; text: string }[]>([
-  { label: '配视觉', text: '帮我配视觉理解' },
-  { label: '配生图', text: '帮我配图像生成' },
-  { label: '配配音', text: '帮我配 TTS 配音' },
-  { label: '配视频', text: '帮我配视频生成' },
-  { label: '从文档接入', text: '下面是我的 API 文档，请按文档写成自定义接入（可以是中转站）：\n' }
-])
+const setupChips = [
+  { id: 'vision', get label() { return translate('setupAgent.setupVision') }, text: '帮我配视觉理解' },
+  { id: 'image', get label() { return translate('setupAgent.setupImage') }, text: '帮我配图像生成' },
+  { id: 'tts', get label() { return translate('setupAgent.setupTts') }, text: '帮我配 TTS 配音' },
+  { id: 'video', get label() { return translate('setupAgent.setupVideo') }, text: '帮我配视频生成' },
+  { id: 'docs', get label() { return translate('setupAgent.fromDocs') }, text: '下面是我的 API 文档，请按文档写成自定义接入（可以是中转站）：\n' }
+]
+const chips = ref<{ label: string; text: string }[]>(setupChips)
 const box = ref<HTMLElement | null>(null)
 let controller: AbortController | null = null
 
@@ -53,10 +55,10 @@ const messages = computed<SetupMessage[]>(() =>
 
 const llmGroups = computed(() => namedModelGroups(settings.config.llms ?? []))
 const abilityRows = computed(() => [
-  { id: 'vision', label: '视觉理解', ready: endpointReady(settings.config.vision), hint: '看图与画面质检' },
-  { id: 'image', label: '图像生成', ready: endpointReady(settings.config.image), hint: '人设、场景与分镜配图' },
-  { id: 'video', label: '视频生成', ready: endpointReady(settings.config.video), hint: '分镜图生成视频' },
-  { id: 'tts', label: '配音 TTS', ready: endpointReady(settings.config.tts), hint: '口播与角色声音' }
+  { id: 'vision', get label() { return translate('common.vision') }, ready: endpointReady(settings.config.vision), get hint() { return translate('setupAgent.visionHint') } },
+  { id: 'image', get label() { return translate('common.imageGeneration') }, ready: endpointReady(settings.config.image), get hint() { return translate('setupAgent.imageHint') } },
+  { id: 'video', get label() { return translate('setupAgent.video') }, ready: endpointReady(settings.config.video), get hint() { return translate('setupAgent.videoHint') } },
+  { id: 'tts', get label() { return translate('setupAgent.tts') }, ready: endpointReady(settings.config.tts), get hint() { return translate('setupAgent.ttsHint') } }
 ])
 
 async function scrollToEnd() {
@@ -92,6 +94,11 @@ function useChip(c: { label: string; text: string }) {
   void sendText(c.text)
 }
 
+function configureAbility(id: string) {
+  const chip = setupChips.find((candidate) => candidate.id === id)
+  if (chip) useChip(chip)
+}
+
 async function sendText(text: string) {
   const t = text.trim()
   if (!t || busy.value) return
@@ -106,8 +113,8 @@ async function sendText(text: string) {
   input.value = ''
   feed.value.push({ id: `u-${Date.now()}`, type: 'msg', role: 'user', content: t })
   busy.value = true
-  log.value = '开始…'
-  trace.value = [{ key: 'think', label: '在想怎么接入…', status: 'running' }]
+  log.value = translate('setupAgent.starting')
+  trace.value = [{ key: 'think', get label() { return translate('setupAgent.thinking') }, status: 'running' }]
   chips.value = []
   const turnController = new AbortController()
   controller = turnController
@@ -149,8 +156,8 @@ function pickLlm(profileId: string, model: string) {
 }
 
 const statusText = computed(() => {
-  if (!ready.value) return '先配语言模型'
-  if (busy.value) return log.value || '写入中'
+  if (!ready.value) return translate('setupAgent.llmFirst')
+  if (busy.value) return log.value || translate('setupAgent.writing')
   return llmLabel.value
 })
 </script>
@@ -159,15 +166,15 @@ const statusText = computed(() => {
   <section class="agent">
     <header class="head">
       <div>
-        <h2>接入助手</h2>
-        <p>用当前语言模型帮你接入。可以说厂家 + Key，也可以把 API 文档贴进来。</p>
+        <h2>{{ $t('common.setupAssistant') }}</h2>
+        <p>{{ $t('setupAgent.hint') }}</p>
       </div>
       <span class="status" :class="{ live: busy, warn: !ready }">{{ statusText }}</span>
     </header>
 
     <div v-if="!ready" class="gate">
-      <p>还没有可用的语言模型。填好接口地址和 API Key 之后，就能在这里对话接入视觉、生图、配音和视频。</p>
-      <button type="button" class="go" @click="openSection('llm')">去配置语言模型</button>
+      <p>{{ $t('setupAgent.noLlm') }}</p>
+      <button type="button" class="go" @click="openSection('llm')">{{ $t('setupAgent.configureLlm') }}</button>
     </div>
 
     <template v-else>
@@ -175,15 +182,15 @@ const statusText = computed(() => {
         <div v-for="item in abilityRows" :key="item.id" class="ability-item" :class="{ done: item.ready }">
           <i>{{ item.ready ? '✓' : '○' }}</i>
           <span><b>{{ item.label }}</b><small>{{ item.hint }}</small></span>
-          <button v-if="!item.ready" type="button" @click="useChip(chips.find((c) => c.label.includes(item.id === 'vision' ? '视觉' : item.id === 'image' ? '生图' : item.id === 'video' ? '视频' : '配音')) || { label: item.label, text: `帮我配置${item.label}` })">让助手配置</button>
-          <em v-else>已配置</em>
+          <button v-if="!item.ready" type="button" @click="configureAbility(item.id)">{{ $t('setupAgent.delegate') }}</button>
+          <em v-else>{{ $t('common.configured') }}</em>
         </div>
       </div>
 
       <details v-if="llmGroups.reduce((n, g) => n + g.models.length, 0) > 1" class="model-switch">
-        <summary>默认使用已配置的语言模型：<b>{{ llmLabel }}</b><span>需要时切换</span></summary>
+        <summary>{{ $t('setupAgent.defaultModel') }}<b>{{ llmLabel }}</b><span>{{ $t('setupAgent.switch') }}</span></summary>
         <label class="llm-pick">
-          <span>切换本次助手使用的模型</span>
+          <span>{{ $t('setupAgent.switchModel') }}</span>
           <select :value="`${settings.config.activeLlmId}::${settings.config.llm.model}`" @change="(e) => {
             const v = (e.target as HTMLSelectElement).value
             const i = v.indexOf('::')
@@ -195,11 +202,13 @@ const statusText = computed(() => {
           </select>
         </label>
       </details>
-      <p v-else class="current-model">默认使用已配置的语言模型：<b>{{ llmLabel }}</b></p>
+      <p v-else class="current-model">{{ $t('setupAgent.defaultModel') }}<b>{{ llmLabel }}</b></p>
 
       <div ref="box" class="msgs">
         <template v-for="item in feed" :key="item.id">
-          <div v-if="item.type === 'msg'" class="msg" :class="item.role">{{ item.content }}</div>
+          <div v-if="item.type === 'msg'" class="msg" :class="item.role">
+            {{ item.id === 'welcome' ? $t('setupAgent.welcome') : item.content }}
+          </div>
           <ol v-else class="trace">
             <li v-for="s in item.rows.filter((row) => row.key !== 'think')" :key="s.key" :class="s.status">
               {{ s.label }}
@@ -222,14 +231,14 @@ const statusText = computed(() => {
           v-model="input"
           rows="3"
           :disabled="busy"
-          placeholder="可以说厂家 + Key，也可以直接粘贴中转站 / 自定义 API 文档。Ctrl+Enter 发送。"
+          :placeholder="$t('setupAgent.placeholder')"
           @keydown.ctrl.enter.prevent="sendText(input)"
           @keydown.meta.enter.prevent="sendText(input)"
         />
         <div class="actions">
-          <span class="hint">换行直接回车，Ctrl+Enter 发送</span>
-          <button v-if="busy" type="button" class="stop" @click="cancel">停止</button>
-          <button v-else type="submit" class="go" :disabled="!input.trim()">发送</button>
+          <span class="hint">{{ $t('setupAgent.keyboardHint') }}</span>
+          <button v-if="busy" type="button" class="stop" @click="cancel">{{ $t('common.stop') }}</button>
+          <button v-else type="submit" class="go" :disabled="!input.trim()">{{ $t('common.send') }}</button>
         </div>
       </form>
     </template>

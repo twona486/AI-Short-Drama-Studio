@@ -29,12 +29,12 @@ function pick(id: string) {
     <div class="lib-head">
       <h4>{{ title }}</h4>
       <button type="button" class="add" @click="adding = !adding">
-        {{ adding ? '取消' : '添加' }}
+        {{ adding ? $t('common.cancel') : $t('common.add') }}
       </button>
     </div>
     <p v-if="hint" class="hint">{{ hint }}</p>
     <div v-if="adding" class="add-pick">
-      <p>选择接入方式</p>
+      <p>{{ $t('common.profileMethod') }}</p>
       <button
         v-for="p in providers"
         :key="p.id"
@@ -63,7 +63,7 @@ function pick(id: string) {
       class="danger"
       @click="emit('remove')"
     >
-      删除当前这项
+      {{ $t('common.deleteProfile') }}
     </button>
   </section>
 </template>

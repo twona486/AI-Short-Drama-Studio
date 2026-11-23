@@ -18,8 +18,8 @@ import { fetchFile, toBlobURL } from '@ffmpeg/util'
 // 用 Vite ?url import 拿到本地 core 文件的 URL
 // 之前放 public/ 被 Vite 禁止从 source code 引用（"cannot be imported from source code"）
 // 移到 src/assets/ 用 ?url 解决
-import coreJsUrl from '@/assets/ffmpeg/ffmpeg-core.esm.js?url'
-import coreWasmUrl from '@/assets/ffmpeg/ffmpeg-core.wasm?url'
+import coreJsUrl from '@ffmpeg/core?url'
+import coreWasmUrl from '@ffmpeg/core/wasm?url'
 
 let _ffmpeg: FFmpeg | null = null
 let _loading: Promise<FFmpeg> | null = null

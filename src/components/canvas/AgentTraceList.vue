@@ -13,7 +13,7 @@ defineProps<{ rows: TraceRow[] }>()
           <circle cx="12" cy="12" r="4" />
           <path d="M12 3v2M12 19v2M3 12h2M19 12h2" />
         </svg>
-        <span>意图</span>
+        <span>{{ $t('agentTraceList.intent') }}</span>
         <b>{{ s.label }}</b>
       </div>
 
@@ -28,8 +28,8 @@ defineProps<{ rows: TraceRow[] }>()
           <div class="plan-txt">
             <p class="plan-title">{{ s.plan.summary }}</p>
             <p v-if="s.plan.calls" class="plan-est">
-              约 {{ s.plan.calls }} 次调用 · 约
-              {{ Math.max(1, Math.ceil(s.plan.seconds / 60)) }} 分钟
+              {{ $t('agentTraceList.approximate') }} {{ s.plan.calls }} {{ $t('common.requestCountEstimate') }}
+              {{ Math.max(1, Math.ceil(s.plan.seconds / 60)) }} {{ $t('common.minutes') }}
             </p>
           </div>
         </div>

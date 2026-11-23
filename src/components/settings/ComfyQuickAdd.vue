@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { t as translate } from '@/i18n'
+
 import { ref } from 'vue'
 import { addComfyUiProfiles, normalizeComfyBaseUrl } from '@/services/settings/comfyQuickAdd'
 import { useToastStore } from '@/stores'
@@ -19,12 +21,12 @@ async function onAdd() {
   if (addImage.value) kinds.push('image')
   if (addVideo.value) kinds.push('video')
   if (!kinds.length) {
-    toast.error('请至少勾选「生图」或「视频」')
+    toast.error(translate('comfyQuickAdd.featureRequired'))
     return
   }
   const url = normalizeComfyBaseUrl(baseUrl.value)
   if (!url) {
-    toast.error('请填写 ComfyUI 地址')
+    toast.error(translate('comfyQuickAdd.addressRequired'))
     return
   }
   busy.value = true
@@ -39,12 +41,12 @@ async function onAdd() {
     })
     lastNotes.value = result.notes
     if (result.ok) {
-      toast.success(result.test && !result.test.ok ? '已添加接入，但连通测试未通过' : '已添加自建 ComfyUI 接入')
+      toast.success(result.test && !result.test.ok ? translate('comfyQuickAdd.testFailed') : translate('comfyQuickAdd.added'))
     } else {
-      toast.error(result.notes[0] || '添加失败')
+      toast.error(result.notes[0] || translate('comfyQuickAdd.addFailed'))
     }
   } catch (e: any) {
-    toast.error(e?.message || '添加失败')
+    toast.error(e?.message || translate('comfyQuickAdd.addFailed'))
   } finally {
     busy.value = false
   }
@@ -54,40 +56,39 @@ async function onAdd() {
 <template>
   <section class="comfy-quick">
     <header class="head">
-      <h3>本地 ComfyUI</h3>
+      <h3>{{ $t('comfyQuickAdd.local') }}</h3>
       <p class="hint">
-        只填你电脑上或局域网里的 ComfyUI，例如 <code>http://127.0.0.1:8188</code>。
-        Zealman 镜像地址填在左侧「Zealman 镜像」。云端大厂和中转站使用下面的 API 接入。
+        {{ $t('comfyQuickAdd.localOnly') }} <code>http://127.0.0.1:8188</code>{{ $t('comfyQuickAdd.remoteHint') }}
       </p>
     </header>
 
-    <label>本地 ComfyUI 地址</label>
+    <label>{{ $t('comfyQuickAdd.address') }}</label>
     <input
       v-model="baseUrl"
       placeholder="http://127.0.0.1:8188"
       @keydown.enter.prevent="onAdd"
     />
 
-    <label>API Key / Token（可选，多数本机可留空）</label>
-    <input v-model="apiKey" type="password" autocomplete="off" placeholder="一般留空" />
+    <label>{{ $t('comfyQuickAdd.keyOptional') }}</label>
+    <input v-model="apiKey" type="password" autocomplete="off" :placeholder="$t('comfyQuickAdd.leaveBlank')" />
 
     <div class="checks">
       <label class="check">
         <input v-model="addImage" type="checkbox" />
-        <span>添加生图接入</span>
+        <span>{{ $t('comfyQuickAdd.addImage') }}</span>
       </label>
       <label class="check">
         <input v-model="addVideo" type="checkbox" />
-        <span>添加视频接入</span>
+        <span>{{ $t('comfyQuickAdd.addVideo') }}</span>
       </label>
       <label class="check">
         <input v-model="runTest" type="checkbox" />
-        <span>添加后测试是否能连接</span>
+        <span>{{ $t('comfyQuickAdd.testAfterAdd') }}</span>
       </label>
     </div>
 
     <button type="button" class="go" :disabled="busy" @click="onAdd">
-      {{ busy ? '添加中…' : '添加并设为当前' }}
+      {{ busy ? $t('comfyQuickAdd.adding') : $t('comfyQuickAdd.addAndSelect') }}
     </button>
 
     <ul v-if="lastNotes.length" class="notes">

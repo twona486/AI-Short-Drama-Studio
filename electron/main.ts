@@ -21,7 +21,18 @@ import { fileURLToPath } from 'node:url'
 import { lookup } from 'node:dns/promises'
 import { isIP } from 'node:net'
 import https from 'node:https'
+import ko from '../src/locales/ko'
+import zh from '../src/locales/zh'
 import { closeAppDb, getDbPath, kvGet, kvSet, openAppDb } from './sqlite'
+
+let nativeLocale: 'ko' | 'zh' = 'ko'
+
+function nativeText(key: keyof typeof ko.electron, fields: Record<string, string | number> = {}) {
+  const messages = nativeLocale === 'zh' ? zh.electron : ko.electron
+  return messages[key].replace(/\{(\w+)\}/g, (placeholder, field: string) =>
+    Object.hasOwn(fields, field) ? String(fields[field]) : placeholder
+  )
+}
 
 const mainDir = path.dirname(fileURLToPath(import.meta.url))
 
@@ -60,27 +71,27 @@ async function assertPublicHttpsUrl(raw: string): Promise<URL> {
   try {
     parsed = new URL(raw)
   } catch {
-    throw new Error('视频下载地址无效')
+    throw new Error(nativeText('invalidVideoUrl'))
   }
   if (parsed.protocol !== 'https:' || parsed.username || parsed.password) {
-    throw new Error('只允许下载公网 HTTPS 视频地址')
+    throw new Error(nativeText('requirePublicHttps'))
   }
   const host = parsed.hostname.toLowerCase()
   if (!host || host === 'localhost' || host.endsWith('.localhost')) {
-    throw new Error('不允许下载本机或内网地址')
+    throw new Error(nativeText('rejectPrivateHost'))
   }
   if (isIP(host)) {
-    if (isPrivateIp(host)) throw new Error('不允许下载本机或内网地址')
+    if (isPrivateIp(host)) throw new Error(nativeText('rejectPrivateHost'))
     return parsed
   }
   let addresses: Awaited<ReturnType<typeof lookup>>
   try {
     addresses = await lookup(host, { all: true, verbatim: true })
   } catch {
-    throw new Error(`无法解析视频源域名：${host}`)
+    throw new Error(nativeText('lookupFailed', { host }))
   }
   if (!addresses.length || addresses.some((item) => isPrivateIp(item.address))) {
-    throw new Error('不允许下载解析到本机或内网的视频地址')
+    throw new Error(nativeText('rejectPrivateResolution'))
   }
   return parsed
 }
@@ -113,7 +124,7 @@ async function downloadPublicVideo(
         if (status >= 300 && status < 400 && location) {
           res.resume()
           if (redirectsLeft <= 0) {
-            reject(new Error('视频下载重定向次数过多'))
+            reject(new Error(nativeText('redirectLimit')))
             return
           }
           const next = new URL(location, parsed).toString()
@@ -122,7 +133,7 @@ async function downloadPublicVideo(
         }
         if (status < 200 || status >= 300) {
           res.resume()
-          reject(new Error(`下载失败 ${status}`))
+          reject(new Error(nativeText('downloadFailed', { status })))
           return
         }
 
@@ -134,14 +145,14 @@ async function downloadPublicVideo(
           !contentType.includes('binary/octet-stream')
         ) {
           res.resume()
-          reject(new Error(`视频源返回了非视频内容：${contentType}`))
+          reject(new Error(nativeText('unexpectedContent', { type: contentType })))
           return
         }
 
         pipeline(res, createWriteStream(dest)).then(resolve, reject)
       }
     )
-    req.once('timeout', () => req.destroy(new Error('视频下载超时')))
+    req.once('timeout', () => req.destroy(new Error(nativeText('downloadTimeout'))))
     req.once('error', reject)
   })
 }
@@ -428,7 +439,7 @@ function createWindow() {
     height: 960,
     minWidth: 1100,
     minHeight: 720,
-    title: '剧流 Studio',
+    title: ko.common.appName,
     icon: resolveAppIcon(),
     backgroundColor: '#101012',
     frame: false,
@@ -489,6 +500,11 @@ app.whenReady().then(async () => {
     }
   })
 
+  ipcMain.handle('desktop:setLocale', (event, locale: unknown) => {
+    nativeLocale = locale === 'zh' ? 'zh' : 'ko'
+    BrowserWindow.fromWebContents(event.sender)?.setTitle(nativeLocale === 'zh' ? zh.common.appName : ko.common.appName)
+  })
+
   ipcMain.handle('desktop:getRoot', async () => {
     const root = currentRoot()
     await ensureDir(root)
@@ -499,16 +515,16 @@ app.whenReady().then(async () => {
     const nextRoot = path.resolve(String(requestedRoot || '').trim())
     const previousRoot = currentRoot()
     if (!requestedRoot || !path.isAbsolute(nextRoot)) {
-      throw new Error('请选择有效的绝对路径')
+      throw new Error(nativeText('absolutePathRequired'))
     }
     if (nextRoot === path.parse(nextRoot).root) {
-      throw new Error('不能直接使用磁盘根目录，请选择一个专用文件夹')
+      throw new Error(nativeText('rejectDiskRoot'))
     }
     if (
       path.resolve(previousRoot) !== nextRoot &&
       (isSameOrNested(previousRoot, nextRoot) || isSameOrNested(nextRoot, previousRoot))
     ) {
-      throw new Error('新旧保存目录不能互相包含，请选择其他文件夹')
+      throw new Error(nativeText('rejectNestedRoot'))
     }
     if (path.resolve(previousRoot) === nextRoot) return nextRoot
 
@@ -588,7 +604,7 @@ app.whenReady().then(async () => {
     const win = BrowserWindow.getFocusedWindow()
     const res = await dialog.showOpenDialog(win ?? undefined, {
       properties: ['openFile', 'multiSelections'],
-      filters: filters ?? [{ name: 'Media', extensions: ['png', 'jpg', 'jpeg', 'webp', 'mp4', 'webm', 'mp3', 'wav'] }]
+      filters: filters ?? [{ name: nativeText('media'), extensions: ['png', 'jpg', 'jpeg', 'webp', 'mp4', 'webm', 'mp3', 'wav'] }]
     })
     return res.canceled ? [] : res.filePaths
   })
@@ -602,14 +618,14 @@ app.whenReady().then(async () => {
       const kind = opts?.kind || 'image'
       const filters =
         kind === 'image'
-          ? [{ name: '图片', extensions: ['png', 'jpg', 'jpeg', 'webp', 'gif', 'bmp'] }]
+          ? [{ name: nativeText('image'), extensions: ['png', 'jpg', 'jpeg', 'webp', 'gif', 'bmp'] }]
           : kind === 'audio'
-            ? [{ name: '音频', extensions: ['mp3', 'wav', 'm4a', 'aac'] }]
+            ? [{ name: nativeText('audio'), extensions: ['mp3', 'wav', 'm4a', 'aac'] }]
             : kind === 'video'
-              ? [{ name: '视频', extensions: ['mp4', 'mov', 'webm', 'mkv'] }]
+              ? [{ name: nativeText('video'), extensions: ['mp4', 'mov', 'webm', 'mkv'] }]
               : [
                   {
-                    name: '媒体',
+                    name: nativeText('media'),
                     extensions: [
                       'png', 'jpg', 'jpeg', 'webp', 'gif', 'bmp',
                       'mp4', 'mov', 'webm', 'mkv',
@@ -640,7 +656,7 @@ app.whenReady().then(async () => {
           })
         } catch {
           throw new Error(
-            `无法读取「${path.basename(src)}」，多半被杀毒软件拦截。请到设置 → 系统里点「授权访问本机文件」。`
+            nativeText('fileReadBlocked', { file: path.basename(src) })
           )
         } finally {
           await fs.unlink(dest).catch(() => {})
@@ -660,7 +676,7 @@ app.whenReady().then(async () => {
 
   ipcMain.handle('desktop:requestFileAccess', async () => {
     if (process.platform !== 'win32') {
-      throw new Error('这项授权只在 Windows 上需要')
+      throw new Error(nativeText('windowsOnly'))
     }
     const root = currentRoot()
     const exe = process.execPath
@@ -693,7 +709,7 @@ app.whenReady().then(async () => {
         child.on('error', reject)
         child.on('exit', (code) => {
           if (code === 0) resolve()
-          else reject(new Error('已取消授权，或本机没有 Windows 安全中心'))
+          else reject(new Error(nativeText('fileAccessCancelled')))
         })
       })
     } finally {
@@ -757,9 +773,9 @@ app.whenReady().then(async () => {
     } catch {
       throw new Error('invalid url')
     }
-    if (!isAllowedProviderFetch(parsed)) throw new Error('ComfyUI 地址只支持 http:// 或 https://')
+    if (!isAllowedProviderFetch(parsed)) throw new Error(nativeText('comfyProtocol'))
     const method = String(opts?.method || 'GET').toUpperCase()
-    if (method !== 'GET' && method !== 'POST') throw new Error('ComfyUI 请求只支持 GET 或 POST')
+    if (method !== 'GET' && method !== 'POST') throw new Error(nativeText('comfyMethod'))
     const timeoutMs = Math.min(180000, Math.max(5000, Number(opts?.timeoutMs) || 120000))
     const controller = new AbortController()
     const timer = setTimeout(() => controller.abort(), timeoutMs)
@@ -796,7 +812,7 @@ app.whenReady().then(async () => {
       }
     } catch (err: any) {
       if (controller.signal.aborted) {
-        throw new Error(`AutoDL 请求超时（${Math.round(timeoutMs / 1000)} 秒）`)
+        throw new Error(nativeText('autoDlTimeout', { seconds: Math.round(timeoutMs / 1000) }))
       }
       throw err
     } finally {
@@ -821,17 +837,17 @@ app.whenReady().then(async () => {
       const host = parsed.hostname.toLowerCase()
       const localHttp =
         parsed.protocol === 'http:' && (host === '127.0.0.1' || host === 'localhost')
-      if (!localHttp) throw new Error('语言模型地址必须是 HTTPS')
+      if (!localHttp) throw new Error(nativeText('llmProtocol'))
     }
     const isModels = /\/models\/?$/i.test(parsed.pathname)
     const isChat = parsed.pathname.includes('/chat/completions')
     if (!isModels && !isChat) {
-      throw new Error('只允许请求 chat/completions 或 /models')
+      throw new Error(nativeText('llmEndpoint'))
     }
     const method = isModels ? 'GET' : 'POST'
     const body = String(opts?.body || '')
     if (method === 'POST' && body.length > 32 * 1024 * 1024) {
-      throw new Error('语言模型请求过大')
+      throw new Error(nativeText('llmRequestTooLarge'))
     }
     const timeoutMs = Math.min(540000, Math.max(5000, Number(opts?.timeoutMs) || 120000))
     const controller = new AbortController()
@@ -853,13 +869,13 @@ app.whenReady().then(async () => {
       return { status: res.status, ok: res.ok, text }
     } catch (err: any) {
       if (controller.signal.aborted) {
-        throw new Error(`语言模型请求超时（${Math.round(timeoutMs / 1000)} 秒）`)
+        throw new Error(nativeText('llmTimeout', { seconds: Math.round(timeoutMs / 1000) }))
       }
       const msg = err instanceof Error ? err.message : String(err ?? '')
       throw new Error(
         /Failed to fetch|net::ERR|ECONNRESET|ETIMEDOUT|ENOTFOUND|ECONNREFUSED/i.test(msg)
-          ? '连不上语言模型（网络中断或被拦截）。请检查网络后重试。'
-          : msg || '连不上语言模型'
+          ? nativeText('llmNetwork')
+          : msg || nativeText('llmConnectionFailed')
       )
     } finally {
       clearTimeout(timer)
@@ -891,7 +907,7 @@ app.whenReady().then(async () => {
       pathName.includes('/services/aigc/video-generation/') ||
       /\/api\/v1\/tasks\/[^/]+$/.test(pathName)
     if (parsed.protocol !== 'https:' || !allowedHost || !allowedPath) {
-      throw new Error('只允许请求百炼视频 API')
+      throw new Error(nativeText('bailianEndpoint'))
     }
     const method = String(opts?.method || 'GET').toUpperCase()
     const timeoutMs = Math.min(180000, Math.max(5000, Number(opts?.timeoutMs) || 120000))
@@ -917,7 +933,7 @@ app.whenReady().then(async () => {
       return { status: res.status, ok: res.ok, text }
     } catch (err: any) {
       if (controller.signal.aborted) {
-        throw new Error(`百炼请求超时（${Math.round(timeoutMs / 1000)} 秒）`)
+        throw new Error(nativeText('bailianTimeout', { seconds: Math.round(timeoutMs / 1000) }))
       }
       throw err
     } finally {

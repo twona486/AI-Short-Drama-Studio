@@ -76,7 +76,7 @@ onUnmounted(() => {
       class="img zoomable"
       :class="{ rounded }"
       alt=""
-      title="点击查看大图"
+      :title="$t('common.clickFullImage')"
       @click="openLightbox(src)"
     />
     <template v-else-if="type === 'video'">

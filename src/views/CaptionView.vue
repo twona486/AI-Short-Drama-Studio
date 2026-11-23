@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { t as translate } from '@/i18n'
+
 import { ref, computed, onMounted, watch, nextTick } from 'vue'
 import { useRouter } from 'vue-router'
 import { useProjectStore, useToastStore, useAssetsStore } from '@/stores'
@@ -82,7 +84,7 @@ const lines = computed(() => {
         key: c.id,
         shotId: c.shotId,
         index: (shot?.index ?? i) + 1,
-        title: shot?.title || `片段 ${i + 1}`,
+        title: shot?.title || translate('caption.clipNumber', { p0: i + 1 }),
         start: c.startTime,
         duration: c.duration,
         text: shot?.voiceover ?? '',
@@ -169,7 +171,7 @@ function changeAudioMode(shot: Shot, mode: ShotAudioMode) {
   if (effectiveShotAudioMode(shot) === mode) return
   const hadVideo = Boolean(shot.videoAssetId)
   project.setShotAudioMode(shot.id, mode)
-  if (hadVideo) toast.info(`第 ${shot.index + 1} 镜人声方案已改变，请重新生成视频以匹配声音和口型。`, 6000)
+  if (hadVideo) toast.info(translate('caption.modeChanged', { p0: shot.index + 1 }), 6000)
 }
 
 function isStale(shot: Shot | undefined) {
@@ -195,28 +197,28 @@ async function saveVoiceover(shot: Shot, blob: Blob, mimeType: string, text: str
 
 async function generateLine(shotId: string) {
   if (isDigitalHuman.value) {
-    toast.info('数字人口播视频已经带上传音频，不需要再配音')
+    toast.info(translate('caption.digitalSpeechHint'))
     return
   }
   const shot = shots.value.find((s) => s.id === shotId)
   if (!shot) return
   const text = shot.voiceover.trim()
   if (!text) {
-    toast.warn(`第 ${shot.index + 1} 段没有台词`)
+    toast.warn(translate('caption.clipMissingDialogue', { p0: shot.index + 1 }))
     return
   }
   if (effectiveShotAudioMode(shot) !== 'tts') {
     const hadVideo = Boolean(shot.videoAssetId)
     project.setShotAudioMode(shot.id, 'tts')
-    if (hadVideo) toast.info(`第 ${shot.index + 1} 镜已改为后期 TTS；请重新生成视频，使 H3 保持闭嘴。`, 6000)
+    if (hadVideo) toast.info(translate('caption.ttsChanged', { p0: shot.index + 1 }), 6000)
   }
   generating.value.add(shotId)
   try {
     const result = await generateSpeech({ text, voice: ttsVoice.value })
     await saveVoiceover(shot, result.blob, result.mimeType, text)
-    toast.success(`第 ${shot.index + 1} 段配音完成`)
+    toast.success(translate('caption.clipVoiceReady', { p0: shot.index + 1 }))
   } catch (e: any) {
-    toast.error(`第 ${shot.index + 1} 段配音失败：${e.message}`, 8000)
+    toast.error(translate('caption.clipVoiceFailed', { p0: shot.index + 1, p1: e.message }), 8000)
   } finally {
     generating.value.delete(shotId)
   }
@@ -224,12 +226,12 @@ async function generateLine(shotId: string) {
 
 async function generateAllVoices() {
   if (isDigitalHuman.value) {
-    toast.info('数字人口播视频已经带上传音频，不需要再配音')
+    toast.info(translate('caption.digitalSpeechHint'))
     return
   }
   const todo = lines.value.filter((l) => l.text.trim())
   if (todo.length === 0) {
-    toast.warn('没有台词可以配音')
+    toast.warn(translate('caption.noDialogueToVoice'))
     return
   }
   generatingAll.value = true
@@ -242,7 +244,7 @@ async function generateAllVoices() {
       await generateLine(line.shotId)
       if (shots.value.find((s) => s.id === line.shotId)?.audioAssetId) ok++
     }
-    toast.success(`已为 ${ok} 段台词生成人声`)
+    toast.success(translate('caption.voicesGenerated', { p0: ok }))
   } finally {
     generatingAll.value = false
   }
@@ -270,9 +272,9 @@ function buildFromTimeline() {
   project.setCaptionSrt(srtText.value)
   const empty = parsed.filter((c) => !c.text.trim()).length
   if (parsed.length === 0) {
-    toast.warn('还没有分镜或时间线，没有字幕')
+    toast.warn(translate('caption.emptySrt'))
   } else if (empty === parsed.length) {
-    toast.warn('台词是空的。请在下面每段里填写，或回分镜页写口播')
+    toast.warn(translate('caption.dialogueEmpty'))
   }
 }
 
@@ -290,14 +292,14 @@ function importSRT() {
       const line = lines.value[i]
       if (line?.shotId) project.updateShot(line.shotId, { voiceover: cue.text })
     })
-    toast.success(`已导入 ${file.name}`)
+    toast.success(translate('caption.imported', { p0: file.name }))
   }
   input.click()
 }
 
 function exportSRT() {
   if (!srtText.value.trim()) {
-    toast.warn('字幕是空的')
+    toast.warn(translate('caption.noCaptions'))
     return
   }
   const blob = new Blob([srtText.value], { type: 'text/plain;charset=utf-8' })
@@ -336,7 +338,7 @@ async function drawPreview() {
   const text =
     lines.value.find((l) => l.text.trim())?.text ||
     srtText.value.split('\n').find((l) => l && !/^\d+$/.test(l) && !l.includes('-->')) ||
-    '字幕预览'
+    translate('caption.previewText')
   const overlay = await renderCaptionPng(
     text,
     style.value,
@@ -362,7 +364,7 @@ function next() {
   }
   project.setCaptionSrt(srtText.value)
   if (!isDigitalHuman.value && pendingVoice.value > 0) {
-    toast.warn(`${pendingVoice.value} 段台词还没配音，导出时这些段会没有人声`)
+    toast.warn(translate('caption.missingVoice', { p0: pendingVoice.value }))
   }
   router.push('/export')
 }
@@ -372,9 +374,9 @@ function next() {
   <div class="page">
     <header class="page-head">
       <div>
-        <h1>💬 字幕与文字</h1>
-        <p v-if="isDigitalHuman">各段视频已经带上传音频，不需要再配音。这里改字幕文案、烧录和自动划重点。</p>
-        <p v-else>按每段台词配音，并调整字幕样式。导出时人声叠到对应片段上。</p>
+        <h1>{{ $t('caption.textPanel') }}</h1>
+        <p v-if="isDigitalHuman">{{ $t('caption.importedAudioHint') }}</p>
+        <p v-else>{{ $t('caption.workflowHint') }}</p>
       </div>
       <div class="head-actions">
         <template v-if="!isDigitalHuman">
@@ -382,13 +384,13 @@ function next() {
             <TtsModelSelect />
           </label>
           <label class="voice-pick">
-            <span>音色</span>
+            <span>{{ $t('common.voice') }}</span>
             <select v-model="ttsVoice" class="input" style="width: auto; min-width: 160px;">
               <option v-for="v in TTS_VOICES" :key="v.id" :value="v.id">{{ v.label }}</option>
             </select>
           </label>
         </template>
-        <GradientButton type="ghost" @click="router.push('/edit')">← 上一步</GradientButton>
+        <GradientButton type="ghost" @click="router.push('/edit')">{{ $t('common.previousStep') }}</GradientButton>
         <GradientButton
           v-if="!isDigitalHuman"
           icon="🎙"
@@ -396,9 +398,9 @@ function next() {
           :disabled="generatingAll || lines.every((l) => !l.text.trim())"
           @click="generateAllVoices"
         >
-          {{ generatingAll ? '配音中...' : '全部改用 TTS 并生成' }}
+          {{ generatingAll ? $t('caption.generating') : $t('caption.generateAllTts') }}
         </GradientButton>
-        <GradientButton icon="→" @click="next">下一步：导出</GradientButton>
+        <GradientButton icon="→" @click="next">{{ $t('caption.next') }}</GradientButton>
       </div>
     </header>
 
@@ -406,13 +408,13 @@ function next() {
       <main class="left">
         <GlassCard v-if="isDigitalHuman" padding="md">
           <div class="card-head">
-            <h3>字幕文案</h3>
+            <h3>{{ $t('caption.text') }}</h3>
             <div class="head-tools">
-              <button class="mini-btn" @click="buildFromTimeline">从分镜同步字幕</button>
+              <button class="mini-btn" @click="buildFromTimeline">{{ $t('caption.syncStoryboard') }}</button>
             </div>
           </div>
-          <p class="cue-hint">声音已经在视频里。下面只改烧到画面上的字幕，不会再生成配音。</p>
-          <p v-if="lines.length === 0" class="cue-hint">还没有分镜或时间线。</p>
+          <p class="cue-hint">{{ $t('caption.embeddedAudioHint') }}</p>
+          <p v-if="lines.length === 0" class="cue-hint">{{ $t('caption.empty') }}</p>
           <div v-else class="line-list">
             <div v-for="line in lines" :key="line.key" class="line-card">
               <div class="line-head">
@@ -426,7 +428,7 @@ function next() {
                 class="line-text"
                 rows="3"
                 :value="line.text"
-                placeholder="这一段要烧到画面上的字幕..."
+                :placeholder="$t('caption.burnPlaceholder')"
                 @input="updateLineText(line.shotId, ($event.target as HTMLTextAreaElement).value)"
               />
             </div>
@@ -434,13 +436,13 @@ function next() {
         </GlassCard>
         <GlassCard v-else padding="md">
           <div class="card-head">
-            <h3>🎙 台词配音</h3>
+            <h3>{{ $t('caption.voiceoverPanel') }}</h3>
             <div class="head-tools">
-              <Tag size="sm" type="success">已配 {{ voicedCount }}/{{ lines.length }}</Tag>
-              <button class="mini-btn" @click="buildFromTimeline">从分镜同步字幕</button>
+              <Tag size="sm" type="success">{{ $t('caption.voiced') }} {{ voicedCount }}/{{ lines.length }}</Tag>
+              <button class="mini-btn" @click="buildFromTimeline">{{ $t('caption.syncStoryboard') }}</button>
             </div>
           </div>
-          <p v-if="lines.length === 0" class="cue-hint">还没有分镜或时间线。</p>
+          <p v-if="lines.length === 0" class="cue-hint">{{ $t('caption.empty') }}</p>
           <div v-else class="line-list">
             <div v-for="line in lines" :key="line.key" class="line-card">
               <div class="line-head">
@@ -449,32 +451,32 @@ function next() {
                   <div class="line-title">{{ line.title }}</div>
                   <div class="line-time">{{ formatClock(line.start) }} · {{ line.duration }}s</div>
                 </div>
-                <Tag v-if="line.shot && effectiveShotAudioMode(line.shot) === 'h3-dialogue'" type="success" size="sm">H3 对白</Tag>
-                <Tag v-else-if="line.shot && effectiveShotAudioMode(line.shot) === 'h3-voiceover'" type="success" size="sm">H3 画外音</Tag>
-                <Tag v-else-if="line.shot && effectiveShotAudioMode(line.shot) === 'none'" size="sm">无口播</Tag>
-                <Tag v-else-if="line.audioAssetId && !isStale(line.shot)" type="success" size="sm">TTS 已配音</Tag>
-                <Tag v-else-if="isStale(line.shot)" type="warning" size="sm">TTS 台词已改</Tag>
-                <Tag v-else-if="line.text.trim()" size="sm">TTS 待配音</Tag>
-                <Tag v-else type="error" size="sm">无台词</Tag>
+                <Tag v-if="line.shot && effectiveShotAudioMode(line.shot) === 'h3-dialogue'" type="success" size="sm">{{ $t('caption.h3Dialogue') }}</Tag>
+                <Tag v-else-if="line.shot && effectiveShotAudioMode(line.shot) === 'h3-voiceover'" type="success" size="sm">{{ $t('caption.h3Voiceover') }}</Tag>
+                <Tag v-else-if="line.shot && effectiveShotAudioMode(line.shot) === 'none'" size="sm">{{ $t('common.noNarration') }}</Tag>
+                <Tag v-else-if="line.audioAssetId && !isStale(line.shot)" type="success" size="sm">{{ $t('caption.ttsReady') }}</Tag>
+                <Tag v-else-if="isStale(line.shot)" type="warning" size="sm">{{ $t('caption.ttsModified') }}</Tag>
+                <Tag v-else-if="line.text.trim()" size="sm">{{ $t('caption.ttsPending') }}</Tag>
+                <Tag v-else type="error" size="sm">{{ $t('caption.noDialogue') }}</Tag>
               </div>
               <textarea
                 class="line-text"
                 rows="3"
                 :value="line.text"
-                placeholder="这一段要念的台词 / 字幕..."
+                :placeholder="$t('caption.dialoguePlaceholder')"
                 @input="updateLineText(line.shotId, ($event.target as HTMLTextAreaElement).value)"
               />
               <label class="voice-pick">
-                <span>人声方案</span>
+                <span>{{ $t('caption.voiceMode') }}</span>
                 <select
                   class="input"
                   :value="line.shot ? effectiveShotAudioMode(line.shot) : 'none'"
                   @change="line.shot && changeAudioMode(line.shot, ($event.target as HTMLSelectElement).value as ShotAudioMode)"
                 >
-                  <option value="h3-dialogue">H3 出镜对白 + 对口型</option>
-                  <option value="h3-voiceover">H3 画外口播</option>
-                  <option value="tts">后期 TTS</option>
-                  <option value="none">无口播</option>
+                  <option value="h3-dialogue">{{ $t('common.h3Dialogue') }}</option>
+                  <option value="h3-voiceover">{{ $t('caption.h3Offscreen') }}</option>
+                  <option value="tts">{{ $t('common.postTts') }}</option>
+                  <option value="none">{{ $t('common.noNarration') }}</option>
                 </select>
               </label>
               <audio v-if="audioUrls[line.shotId]" class="vo-player" :src="audioUrls[line.shotId]" controls />
@@ -485,7 +487,7 @@ function next() {
                   :disabled="!line.text.trim() || generating.has(line.shotId)"
                   @click="generateLine(line.shotId)"
                 >
-                  {{ line.audioAssetId ? '重新配音' : '生成人声' }}
+                  {{ line.audioAssetId ? $t('caption.regenerateVoice') : $t('caption.generateVoice') }}
                 </GradientButton>
               </div>
             </div>
@@ -494,19 +496,19 @@ function next() {
 
         <GlassCard padding="md">
           <div class="card-head">
-            <h3>📝 SRT 字幕</h3>
+            <h3>{{ $t('caption.srtPanel') }}</h3>
             <div class="head-tools">
               <label class="check">
                 <input v-model="burnCaptions" type="checkbox" />
-                <span>烧录到视频</span>
+                <span>{{ $t('caption.burn') }}</span>
               </label>
               <label class="check">
                 <input v-model="captionHighlight" type="checkbox" />
-                <span>自动划重点</span>
+                <span>{{ $t('common.autoDelineate') }}</span>
               </label>
-              <button class="mini-btn" @click="showSrt = !showSrt">{{ showSrt ? '收起' : '展开编辑' }}</button>
-              <button class="mini-btn" @click="importSRT">导入</button>
-              <button class="mini-btn" @click="exportSRT">导出</button>
+              <button class="mini-btn" @click="showSrt = !showSrt">{{ showSrt ? $t('common.collapse') : $t('caption.expandEdit') }}</button>
+              <button class="mini-btn" @click="importSRT">{{ $t('common.import') }}</button>
+              <button class="mini-btn" @click="exportSRT">{{ $t('common.export') }}</button>
             </div>
           </div>
           <textarea
@@ -514,19 +516,19 @@ function next() {
             v-model="srtText"
             class="srt-area"
             rows="14"
-            placeholder="SRT 字幕格式，改台词请优先在上方每段里编辑"
+            :placeholder="$t('caption.srtHint')"
             @input="drawPreview"
           />
           <div class="cue-info">
-            <Tag size="sm" type="accent">{{ cues.length }} 条字幕</Tag>
-            <span class="cue-hint">改上方台词会自动同步 SRT</span>
+            <Tag size="sm" type="accent">{{ cues.length }} {{ $t('caption.captionCount') }}</Tag>
+            <span class="cue-hint">{{ $t('caption.syncSrt') }}</span>
           </div>
         </GlassCard>
       </main>
 
       <aside class="right">
         <GlassCard padding="md">
-          <h3>👀 样式预览</h3>
+          <h3>{{ $t('caption.previewPanel') }}</h3>
           <canvas
             ref="previewCanvas"
             width="640"
@@ -534,28 +536,28 @@ function next() {
             class="preview-canvas"
             @load="drawPreview"
           />
-          <button class="refresh-btn" @click="drawPreview">↻ 刷新</button>
+          <button class="refresh-btn" @click="drawPreview">{{ $t('caption.refresh') }}</button>
         </GlassCard>
 
         <GlassCard padding="md">
-          <h3>字体样式</h3>
+          <h3>{{ $t('caption.fontStyle') }}</h3>
           <label class="field">
-            <span>字体</span>
+            <span>{{ $t('common.font') }}</span>
             <select
               :value="style.fontFamily"
               @change="updateStyle({ fontFamily: ($event.target as HTMLSelectElement).value })"
               class="input"
             >
-              <option value="Noto Sans CJK SC">思源黑体</option>
-              <option value="Noto Serif CJK SC">思源宋体</option>
-              <option value="sans-serif">无衬线</option>
-              <option value="serif">衬线</option>
-              <option value="monospace">等宽</option>
+              <option value="Noto Sans CJK SC">{{ $t('caption.sourceHanSans') }}</option>
+              <option value="Noto Serif CJK SC">{{ $t('caption.sourceHanSerif') }}</option>
+              <option value="sans-serif">{{ $t('caption.sansSerif') }}</option>
+              <option value="serif">{{ $t('caption.serif') }}</option>
+              <option value="monospace">{{ $t('caption.monospace') }}</option>
             </select>
           </label>
 
           <label class="field">
-            <span>字号（占视频高度）</span>
+            <span>{{ $t('caption.fontSize') }}</span>
             <div class="row">
               <input
                 type="range"
@@ -571,7 +573,7 @@ function next() {
           </label>
 
           <label class="field row-field">
-            <span>颜色</span>
+            <span>{{ $t('common.color') }}</span>
             <input
               type="color"
               :value="style.color"
@@ -587,7 +589,7 @@ function next() {
           </label>
 
           <label class="field row-field">
-            <span>重点词</span>
+            <span>{{ $t('caption.keyword') }}</span>
             <input v-model="highlightColor" type="color" class="color" :disabled="!captionHighlight" />
             <input
               v-model="highlightColor"
@@ -598,7 +600,7 @@ function next() {
           </label>
 
           <label class="field">
-            <span>重点词放大</span>
+            <span>{{ $t('caption.enlargeKeywords') }}</span>
             <div class="row">
               <input
                 v-model.number="highlightScale"
@@ -614,7 +616,7 @@ function next() {
           </label>
 
           <label class="field">
-            <span>描边宽度</span>
+            <span>{{ $t('caption.strokeWidth') }}</span>
             <div class="row">
               <input
                 type="range"
@@ -630,7 +632,7 @@ function next() {
           </label>
 
           <label class="field row-field">
-            <span>描边色</span>
+            <span>{{ $t('caption.strokeColor') }}</span>
             <input
               type="color"
               :value="style.strokeColor"
@@ -642,12 +644,12 @@ function next() {
               :checked="style.bold"
               @change="updateStyle({ bold: ($event.target as HTMLInputElement).checked })"
             />
-            <span>粗体</span>
+            <span>{{ $t('caption.bold') }}</span>
           </label>
         </GlassCard>
 
         <GlassCard padding="md">
-          <h3>位置</h3>
+          <h3>{{ $t('caption.position') }}</h3>
           <div class="position-grid">
             <button
               v-for="p in ['top', 'center', 'bottom'] as const"
@@ -659,19 +661,19 @@ function next() {
               <div class="pos-icon" :data-pos="p">
                 <div class="pos-line" />
               </div>
-              <span>{{ { top: '顶部', center: '居中', bottom: '底部' }[p] }}</span>
+              <span>{{ { top: $t('common.top'), center: $t('common.center'), bottom: $t('common.bottom') }[p] }}</span>
             </button>
           </div>
 
           <label class="field" style="margin-top: 12px">
-            <span>是否加底色</span>
+            <span>{{ $t('caption.background') }}</span>
             <div class="row">
               <input
                 type="checkbox"
                 :checked="project.current?.settings.captionBg"
                 @change="project.current && project.setSettings({ captionBg: ($event.target as HTMLInputElement).checked })"
               />
-              <span>视频上铺一层半透明黑底</span>
+              <span>{{ $t('caption.backgroundHint') }}</span>
             </div>
           </label>
         </GlassCard>

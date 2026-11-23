@@ -12,7 +12,7 @@ const emit = defineEmits<{ 'update:modelValue': [value: DocImageResolution] }>()
 
 <template>
   <ParamSelect
-    label="分辨率"
+    :label="$t('common.resolutionLabel')"
     width="88px"
     :model-value="modelValue"
     @update:model-value="emit('update:modelValue', $event as DocImageResolution)"
