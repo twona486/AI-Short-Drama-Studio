@@ -51,7 +51,7 @@ function probeVideo(url: string): Promise<MediaInfo> {
     v.muted = true
     const timer = window.setTimeout(() => {
       cleanup()
-      reject(new Error('无法读取视频元数据'))
+      reject(new Error('영상 메타데이터를 읽지 못했어요.'))
     }, 8000)
     const cleanup = () => {
       window.clearTimeout(timer)
@@ -72,7 +72,7 @@ function probeVideo(url: string): Promise<MediaInfo> {
     }
     v.onerror = () => {
       cleanup()
-      reject(new Error('无法读取视频元数据'))
+      reject(new Error('영상 메타데이터를 읽지 못했어요.'))
     }
     v.src = url
   })
@@ -89,7 +89,7 @@ function probeAudio(url: string): Promise<MediaInfo> {
         duration: a.duration
       })
     }
-    a.onerror = () => reject(new Error('无法读取音频元数据'))
+    a.onerror = () => reject(new Error('오디오 메타데이터를 읽지 못했어요.'))
     a.src = url
   })
 }
@@ -214,14 +214,14 @@ export async function extractVideoThumbnail(blob: Blob): Promise<Blob> {
   v.src = url
   try {
     await new Promise<void>((resolve, reject) => {
-      const timer = window.setTimeout(() => reject(new Error('视频元数据超时')), 10000)
+      const timer = window.setTimeout(() => reject(new Error('영상 메타데이터 읽기 시간이 초과됐어요.')), 10000)
       v.onloadedmetadata = () => {
         window.clearTimeout(timer)
         resolve()
       }
       v.onerror = () => {
         window.clearTimeout(timer)
-        reject(new Error('视频加载失败'))
+        reject(new Error('영상을 불러오지 못했어요.'))
       }
     })
     try {
@@ -256,7 +256,7 @@ export async function extractVideoThumbnail(blob: Blob): Promise<Blob> {
       canvas.height = Math.max(1, Math.round(w / ratio))
       ctx.drawImage(v, 0, 0, canvas.width, canvas.height)
       const jpeg = await new Promise<Blob>((resolve, reject) => {
-        canvas.toBlob((b) => (b ? resolve(b) : reject(new Error('封面为空'))), 'image/jpeg', 0.82)
+        canvas.toBlob((b) => (b ? resolve(b) : reject(new Error('표지 이미지가 비어 있어요.'))), 'image/jpeg', 0.82)
       })
       lastJpeg = jpeg
       if (!canvasIsDark(ctx, canvas.width, canvas.height)) return jpeg
@@ -282,14 +282,14 @@ export async function extractVideoLastFrame(blob: Blob): Promise<Blob> {
   v.src = url
   try {
     await new Promise<void>((resolve, reject) => {
-      const timer = window.setTimeout(() => reject(new Error('视频元数据超时')), 10000)
+      const timer = window.setTimeout(() => reject(new Error('영상 메타데이터 읽기 시간이 초과됐어요.')), 10000)
       v.onloadedmetadata = () => {
         window.clearTimeout(timer)
         resolve()
       }
       v.onerror = () => {
         window.clearTimeout(timer)
-        reject(new Error('视频加载失败'))
+        reject(new Error('영상을 불러오지 못했어요.'))
       }
     })
     try {
@@ -318,7 +318,7 @@ export async function extractVideoLastFrame(blob: Blob): Promise<Blob> {
       canvas.height = Math.max(1, Math.round(w / ratio))
       ctx.drawImage(v, 0, 0, canvas.width, canvas.height)
       const jpeg = await new Promise<Blob>((resolve, reject) => {
-        canvas.toBlob((b) => (b ? resolve(b) : reject(new Error('末帧为空'))), 'image/jpeg', 0.9)
+        canvas.toBlob((b) => (b ? resolve(b) : reject(new Error('끝 프레임이 비어 있어요.'))), 'image/jpeg', 0.9)
       })
       lastJpeg = jpeg
       if (!canvasIsDark(ctx, canvas.width, canvas.height)) return jpeg
