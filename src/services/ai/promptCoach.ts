@@ -1,5 +1,5 @@
 /**
- * 图生视频画布：按用户原文扩写节点提示词，补画面层次，不另起故事，不改格式。
+ * 이미지→영상画布：按用户原文扩写节点提示词，补画面层次，不另起故事，不改格式。
  */
 import { callLLM, getAIMode } from './client'
 import { parseJsonRobust, stripModelWrappers } from '@/utils/jsonRepair'
@@ -68,12 +68,12 @@ function formatBreakReason(original: string, next: string): string | null {
   const origAnchors = extractFormatAnchors(original)
   if (!origAnchors.length) {
     if (H3_HEADINGS.test(next) && !H3_HEADINGS.test(original)) {
-      return '扩写把原文改成了另一套分段格式'
+      return '프롬프트를 확장하면서 원문의 섹션 구조가 바뀌었습니다.'
     }
     return null
   }
   const missing = origAnchors.filter((anchor) => !hasAnchor(next, anchor))
-  if (missing.length) return `扩写丢掉了原格式：${missing.slice(0, 8).join('、')}`
+  if (missing.length) return `프롬프트 확장 중 원문의 표식이 사라졌습니다. ${missing.slice(0, 8).join('、')}`
   return null
 }
 
@@ -101,39 +101,39 @@ function mockExpand(input: OptimizeNodePromptInput): OptimizeNodePromptResult {
   if (!base) {
     return {
       prompt: input.kind === 'video' ? '一条连续镜头。写清谁在做什么、光从哪来。' : '一张能看清主体和光线的静帧。',
-      note: '演示模式：原文为空，只给了占位。'
+      note: '데모 모드입니다. 원문이 비어 있어 임시 문구를 넣었습니다.'
     }
   }
-  return { prompt: base, note: '演示模式：不改格式，原文原样保留。' }
+  return { prompt: base, note: '데모 모드입니다. 원문과 형식을 그대로 유지했습니다.' }
 }
 
 function formatRules(input: OptimizeNodePromptInput, current: string): string {
-  const kindLabel = input.kind === 'video' ? '图生视频' : '文生图 / 图生图'
+  const kindLabel = input.kind === 'video' ? '이미지→영상' : '텍스트→이미지 / 이미지→이미지'
   const duration = input.kind === 'video' ? Math.max(1, Math.round(input.duration || 8)) : 0
   const anchors = extractFormatAnchors(current)
   const anchorLine = anchors.length
-    ? `原文必须保留的标记：${anchors.join('、')}`
-    : '原文没有分段标题。不要给它套 MiniMax 六段或任何新模板。'
+    ? `원문에서 꼭 보존할 표식 ${anchors.join('、')}`
+    : '원문에 섹션 제목이 없습니다. MiniMax 여섯 섹션이나 다른 형식을 입히지 마세요.'
 
   const shotBlock =
     input.kind === 'video'
-      ? `这是连续 ${duration} 秒的一条镜头：只加厚开幅、动作怎么起、怎么收，不要切镜，不要新按秒切段。原文里已有的秒标记原样保留。`
-      : '这是静帧：只加厚已经能看见的画面，不要写时间流逝。'
+      ? `${duration}초 동안 이어지는 샷 하나입니다. 시작 화면, 동작의 시작과 끝만 구체화하세요. 샷을 자르거나 새 시간 구간을 만들지 마세요. 원문의 시간 표식은 그대로 유지하세요.`
+      : '정지 프레임입니다. 화면에서 보이는 내용만 구체화하고 시간의 흐름은 쓰지 마세요.'
 
-  return `你是提示词润色助手。只加厚原文里已有的画面，绝对不改变格式。
-任务类型：${kindLabel}。
-格式铁律：
+  return `당신은 프롬프트를 다듬는 도우미입니다. 원문에 있는 화면만 구체화하고 형식을 바꾸지 마세요.
+작업 유형은 ${kindLabel}입니다.
+형식 필수 규칙
 - ${anchorLine}
-- 标题、分段、[Shot]、图1=、0.00-2.00 这类标记的名字和顺序都不能改。
-- 禁止把自由段落改成六段，也禁止把已有分段拆掉、合并或改名。
-- 只在原有段落内部写得更具体：眉眼嘴、手、身体、光、材质、声音。
-- 台词、人名、服装、场景限制、参考图指代一律不动。
-- 原来用中文的句子继续中文，原来用英文的句子继续英文，不要整段互译。
+- 제목, 섹션, [Shot], 图1=, 0.00-2.00 같은 표식의 이름과 순서를 유지하세요.
+- 자유 형식 문단을 여섯 섹션으로 바꾸거나 기존 섹션을 삭제, 통합, 이름 변경하지 마세요.
+- 기존 문단 안에서 눈썹과 눈, 입, 손, 몸, 빛, 재료와 소리를 구체화하세요.
+- 대사, 이름, 의상, 장면의 제약과 참조 이미지 표시는 그대로 두세요.
+- 생성 모델에 전달하는 프롬프트는 문장마다 원래 언어를 유지하세요. 중국어는 중국어로, 영어는 영어로 유지하고 문단 전체를 다른 언어로 바꾸지 마세요.
 ${shotBlock}
-硬性要求：
-- 没写的剧情不要编。
-- 禁止套话，禁止分析过程。prompt 只能是给生成模型看的全文。
-只输出 JSON：{"prompt":"扩写后的全文","note":"改了什么，一两句中文"}`
+필수 요구사항
+- 원문에 없는 이야기를 만들어 내지 마세요.
+- 상투적인 말과 분석 과정을 생략하세요. prompt에는 생성 모델에 보낼 본문 전문만 넣으세요.
+JSON만 출력하세요. {"prompt":"확장한 프롬프트 전문","note":"무엇을 바꿨는지 한국어 한두 문장으로 설명"}`
 }
 
 async function askOnce(
@@ -152,19 +152,19 @@ async function askOnce(
       { role: 'system', content: formatRules(input, current) },
       {
         role: 'user',
-        content: `节点：${input.nodeLabel}
+        content: `노드 ${input.nodeLabel}
 
-当前提示词：
-${current || '（空）'}
+현재 프롬프트
+${current || '（비어 있음）'}
 
-用户补充：
-${hint || '（没有额外要求，按更有画面感来扩，但不要改格式）'}
+사용자가 추가한 요청
+${hint || '（추가 요청 없음. 형식을 유지하고 화면을 더 생생하게 묘사）'}
 
-剧情参考：
-${script ? script.slice(0, 6000) : '（无）'}
+이야기 참조 자료
+${script ? script.slice(0, 6000) : '（없음）'}
 ${extra}
 
-直接给出扩写后的全文。格式必须与当前提示词一致。`
+확장한 본문 전문을 반환하세요. 현재 프롬프트와 같은 형식을 유지하세요.`
       }
     ]
   })
@@ -179,14 +179,14 @@ function readPrompt(content: string): { prompt: string; note: string } | null {
     }
     const prompt = String(parsed.prompt || parsed.optimizedPrompt || '').trim()
     if (prompt.length >= 8 && !isReasoningDump(prompt)) {
-      return { prompt, note: String(parsed.note || '已按原文加厚画面，格式未改。').trim() }
+      return { prompt, note: String(parsed.note || '원문 형식에 맞춰 화면 묘사를 구체화했습니다.').trim() }
     }
   } catch {
     /* ignore */
   }
   const fallback = stripModelWrappers(content).trim()
   if (fallback.length >= 8 && !isReasoningDump(fallback) && fallback[0] !== '{') {
-    return { prompt: fallback, note: '模型没按 JSON 返回，已尽量保留扩写正文。' }
+    return { prompt: fallback, note: '모델이 JSON을 반환하지 않아 확장한 프롬프트 본문을 가능한 한 보존했습니다.' }
   }
   return null
 }
@@ -199,35 +199,35 @@ export async function optimizeNodePrompt(
   const hint = input.userHint?.trim() || ''
   const script = input.script?.trim() || ''
   if (!current && !hint && !script) {
-    throw new Error('先在节点里写一句要生成什么，或贴一段剧情参考。')
+    throw new Error('먼저 노드에 생성할 내용을 한 문장으로 쓰거나 이야기 참조 자료를 붙여 넣으세요.')
   }
   if (getAIMode() === 'mock') return mockExpand(input)
   if (!current) {
-    throw new Error('先在节点里写下提示词。扩写只加厚原文，不会另起一套格式。')
+    throw new Error('먼저 노드에 프롬프트를 작성하세요. 원문의 형식을 유지한 채 기존 내용을 구체화합니다.')
   }
 
-  onProgress?.('正在按原文格式加厚提示词…')
+  onProgress?.('원문의 형식에 맞춰 프롬프트를 구체화하는 중…')
   const first = await askOnce(input, current, hint, script)
   let result = readPrompt(first.content)
-  let breakReason = result ? formatBreakReason(current, result.prompt) : '没有得到可用提示词'
+  let breakReason = result ? formatBreakReason(current, result.prompt) : '사용 가능한 프롬프트를 얻지 못했습니다.'
 
   if (result && !breakReason) return result
 
-  onProgress?.('上次改了格式，正在按原文结构重写…')
+  onProgress?.('이전 응답의 형식이 바뀌어 원문의 구조로 다시 작성하는 중…')
   const retry = await askOnce(
     input,
     current,
     hint,
     script,
-    `\n上次结果不合格：${breakReason || '格式被改了'}。必须用原文的标题和分段，只加厚内容，不要换模板。`
+    `\n이전 응답이 요구사항을 충족하지 못했습니다. ${breakReason || '형식이 바뀌었습니다.'} 원문의 제목과 섹션을 그대로 쓰고 내용만 구체화하세요. 다른 형식을 사용하지 마세요.`
   )
   result = readPrompt(retry.content)
   if (!result || isReasoningDump(result.prompt)) {
-    throw new Error('扩写写成了分析过程，没有得到提示词。请换一个模型或再试一次。')
+    throw new Error('모델이 프롬프트 대신 분석 과정을 반환했습니다. 다른 모델을 선택하거나 다시 시도하세요.')
   }
   breakReason = formatBreakReason(current, result.prompt)
   if (breakReason) {
-    throw new Error(`${breakReason}。原文格式必须保留，请再试一次。`)
+    throw new Error(`${breakReason} 원문의 형식을 유지해 다시 시도하세요.`)
   }
   return result
 }
