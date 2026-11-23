@@ -988,15 +988,15 @@ export function extractSpokenFromNotes(text: string): string[] {
 export function nodeTextHasSpeech(text: string): boolean {
   const t = String(text || '')
   if (extractSpokenFromNotes(t).length) return true
-  if (/没有台词|无对白|不说话|无口播|No dialogue/i.test(t)) return false
-  if (/<d\s*>/i.test(t) && !/<d>\s*\[[^\]]+\]\s*(?:无|没有|无对白|none|N\/A)\s*<\/d>/i.test(t)) return true
+  if (/没有台词|无对白|不说话|无口播|대사 없음|대사가 없|내레이션 없음|말하지 않|No dialogue|No narration/i.test(t)) return false
+  if (/<d\s*>/i.test(t) && !/<d>\s*\[[^\]]+\]\s*(?:无|没有|无对白|없음|대사 없음|none|N\/A)\s*<\/d>/i.test(t)) return true
   return /(?:喊出|喊道|叫道|叫着|轻声说|小声说|小声喊)/.test(t)
 }
 
 export function nodeTextForbidsSpeech(text: string): boolean {
   const t = String(text || '')
   if (extractSpokenFromNotes(t).length) return false
-  return /没有台词|无对白|不说话|无口播|No dialogue/i.test(t)
+  return /没有台词|无对白|不说话|无口播|대사 없음|대사가 없|내레이션 없음|말하지 않|No dialogue|No narration/i.test(t)
 }
 
 function spokenLinesForPrompt(input: H3PromptInput): string[] {
@@ -1129,9 +1129,9 @@ function shotSizeEn(raw?: string): string {
 
 function angleEn(raw?: string): string {
   const t = String(raw || '')
-  if (/过肩/.test(t)) return 'over-the-shoulder'
-  if (/俯/.test(t)) return 'slight high angle'
-  if (/仰/.test(t)) return 'slight low angle'
+  if (/过肩|오버숄더|over.the.shoulder/i.test(t)) return 'over-the-shoulder'
+  if (/俯|하이 앵글|high angle/i.test(t)) return 'slight high angle'
+  if (/仰|로우 앵글|low angle/i.test(t)) return 'slight low angle'
   if (/45|侧/.test(t)) return 'framed from a slight side angle'
   return 'framed from a slight three-quarter angle'
 }
@@ -1244,7 +1244,7 @@ function descriptionFromNotes(input: H3PromptInput): string {
         ? 'push'
         : /慢拉|拉远|拉开/.test(notedMove)
           ? 'pull'
-          : /上摇|俯仰/.test(notedMove)
+          : /上摇|俯仰|로우 앵글|low angle/i.test(notedMove)
             ? 'tilt'
             : /横摇|摇镜|横移/.test(notedMove)
               ? 'pan'
@@ -1307,7 +1307,7 @@ export function compiledH3PromptNeedsRebuild(text: string | undefined): boolean 
   const t = String(text || '').trim()
   if (!t) return true
   if (isLifelessH3Prompt(t)) return true
-  if (/<d>\s*\[(?:Chinese|English|Japanese|Korean)\]\s*(?:无|没有|无对白|无台词|none|N\/A)\s*<\/d>/i.test(t)) {
+  if (/<d>\s*\[(?:Chinese|English|Japanese|Korean)\]\s*(?:无|没有|无对白|无台词|없음|대사 없음|none|N\/A)\s*<\/d>/i.test(t)) {
     return true
   }
   if (/says(?: in an off-screen voiceover)?:\s*<d>\s*\[Chinese\]\s*无\s*<\/d>/i.test(t)) return true
@@ -1366,12 +1366,12 @@ function dialogueCuesForPrompt(input: H3PromptInput): DialogueCue[] {
 function dialogueTurnIssue(desc: string, expected: DialogueCue[]): string {
   if (!expected.length) return ''
   const tags = [...String(desc || '').matchAll(/<d>\s*\[[^\]]*\]\s*([\s\S]*?)<\/d>/gi)]
-  if (tags.length !== expected.length) return `台词标签数量应为 ${expected.length}，实际为 ${tags.length}`
+  if (tags.length !== expected.length) return `Expected ${expected.length} dialogue tags but found ${tags.length}.`
   for (let i = 0; i < tags.length; i += 1) {
     const index = tags[i].index || 0
     const lead = desc.slice(Math.max(0, index - 260), index)
     if (!/\(S\d+\)[^.\n]{0,180}\b(?:says?|asks?|shouts?|replies?|exclaims?|yells?|whispers?)\b[^.\n]{0,120}[:，,]?\s*$/i.test(lead)) {
-      return `第 ${i + 1} 句台词没有紧邻的唯一说话人 (S#) 和说话动作`
+      return `Line ${i + 1} needs exactly one speaker (S#) and a speech verb immediately before the tag.`
     }
   }
   return ''
@@ -1602,10 +1602,10 @@ export async function compileH3OfficialPrompt(input: H3PromptInput): Promise<str
 This is ONE generated clip. The field format is fixed, but the filmmaking is NOT a fill-in template. Read the dramatic event first, then author the shot around its unique action and emotional causality.
 
 Required output structure:
-1) START by copying the speaker lock verbatim. (S1) is permanently the first character picture, (S2) the second. Never renumber S by dialogue order, and never write 图1 or "this person's character design" instead of (S#).
-(S1) is 「中文名」 / <Picture 1>. Lock face, hair, body, age and outfit. Identity reference only, not the first frame.
-(S2) is 「中文名」 / <Picture 2>. Lock face, hair, body, age and outfit. Identity reference only, not the first frame.
-<Picture 3> is the location 「场景名」. Lock space, materials, weather and light.
+1) START by copying the speaker lock verbatim. (S1) is permanently the first character picture, (S2) the second. Never renumber S by dialogue order, and never write “Picture 1” or "this person's character design" instead of (S#).
+(S1) is 「character name」 / <Picture 1>. Lock face, hair, body, age and outfit. Identity reference only, not the first frame.
+(S2) is 「character name」 / <Picture 2>. Lock face, hair, body, age and outfit. Identity reference only, not the first frame.
+<Picture 3> is the location 「location name」. Lock space, materials, weather and light.
 Only one (S#) speaks at a time. Everyone else keeps their lips completely closed.
 These images are identity/location locks, NOT first frames. Do not write "Picture 1 is the first frame" or "Picture 1 aligns with 0.00 seconds".
 
@@ -1615,13 +1615,13 @@ These images are identity/location locks, NOT first frames. Do not write "Pictur
 
 4) Camera movement must be motivated by what the audience needs to discover. State where the camera begins, what action or reveal makes it move, what foreground/background parallax or focus change occurs, and where it lands. The supplied camera family is only a preference, not a command. Static is valid only when stillness creates tension; do not repeat a static-camera sentence in every beat. Never combine “no pan, tilt, or zoom” with a push, pull, pan, tilt, or arc.
 
-5) Direct performance through observable behavior and progression, not emotion labels: weight in the steps, a delayed glance, fingers missing the switch, breath catching, shoulders releasing, jaw tightening, or attention shifting to a sound. Derive the exact emotion from this beat; never turn every 怒 into “cold and controlled,” and never use generic instructions such as “faces show a specific reaction,” “play the emotional change,” or “hold the last expression and let the frame breathe.”
+5) Direct performance through observable behavior and progression, not emotion labels: weight in the steps, a delayed glance, fingers missing the switch, breath catching, shoulders releasing, jaw tightening, or attention shifting to a sound. Derive the exact emotion from this beat; never turn every expression of anger into “cold and controlled,” and never use generic instructions such as “faces show a specific reaction,” “play the emotional change,” or “hold the last expression and let the frame breathe.”
 
 6) Treat each reference character according to the state described in the scene: living body, carved statue, portrait, reflection, shadow, off-screen voice, hidden presence, or absent identity reference. A character reference does NOT prove that a full living person is physically present. Do not duplicate a referenced identity as both a person and a prop unless the action explicitly shows a transformation.
 
 7) Dialogue ONLY inside <d>. Each trusted line is spoken once, by its own (S#), in its own time range. Never let two people talk at once, and never let a second person repeat the line. Use exactly:
-(S1) says: <d>[Chinese] 原词</d> Only (S1) speaks in this shot. (S2) keeps their lips completely closed and makes no voice.
-The tag contains ONLY the spoken words. Never dump 场记, timestamps, style, picture labels, or Camera language into <d>. A bare <d> tag is forbidden. The listener stays in the blocking with a closed mouth. Do not split a clip merely because its dialogue is fast when the user's timing explicitly fits it.
+(S1) says: <d>[Korean] 제 말을 들어 주세요.</d> Only (S1) speaks in this shot. (S2) keeps their lips completely closed and makes no voice.
+The tag contains ONLY the spoken words. Never put continuity notes, timestamps, style, picture labels, or Camera language into <d>. A bare <d> tag is forbidden. The listener stays in the blocking with a closed mouth. Do not split a clip merely because its dialogue is fast when the user's timing explicitly fits it.
 
 Timeline writing standard:
 - Use the user's timing when supplied; otherwise divide the full duration according to action and dialogue, never into generic equal thirds.
@@ -1639,7 +1639,7 @@ Rules:
 - Write direct, decisive filmmaking prose like a director describing the finished moving image. The format is a container, not a prose template.
 - Write action, camera, lighting, and performance in English. Preserve dialogue in its original language inside <d> and preserve 「source names」 in the speaker lock. Write the blocking in English, including who is left or right, what they hold, and how a prop changes over time. Preserve explicitly requested Korean on-screen text.
 - In action prose, call people (S1), (S2) exactly as the speaker lock defines them. Do not invent a new S number per line. Do not anonymize a known character as “the man.” Recurring props keep the (P#) and <Picture N> written in the lock. When a hand touches that object, name that picture.
-- Spoken lines already extracted below are the ONLY dialogue. If the list is empty, write No dialogue. No lips moving. NEVER invent speech from 场记, timestamps, style, or the speaker lock. Never put 无 or director notes inside a d tag.
+- Spoken lines already extracted below are the ONLY dialogue. If the list is empty, write No dialogue. No lips moving. NEVER invent speech from continuity notes, timestamps, style, or the speaker lock. Never put “none” or director notes inside a d tag.
 - MUST COPY the speaker-lock block below verbatim at the start of integrated_multimodal_description. Do not invent, omit, or reorder (S1)/(S2)/<Picture N>.
 - overall_soundscape names the script's real sounds (chip crunch, cushion rustle, room tone). Do not write a generic sentence such as "close breath stay synchronized with the picture. Spoken words appear only inside the d tag."
 - Delivery format is chosen by the app, not by you. Write the shot body only. Multimodal reference (R2VA) is wrapped into six sections: subject_definitions, summary, retention_analysis, detailed_description, overall_soundscape, non_diegetic_music. First-frame (I2VA), first-and-last-frame (FL2VA), last-frame (L2VA) and text-only (T2VA) stay three fields, with the official alignment line added outside your JSON. Do not emit those headers yourself.
@@ -1662,12 +1662,12 @@ MUST COPY this speaker lock verbatim (identity/location lock, not first frames):
 ${pictureRoster(resolved) || 'no extra pictures'}
 Voice mode: ${cueLines.length ? resolved.voiceMode || 'dialogue' : 'none — no trusted spoken lines; do NOT invent dialogue'}
 Character voice (this speaker's own timbre, kept verbatim as delivery inside each <d> bracket; do not reinterpret or translate it away): ${resolved.speakerVoice || '(not set — infer a natural timbre that fits the character)'}
-Spoken lines already extracted (quotes / 台词 / 口播栏 only; director notes are NOT speech):
+Spoken lines already extracted (quotes, dialogue, or narration fields only; director notes are NOT speech):
 ${cueLines.length ? cueLines.map((line, i) => `${i + 1}. ${line}`).join('\n') : '(none — write No dialogue. No lips moving.)'}
 Dialogue ownership recovered from the source (each item is one exclusive turn; preserve this order):
 ${dialogueCues.length ? dialogueCues.map((cue, i) => `${i + 1}. (${speakerCode(resolved, cue.speaker)}) speaker=${cue.speaker || 'unassigned'} | words=${cue.text}`).join('\n') : '(none)'}
 Sound notes: ${englishOrOmit(resolved.audioDescription) || '(from the node text)'}
-NODE MATERIAL TO DIRECT (source of truth for event, props, blocking and continuity; 场记/时长/画风 are not speech):
+NODE MATERIAL TO DIRECT (source of truth for event, props, blocking and continuity; continuity notes, duration, and visual style are not speech):
 ${source || '(perform the beat in this location)'}`
         }
       ],
@@ -1704,7 +1704,7 @@ ${source || '(perform the beat in this location)'}`
 The rejected draft was lifeless because it used a reusable timing template, repeated static-camera instructions, or failed to preserve the actual event.
 Write the moving image itself. Preserve the exact speaker lock and trusted dialogue. (S1) is the first character picture for the whole clip. Subject universe lock: only subjects present in the source material and reference pictures may appear — never add new characters, animals, or plot events, and never turn idioms or fables into literal content. The visual style must match the reference pictures exactly. Build a concrete cause-and-effect action chain with named props, motivated camera changes, observable performance, environmental reaction, and a visible final state. Give each spoken line its own time range. Never create generic opening/middle/hold slots. Never treat a statue, portrait, reflection, hidden presence, or off-screen identity as a living body. Write English action prose; preserve Korean or Chinese names and trusted <d> dialogue verbatim. A Chinese scene body will be deleted.
 
-Dialogue is exclusive turn-taking. Immediately before every <d>, write the stable (S#) and says/asks/replies. Form: (S1) says: <d>[Chinese] 原词</d> Only (S1) speaks in this shot. (S2) keeps their lips completely closed. Bare <d> tags are forbidden. Do not split the clip merely because the delivery is fast.
+Dialogue is exclusive turn-taking. Immediately before every <d>, write the stable (S#) and says/asks/replies. Form: (S1) says: <d>[Korean] 제 말을 들어 주세요.</d> Only (S1) speaks in this shot. (S2) keeps their lips completely closed. Bare <d> tags are forbidden. Do not split the clip merely because the delivery is fast.
 
 Rebuild the prompt as a concise cinematic timeline, not a four-line outline and not a dense screenplay paragraph. For every range write 2–4 filmable sentences covering framing or one motivated camera move, active body action and eyeline, a trigger-based facial change, listener blocking/reaction, and dialogue when present. Preserve foreground/background and left/right positions, keep the camera axis continuous, prevent anyone from staring into the lens, and use only story-relevant props, light and environmental motion. Every range must visibly advance the event. End once with the full ${durationText(resolved)}-second completion sentence.`
           },
