@@ -72,7 +72,7 @@ export async function refineMusicPrompt(project: Project): Promise<string> {
         {
           role: 'system',
           content:
-            '당신은 숏폼 영상의 음악 감독입니다. 프로젝트 정보를 바탕으로 음악 생성 모델에 전달할 중국어 프롬프트를 80–180자로 작성하세요. 기악만 사용하며 사람 음성과 가사가 없고 내레이션의 배경음으로 어울려야 한다고 명시하세요. 설명 없이 프롬프트 본문만 출력하세요.'
+            'You are a music director for short-form video. From the project context, write an 80–180-character instrumental music prompt in English for the generation model. Specify instruments only, no vocals or lyrics, and a mix suitable under narration. Return only the prompt.'
         },
         { role: 'user', content: fallback }
       ],
