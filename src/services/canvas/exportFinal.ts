@@ -1,5 +1,5 @@
 /**
- * 画布内合成最终视频（不跳转经典导出页）
+ * 캔버스에서 최종 영상을 합성한다.
  */
 
 import { exportVideo, parseSRT, buildCuesFromClips, probeMedia, trimTimelineBySpeech } from '@/services/ffmpeg'
@@ -178,7 +178,7 @@ export async function generateFinalCut(onProgress?: (msg: string) => void) {
   })
   project.setFinalVideo(asset.id)
 
-  // 刷新画布节点状态
+  // 캔버스 노드 상태를 갱신한다.
   if (project.current?.canvas) {
     const nodes = project.current.canvas.nodes.map((n) => {
       if (n.id === 'export' || n.id === 'final' || n.type === 'final') {
