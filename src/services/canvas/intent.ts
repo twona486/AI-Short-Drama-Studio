@@ -15,16 +15,16 @@ import { isNewStoryBrief } from '@/utils/storyBrief'
 import { parseForgetRequest, parseRememberRequest } from '@/services/memory/memoryStore'
 
 export type AgentIntentKind =
-  | 'remember' // 要求记住偏好 / 事实
-  | 'forget' // 要求忘掉某条记忆
-  | 'question' // 问答咨询，不动画布
-  | 'status' // 查询项目进度 / 检查缺漏
-  | 'prompt_polish' // 加厚 / 改写提示词
-  | 'create_asset' // 新建自由图片 / 视频节点
-  | 'edit_canvas' // 修改现有节点或分镜
-  | 'pipeline' // 剧本流水线推进
+  | 'remember' // 선호 또는 사실을 저장한다.
+  | 'forget' // 기억 항목을 삭제한다.
+  | 'question' // 캔버스를 바꾸지 않고 질문에 답한다.
+  | 'status' // 진행 상황이나 누락을 확인한다.
+  | 'prompt_polish' // 프롬프트를 보완하거나 다시 작성한다.
+  | 'create_asset' // 자유 이미지 또는 영상 노드를 만든다.
+  | 'edit_canvas' // 기존 노드나 스토리보드를 수정한다.
+  | 'pipeline' // 대본 워크플로를 진행한다.
   | 'chitchat'
-  | 'task' // 其他需要工具的任务
+  | 'task' // 도구가 필요한 기타 작업
 
 export interface AgentIntent {
   kind: AgentIntentKind
