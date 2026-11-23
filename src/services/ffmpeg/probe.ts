@@ -28,7 +28,7 @@ export async function probeMedia(blob: Blob): Promise<MediaInfo> {
     try {
       return await probeVideo(url)
     } catch {
-      throw new Error('不支持的媒体类型: ' + (typed.type || '(empty)'))
+      throw new Error('지원하지 않는 미디어 유형 ' + (typed.type || '(empty)'))
     }
   } finally {
     URL.revokeObjectURL(url)
@@ -240,7 +240,7 @@ export async function extractVideoThumbnail(blob: Blob): Promise<Blob> {
     ]
     const canvas = document.createElement('canvas')
     const ctx = canvas.getContext('2d')
-    if (!ctx) throw new Error('无法绘制封面')
+    if (!ctx) throw new Error('커버 이미지를 만들 수 없습니다.')
     let lastJpeg: Blob | null = null
     for (const t of candidates) {
       const target = Math.min(Math.max(0.04, t), Math.max(0.04, dur - 0.05))
@@ -262,7 +262,7 @@ export async function extractVideoThumbnail(blob: Blob): Promise<Blob> {
       if (!canvasIsDark(ctx, canvas.width, canvas.height)) return jpeg
     }
     if (lastJpeg) return lastJpeg
-    throw new Error('无法绘制封面')
+    throw new Error('커버 이미지를 만들 수 없습니다.')
   } finally {
     v.pause()
     v.removeAttribute('src')
@@ -301,7 +301,7 @@ export async function extractVideoLastFrame(blob: Blob): Promise<Blob> {
     const dur = Number.isFinite(v.duration) && v.duration > 0 ? v.duration : 1
     const canvas = document.createElement('canvas')
     const ctx = canvas.getContext('2d')
-    if (!ctx) throw new Error('无法绘制末帧')
+    if (!ctx) throw new Error('끝 프레임을 만들 수 없습니다.')
     // 末帧附近可能有编码噪声，向前微退半帧并在两个采样点里取非黑的那帧。
     const candidates = [Math.max(0.04, dur - 0.08), Math.max(0.04, dur - 0.25)]
     let lastJpeg: Blob | null = null
@@ -324,7 +324,7 @@ export async function extractVideoLastFrame(blob: Blob): Promise<Blob> {
       if (!canvasIsDark(ctx, canvas.width, canvas.height)) return jpeg
     }
     if (lastJpeg) return lastJpeg
-    throw new Error('无法绘制末帧')
+    throw new Error('끝 프레임을 만들 수 없습니다.')
   } finally {
     v.pause()
     v.removeAttribute('src')
