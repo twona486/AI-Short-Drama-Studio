@@ -183,9 +183,9 @@ export async function togglePinMemory(id: string): Promise<void> {
 }
 
 const KIND_LABEL: Record<MemoryKind, string> = {
-  preference: '偏好',
-  fact: '事实',
-  note: '笔记'
+  preference: 'Preference',
+  fact: 'Fact',
+  note: 'Note'
 }
 
 /** 组装注入 LLM 上下文的记忆文本。没有记忆时返回空串。 */
@@ -197,8 +197,8 @@ export async function memoryContextPrompt(): Promise<string> {
   const fmt = (list: AgentMemoryEntry[]) =>
     list.map((e) => `- [${KIND_LABEL[e.kind]}] ${e.content}`).join('\n')
   const parts: string[] = []
-  if (global.length) parts.push(`【用户长期记忆】\n${fmt(global)}`)
-  if (proj.length) parts.push(`【本项目记忆】\n${fmt(proj)}`)
+  if (global.length) parts.push(`【Long-term user memory】\n${fmt(global)}`)
+  if (proj.length) parts.push(`【Project memory】\n${fmt(proj)}`)
   return parts.join('\n\n')
 }
 
