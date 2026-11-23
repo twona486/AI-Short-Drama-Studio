@@ -380,41 +380,41 @@ function buildStylePriorityBlock(input: StoryboardInput): string {
   const mediumPhrase = extractUserMediumPhrase(input.topic, input.content, ...(input.keywords ?? []))
 
   if (mediumPhrase) {
-    return `【画风听用户的 · 硬性】
-用户点名了画风。画风写进画面实物里，不要单独开一段技法说明书。
+    return `【사용자 지정 그림체 필수 적용】
+사용자가 그림체를 지정했습니다. 화면에 실제로 보이는 물건을 묘사하면서 그림체를 표현하세요. 기법만 설명하는 문단은 만들지 마세요.
 
-用户点名的画风原词（文中点一次即可）：「${mediumPhrase}」
+사용자가 지정한 그림체 원문(본문에서 한 번 언급) 「${mediumPhrase}」
 
-用户主题/画风原文：
+사용자 주제와 그림체 원문
 """
 ${userAuth}
 """
 
-每一镜 visualPrompt 必须是镜头语言：
-1. 写画面里能看见的一切：地面/建筑/水/植物/天空/道具，近到远。
-2. 写动态：水波、风、衣摆、烟尘；不动也要写明静止。
-3. 写光从哪来、影子落在哪。
-4. 人：衣服、手脚、朝向、手里的具体物件、这一秒在做什么。
-5. 「${mediumPhrase}」在文中自然出现一次；技法只写在实物上。禁止开头「${mediumPhrase}。」然后空讲站位，禁止结尾抄画风套话。
+모든 visualPrompt는 샷 연출에 맞춰 작성하세요.
+1. 바닥, 건축물, 물, 식물, 하늘, 소품 등 화면에서 보이는 모든 것을 가까운 곳부터 먼 곳까지 쓰세요.
+2. 물결, 바람, 옷자락, 연기와 먼지의 움직임을 쓰세요. 움직이지 않으면 정지 상태를 명시하세요.
+3. 빛이 어디에서 오고 그림자가 어디에 드리우는지 쓰세요.
+4. 인물의 옷, 손발, 방향, 손에 든 구체적인 물건과 이 순간 하는 동작을 쓰세요.
+5. ‘${mediumPhrase}’을 본문에서 자연스럽게 한 번 언급하고 기법은 실물 묘사에 녹이세요. ‘${mediumPhrase}’로 시작해 인물의 위치만 나열하거나 끝에 상투적인 그림체 문장을 붙이지 마세요.
 ${
   look.matched
-    ? `6. 该媒介画在实物上时注意：${VISUAL_STYLE_GUIDE[look.matched].mustInclude}。${VISUAL_STYLE_GUIDE[look.matched].avoid}`
-    : `6. 按「${mediumPhrase}」这个媒介本身的材料与质感来写实物，不要套页面下拉风格。`
+    ? `6. 이 표현 매체로 실제 물건을 묘사할 때 다음 사항을 지키세요. ${VISUAL_STYLE_GUIDE[look.matched].mustInclude}。${VISUAL_STYLE_GUIDE[look.matched].avoid}`
+    : `6. ‘${mediumPhrase}’ 자체의 재료와 질감에 맞춰 물건을 묘사하고 화면 드롭다운의 그림체는 적용하지 마세요.`
 }`
   }
 
   if (userAuth) {
-    return `【画风听用户的】
-用户主题原文（保留味道，但主题没点名具体媒介）：
+    return `【사용자 지정 그림체 적용】
+사용자 주제 원문(분위기를 유지하며 특정 매체는 지정되지 않음)
 """
 ${userAuth}
 """
 
-画面媒介以下拉风格为准（当前：${styleLabel(input.style)} / ${input.style}）：
+화면 표현 매체는 드롭다운의 그림체를 따르세요(현재 ${styleLabel(input.style)} / ${input.style}）：
 ${fallback}`
   }
 
-  return `【画风指令】主题未写画风时，以下拉风格为准：
+  return `【그림체 지침】주제에 그림체가 없으면 드롭다운의 스타일을 따르세요.
 ${fallback}`
 }
 
@@ -447,7 +447,7 @@ async function parseJsonWithModelRepair(
       }
     })()
     if (!jsonCandidate) {
-      throw new Error(`${label} JSON 自动修复失败：没有可修复的内容\n首次错误：${(parseError as Error).message}`)
+      throw new Error(`${label} JSON 자동 복구에 실패했습니다. 복구할 내용이 없습니다.\n첫 오류 ${(parseError as Error).message}`)
     }
     let repairedContent = ''
     try {
@@ -478,7 +478,7 @@ async function parseJsonWithModelRepair(
       }
     }
     throw new Error(
-      `${label} JSON 自动修复失败：${(parseError as Error).message}`
+      `${label} JSON 자동 복구에 실패했습니다. ${(parseError as Error).message}`
     )
   }
 }
@@ -561,7 +561,7 @@ async function ensureNarrativeContinuity(
   for (let round = 0; round < 2; round++) {
     const issues = await auditStoryboardNarrative(current, input, model)
     if (!issues.length) return current
-    onProgress?.(`发现叙事断层，正在局部重排相关镜头（${round + 1}/2）…`)
+    onProgress?.(`이야기가 끊기는 부분을 찾아 관련 샷을 재배치하는 중（${round + 1}/2）…`)
     log(`⚠ 叙事连续性未通过 ${round + 1}/2：${issues.join('；')}`)
     current = await repairStoryboardOnce(
       current,
@@ -573,7 +573,7 @@ async function ensureNarrativeContinuity(
   }
   const remaining = await auditStoryboardNarrative(current, input, model)
   if (remaining.length) {
-    throw new Error(`叙事连续性验收未通过（已自动局部重写 2 次）：${remaining.join('；')}`)
+    throw new Error(`샷을 두 차례 자동으로 부분 수정했지만 이야기 연속성 검수를 통과하지 못했습니다. ${remaining.join('；')}`)
   }
   return current
 }
@@ -590,23 +590,23 @@ async function polishStoryboardOnce(
   onProgress?: (msg: string) => void
 ): Promise<StoryboardResult> {
   const structural = storyboardQualityIssues(parsed, input)
-  onProgress?.('快速检查镜头承接与说话者归属…')
+  onProgress?.('샷 연결과 대사별 화자를 확인하는 중…')
   const narrative = await auditStoryboardNarrative(parsed, input, model)
   const issues = [...structural, ...narrative.map((issue) => `叙事承接：${issue}`)].slice(0, 16)
   if (!issues.length) return parsed
 
-  onProgress?.('发现可改进处，合并修订一次后立即交稿…')
+  onProgress?.('개선할 항목을 모아 한 번 수정한 뒤 초안을 제공하는 중…')
   try {
     const repaired = await repairStoryboardOnce(parsed, input, model, issues)
     const remaining = storyboardQualityIssues(repaired, input)
     if (remaining.length) {
       log(`⚠ 修订后仍有非阻断问题，交付可编辑稿：${remaining.join('；')}`)
-      onProgress?.(`已生成可编辑分镜；仍有 ${remaining.length} 项建议可在画布继续调整`)
+      onProgress?.(`편집 가능한 스토리보드를 생성했습니다. 캔버스에서 ${remaining.length}개 항목을 더 조정할 수 있습니다.`)
     }
     return repaired.shots.length ? repaired : parsed
   } catch (error) {
     log(`⚠ 合并修订失败，交付首稿：${(error as Error).message}`)
-    onProgress?.('自动修订未完成，已保留并交付可编辑首稿')
+    onProgress?.('자동 수정을 완료하지 못해 편집 가능한 첫 초안을 보존했습니다.')
     return parsed
   }
 }
@@ -619,8 +619,8 @@ async function repairStoryboardOnce(
 ): Promise<StoryboardResult> {
   const extractHint =
     input.mode === 'extract'
-      ? '输入已是完整剧本，只修提炼结果：不要改口播原意，不要另起故事。人物章每一个 ### 都必须建档——若只是对已有角色的称呼（如哥哥），把这个词写进该人物的 name/role/description；若人物表里确实有这个角色，必须单独建档。已故角色用遗物、画像或闪回入镜即可；活人对手必须有对峙或可见压力镜。每个已建档人物必须出现在至少一镜（本人、遗物、画像或可见压力）：subjectIds 挂上，visualPrompt / videoPrompt 写名字。禁止因为「这集没站在镜头正中」就把父亲、哥哥、对手从人物表删掉。禁止只做人物卡、分镜里却换成路人或「一个男人」。'
-      : '每个出场人物都在 subjects 单独建档，不能合并成一个“主角”。'
+      ? '입력은 완성 대본이므로 추출 결과만 수정하세요. 내레이션의 의미를 바꾸거나 새 이야기를 만들지 마세요. 캐릭터 절의 각 ### 항목을 기록하세요. ‘형’처럼 기존 캐릭터를 부르는 말이면 해당 인물의 name/role/description에 넣고, 캐릭터 목록에 별도로 있는 인물은 개별 기록을 만드세요. 사망한 인물은 유품, 초상화 또는 회상으로 보여 줄 수 있습니다. 살아 있는 상대역은 대치나 눈에 보이는 압박을 담은 샷이 필요합니다. 기록한 인물마다 본인, 유품, 초상화 또는 눈에 보이는 압박으로 적어도 한 샷에 등장시켜 subjectIds에 연결하고 visualPrompt / videoPrompt에 이름을 쓰세요. 화면 중앙에 서지 않는다는 이유로 아버지, 형 또는 상대역을 목록에서 빼지 마세요. 캐릭터 카드를 만들고 스토리보드에서 행인이나 ‘어떤 남자’로 바꾸지 마세요.'
+      : '등장인물마다 subjects에 개별 기록을 만들고 한 명의 ‘주인공’으로 합치지 마세요.'
   const repairTargetSec =
     Number(input.targetDurationSec) || extractTargetDurationSec(input.topic, input.content)
   const repairShotCap = shotBudgetFromDuration(repairTargetSec, input.maxShotDuration)
@@ -672,12 +672,12 @@ async function ensureStoryboardQuality(
     }
     if (round === QUALITY_REPAIR_ROUNDS) {
       throw new Error(
-        `脚本质量验收未通过（已打回重提炼 ${QUALITY_REPAIR_ROUNDS} 次）：${issues.join('；')}`
+        `${QUALITY_REPAIR_ROUNDS}차례 재추출했지만 대본 품질 검수를 통과하지 못했습니다. ${issues.join('；')}`
       )
     }
     const n = round + 1
     log(`⚠ 质量未通过，打回重提炼 ${n}/${QUALITY_REPAIR_ROUNDS}：${issues.join('；')}`)
-    onProgress?.(`验收未通过，打回重新提炼（${n}/${QUALITY_REPAIR_ROUNDS}）…`)
+    onProgress?.(`검수를 통과하지 못해 다시 추출하는 중（${n}/${QUALITY_REPAIR_ROUNDS}）…`)
     current = await repairStoryboardOnce(current, input, model, issues)
   }
   return current
