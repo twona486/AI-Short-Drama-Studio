@@ -786,7 +786,7 @@ export async function runSetupAgentTurn(
   const looksLikeDocs =
     userText.length > 400 || /https?:\/\//i.test(userText) || Boolean(comfyTpl)
   const userPayload = looksLikeDocs
-    ? `아래는 사용자가 제공한 API 설명, API 문서 또는 ComfyUI 워크플로 JSON입니다. 중계 서비스, 사용자 지정 게이트웨이 또는 로컬 ComfyUI에서 가져왔을 수 있습니다. 문서를 분석해 provider=custom 연결을 만들고 공식 공급자 주소로 바꾸지 마세요. class_type이 있는 Comfy API JSON이 포함되면 adapter.type=comfyui-prompt를 쓰고 adapter.workflowTemplate에 JSON을 저장하세요. 실행 가능한 기본 워크플로를 지어내지 마세요. 문서에 나온 기능 유형마다 add_profile을 하나씩 작성하세요.\n\n${userText}`
+    ? `The user supplied an API description, API documentation, or ComfyUI workflow JSON below. It may come from a relay service, a custom gateway, or a local ComfyUI instance. Analyze it and create a provider=custom connection without substituting an official provider URL. If it contains Comfy API JSON with class_type, set adapter.type=comfyui-prompt and store the JSON in adapter.workflowTemplate. Do not invent an executable default workflow. Create one add_profile action per capability documented.\n\n${userText}`
     : userText
   const res = await callLLM({
     messages: [
