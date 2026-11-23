@@ -127,10 +127,10 @@ export async function extractVideoFrames(
 
 function playMarkdownFromRaw(raw: any): string {
   const topic = String(raw?.topic || '영상 재현').trim()
-  const lines = [`# ${topic}`, '', '## 故事梗概', '', String(raw?.summary || raw?.aesthetic || topic), '']
+  const lines = [`# ${topic}`, '', '## 이야기 배경', '', String(raw?.summary || raw?.aesthetic || topic), '']
   const subjects = Array.isArray(raw?.subjects) ? raw.subjects : []
   if (subjects.length) {
-    lines.push('## 人物', '')
+    lines.push('## 캐릭터', '')
     for (const s of subjects) {
       lines.push(`### ${s?.name || '캐릭터'}`)
       lines.push('')
@@ -140,7 +140,7 @@ function playMarkdownFromRaw(raw: any): string {
   }
   const scenes = Array.isArray(raw?.scenes) ? raw.scenes : []
   if (scenes.length) {
-    lines.push('## 场景', '')
+    lines.push('## 환경과 장면', '')
     for (const s of scenes) {
       lines.push(`### ${s?.name || '장면'}`)
       lines.push('')
@@ -149,17 +149,17 @@ function playMarkdownFromRaw(raw: any): string {
     }
   }
   const shots = Array.isArray(raw?.shots) ? raw.shots : []
-  lines.push('## 分场', '')
+  lines.push('## 장면 구성', '')
   shots.forEach((s: any, i: number) => {
-    lines.push(`### 第 ${i + 1} 场　${s?.title || `샷 ${i + 1}`}`)
+    lines.push(`### 장면 ${i + 1}｜${s?.title || `샷 ${i + 1}`}`)
     lines.push('')
-    lines.push(`**口播**　${s?.voiceover?.trim() || '无'}`)
+    lines.push(`**내레이션**　${s?.voiceover?.trim() || '없음'}`)
     lines.push('')
-    lines.push(`**画面**　${s?.visualPrompt || s?.action || ''}`)
+    lines.push(`**화면**　${s?.visualPrompt || s?.action || ''}`)
     lines.push('')
-    lines.push(`**声音**　${s?.audioDescription || '환경음'}`)
+    lines.push(`**소리**　${s?.audioDescription || '환경음'}`)
     lines.push('')
-    lines.push(`**时长**　约 ${Math.round(Number(s?.duration) || 5)} 秒`)
+    lines.push(`**길이**　약 ${Math.round(Number(s?.duration) || 5)}초`)
     lines.push('')
   })
   return lines.join('\n')
