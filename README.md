@@ -1,13 +1,14 @@
-# 극류 Studio (剧流 Studio)
+# 극류 Studio
+
+[원본 저장소](https://github.com/JerrIsTheBesta/AI-Short-Drama-Studio)의 한국어 포크입니다.
 
 > 로컬 우선 방식으로 다양한 모델을 자유롭게 연결할 수 있는 오픈소스 AI 영상 제작 작업대입니다.
 
-[![Latest Release](https://img.shields.io/github/v/release/JerrIsTheBesta/AI-Short-Drama-Studio?label=最新版&color=5865f2)](https://github.com/JerrIsTheBesta/AI-Short-Drama-Studio/releases/latest)
+[![Latest Release](https://img.shields.io/github/v/release/JerrIsTheBesta/AI-Short-Drama-Studio?label=latest&color=5865f2)](https://github.com/JerrIsTheBesta/AI-Short-Drama-Studio/releases/latest)
 [![License: MIT](https://img.shields.io/badge/License-MIT-22c55e.svg)](LICENSE)
 [![Vue 3](https://img.shields.io/badge/Vue-3-42b883.svg)](https://vuejs.org/)
 [![Electron](https://img.shields.io/badge/Electron-Windows-47848f.svg)](https://www.electronjs.org/)
 
-![극류 Studio: AI 숏드라마 생성, 클라우드 컴퓨팅, ComfyUI 및 중계 서비스 연결, 영상 재현, AI 상품 소개 영상과 편집](docs/images/github-hero-2026.png)
 
 극류 Studio는 대본, 등장인물, 배경, 스토리보드, 이미지, 영상, 더빙, 음악과 최종 합성을 하나의 시각적 캔버스에 담습니다. AI 에이전트가 전체 제작 과정을 진행하도록 하거나, 언제든 노드를 수정하고 소재를 연결하며 모델을 바꾸거나 특정 단계만 다시 실행할 수 있습니다.
 
@@ -61,7 +62,7 @@ Release 페이지에서 `Studio.Setup.*.exe`를 다운로드하여 더블클릭�
 ### 이미지, 영상과 음성
 
 - 캐릭터 디자인 이미지, 캐릭터 카드, 배경 이미지, 스토리보드 이미지, 콘티와 키프레임을 생성합니다.
-- H3, 완샹(万相), APIMart, AutoDL, Zealman, 로컬·클라우드 ComfyUI 및 사용자 지정 인터페이스를 지원합니다.
+- H3, 완샹, APIMart, AutoDL, Zealman, 로컬·클라우드 ComfyUI 및 사용자 지정 인터페이스를 지원합니다.
 - 참고 이미지를 활용한 영상, 시작·종료 프레임 영상, 작업 상태 확인, 실패 복구와 일괄 처리를 지원합니다.
 - 캐릭터 카드에 음색 설명과 참고 오디오를 설정하고 “캐릭터명: 대사” 형식으로 더빙과 음성 복제를 연결할 수 있습니다.
 
@@ -78,7 +79,7 @@ Release 페이지에서 `Studio.Setup.*.exe`를 다운로드하여 더블클릭�
 2. “연결 도우미”를 열어 다른 서비스의 API 문서를 붙여 넣고, 이미지 이해·생성, 영상, 더빙 등의 기능을 설정하도록 합니다.
 3. 홈으로 돌아가 “새로 만들기”를 누르고 캔버스 왼쪽의 에이전트에게 만들고 싶은 영상을 알려주세요.
 
-초보자에게 추천하는 문서: [처음 사용하기 안내](docs/教程-第一次用.md)
+초보자에게 추천하는 문서: [처음 사용하기 안내](docs/처음-사용하기.md)
 
 > AI 서비스 계정, API Key와 사용량은 사용자가 직접 준비해야 합니다. 저장소와 공개 설치 파일에는 실제 키가 포함되어 있지 않습니다.
 
@@ -89,7 +90,7 @@ Release 페이지에서 `Studio.Setup.*.exe`를 다운로드하여 더블클릭�
 - 언어 모델: OpenAI Chat Completions 호환 인터페이스, 공식 제공업체 또는 중계 서비스.
 - 이미지 이해: 참고 이미지 분석, 인물·배경 추출, 화면 품질 검사.
 - 이미지 생성: OpenAI 이미지 호환 인터페이스, Seedream, APIMart, ComfyUI 및 사용자 지정 인터페이스.
-- 영상 생성: AutoDL, Zealman, APIMart, 완샹(万相), 로컬·클라우드 ComfyUI 및 사용자 지정 워크플로.
+- 영상 생성: AutoDL, Zealman, APIMart, 완샹, 로컬·클라우드 ComfyUI 및 사용자 지정 워크플로.
 - 더빙과 음악: TTS, 참고 오디오 기반 음성 복제, 환경음과 배경음악 서비스.
 
 먼저 언어 모델을 설정한 후 공개 API 문서를 연결 도우미에 전달하는 것을 권장합니다. 개인 키는 해당 설정 화면에 직접 입력하고, 신뢰할 수 없는 제3자 대화에 붙여 넣지 마세요.
