@@ -224,7 +224,7 @@ export function durationWindowIssue(totalSec: number, targetSec: number): string
   const lo = target - DURATION_TOLERANCE_SEC
   const hi = target + DURATION_TOLERANCE_SEC
   const delta = total - target
-  return `严重：成片总时长 ${total} 秒，不在用户要求的 ${target} 秒允许区间 ${lo}–${hi} 秒（只能多 ${DURATION_TOLERANCE_SEC} 秒或少 ${DURATION_TOLERANCE_SEC} 秒）。当前${delta > 0 ? '超了' : '少了'} ${Math.abs(delta)} 秒。必须重排镜头，让全部 duration 相加落进这个区间：超了就合并相邻、同地点、同组人物的镜头并缩短；短了就加长已有镜头。不能删掉关键剧情来凑秒数。`
+  return `심각: 완성 영상이 ${total}초로 목표 ${target}초의 허용 구간인 ${lo}–${hi}초(±${DURATION_TOLERANCE_SEC}초)를 벗어났습니다. 현재 ${Math.abs(delta)}초 ${delta > 0 ? '초과했습니다' : '부족합니다'}. 샷을 재구성해 전체 duration 합을 허용 구간에 맞추세요. 길면 같은 장소와 캐릭터가 이어지는 샷을 합쳐 줄이고, 짧으면 기존 샷을 늘리세요. 시간을 맞추기 위해 핵심 줄거리를 삭제하지 마세요.`
 }
 
 /**
@@ -567,7 +567,7 @@ async function ensureNarrativeContinuity(
       current,
       input,
       model,
-      issues.map((issue) => `严重：叙事断层：${issue}`)
+      issues.map((issue) => `심각: 이야기 연속성 단절 ${issue}`)
     )
     current = await ensureStoryboardQuality(current, input, model, onProgress)
   }
@@ -665,7 +665,7 @@ async function ensureStoryboardQuality(
   for (let round = 0; round <= QUALITY_REPAIR_ROUNDS; round++) {
     const issues = storyboardQualityIssues(current, input)
     if (!issues.length) return current
-    const severe = issues.filter((issue) => issue.startsWith('严重'))
+    const severe = issues.filter((issue) => issue.startsWith('심각:'))
     if (round > 0 && !severe.length) {
       log(`⚠ 仍有非阻断问题，继续使用：${issues.join('；')}`)
       return current
@@ -1020,7 +1020,7 @@ function asShotOutlineList(raw: unknown): ShotOutline[] {
         : undefined
       const voiceover = String(s?.voiceover ?? '').trim()
       return {
-        title: String(s?.title || `镜头${i + 1}`).trim() || `镜头${i + 1}`,
+        title: String(s?.title || `샷 ${i + 1}`).trim() || `샷 ${i + 1}`,
         shotSize: String(s?.shotSize || '').trim() || undefined,
         visualPrompt: String(s?.visualPrompt || s?.picture || '').trim(),
         videoPrompt: String(s?.videoPrompt || s?.action || '').trim() || undefined,
@@ -1082,7 +1082,7 @@ function parseOutlineText(content: string): ShotOutline[] {
   return blocks
     .map((block, i) => {
       const head = block.match(/^镜头\s*\d+\s*[：:]\s*([^\n]+)/)
-      let title = (head?.[1] || `镜头${i + 1}`).trim()
+      let title = (head?.[1] || `샷 ${i + 1}`).trim()
       let shotSize = outlineField(block, '景别')
       const paren = title.match(/[（(]([^）)]+)[）)]\s*$/)
       if (paren) {
@@ -1096,7 +1096,7 @@ function parseOutlineText(content: string): ShotOutline[] {
       const voiceover = outlineField(block, '口播|对白|台词')
       const duration = Number(block.match(/时长[：:]\s*(\d+(?:\.\d+)?)/)?.[1])
       return {
-        title: title.trim() || `镜头${i + 1}`,
+        title: title.trim() || `샷 ${i + 1}`,
         shotSize: shotSize || undefined,
         visualPrompt: visualPrompt || videoPrompt,
         videoPrompt: videoPrompt || undefined,
@@ -2225,12 +2225,12 @@ export function storyboardQualityIssues(
   input: Pick<StoryboardInput, 'content' | 'topic' | 'targetDurationSec' | 'maxShotDuration'>
 ): string[] {
   const issues: string[] = []
-  if (!result.shots.length) issues.push('严重：没有生成任何分镜')
+  if (!result.shots.length) issues.push('심각: 생성된 스토리보드 샷이 없습니다.')
   const targetSec = Number(input.targetDurationSec) || extractTargetDurationSec(input.topic, input.content)
   const shotCap = shotBudgetFromDuration(targetSec, input.maxShotDuration) || 12
   if (result.shots.length > shotCap) {
     issues.push(
-      `${targetSec ? '严重：' : ''}分镜 ${result.shots.length} 个，超出${targetSec ? `「${targetSec} 秒」对应的 ${shotCap}` : shotCap}镜预算，短视频节奏失控`
+      `${targetSec ? '심각: ' : ''}스토리보드 샷 ${result.shots.length}개가 ${targetSec ? `목표 ${targetSec}초에 해당하는 ${shotCap}` : shotCap}개 한도를 넘었습니다. 숏폼 영상의 리듬에 맞게 줄이세요.`
     )
   }
   if (
@@ -2238,7 +2238,7 @@ export function storyboardQualityIssues(
     result.subjects[0]?.name === '主角' &&
     (input.content || '').trim()
   ) {
-    issues.push('严重：没有从用户原文中提取完整人物，只生成了兜底“主角”')
+    issues.push('심각: 사용자 원문에서 캐릭터를 충분히 추출하지 못하고 기본 ‘주인공’만 생성했습니다.')
   }
   const sourceText = `${input.topic || ''}\n${input.content || ''}`
   const castText = (result.subjects ?? [])
@@ -2250,21 +2250,21 @@ export function storyboardQualityIssues(
     '顾客', '主持人', '女孩', '男孩', '女人', '男人'
   ].filter((role) => sourceText.includes(role) && !castText.includes(role))
   if (visibleRoles.length) {
-    issues.push(`严重：subjects 遗漏原文人物：${visibleRoles.join('、')}`)
+    issues.push(`심각: subjects에서 다음 원문 인물이 빠졌습니다. ${visibleRoles.join('、')}`)
   }
   const normalizedTitles = result.shots.map((shot) => shot.title.trim())
   if (
-    normalizedTitles.some((title) => /^镜头\s*\d*$/.test(title)) ||
+    normalizedTitles.some((title) => /^(?:镜头|샷)\s*\d*$/.test(title)) ||
     new Set(normalizedTitles).size !== normalizedTitles.length
   ) {
-    issues.push('严重：分镜标题缺失或重复；每镜必须使用不同的内容标题，不能统一写“镜头”')
+    issues.push('심각: 스토리보드 제목이 없거나 중복됩니다. 샷마다 내용에 맞는 제목을 쓰세요. 모두 ‘샷’으로 적지 마세요.')
   }
   const targetDuration = targetSec
   const totalDuration = result.shots.reduce((sum, shot) => sum + shot.duration, 0)
   const durationIssue = durationWindowIssue(totalDuration, targetDuration)
   if (durationIssue) issues.push(durationIssue)
   if (!result.h3Aesthetic || result.h3Aesthetic.length < 35) {
-    issues.push('缺少可直接传给 H3 的英文 Aesthetic')
+    issues.push('H3에 바로 보낼 영어 Aesthetic이 없습니다.')
   }
   const people = (result.subjects ?? []).filter((s) => s.kind !== 'other')
   const voicedShots = result.shots.filter((shot) => (shot.voiceover || '').trim())
@@ -2275,23 +2275,23 @@ export function storyboardQualityIssues(
     result.shots.length >= 4 &&
     voicedShots.length < Math.max(3, Math.ceil(result.shots.length * 0.35))
   ) {
-    issues.push('对白过少：有人物同场的镜头几乎不说话，短剧/短电影不能写成默片。唤名、问答、相认、对峙、劝阻必须落到 voiceover。禁止把全部前情塞进第一镜成年旁白')
+    issues.push('대사가 너무 적습니다. 여러 인물이 함께 있는 샷에서 거의 말하지 않습니다. 이름 부르기, 질문과 답변, 서로 알아보기, 대치, 만류는 voiceover에 대사를 써야 합니다. 앞 이야기를 전부 첫 샷의 성인이 된 인물 내레이션에 넣지 마세요.')
   }
   if (
     voicedShots.some((shot) => /成年/.test(shot.voiceover)) &&
     voicedShots.filter((shot) => !/成年/.test(shot.voiceover)).length < 2
   ) {
-    issues.push('出镜对白被改成了「成年某某」旁白；本场人物必须自己开口，故事背景不要用旁白复述')
+    issues.push('화면 속 대사가 성인이 된 인물의 내레이션으로 바뀌었습니다. 이 장면에서 보이는 인물이 직접 말해야 합니다. 배경을 내레이션으로 요약하지 마세요.')
   }
   if (
     totalDuration >= 25 &&
     voicedShots.length >= 3 &&
     voicedShots.every((shot) => spokenSentenceCount(shot.voiceover) <= 1)
   ) {
-    issues.push('口播被机械拆成了“一镜一句”；同一人物、同一表达意图的连续 2-4 个短句应合进一个 7-10 秒镜头，只给短促反应保留单句')
+    issues.push('대사가 샷마다 한 마디씩 기계적으로 나뉘었습니다. 같은 인물이 같은 의도로 이어 말하는 2–4마디를 7–10초 샷 하나에 넣으세요. 짧은 반응에만 한 마디를 쓰세요.')
   }
   result.shots.forEach((shot, index) => {
-    const label = `第 ${index + 1} 镜`
+    const label = `${index + 1}번 샷`
     const speakers = voiceoverSpeakerLabels(shot.voiceover || '')
     const speaker = speakers[0]
     if (shot.audioMode === 'h3-dialogue' && speaker) {
@@ -2299,16 +2299,16 @@ export function storyboardQualityIssues(
         .filter(Boolean)
         .join('\n')
       if (!staging.includes(speaker)) {
-        issues.push(`${label} 出镜对白没点名说话者「${speaker}」`)
+        issues.push(`${label}의 화면 속 대사에서 화자 ‘${speaker}’를 지목하지 않았습니다.`)
       }
     }
     if ((shot.visualPrompt || '').trim().length < 50) {
-      issues.push(`${label} 画面描述过短，无法稳定生成`)
+      issues.push(`${label}의 화면 묘사가 너무 짧아 안정적으로 생성하기 어렵습니다.`)
     }
     const performance = (shot.videoPrompt || '').trim()
     const still = (shot.visualPrompt || '').trim()
     if (!performance || performance === still) {
-      issues.push(`${label} 缺少视频内容表现（谁做什么、说什么、镜头怎么走），不能复用配图描述`)
+      issues.push(`${label}의 영상 연출이 빠졌습니다. 누가 무엇을 하고 말하는지, 카메라가 어떻게 움직이는지 작성하세요. 샷 이미지 설명을 재사용하지 마세요.`)
     } else {
       const names = (result.subjects || [])
         .filter((s) => (shot.subjectIds || []).includes(s.id) || performance.includes(s.name))
@@ -2316,22 +2316,22 @@ export function storyboardQualityIssues(
       const perfIssue = videoPerformanceIssue(performance, names)
       if (perfIssue) issues.push(`${label} ${perfIssue}`)
     }
-    if (!shot.sceneId) issues.push(`${label} 没有关联场景`)
-    if (!shot.cameraMovement) issues.push(`${label} 缺少运镜方式`)
+    if (!shot.sceneId) issues.push(`${label}에 연결된 장면이 없습니다.`)
+    if (!shot.cameraMovement) issues.push(`${label}에 카메라 움직임 방식이 없습니다.`)
     const continuity = (shot.continuity || '').trim()
     const continuitySteps = (continuity.match(/→/g) || []).length
     if (continuity.length < 28 || continuitySteps < 2) {
-      issues.push(`严重：${label} continuity 没写清“承接上一镜末态 → 本镜变化 → 下一镜末态”，无法保证跨段连续`)
+      issues.push(`심각: ${label}의 continuity에 ‘이전 샷 끝 상태 → 현재 샷의 변화 → 다음 샷 끝 상태’가 명시되지 않아 구간 사이의 연속성을 보장할 수 없습니다.`)
     }
     const emptyPlate =
       !shot.voiceover.trim() && /空镜|空景|无人/.test(`${shot.title}${shot.visualPrompt}`)
     if (people.length && !(shot.subjectIds ?? []).length && !emptyPlate) {
-      issues.push(`严重：${label} 没有关联人物，人设图不会进这镜配图`)
+      issues.push(`심각: ${label}에 캐릭터가 연결되지 않아 샷 이미지에 캐릭터 설정 이미지를 전달할 수 없습니다.`)
     }
   })
   const source = (input.content || '').trim()
   if (source.length > 0 && result.shots.every((shot) => !shot.voiceover.trim())) {
-    issues.push('严重：用户有完整文案，但所有镜头口播均为空')
+    issues.push('심각: 사용자 원고가 있지만 모든 샷의 내레이션이 비어 있습니다.')
   }
   for (const sub of people) {
     const used = result.shots.some(
@@ -2339,7 +2339,7 @@ export function storyboardQualityIssues(
         (shot.subjectIds ?? []).includes(sub.id) ||
         inferSubjectsFromText(shotCastText(shot as Shot), [sub]).length > 0
     )
-    if (!used) issues.push(`严重：人物「${sub.name}」已建档，但所有分镜都没用上`)
+    if (!used) issues.push(`심각: 캐릭터 ‘${sub.name}’의 설정은 있지만 스토리보드의 어느 샷에도 등장하지 않습니다.`)
   }
   return issues.slice(0, 16)
 }
@@ -2399,14 +2399,14 @@ function extractSceneRows(raw: any): any[] {
 
 function shotTitle(raw: any, index: number): string {
   const explicit = String(raw?.title ?? raw?.shotTitle ?? raw?.name ?? '').trim()
-  if (explicit && !/^镜头\s*\d*$/.test(explicit)) return explicit.slice(0, 12)
+  if (explicit && !/^(?:镜头|샷)\s*\d*$/.test(explicit)) return explicit.slice(0, 12)
 
   const source = String(raw?.purpose ?? raw?.visualPrompt ?? raw?.videoPrompt ?? '')
     .replace(/^(特写|近景|中景|全景|远景|镜头|画面)[：:，,、\s-]*/i, '')
     .replace(/[【】()[\]<>"'“”‘’]/g, '')
     .trim()
   const phrase = source.split(/[，。！？；,:.!?;\n]/)[0]?.replace(/\s+/g, '') || ''
-  return phrase ? `${phrase.slice(0, 6)}${index + 1}` : `分镜${index + 1}`
+  return phrase ? `${phrase.slice(0, 6)}${index + 1}` : `샷 ${index + 1}`
 }
 
 function resolveIds(
