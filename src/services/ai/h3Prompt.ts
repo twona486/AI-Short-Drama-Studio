@@ -1691,13 +1691,13 @@ ${source || '(perform the beat in this location)'}`
         messages: [
           {
             role: 'system',
-            content: `Rewrite a rejected shot-video prompt as JSON only: {"integrated_multimodal_description":"...","overall_soundscape":"..."}.
-The rejected draft was lifeless because it used a reusable timing template, repeated static-camera instructions, or failed to preserve the actual event.
-Write the moving image itself. Preserve the exact speaker lock and trusted dialogue. (S1) is the first character picture for the whole clip. Subject universe lock: only subjects present in the source material and reference pictures may appear — never add new characters, animals, or plot events, and never turn idioms or fables into literal content. The visual style must match the reference pictures exactly. Build a concrete cause-and-effect action chain with named props, motivated camera changes, observable performance, environmental reaction, and a visible final state. Give each spoken line its own time range. Never create generic opening/middle/hold slots. Never treat a statue, portrait, reflection, hidden presence, or off-screen identity as a living body. English action prose; Chinese only inside 「names」 and trusted <d> dialogue. A Chinese scene body will be deleted.
+            content: `거절된 샷 영상 프롬프트를 다시 작성하고 JSON만 출력하세요. {"integrated_multimodal_description":"...","overall_soundscape":"..."}.
+이전 초안은 반복 가능한 타이밍 틀을 사용했거나 카메라 고정 지시를 반복했거나 실제 사건을 보존하지 못해 생동감이 없었습니다.
+움직이는 화면 자체를 쓰세요. 화자 대응 블록과 신뢰할 수 있는 대사 원문을 보존하세요. (S1)은 클립 전체에서 첫 번째 캐릭터 이미지입니다. 원본 자료와 참조 이미지에 있는 대상만 등장시킬 수 있습니다. 인물, 동물, 사건을 추가하지 말고 관용구나 우화를 문자 그대로 구현하지 마세요. 참조 이미지와 시각 스타일을 정확하게 맞추세요. 이름을 명시한 소품, 동기 있는 카메라 변화, 관찰 가능한 연기, 환경의 반응과 눈에 보이는 최종 상태로 구체적인 인과관계를 구성하세요. 각 대사에 별도의 시간 구간을 배정하세요. 시작, 중간, 유지로 기계적으로 나누지 마세요. 조각상, 초상화, 반사, 숨은 존재, 화면 밖 인물을 살아 있는 몸으로 표현하지 마세요. 생성 모델에 전달할 동작 서술은 영어로 쓰세요. 중국어는 「이름」과 신뢰할 수 있는 <d> 대사 안에서만 허용됩니다. 중국어 장면 본문은 삭제됩니다.
 
-Dialogue is exclusive turn-taking. Immediately before every <d>, write the stable (S#) and says/asks/replies. Form: (S1) says: <d>[Chinese] 原词</d> Only (S1) speaks in this shot. (S2) keeps their lips completely closed. Bare <d> tags are forbidden. Do not split the clip merely because the delivery is fast.
+한 번에 한 사람만 말하게 하세요. 모든 <d> 바로 앞에 고정된 (S#)와 says/asks/replies를 붙이세요. 형식은 다음과 같습니다. (S1) says: <d>[Chinese] 原词</d> Only (S1) speaks in this shot. (S2) keeps their lips completely closed. 화자 표시 없는 <d>를 쓰지 마세요. 대사가 빠르다는 이유만으로 클립을 나누지 마세요.
 
-Rebuild the prompt as a concise cinematic timeline, not a four-line outline and not a dense screenplay paragraph. For every range write 2–4 filmable sentences covering framing or one motivated camera move, active body action and eyeline, a trigger-based facial change, listener blocking/reaction, and dialogue when present. Preserve foreground/background and left/right positions, keep the camera axis continuous, prevent anyone from staring into the lens, and use only story-relevant props, light and environmental motion. Every range must visibly advance the event. End once with the full ${durationText(resolved)}-second completion sentence.`
+프롬프트를 간결한 영화 타임라인으로 다시 구성하세요. 네 줄짜리 개요나 빽빽한 대본 문단으로 쓰지 마세요. 구간마다 촬영 가능한 문장 2–4개를 쓰고 구도나 동기가 있는 카메라 이동 한 가지, 인물의 동작과 시선, 계기에 따른 표정 변화, 듣는 인물의 배치와 반응, 대사가 있다면 그 대사를 포함하세요. 전경과 배경, 왼쪽과 오른쪽의 위치 및 카메라 축을 유지하고 아무도 렌즈를 응시하지 않게 하세요. 이야기에 필요한 소품, 조명, 환경의 움직임만 사용하세요. 모든 구간에서 눈에 보이게 사건을 진행하세요. ${durationText(resolved)}초 안에 동작이 끝난다는 전체 마무리 문장을 마지막에 한 번 쓰세요.`
           },
           {
             role: 'user',
