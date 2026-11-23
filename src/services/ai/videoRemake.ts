@@ -37,7 +37,7 @@ export interface RemakeAnalysis {
 function parseJsonLoose(text: string): any {
   const start = text.indexOf('{')
   const end = text.lastIndexOf('}')
-  if (start < 0 || end <= start) throw new Error('模型没有返回 JSON')
+  if (start < 0 || end <= start) throw new Error('모델이 JSON을 반환하지 않았습니다.')
   try {
     return JSON.parse(text.slice(start, end + 1))
   } catch {
@@ -62,7 +62,7 @@ async function seekVideo(video: HTMLVideoElement, time: number) {
       video.removeEventListener('seeked', done)
       video.removeEventListener('error', fail)
       window.clearTimeout(timer)
-      reject(new Error('抽帧失败'))
+      reject(new Error('프레임 추출에 실패했습니다.'))
     }
     const timer = window.setTimeout(done, 2500)
     video.addEventListener('seeked', done)
@@ -87,7 +87,7 @@ export async function extractVideoFrames(
   try {
     const loaded = new Promise<void>((resolve, reject) => {
       video.onloadedmetadata = () => resolve()
-      video.onerror = () => reject(new Error('无法读取上传的视频'))
+      video.onerror = () => reject(new Error('업로드한 영상을 읽을 수 없습니다.'))
     })
     video.src = url
     await loaded
@@ -100,7 +100,7 @@ export async function extractVideoFrames(
     const duration = Number.isFinite(video.duration) && video.duration > 0 ? video.duration : 8
     const canvas = document.createElement('canvas')
     const ctx = canvas.getContext('2d')
-    if (!ctx) throw new Error('无法抽帧')
+    if (!ctx) throw new Error('프레임을 추출할 수 없습니다.')
     const frames: Blob[] = []
     const n = Math.max(4, Math.min(12, count))
     for (let i = 0; i < n; i++) {
@@ -111,7 +111,7 @@ export async function extractVideoFrames(
       ctx.drawImage(video, 0, 0, canvas.width, canvas.height)
       const frame = await new Promise<Blob>((resolve, reject) => {
         canvas.toBlob(
-          (b) => (b ? resolve(b) : reject(new Error('抽帧转码失败'))),
+          (b) => (b ? resolve(b) : reject(new Error('프레임 인코딩에 실패했습니다.'))),
           'image/jpeg',
           0.82
         )
@@ -126,15 +126,15 @@ export async function extractVideoFrames(
 }
 
 function playMarkdownFromRaw(raw: any): string {
-  const topic = String(raw?.topic || '视频复刻').trim()
+  const topic = String(raw?.topic || '영상 재현').trim()
   const lines = [`# ${topic}`, '', '## 故事梗概', '', String(raw?.summary || raw?.aesthetic || topic), '']
   const subjects = Array.isArray(raw?.subjects) ? raw.subjects : []
   if (subjects.length) {
     lines.push('## 人物', '')
     for (const s of subjects) {
-      lines.push(`### ${s?.name || '角色'}`)
+      lines.push(`### ${s?.name || '캐릭터'}`)
       lines.push('')
-      lines.push(String(s?.description || '全片保持同一外貌与穿戴。'))
+      lines.push(String(s?.description || '영상 전체에서 외모와 의상을 유지합니다.'))
       lines.push('')
     }
   }
@@ -142,7 +142,7 @@ function playMarkdownFromRaw(raw: any): string {
   if (scenes.length) {
     lines.push('## 场景', '')
     for (const s of scenes) {
-      lines.push(`### ${s?.name || '场景'}`)
+      lines.push(`### ${s?.name || '장면'}`)
       lines.push('')
       lines.push(String(s?.description || ''))
       lines.push('')
@@ -151,13 +151,13 @@ function playMarkdownFromRaw(raw: any): string {
   const shots = Array.isArray(raw?.shots) ? raw.shots : []
   lines.push('## 分场', '')
   shots.forEach((s: any, i: number) => {
-    lines.push(`### 第 ${i + 1} 场　${s?.title || `镜头${i + 1}`}`)
+    lines.push(`### 第 ${i + 1} 场　${s?.title || `샷 ${i + 1}`}`)
     lines.push('')
     lines.push(`**口播**　${s?.voiceover?.trim() || '无'}`)
     lines.push('')
     lines.push(`**画面**　${s?.visualPrompt || s?.action || ''}`)
     lines.push('')
-    lines.push(`**声音**　${s?.audioDescription || '环境音'}`)
+    lines.push(`**声音**　${s?.audioDescription || '환경음'}`)
     lines.push('')
     lines.push(`**时长**　约 ${Math.round(Number(s?.duration) || 5)} 秒`)
     lines.push('')
@@ -167,56 +167,56 @@ function playMarkdownFromRaw(raw: any): string {
 
 function mockRemakeRaw(topic: string): any {
   return {
-    topic: topic || '产品短视频复刻',
-    summary: '按参考视频的镜头节奏复刻一条带货短片，画面中的商品换成用户产品。',
-    aesthetic: '干净商业短视频，产品特写清晰，光线均匀。',
+    topic: topic || '제품 숏폼 영상 재현',
+    summary: '참조 영상의 샷 리듬에 맞춰 상품 소개 영상을 재현하고 화면 속 상품을 사용자의 제품으로 바꿉니다.',
+    aesthetic: '상업용 숏폼 영상. 제품 클로즈업을 선명하게 잡고 고른 조명을 사용합니다.',
     subjects: [
       {
-        name: '出镜主角',
+        name: '화면에 등장하는 주인공',
         kind: 'person',
-        description: '全片同一人，服装与发型保持一致',
-        role: '主角'
+        description: '영상 내내 동일한 인물의 의상과 헤어스타일을 유지합니다.',
+        role: '주인공'
       }
     ],
     scenes: [
       {
-        name: '主场景',
-        description: '参考视频中的主要拍摄环境',
-        lighting: '自然光或柔和顶光'
+        name: '주요 장면',
+        description: '참조 영상의 주요 촬영 환경',
+        lighting: '자연광 또는 부드러운 상단 조명'
       }
     ],
     shots: [
       {
-        title: '开场钩子',
+        title: '시선을 끄는 시작',
         duration: 5,
-        shotSize: '近景',
+        shotSize: '근경',
         cameraMovement: 'push',
         visualPrompt: '产品被拿到镜头前，包装与 logo 必须与用户产品图完全一致。',
         videoPrompt: '主角把用户产品拿到镜头前，包装和 logo 始终清晰，说完开场那句。',
-        voiceover: '你还在用普通的吗？',
-        audioDescription: '衣料摩擦、轻微环境底噪',
+        voiceover: '아직도 평범한 제품을 쓰세요?',
+        audioDescription: '옷감이 스치는 소리와 약한 배경음',
         purpose: '钩子'
       },
       {
-        title: '功能展示',
+        title: '기능 시연',
         duration: 6,
-        shotSize: '中景',
+        shotSize: '중경',
         cameraMovement: 'static',
         visualPrompt: '主角使用用户产品，动作清楚，背景简洁。',
         videoPrompt: '主角使用用户产品，动作清楚，把这一步做完并说完功能那句。',
-        voiceover: '关键就在这一步。',
-        audioDescription: '操作声、环境底噪',
+        voiceover: '이 단계가 핵심이에요.',
+        audioDescription: '제품을 조작하는 소리와 배경음',
         purpose: '说明'
       },
       {
-        title: '收口特写',
+        title: '마무리 클로즈업',
         duration: 5,
-        shotSize: '特写',
+        shotSize: '클로즈업',
         cameraMovement: 'push',
         visualPrompt: '用户产品包装特写，logo 清晰。',
         videoPrompt: '镜头推到用户产品包装特写，logo 清楚，说完收口那句。',
-        voiceover: '换它就对了。',
-        audioDescription: '轻放桌面的声音',
+        voiceover: '이 제품으로 바꿔 보세요.',
+        audioDescription: '테이블 위에 가볍게 내려놓는 소리',
         purpose: '收口'
       }
     ]
@@ -234,44 +234,44 @@ export async function analyzeRemakeVideo(
     onProgress?: (msg: string) => void
   }
 ): Promise<RemakeAnalysis> {
-  const topic = input.topic?.trim() || '视频复刻'
-  input.onProgress?.('抽取参考视频关键帧…')
+  const topic = input.topic?.trim() || '영상 재현'
+  input.onProgress?.('참조 영상에서 키프레임을 추출하는 중…')
   const { frames, duration } = await extractVideoFrames(input.videoBlob, 10)
 
   let raw: any
   if (getAIMode() !== 'real') {
-    input.onProgress?.('演示模式：按参考视频节奏生成脚本')
+    input.onProgress?.('데모 모드에서 참조 영상의 리듬에 맞춰 대본을 작성하는 중…')
     raw = mockRemakeRaw(topic)
   } else {
-    input.onProgress?.(`理解视频镜头（${frames.length} 帧）…`)
+    input.onProgress?.(`영상의 샷을 분석하는 중(${frames.length}프레임)…`)
     const parts: LLMContentPart[] = [
       {
         type: 'text',
-        text: `你是短视频分镜导演。下面按时间顺序给出参考视频的关键帧（全片约 ${duration.toFixed(1)} 秒，画面比例 ${input.aspectRatio}）。
-请理解：内容讲什么、每镜景别/运镜/动作、听到的口播、现场环境音、出场人物与场景。
-然后写成可复刻的分镜脚本。商品外观不要抄原视频品牌，只写「用户产品」，因为后续会换成用户上传的 ${input.productCount} 张产品图。
+        text: `당신은 짧은 영상의 스토리보드 감독입니다. 참조 영상의 키프레임을 시간 순서로 제공합니다. 전체 길이는 약 ${duration.toFixed(1)}초, 화면 비율은 ${input.aspectRatio}입니다.
+내용, 샷마다 화면 크기·카메라 움직임·동작, 들리는 내레이션, 현장 환경음, 출연 캐릭터와 장면을 파악하세요.
+그다음 재현할 수 있는 스토리보드 대본을 쓰세요. 상품 외형에 원본 영상의 브랜드를 복사하지 마세요. 나중에 사용자가 업로드한 제품 이미지 ${input.productCount}장으로 바꾸므로 모델용 프롬프트에는 「用户产品」으로만 쓰세요.
 
-只输出 JSON：
+제목과 설명은 한국어로 작성하고 이미지·영상 모델에 전달되는 연출 문장은 중국어로 유지하세요. 참조 영상에서 들리는 내레이션 원문을 보존하세요. JSON만 출력하세요.
 {
-  "topic": "<短标题>",
-  "summary": "<一两段梗概>",
-  "aesthetic": "<全片画面味道，中文>",
+  "topic": "<짧은 제목>",
+  "summary": "<한두 문단의 줄거리>",
+  "aesthetic": "<영상 전체의 화면 분위기>",
   "subjects": [{ "name": "", "kind": "person|animal|other", "description": "", "role": "" }],
   "scenes": [{ "name": "", "description": "", "lighting": "", "mainAnchor": "" }],
   "shots": [{
-    "title": "<3-8字>",
+    "title": "<3-8자>",
     "duration": 5,
     "shotSize": "",
     "cameraMovement": "push|pull|pan|tilt|static|orbit",
     "purpose": "钩子|说明|反应|揭示|收口",
-    "visualPrompt": "<中文可拍描述，产品写作用户产品>",
-    "videoPrompt": "<中文视频内容表现，写细：每个角色表情神态、动作、环境反应、原词台词、运镜；不要抄 visualPrompt>",
-    "voiceover": "<这一镜听到的口播原文；没有就空>",
-    "audioDescription": "<环境音，中文短句>",
+    "visualPrompt": "<촬영할 수 있는 중국어 묘사. 제품 이름은 用户产品>",
+    "videoPrompt": "<중국어 영상 연출. 캐릭터별 표정과 기색, 동작, 환경 반응, 대사 원문, 카메라 움직임을 구체화하고 visualPrompt를 복사하지 않음>",
+    "voiceover": "<이 샷에서 들리는 내레이션 원문. 없으면 빈 문자열>",
+    "audioDescription": "<환경음을 짧은 문장으로 묘사>",
     "audioMode": "tts"
   }]
 }
-口播按镜头切开，不要发明原片没有的功效承诺。每镜 duration 5-10 秒整数。配音全部后期合成，audioMode 一律 tts，无口播用 none。生成视频时不要人声。`
+내레이션은 샷에 맞춰 나누고 원본에 없는 효능이나 약속을 만들지 마세요. 샷마다 duration은 5–10초의 정수로 쓰세요. 모든 더빙은 후반 작업에서 합성하므로 audioMode는 tts로, 내레이션이 없으면 none으로 지정하세요. 영상 생성에는 사람 음성을 넣지 마세요.`
       }
     ]
     for (let i = 0; i < frames.length; i++) {
@@ -287,14 +287,14 @@ export async function analyzeRemakeVideo(
     let respContent = ''
     for (const model of models) {
       try {
-        input.onProgress?.('理解镜头…')
+        input.onProgress?.('샷을 분석하는 중…')
         const resp = await callLLM({
           provider: 'vision',
           model,
           messages: [
             {
               role: 'system',
-              content: '你只输出合法 JSON。理解视频镜头语言，写成可复刻分镜。配音全部后期 TTS。'
+              content: '유효한 JSON만 출력하세요. 영상의 샷과 연출을 분석해 재현 가능한 스토리보드를 쓰세요. 더빙은 모두 후반 작업에서 TTS로 합성합니다.'
             },
             { role: 'user', content: parts }
           ],
@@ -316,7 +316,7 @@ export async function analyzeRemakeVideo(
             msg
           )
         if (!canFallback) throw e
-        input.onProgress?.('当前模型不能看图，换一套继续…')
+        input.onProgress?.('현재 모델이 이미지를 지원하지 않아 다른 모델을 사용하는 중…')
       }
     }
     if (lastErr) throw lastErr
@@ -324,7 +324,7 @@ export async function analyzeRemakeVideo(
   }
 
   if (!Array.isArray(raw?.shots) || !raw.shots.length) {
-    throw new Error('视频分析结果没有分镜')
+    throw new Error('영상 분석 결과에 스토리보드가 없습니다.')
   }
   raw.topic = String(raw.topic || topic).trim() || topic
   for (const s of raw.shots) {
