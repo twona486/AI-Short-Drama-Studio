@@ -1,5 +1,5 @@
 /**
- * 存储门面：桌面端走本地文件夹，浏览器走 IndexedDB
+ * 데스크톱 로컬 디렉터리와 브라우저 IndexedDB를 추상화한 저장 API
  */
 
 import { assetFileUrl, isDesktop } from '@/services/desktop'
@@ -130,7 +130,7 @@ function firstImg2VideoCoverId(p: Project): string | undefined {
   return nodes.find((n) => n.data.outputAssetId)?.data.outputAssetId
 }
 
-/** 封面：一图生视频用第一个节点的第一张参考图；否则场景底板 → 人设 → 分镜配图 */
+/** 첫 자유 노드의 참조 이미지, 장면 기준 이미지, 캐릭터 이미지, 샷 이미지 순으로 표지를 찾는다. */
 export function pickCoverAssetId(p: Project): string | undefined {
   if (p.pipelineMode === 'img2video') return firstImg2VideoCoverId(p)
   const plate = (p.scenes ?? []).find((s) => s.plateAssetId)?.plateAssetId
