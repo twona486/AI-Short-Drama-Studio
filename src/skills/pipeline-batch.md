@@ -1,57 +1,50 @@
 ---
 name: pipeline-batch
-description: 사용자가 전부 완료, 한 번에 진행, 전체 워크플로를 명시한 경우에만 순서대로 일괄 진행한다. 평소에는 로드하지 않는다.
-triggers: 全部做完,一口气,整条流水线,都生成,全做,全部生成,从头到尾,缺的都补上,全流程,전부 완료,한 번에,전체 워크플로,모두 생성,전부 해,전체 생성,처음부터 끝까지,빠진 것 전부,전체 과정
+description: Run the full production workflow in order only when the user explicitly asks to batch or complete everything.
+triggers: 全部做完,一口气,整条流水线,都生成,全做,全部生成,从头到尾,缺的都补上,全流程,전부 완료,한 번에,전체 워크플로,모두 생성,전부 해,전체 생성,처음부터 끝까지,빠진 것 전부,전체 과정,full workflow,generate all,finish everything
 ---
 
-# 워크플로 일괄 실행
+# Batch workflow
 
-사용자가 이번 요청에서 일괄 작업을 명시했을 때만 적용한다. 현장 진행을 챙기듯 작업을 관리한다. 한 번에 최대 12개 작업을 실행한다.
+Use this guide only when the user explicitly requests a batch on this turn. Execute at most 12 actions at a time. Skip steps the user did not request. Use `generate_all_*` only for an explicit request for all results.
 
-## 최우선 규칙
+## Default progression
 
-이번 요청에서 사용자가 지목하지 않은 단계는 실행하지 않는다. ‘전체’를 요청한 경우에만 `generate_all_*`를 실행한다.
+Stop after writing the script. Tell the user in Korean (한국어) that the complete script is on the left side of the canvas and node extraction has not started. Ask whether to extract nodes.
 
-## 기본 작업 방식
+- When the user says to continue and there are no nodes, extract characters, then locations, then storyboard shots, one step per invocation. Save immediately after each. When nodes are present, verify and do only the next step.
+- When the user approves, verify and ask whether to continue.
+- Run everything in one workflow only on an explicit request for the full workflow.
+- When unclear, ask for the subject, duration, and whether the user wants the script or the full workflow.
 
-대본 작성이 끝나면 반드시 멈춘다. ‘캔버스 왼쪽에 전체 대본이 표시됩니다. 노드 추출은 아직 시작하지 않았습니다’라고 알려 주고 노드를 추출할지 묻는다.
+## Order for the full workflow
 
-사용자가 ‘계속’이라고 하면 노드 유무를 확인한다. 노드가 없으면 캐릭터 → 장면 → 스토리보드 순으로 하나씩 추출하며, 한 번에 한 단계만 실행하고 즉시 저장한다. 노드가 모두 갖춰졌으면 검수하고 다음 단계 하나만 진행한다.
-‘검수 통과’라고 하면 검수만 한 뒤 계속할지 묻는다.
-‘전체 워크플로’ 또는 ‘전부 완료’를 요청해야 한 번에 모두 실행한다.
+1. Without a complete script, use `generate_play`.
+2. Without storyboard nodes, use `extract_cast`.
+3. Use `approve_play`. Automatically approve only in a full workflow.
+4. For missing character sheets, use `generate_all_sheets`.
+5. For missing location anchors, use `generate_all_scenes`.
+6. For missing storyboard panels, use `generate_all_boards`.
+7. If panels exist and videos are missing, use `generate_all_videos`. Supply character images, location images, and panels without pre-generating shot images.
+8. Use `generate_all_images` only when the user explicitly requests shot images.
 
-요구사항이 모호하면 먼저 주제, 길이, 대본만 필요한지 전체 워크플로가 필요한지 묻는다.
+## Checks and recovery
 
-## 전체 워크플로의 고정 순서
+- Check dependencies before each action. Fill the smallest missing prerequisite and then return to the original objective.
+- Verify the actual script, nodes, or assets in the project after tool success.
+- Fix only affected parts for input or quality problems. Retry the same objective once after a transient service error.
+- Stop repeated attempts after the same error happens twice. Pause and explain authentication, quota, content safety, user-approval, or authorization issues.
+- Record automatic prerequisite actions and replanning counts so they can be traced after a refresh or reopening.
 
-1. 전체 대본이 없으면 `generate_play`
-2. 스토리보드 노드가 없으면 `extract_cast`
-3. `approve_play`로 승인한다. 자동 승인은 전체 워크플로에서만 한다.
-4. 캐릭터 4면 설정 이미지가 없으면 `generate_all_sheets`
-5. 장면 기준 이미지가 없으면 `generate_all_scenes`
-6. 샷에 스토리 개요판이 없으면 `generate_all_boards`
-7. 개요판은 있지만 영상이 없으면 `generate_all_videos`. 캐릭터 디자인 이미지, 장면 이미지, 개요판을 전달한다. 샷 이미지는 먼저 생성하지 않는다.
-8. 사용자가 샷 이미지를 지정해서 요청한 경우에만 `generate_all_images`
+## Requests for one stage
 
-## 자체 점검과 복구
+- Write the script or break down the story: use only `generate_play` and stop.
+- Continue or add two scenes: use only `continue_play` and preserve existing scenes.
+- Extract nodes: use only `extract_cast`; characters first, then locations after confirmation, then shots on a later turn.
+- Character sheet: generate only character images.
+- Location: generate the four-panel location anchor only.
+- Storyboard panel: generate the line-art composition only.
+- Draw the third shot: generate that image only, and fill its missing panel first if needed.
+- Generate the third shot video: generate that video only.
 
-- 작업을 실행하기 전에 의존성을 확인한다. 앞 단계 산출물이 없으면 최소한의 의존성만 채운 뒤 원래 목표로 돌아간다.
-- 도구가 성공을 반환하면 대본, 노드, 에셋이 프로젝트에 실제로 반영됐는지 확인한다. 성공 메시지만 믿지 않는다.
-- 산출물 품질이나 입력에 문제가 있으면 해당 부분만 수정해 다시 시도한다. 일시적인 서비스 오류라면 같은 목표를 한 번 다시 시도할 수 있다.
-- 같은 오류가 두 번 연속 발생하면 반복 시도를 멈춘다. 인증, 할당량, 콘텐츠 안전, 사용자 승인 또는 권한 범위를 확대하는 문제는 중단하고 이유를 설명한다.
-- 자동 의존성 보완과 재계획 횟수를 작업 기록에 남겨 새로고침하거나 프로젝트를 다시 열어도 추적할 수 있게 한다.
-
-## 일부 단계만 요청했을 때
-
-- ‘대본을 써 줘’ 또는 ‘샷으로 나눠 줘’는 `generate_play`만 실행하고 멈춘다.
-- ‘이어 써’, ‘계속 써’, ‘두 장면 더 써’는 `continue_play`만 실행하고 기존 장면을 보존한다.
-- ‘노드 추출’은 `extract_cast`만 실행한다. 처음에는 캐릭터만 추출하고 사용자가 다시 확인한 뒤 장면을, 그다음 차례에 스토리보드를 추출한다.
-- ‘캐릭터 설정을 만들어 줘’ 또는 ‘4면 설정 이미지’는 캐릭터 이미지만 만든다. 샷 이미지나 영상은 생성하지 않는다.
-- ‘장면을 만들어 줘’는 4분할 장면 기준 이미지만 만든다.
-- ‘스토리 개요판’은 구도를 잡는 선화만 그린다.
-- ‘세 번째 샷을 그려 줘’는 해당 샷 이미지만 만든다. 개요판이 없으면 먼저 보완한다.
-- ‘세 번째 샷 영상’은 해당 샷 영상만 만든다.
-
-## 답변
-
-짧고 구체적으로 답한다. ‘네, 전체 워크플로를 시작해 드리겠습니다’ 같은 말은 생략한다.
+Report briefly and concretely in Korean (한국어). Write prompts sent to generation models in English, preserving Korean dialogue or explicitly requested Korean on-screen text.
