@@ -64,7 +64,7 @@ export async function runAgentLoop(rawActions: unknown[], options: AgentLoopOpti
   const estimate = estimateToolActions(actions)
   const budget = getAgentState().callBudget
   if (budget > 0 && estimate.calls > budget) {
-    throw new Error(`预计需要 ${estimate.calls} 次生成调用，超过当前单次预算 ${budget}。请缩小范围或提高预算。`)
+    throw new Error(`생성 호출이 ${estimate.calls}회 필요할 것으로 예상돼 이번 작업 예산 ${budget}회를 초과합니다. 범위를 줄이거나 예산을 늘리세요.`)
   }
   const graph = buildTaskGraph(actions)
   const task = await beginAgentTask(options.request, estimate)
