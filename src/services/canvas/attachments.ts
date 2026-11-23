@@ -60,7 +60,7 @@ export async function buildMaterialBlock(
       continue
     }
     try {
-      if (!isDesktop()) throw new Error('读本地文件需要桌面端（已安装的应用）')
+      if (!isDesktop()) throw new Error('로컬 파일을 읽으려면 설치된 데스크톱 앱이 필요합니다.')
       const content = await desktop().readText(p)
       append(`【本地文件：${p}】`, content)
       onLog?.(`已读取本地文件 ${p}`)
