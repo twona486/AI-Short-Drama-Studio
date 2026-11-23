@@ -1,6 +1,6 @@
 /**
- * 画布智能体 Skill：按用户意图只加载相关 playbook。
- * 正文是我们自己写的现场手册，不是外站提示词。
+ * 캔버스 에이전트에서 사용자 의도에 맞는 스킬을 불러온다.
+ * 본문은 프로젝트에서 작성한 작업 지침이다.
  */
 
 import characterRaw from './character-consistency.md?raw'
@@ -105,8 +105,8 @@ function triggeredByText(skill: Skill, text: string): boolean {
 }
 
 /**
- * 按意图挑选要塞进上下文的 Skill。
- * 目录始终可见；正文只加载本轮匹配到的手册。
+ * 모델 컨텍스트에 포함할 스킬을 의도에 따라 선택한다.
+ * 목록은 항상 표시하고 일치하는 스킬 본문만 추가한다.
  */
 export function selectSkills(ctx: SkillSelectContext): Skill[] {
   const text = ctx.userText
