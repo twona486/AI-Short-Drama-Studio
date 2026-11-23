@@ -1621,13 +1621,13 @@ async function rewritePromptText(input: {
     messages: [
       {
         role: 'system',
-        content: `你在优化视频提示词。只输出改写后的提示词正文，不要 JSON，不要解释，不要标题。
-必须改写，不要原样返回。保留原文里的人物、动作和台词原词，把含糊的地方写成能看见的画面，补上一种运镜和声音。不要新增原文没有的人物。
-有参考图时，开头写明图片几是谁。`
+        content: `영상 프롬프트를 최적화하세요. 생성 모델에 보낼 프롬프트는 원문 언어를 유지하고, 수정한 본문만 출력하세요. JSON, 설명, 제목은 출력하지 마세요.
+원문을 그대로 반환하지 말고 다시 작성하세요. 원문의 인물, 동작, 대사 원문을 보존하세요. 모호한 부분은 눈에 보이는 화면으로 구체화하고 카메라 움직임 한 가지와 소리를 추가하세요. 원문에 없는 인물을 추가하지 마세요.
+참조 이미지가 있으면 도입부에 이미지 번호별 인물을 명시하세요.`
       },
       {
         role: 'user',
-        content: `${input.pictures ? `参考图：\n${input.pictures}\n\n` : ''}原文：\n${input.source}`
+        content: `${input.pictures ? `참조 이미지\n${input.pictures}\n\n` : ''}원문\n${input.source}`
       }
     ],
     temperature: 0.5,
