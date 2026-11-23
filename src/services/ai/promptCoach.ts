@@ -108,7 +108,7 @@ function mockExpand(input: OptimizeNodePromptInput): OptimizeNodePromptResult {
 }
 
 function formatRules(input: OptimizeNodePromptInput, current: string): string {
-  const kindLabel = input.kind === 'video' ? '이미지→영상' : '텍스트→이미지 / 이미지→이미지'
+  const kindLabel = input.kind === 'video' ? 'image-to-video' : 'text-to-image / image-to-image'
   const duration = input.kind === 'video' ? Math.max(1, Math.round(input.duration || 8)) : 0
   const anchors = extractFormatAnchors(current)
   const anchorLine = anchors.length
@@ -152,19 +152,19 @@ async function askOnce(
       { role: 'system', content: formatRules(input, current) },
       {
         role: 'user',
-        content: `노드 ${input.nodeLabel}
+        content: `Node ${input.nodeLabel}
 
-현재 프롬프트
-${current || '（비어 있음）'}
+Current prompt
+${current || '(empty)'}
 
-사용자가 추가한 요청
-${hint || '（추가 요청 없음. 형식을 유지하고 화면을 더 생생하게 묘사）'}
+Additional user request
+${hint || '(None. Keep the format and make the visuals more vivid.)'}
 
-이야기 참조 자료
-${script ? script.slice(0, 6000) : '（없음）'}
+Story reference
+${script ? script.slice(0, 6000) : '(none)'}
 ${extra}
 
-확장한 본문 전문을 반환하세요. 현재 프롬프트와 같은 형식을 유지하세요.`
+Return the full expanded prompt. Preserve the format of the current prompt.`
       }
     ]
   })
@@ -219,7 +219,7 @@ export async function optimizeNodePrompt(
     current,
     hint,
     script,
-    `\n이전 응답이 요구사항을 충족하지 못했습니다. ${breakReason || '형식이 바뀌었습니다.'} 원문의 제목과 섹션을 그대로 쓰고 내용만 구체화하세요. 다른 형식을 사용하지 마세요.`
+    `\nThe previous response failed the format check. Keep the original headings and sections exactly as written and elaborate only on their content. Use the original format.`
   )
   result = readPrompt(retry.content)
   if (!result || isReasoningDump(result.prompt)) {
