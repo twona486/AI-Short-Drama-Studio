@@ -1,133 +1,133 @@
 ---
 name: ai-short-film-screenwriter
-description: AI 숏드라마, 단편 영화, 시리즈 숏드라마의 대본을 창작·각색·진단한다. 줄거리, 캐릭터 소개, 장면 에셋 목록, 회차별 개요와 촬영할 수 있는 장면별 대본을 작성한다. AI 숏드라마, AI 영화, 세로형 드라마, 초단편 드라마, 이야기 각색, 대본 이어 쓰기, 회차 구성, 장면별 대본 또는 대본 개선 요청에 사용한다.
-triggers: AI短剧,AI电影,竖屏剧,微短剧,写剧本,改编,续写,分集,逐场,优化剧本,编剧,故事改编,短电影,AI 숏드라마,AI 영화,세로형 드라마,초단편 드라마,대본 작성,각색,이어 쓰기,회차 구성,장면별 대본,대본 개선,시나리오,단편 영화
+description: Write, adapt, continue, or diagnose scripts for AI short dramas, short films, and series. Produce synopses, character profiles, location asset lists, episode outlines, and filmable scenes.
+triggers: AI短剧,AI电影,竖屏剧,微短剧,写剧本,改编,续写,分集,逐场,优化剧本,编剧,故事改编,短电影,AI 숏드라마,AI 영화,세로형 드라마,초단편 드라마,대본 작성,각색,이어 쓰기,회차 구성,장면별 대본,대본 개선,시나리오,단편 영화,screenplay,adaptation,short film
 ---
 
-# AI 숏드라마와 단편 영화 대본
+# Screenwriting for AI short dramas and films
 
-이야기를 화면으로 보여 주고 촬영하거나 AI 샷으로 나눌 수 있는 대본으로 작성한다. 기본 언어는 한국어다. 사용자가 지정한 유형, 길이, 회차 수, 화면 비율, 시청자, 플랫폼, 결말을 따른다. 지정하지 않은 항목은 작업 규모에 맞게 가정하고 최종본 전에 간단히 밝힌다.
+Make the story visual, filmable, and suitable for AI shot breakdown. Write all user-facing script text, headings, narration, dialogue, character profiles, and explanations in Korean (한국어). Preserve existing or quoted dialogue verbatim where the user requires it. Respect requested genre, duration, episode count, aspect ratio, audience, platform, and ending. Make reasonable assumptions for unspecified items and state them briefly before the draft.
 
-## 작업 종류와 요구사항
+## Identify the task
 
-1. 처음부터 창작, IP 또는 설화 각색, 이어 쓰기, 확장, 진단·수정 중 어떤 요청인지 확인한다.
-2. 전체 길이, 회차 수, 회차당 길이, 비율, 장르, 시청자, 반드시 남길 사건, 금지 사항, 제작 자원 등 필수 제약을 파악한다.
-3. 빠진 정보 때문에 전체 구조가 달라지는 경우에만 질문한다. 그 외에는 먼저 완전하고 사용할 수 있는 초안을 작성한다.
-4. 각색할 때는 널리 알려진 이야기 모티프와 특정 현대판의 독창적 표현을 구분한다. 사용자가 제공하지 않은 보호 대상 대사나 장면을 그대로 옮기지 않는다.
+1. Determine whether the user requests new work, adaptation of intellectual property or folklore, continuation, expansion, or diagnosis and revision.
+2. Extract required total duration, episode count, per-episode duration, aspect, genre, audience, required plot, exclusions, and production resources.
+3. Ask only if missing information would change the basic structure. Otherwise deliver a complete usable draft.
+4. Distinguish common motifs from the original expression of a specific modern adaptation. Do not copy protected scenes or dialogue that the user has not supplied.
 
-## 각색 필수 제약
+## Adaptation rules
 
-캐릭터 수를 줄일 때는 행인과 재사용할 수 있는 단역을 압축한다. 상대역이나 핵심 가족은 포함한다.
+Reduce incidental passersby and merge reusable extras. Keep opponents and key family members.
 
-- 이야기를 움직이는 주인공, 상대역이나 그 인격화된 대표, 부모, 멘토, 법 집행자를 캐릭터 소개에 넣는다. 사용자가 지정한 주제나 모티프에서 이름을 부른 인물을 빠뜨리지 않는다.
-- 사망했거나 이번 회차 후반에야 등장하는 인물도 설정을 작성한다. 생전 외모나 유품·초상화·구술이 어떻게 계속 영향을 미치는지 설명한다.
-- 살아 있는 상대역은 장면에 등장하거나 대치, 방해, 명령 전달, 하늘의 규칙이 눈앞에 드러나는 등 눈에 보이는 압박을 만들어야 한다. 배경의 한 문장으로 사망하거나 사라지게 한 다음 두 인물만 나오는 절정으로 줄이지 않는다.
-- 줄거리는 목표, 상대역의 가치관, 점차 커지는 장애물, 절정의 선택과 결말까지 전체 이야기를 담는다. 절정의 한 프레임으로 시작한다고 쓰며 전체를 대신하지 않는다. 사용자 요청이 특정 부분에 한정되면 그 부분만 작성한다.
-- 단편은 장면 수와 길이를 줄일 수 있지만 갈등 구조를 빼지 않는다. ‘침향이 어머니를 구하는 이야기’에서는 류옌창(아버지. 이미 사망했어도 기록), 이랑신(상대역), 삼성모와 침향이 모두 필요하다. 모자가 재회해 산을 내려오는 장면만 남기지 않는다.
+- Give every character driving the story a profile: protagonist, opponent or personified representative, parents, mentors, and law enforcement. Keep people explicitly named in the premise.
+- Profile deceased and late-arriving characters. Describe their earlier appearance or how a keepsake, portrait, or account continues to exert pressure.
+- A living opponent must appear or exert visible pressure through confrontation, obstruction, a messenger, or a visible rule. Do not erase the opponent in backstory and leave only a two-person climax.
+- Cover goal, opponent's values, increasing obstacles, climactic choice, and ending in the synopsis. Start at the climax only if the user specifically requests that excerpt.
+- A shorter runtime can reduce scenes but must retain the conflict. In the story of Chenxiang saving his mother, Liu Yanchang (the father, even if deceased), Erlang Shen (the opponent), Sanshengmu, and Chenxiang all matter. Do not keep only the mother and son's reunion and departure.
 
-## 이야기를 움직이는 요소
+## Story engine
 
-장면을 쓰기 전에 아래 요소를 확정한다.
+Establish the following before scenes:
 
-- 한 문장 이야기. `[주인공]은 [외적 목표]를 위해 [어려운 행동]을 해야 한다. 실패하면 [대가]를 치르며, 마지막에는 [내적 주제]를 깨닫는다.`
-- 주인공의 동력. 욕망, 결핍이나 잘못된 믿음, 강점, 약점, 행동하지 않을 때의 대가.
-- 갈등 구조. 상대역은 자기 가치관에 따라 행동하며 주인공이 치러야 할 대가를 계속 키울 수 있어야 한다.
-- 감정의 중심. 핵심이 되는 구체적인 관계를 하나 고르고 큰 장면이 그 관계를 보여 주게 한다.
-- 시각적 모티프. 반복하면서 의미가 깊어지는 소품이나 시각적 이미지 1–3개를 정해 복선을 깔고 회수한다.
+- A one-sentence premise: to reach an external goal, the protagonist must take a difficult action or pay the cost of failure, ultimately discovering the inner theme.
+- Protagonist: desire, lack or false belief, strength, weakness, and cost of inaction.
+- Opposition: a rationale the opponent believes and the ability to raise the stakes over time.
+- Emotion: one specific central relationship that large scenes serve.
+- Visual motif: one to three recurrent props or visual images whose meaning develops and pays off.
 
-동작, 소품, 반응, 환경으로 드러낼 수 있는 정보를 내레이션으로 설명하지 않는다. 주제는 인물의 선택과 그 대가로 보여 준다. 구호처럼 쓰지 않는다.
+Use action, props, reactions, or environment for information they can convey. Express the theme through choices and costs instead of slogans.
 
-## 구조와 리듬
+## Structure and rhythm
 
-길이에 맞춰 이야기 박자를 정한다. 공식을 기계적으로 적용하지 않는다. 적어도 다음 요소를 포함한다.
+Set beats to the runtime. At minimum, include:
 
-1. 시작 화면에서 주인공의 상황이나 대비를 즉시 보여 준다.
-2. 사건이 기존 질서를 깨뜨리고 주인공이 예전처럼 살 수 없게 한다.
-3. 주인공이 쉽게 되돌릴 수 없는 행동을 스스로 선택한다.
-4. 갈등이 반복될 때마다 국면이 바뀌고 난도, 위험 또는 감정적 대가가 점차 커진다.
-5. 중반에는 새 정보, 잠깐의 승리 또는 큰 패배로 주인공의 이해와 접근이 바뀐다.
-6. 가장 힘든 순간에는 목표, 관계, 존엄 또는 안전 중 실제로 무엇인가를 잃는다.
-7. 절정에서 선택과 행동으로 주제에 답한다. 우연, 갑작스러운 각성이나 외부의 해결에 기대지 않는다.
-8. 결말에서 관계, 소품 또는 첫 화면을 다시 보여 주며 인물의 변화를 드러낸다.
+1. An opening image that immediately shows the protagonist's situation or a contrast.
+2. An inciting event that breaks the old order.
+3. An active choice that cannot easily be undone.
+4. Increasing obstacles that change the situation and raise difficulty, risk, or emotional cost.
+5. A midpoint revelation, temporary success, or defeat that changes the protagonist's understanding and method.
+6. A low point or highest cost requiring a real sacrifice in goals, relationships, dignity, or safety.
+7. A climactic choice that answers the theme through action. Avoid coincidence, sudden awakening, or rescue that replaces the protagonist's action.
+8. An ending that echoes a relationship, prop, or opening image and shows character change.
 
-시리즈 숏드라마의 각 회차는 작은 목표 하나를 이루고 새로운 질문, 위기, 폭로, 오해 또는 되돌릴 수 없는 결정으로 끝난다. 회차 끝의 긴장감은 사건의 인과관계에서 나와야 한다. 다음 회차와 무관한 가짜 놀라움을 넣지 않는다.
+Each series episode completes a smaller goal and ends with a new question, crisis, reveal, misunderstanding, or irreversible decision. Let the hook follow from the causal chain.
 
-## AI 제작 제약
+## AI production constraints
 
-다음 제약을 대본을 쓰는 단계부터 적용한다.
+- Control the number of characters, locations, wardrobe changes, and key props. Reuse established assets. Merge extras where possible, preserving opponents, key family, and mentors.
+- Carry age, hair, wardrobe, injuries, and held props across scenes. Explain changes in the story.
+- Use one primary space and time per scene. Avoid frequent location changes, large crowds, and interactions that are difficult to generate reliably.
+- Break long motion into beats with clear directions and visible results. Connect actor positions, eyelines, and environmental direction.
+- Give every scene one main visual purpose to avoid competing spectacles.
+- At script stage write story and filming intent. Add model parameters, negative prompts, seeds, or software instructions only when requested.
 
-- 캐릭터, 장면, 의상과 핵심 소품의 수를 조절하고 만들어 둔 에셋을 우선 재사용한다. 행인은 합칠 수 있다. 상대역, 핵심 가족과 멘토는 합치거나 빼지 않는다.
-- 장면 사이에서 인물 나이, 헤어스타일, 의상, 부상과 소지품이 이어지게 한다. 달라지는 경우 이야기에서 원인을 설명한다.
-- 한 장면에는 주요 시간과 공간을 하나씩 잡는다. 한 장면에서 장소가 자주 바뀌거나 대규모 군중이 필요하거나 안정적으로 생성하기 어려운 복잡한 상호작용은 피한다.
-- 긴 동작은 방향이 분명하고 결과가 보이는 단위로 나눈다. 캐릭터의 위치와 시선, 환경의 방향이 이어지게 한다.
-- 장면마다 핵심 시각 과제 하나를 정한다. 관객이 동시에 읽기 어려운 볼거리를 겹쳐 놓지 않는다.
-- 대본 단계에는 이야기와 촬영 의도만 쓴다. 사용자가 요구하지 않은 모델 파라미터, 부정 프롬프트, 시드 값, 소프트웨어 조작법을 넣지 않는다.
+## Scene writing
 
-## 장면별 작성 규칙
+Each scene answers who wants what, what or who prevents it, and how the situation changes. Combine or delete scenes that do not affect causality, character, or emotion.
 
-장면마다 누가 무엇을 원하는지, 누가 또는 무엇이 이를 막는지, 끝에서 상황이 어떻게 달라지는지 답한다. 삭제해도 인과관계, 인물, 감정에 영향이 없다면 장면을 삭제하거나 통합한다.
-
-아래 형식에서 파서가 읽는 표식은 그대로 두고 본문과 대사는 한국어로 쓴다.
+Use this format, preserving the structural headings and writing the visible content in Korean (한국어):
 
 ```markdown
-### [회차 번호]-[장면 번호] [장소] [낮/밤] [실내/실외]
-人物：[장면에 등장하는 캐릭터]
-场次任务：[주인공의 목표] / [장애물] / [결과 또는 전환점]
+## 장면 N｜제목
+**실내｜장소｜날씨와 시간대**
+등장인물: [이 장면에 등장하는 캐릭터]
+장면 과제: [주인공의 목표] / [장애물] / [결과 또는 전환점]
 
-■（[필요한 샷 크기 또는 카메라 움직임]）[현재형으로 쓴, 보거나 듣거나 실행할 수 있는 행동과 환경]
-■ [캐릭터의 동작과 반응 또는 상대역의 행동]
-캐릭터 이름：（[필요한 말투 또는 동작]）[대사]
-■ [장면 끝의 새로운 화면 또는 상황]【节拍：[触发/抉择/危机/揭秘/回收 등]】
+■ ([필요한 샷 크기 또는 카메라 움직임]) [현재형의 보이거나 들리는 동작과 환경]
+■ [캐릭터의 동작이나 반응, 또는 상대역의 행동]
+**캐릭터 이름：**
+「대사 원문」
+■ [새롭게 보이는 화면이나 상황]【장면 박자：[계기/선택/위기/폭로/회수]】
 ```
 
-장면은 현재형과 짧은 문단으로 쓴다. 관객이 보고 들을 수 있는 내용만 담는다. 심리는 표정, 움직임, 망설임, 선택, 환경 반응으로 바꿔 표현한다. 클로즈업, 카메라 움직임, 느린 화면, 회상, 몽타주는 생략할 경우 이야기 효과가 달라질 때만 명시한다.
+Write present tense, with short paragraphs of observable details. Show inner states through expression, movement, pauses, choices, or environmental reactions. Mention close-ups, camera movements, slow motion, flashbacks, and montage only when omitting them would change the story effect.
 
-대사는 다음과 같이 작성한다.
+Dialogue rules:
 
-- 신분, 나이, 관계, 목적, 시대에 맞춰 캐릭터마다 고유한 말투를 쓴다.
-- 인물은 무언가 얻기 위해 말하게 한다. 숨기기, 피하기, 떠보기, 말 뒤에 숨은 뜻을 허용한다.
-- 양쪽이 이미 아는 정보, 화면에서 보이는 것의 반복, 감정의 직접적인 설명을 지운다.
-- 핵심 대사는 짧고 구체적으로 쓰며 관계나 행동을 바꾸게 한다. 그럴듯한 명언을 나열하지 않는다.
-- 숏드라마와 단편 영화에는 주고받는 대사가 필요하다. 절제는 구호와 명언을 걷어 내는 것이며 전체 대사를 한두 마디로 줄이는 뜻이 아니다. 서로 이름을 부르거나 묻고 답하거나, 알아보거나, 대치하거나, 만류하거나, 작별할 때는 적어도 한 번씩 주고받는다. 배경을 성인이 된 인물의 내레이션에 몰아넣지 말고 화면에 등장하는 인물이 직접 말하게 한다.
+- Give each person a distinct voice based on identity, age, relationships, purpose, and era.
+- Let people speak to get something. Allow concealment, evasion, probing, and subtext.
+- Cut facts both speakers know, repeated visuals, and direct declarations of emotion.
+- Make critical lines short, specific, and able to change a relationship or action. Avoid manufactured profundity.
+- Recognition, questions, calling someone's name, confrontations, persuasion, and farewells need an exchange. Restraint means avoiding slogans, while leaving enough dialogue for drama. Do not compress backstory into the narration of an older version of a person when a present character can speak.
 
-## 기본 산출물
+## Default deliverables
 
-전체 대본을 요청하면 아래 순서로 작성한다. 특정 단계만 요청하면 해당 단계까지만 제공한다.
+For a complete-script request, deliver in this order. If the user requests a single phase, deliver that phase only.
 
-1. **창작 설정** — 제목, 장르, 형식, 예상 길이, 주요 시청자, 한 문장 이야기, 주제, 시각적 기조.
-2. **줄거리** — 산문으로 발단, 전환, 점차 커지는 장애물, 절정의 선택, 결말을 모두 설명한다. 결말을 숨기지 않는다.
-3. **캐릭터 소개** — 인물별 나이와 신분, 외모 식별 특징, 성격과 말투, 욕망, 두려움과 약점, 관계, 변화, AI 시각 일관성을 위한 기준점.
-4. **주요 장면과 소품** — 장소, 시간과 날씨, 공간 배치, 색과 빛, 이야기에서의 역할, 재사용 요소를 명시하고 핵심 소품의 등장과 회수를 정리한다.
-5. **구조 개요** — 단편 영화는 이야기 박자표, 시리즈 숏드라마는 회차별 개요를 작성한다. 회차마다 목표, 갈등, 핵심 전환, 결과와 다음 회차를 보게 만드는 끝 지점을 기록한다.
-6. **전체 대본** — 장면 형식을 통일해 결말까지 쓴다.
-7. **연속성 부록** — 캐릭터의 외형, 의상, 부상, 소품 소유자, 시간, 장면 상태가 앞뒤에서 어떻게 달라지는지 간단히 적는다.
+1. **Creative setup**: title, genre, form, expected duration, main audience, one-sentence premise, theme, and visual tone.
+2. **Synopsis**: connected prose covering beginning, turns, escalating opposition, climactic choice, and ending.
+3. **Character profiles**: identity and age, visual identifiers, personality and voice, desire, fear and weakness, relationships, arc, and AI visual anchors.
+4. **Key locations and props**: place, time and weather, spatial layout, color and light, story function, reusable elements, and how props appear and pay off.
+5. **Structure**: beats for a short film. For a series, list each episode's goal, conflict, turn, result, and ending hook.
+6. **Complete script**: consistent scene format through the ending.
+7. **Continuity appendix**: cross-scene changes in appearances, wardrobe, injuries, prop ownership, time, and location.
 
-## 진단과 수정
+## Diagnosis and revision
 
-기존 초안을 받으면 핵심 설정과 효과적인 표현을 보존하고 다음 순서로 수정한다.
+For an existing draft, retain the effective core and revise in this order:
 
-1. 인과관계와 주인공의 주도성
-2. 목표, 장애물, 대가와 이야기 박자가 강해지는 방식
-3. 인물 관계와 절정의 선택
-4. 장면의 기능, 정보를 공개하는 방식과 리듬
-5. 대사, 화면 구현 정도, AI 제작 가능성
+1. Causality and protagonist agency.
+2. Goals, obstacles, costs, and escalation.
+3. Relationships and climactic choices.
+4. Scene functions, information release, and pacing.
+5. Dialogue, visual clarity, and AI production feasibility.
 
-진단만 요청하면 수정본을 만들지 말고 ‘문제 — 영향 — 수정 방법 — 예시’를 나열한다. 수정을 요청하면 바로 사용할 수 있는 수정본을 제공하고 필요할 때만 변경 내용을 간단히 설명한다.
+For diagnosis only, present problem, impact, fix, and example. For revision, provide usable revised text and add a concise change explanation only when helpful.
 
-## 최종 점검
+## Final review
 
-건네기 전에 아래를 점검하고 문제를 발견하면 수정한다. 미완성 점검표를 사용자에게 넘기지 않는다.
+Before delivery, fix issues found by checking:
 
-- 주인공의 목표, 동기, 시간 제한이나 압박과 실패의 대가가 분명한가?
-- 주요 결과가 인물의 선택과 기존 복선에서 나왔는가?
-- 장면마다 목표, 장애물, 상태 변화가 있는가? 가능한 한 늦게 시작해 일찍 끝낼 수 있는가?
-- 중요한 정보는 한 번만, 가장 긴장감 높은 곳에서 드러나는가?
-- 화자 이름을 가려도 대사만으로 누가 말하는지 알 수 있는가?
-- 화면 묘사나 양쪽이 알고 있는 정보가 대사로 반복되는가? 서로 알아보기, 대치, 질문과 답변, 만류, 작별에 대사가 있는가? 전체 대사가 지나치게 적은가?
-- 소품, 부상, 의상, 시간, 지리, 인물이 아는 정보가 이어지는가?
-- 장면과 캐릭터 에셋 수가 제작 규모에 맞는가? 동작을 안정적인 샷으로 나눌 수 있는가?
-- 길이가 적절한가? 소리 내어 읽는 시간으로 대략 계산한다. 중국어 대사는 분당 약 180–220한자를 기준으로 추정할 수 있다. 동작, 멈춤, 인물 없는 장면에도 시간을 배정한다.
-- 첫 화면의 상황을 바로 이해할 수 있는가? 끝에서 감정이나 시각적 모티프를 회수하는가?
-- 캐릭터 목록에 상대역과 핵심 가족이 있는가? 사망한 인물도 기록했는가? 전체 줄거리가 절정만 남도록 압축되지는 않았는가?
+- Clear protagonist goal, motives, time pressure, and stakes.
+- Major outcomes supported by choices and setup.
+- A goal, obstacle, and change in every scene, entering as late and leaving as early as possible.
+- Important information appears once at the most effective moment.
+- Speakers have distinguishable voices without labels.
+- Dialogue avoids repeating pictures or known facts while retaining exchanges in recognition, confrontation, questioning, persuasion, and farewells.
+- Continuity of props, injury, clothing, geography, time, and character knowledge.
+- A workable number of character and location assets and action that breaks into stable shots.
+- Realistic timing based on reading aloud, or about 180–220 Han characters per minute for Chinese dialogue, with time left for action, pauses, and empty shots.
+- A readable opening and an emotional or visual payoff.
+- Opponents, key family, and deceased characters are present in the profiles and the synopsis covers more than the climax.
 
-사용자가 이번에 요청한 산출물만 제공한다. 대본을 가리는 장황한 작성 안내는 덧붙이지 않는다.
+Deliver only the requested artifact, without tutorial prose around the script.
