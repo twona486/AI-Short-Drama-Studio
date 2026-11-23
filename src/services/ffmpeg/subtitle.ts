@@ -1,11 +1,11 @@
 /**
- * 字幕相关
+ * 자막 처리
  *
- * - SRT 解析/生成
- * - 把字幕烧录进视频（FFmpeg drawtext / ass）
+ * SRT 읽기 및 생성
+ * FFmpeg drawtext 또는 ASS를 이용한 영상 자막 합성
  *
- * 注：FFmpeg.wasm 默认不包含 libass，所以用 drawtext 单条字幕动态绘制。
- *     大量字幕建议用 WebVTT + canvas overlay（性能更好）。
+ * 기본 FFmpeg.wasm에는 libass가 없어 drawtext로 자막을 한 줄씩 그린다.
+ *     자막이 많으면 WebVTT와 Canvas 오버레이를 사용하면 처리 성능이 향상된다.
  */
 
 import type { CaptionStyle } from '@/types'
@@ -82,7 +82,7 @@ function pad(n: number, w: number): string {
   return String(n).padStart(w, '0')
 }
 
-/** 把字幕按片段时间映射（每个 clip 一个 cue） */
+/** 클립마다 자막 큐 하나를 배정한다. */
 export function buildCuesFromClips(
   clips: Array<{ startTime: number; duration: number; text: string }>
 ): SubtitleCue[] {
@@ -94,7 +94,7 @@ export function buildCuesFromClips(
   }))
 }
 
-/** 为 FFmpeg drawtext 转义特殊字符 */
+/** FFmpeg drawtext의 특수 문자를 이스케이프한다. */
 export function escapeDrawText(s: string): string {
   return s
     .replace(/\\/g, '\\\\')
@@ -104,7 +104,7 @@ export function escapeDrawText(s: string): string {
     .replace(/\n/g, '\\n')
 }
 
-/** 把 Cue 列表 + 样式 → FFmpeg drawtext 滤镜（多段叠加） */
+/** 자막 큐와 스타일을 drawtext 필터로 변환해 여러 구간에 합성한다. */
 export function cuesToDrawTextFilter(
   cues: SubtitleCue[],
   style: CaptionStyle,
@@ -113,7 +113,7 @@ export function cuesToDrawTextFilter(
   const fontSize = Math.round(videoHeight * style.fontSizeRatio)
   const y = calcY(style.position, videoHeight, fontSize)
   const fontFile = ''
-  // 字号 / 颜色 / 描边 / 位置
+  // 글자 크기, 색상, 외곽선, 위치
   const base = (text: string) =>
     [
       `text='${escapeDrawText(text)}'`,
@@ -144,7 +144,7 @@ export interface CaptionHighlightOptions {
   enabled?: boolean
   color?: string
   scale?: number
-  /** 可选人工覆盖；为空时自动提取 */
+  /** 직접 강조할 단어를 지정한다. 비어 있으면 자동으로 찾는다. */
   words?: string[]
 }
 
@@ -173,8 +173,8 @@ interface HighlightCandidate {
 }
 
 /**
- * 为一条字幕自动挑出最多两个重点词。
- * 优先级：完整日期/时间与数字 → 营销实体/结论词 → 中文分词中的高信息词。
+ * 자막 한 줄에서 강조할 단어를 최대 두 개 선택한다.
+ * 날짜와 시간 및 수치, 홍보 관련 키워드, 정보량이 큰 단어 순으로 찾는다.
  */
 export function pickCaptionHighlights(text: string, limit = 2): string[] {
   const source = /\p{Script=Han}/u.test(text) && !/\p{Script=Hangul}/u.test(text)
@@ -231,7 +231,7 @@ export function pickCaptionHighlights(text: string, limit = 2): string[] {
       }
     }
   } catch {
-    /* 不支持 Intl.Segmenter 时，数字和词典规则仍然可用 */
+    /* Intl.Segmenter가 없으면 숫자와 키워드 규칙만 적용한다. */
   }
 
   const ranked = candidates.sort((a, b) => b.score - a.score || a.start - b.start)
@@ -317,8 +317,8 @@ function hexToRgba(hex: string, alpha: number): string {
 }
 
 /**
- * 用浏览器 Canvas 把一句字幕画成整帧透明 PNG。
- * ffmpeg.wasm 没有 freetype，drawtext 烧中文会失败；overlay PNG 才能真正叠字。
+ * 브라우저 Canvas로 자막 한 줄을 투명한 전체 프레임 PNG로 그린다.
+ * FFmpeg.wasm의 drawtext가 지원하지 않는 문자를 PNG 오버레이로 합성한다.
  */
 export async function renderCaptionPng(
   text: string,
@@ -347,7 +347,7 @@ export async function renderCaptionPng(
   const highlightWords = highlight.enabled
     ? (highlight.words?.filter(Boolean) ?? pickCaptionHighlights(text))
     : []
-  // 重点词会变大，换行时预留少量宽度，避免靠近安全区边缘。
+  // 강조 단어의 크기가 커지므로 줄바꿈 시 여유 폭을 두어 안전 영역을 지킨다.
   const maxWidth = width * (highlightWords.length ? 0.82 : 0.86)
   const lines = wrapCaptionLines(ctx, text.trim(), maxWidth)
   if (lines.length === 0) {
