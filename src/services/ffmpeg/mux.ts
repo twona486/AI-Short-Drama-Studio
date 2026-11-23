@@ -36,7 +36,7 @@ export async function replaceVideoAudio(
     '-movflags', '+faststart',
     '-y', outputName
   ])
-  if (exitCode !== 0) throw new Error(`替换数字人音轨失败（FFmpeg ${exitCode}）`)
+  if (exitCode !== 0) throw new Error(`디지털 휴먼 오디오 트랙을 교체하지 못했습니다.（FFmpeg ${exitCode}）`)
   return toBlob((await readFile(ffmpeg, outputName)) as Uint8Array, 'video/mp4')
 }
 
@@ -63,7 +63,7 @@ export async function sliceAudio(
     '-y',
     outputName
   ])
-  if (exitCode !== 0) throw new Error(`切音频失败（FFmpeg ${exitCode}）`)
+  if (exitCode !== 0) throw new Error(`오디오를 자르지 못했습니다.（FFmpeg ${exitCode}）`)
   return toBlob((await readFile(ffmpeg, outputName)) as Uint8Array, 'audio/mp4')
 }
 
@@ -97,7 +97,7 @@ export async function toDigitalHumanWav(
     '-y',
     'out.wav'
   ])
-  if (exitCode !== 0) throw new Error(`口播音频转码失败（FFmpeg ${exitCode}）`)
+  if (exitCode !== 0) throw new Error(`내레이션 오디오를 변환하지 못했습니다.（FFmpeg ${exitCode}）`)
   const blob = toBlob((await readFile(ffmpeg, 'out.wav')) as Uint8Array, 'audio/wav')
   const info = await probeMedia(blob).catch(() => ({ duration: 5 }))
   const duration = Math.max(5, Math.min(15, Math.round(info.duration || 5)))
