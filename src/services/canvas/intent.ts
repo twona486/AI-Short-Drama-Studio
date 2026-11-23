@@ -1,3 +1,4 @@
+import { t as translate } from "@/i18n"
 /**
  * 意图识别：在任务规划之前先判断用户这句话想干什么。
  * 正式模式（real）下全部交给 LLM 分类，不用任何正则/关键词规则；
@@ -41,18 +42,18 @@ export interface IntentContext {
   hasSelectedGenNode: boolean
 }
 
-const INTENT_LABEL: Record<AgentIntentKind, string> = {
-  remember: '记住这个',
-  forget: '删除记忆',
-  question: '问答咨询',
-  status: '查看进度',
-  prompt_polish: '优化提示词',
-  create_asset: '创建生成节点',
-  edit_canvas: '修改画布',
-  pipeline: '推进制作',
-  chitchat: '闲聊',
-  task: '执行任务'
-}
+const INTENT_KINDS: AgentIntentKind[] = [
+  'remember',
+  'forget',
+  'question',
+  'status',
+  'prompt_polish',
+  'create_asset',
+  'edit_canvas',
+  'pipeline',
+  'chitchat',
+  'task',
+]
 
 function intent(kind: AgentIntentKind, confidence: 'high' | 'low' = 'high'): AgentIntent {
   const needsTools =
@@ -61,12 +62,12 @@ function intent(kind: AgentIntentKind, confidence: 'high' | 'low' = 'high'): Age
     kind === 'edit_canvas' ||
     kind === 'pipeline' ||
     kind === 'task'
-  return { kind, label: INTENT_LABEL[kind], needsTools, confidence }
+  return { kind, label: translate(`canvasIntent.${kind}`), needsTools, confidence }
 }
 
 /** 工具类关键词：命中即说明用户想动画布，不是纯问答 */
 const ACTION_HINT =
-  /写|续写|改编|拆|提炼|提取|生成|出图|配图|出视频|做|改|换|重跑|重新|创建|新建|加一|补|跑|优化|扩写|加厚|删除|去掉|全流程|确认通过|继续|开始/
+  /写|续写|改编|拆|提炼|提取|生成|出图|配图|出视频|做|改|换|重跑|重新|创建|新建|加一|补|跑|优化|扩写|加厚|删除|去掉|全流程|确认通过|继续|开始|작성해|생성해|수정해|바꿔|삭제해|계속해|시작해|\b(?:write|generate|edit|change|remove|continue|start)\b/i
 
 export function detectIntent(text: string, ctx: IntentContext): AgentIntent {
   const t = text.trim()
@@ -85,7 +86,7 @@ export function detectIntent(text: string, ctx: IntentContext): AgentIntent {
   if (/[A-Za-z]:[\\/]/.test(t) && !ACTION_HINT.test(t)) return intent('question', 'low')
 
   // 2. 进度查询 / 质检
-  if (/进度|状态|还差|缺什么|缺了|齐了没|检查一遍|质检|验收清单|现在.*(?:情况|进展)|做到哪/.test(t)) {
+  if (/进度|状态|还差|缺什么|缺了|齐了没|检查一遍|质检|验收清单|现在.*(?:情况|进展)|做到哪|진행 상황|완료 상태|뭐가 남|누락 확인|검수|\b(?:progress|status|what(?:'s| is) missing|quality check)\b/.test(t)) {
     return intent('status')
   }
 
@@ -102,7 +103,7 @@ export function detectIntent(text: string, ctx: IntentContext): AgentIntent {
   }
 
   // 4. 提示词优化
-  if (/优化|扩写|加厚|润色|改写|重写/.test(t) && /提示词|prompt|画面|运镜|文案|这段|这句|节点/i.test(t)) {
+  if (/优化|扩写|加厚|润色|改写|重写|최적화|다듬|구체화|확장|\b(?:polish|refine|expand|rewrite)\b/i.test(t) && /提示词|prompt|画面|运镜|文案|这段|这句|节点|프롬프트|노드|화면|카메라 움직임/i.test(t)) {
     return intent('prompt_polish')
   }
   if (ctx.hasSelectedGenNode && /更有画面感|写清|动作|表情|暗一点|亮一点|按剧情|更具体|再细/.test(t)) {
@@ -110,12 +111,12 @@ export function detectIntent(text: string, ctx: IntentContext): AgentIntent {
   }
 
   // 5. 新建自由节点
-  if (/新建|创建|加一?个|来一个|帮我做一?[个张条]/.test(t) && /图片|图像|视频|节点|画面/.test(t)) {
+  if (/新建|创建|加一?个|来一个|帮我做一?[个张条]|새로 만들|새 노드|추가해|\b(?:create|add|make)\b/i.test(t) && /图片|图像|视频|节点|画面|이미지|영상|노드|\b(?:image|video|node)\b/i.test(t)) {
     return intent('create_asset')
   }
 
   // 6. 修改画布现有内容
-  if (/第\s*[\d一二两三四五六七八九十]+\s*镜/.test(t) && ACTION_HINT.test(t)) {
+  if (/(?:第\s*[\d一二两三四五六七八九十]+\s*镜|\d+\s*번\s*샷|\bshot\s+\d+\b)/i.test(t) && ACTION_HINT.test(t)) {
     return intent('edit_canvas')
   }
   if (/把|将|改/.test(t) && /节点|提示词|分镜|时长|比例|运镜/.test(t) && ACTION_HINT.test(t)) {
@@ -126,7 +127,7 @@ export function detectIntent(text: string, ctx: IntentContext): AgentIntent {
   const looksQuestion =
     /[吗呢吧？?]$/.test(t) ||
     /^(?:什么是|怎么|为什么|为啥|能不能|可不可以|你会|你认识|介绍一下|解释一下|讲讲|告诉我)/.test(t) ||
-    /你能做什么|你会什么|你是谁|有什么功能|怎么用/.test(t) ||
+    /你能做什么|你会什么|你是谁|有什么功能|怎么用|어떻게 쓰|뭘 할 수|무슨 뜻|\b(?:what can you do|how do I use|what does .+ mean)\b/i.test(t) ||
     /(?:是|讲的?是|说的?是|里面(?:是|有))啥|什么意思|啥意思|是什么意思|什么内容|内容是什么|里面有什么|讲了什么|说了什么/.test(t)
   if (looksQuestion && !ACTION_HINT.test(t)) {
     return intent('question')
@@ -172,7 +173,7 @@ function parseIntentJson(raw: string): AgentIntentKind | null {
   if (from < 0 || to <= from) return null
   try {
     const kind = String(JSON.parse(s.slice(from, to + 1))?.kind || '').trim()
-    return (Object.keys(INTENT_LABEL) as AgentIntentKind[]).includes(kind as AgentIntentKind)
+    return INTENT_KINDS.includes(kind as AgentIntentKind)
       ? (kind as AgentIntentKind)
       : null
   } catch {
@@ -188,16 +189,16 @@ async function detectIntentWithLlm(
 ): Promise<AgentIntent> {
   const p = ctx.project
   const state = [
-    p?.script?.content?.trim() ? '有剧本' : '无剧本',
-    (p?.shots?.length ?? 0) > 0 ? `有${p!.shots.length}个分镜` : '无分镜',
-    ctx.hasSelectedGenNode ? '画布上选中了一个生成节点' : '没有选中节点'
+    p?.script?.content?.trim() ? 'screenplay available' : 'no screenplay',
+    (p?.shots?.length ?? 0) > 0 ? `${p!.shots.length} storyboard shots` : 'no storyboard shots',
+    ctx.hasSelectedGenNode ? 'a generation node is selected' : 'no selected node'
   ].join('，')
   const resp = await callLLM({
     messages: [
       { role: 'system', content: INTENT_LLM_SYSTEM },
       {
         role: 'user',
-        content: `项目当前状态：${state}\n\n用户消息：\n${text}`
+        content: `Current project state: ${state}\n\nUser message:\n${text}`
       }
     ],
     temperature: 0,

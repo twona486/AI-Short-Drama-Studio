@@ -2331,5 +2331,17 @@ export default {
     "finalFormat": "최종 형식 {format}(으)로 변환하고 있어요…",
     "convertFormat": "{format} 변환",
     "drawCaptions": "자막을 그리고 있어요({current}/{total})…"
+  },
+  "canvasIntent": {
+    "remember": "이 내용 기억",
+    "forget": "기억 삭제",
+    "question": "질문",
+    "status": "진행 상황 확인",
+    "prompt_polish": "프롬프트 최적화",
+    "create_asset": "생성 노드 만들기",
+    "edit_canvas": "캔버스 수정",
+    "pipeline": "제작 진행",
+    "chitchat": "일상 대화",
+    "task": "작업 실행"
   }
 }

@@ -2331,5 +2331,17 @@ export default {
     "finalFormat": "转最终格式 {format}...",
     "convertFormat": "转 {format}",
     "drawCaptions": "绘制字幕 {current}/{total}..."
+  },
+  "canvasIntent": {
+    "remember": "记住这个",
+    "forget": "删除记忆",
+    "question": "问答咨询",
+    "status": "查看进度",
+    "prompt_polish": "优化提示词",
+    "create_asset": "创建生成节点",
+    "edit_canvas": "修改画布",
+    "pipeline": "推进制作",
+    "chitchat": "闲聊",
+    "task": "执行任务"
   }
 }
