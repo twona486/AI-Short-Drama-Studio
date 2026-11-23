@@ -7,7 +7,7 @@ import {
   VIDEO_H3_V5_10S_WORKFLOW_ID
 } from './env'
 
-/** AutoDL 固定网关地址，用户只填 Token，不需要碰地址。 */
+/** AutoDL 기본 게이트웨이 주소. 사용자는 토큰만 입력한다. */
 export const AUTODL_BASE_URL = VIDEO_AUTODL_ROOT
 
 export interface AutodlWorkflow {
@@ -20,8 +20,8 @@ export interface AutodlWorkflow {
 }
 
 /**
- * AutoDL 内置 H3 系列工作流。全部对应 autodl.art 上的现成工作流，
- * 用户只需要在设置里填一次 AutoDL Token。
+ * autodl.art에서 제공하는 내장 H3 워크플로 목록
+ * 설정에서 AutoDL 토큰을 한 번 입력하면 된다.
  */
 export const AUTODL_WORKFLOWS: AutodlWorkflow[] = [
   {
