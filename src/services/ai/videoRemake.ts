@@ -191,8 +191,8 @@ function mockRemakeRaw(topic: string): any {
         duration: 5,
         shotSize: '근경',
         cameraMovement: 'push',
-        visualPrompt: '产品被拿到镜头前，包装与 logo 必须与用户产品图完全一致。',
-        videoPrompt: '主角把用户产品拿到镜头前，包装和 logo 始终清晰，说完开场那句。',
+        visualPrompt: 'The product is held up to the camera. The packaging and logo must match the user’s product image exactly.',
+        videoPrompt: 'The lead holds the user’s product up to the camera while speaking the opening line. The packaging and logo remain clear throughout.',
         voiceover: '아직도 평범한 제품을 쓰세요?',
         audioDescription: '옷감이 스치는 소리와 약한 배경음',
         purpose: '钩子'
@@ -202,8 +202,8 @@ function mockRemakeRaw(topic: string): any {
         duration: 6,
         shotSize: '중경',
         cameraMovement: 'static',
-        visualPrompt: '主角使用用户产品，动作清楚，背景简洁。',
-        videoPrompt: '主角使用用户产品，动作清楚，把这一步做完并说完功能那句。',
+        visualPrompt: 'The lead demonstrates the user’s product with clear movements against an uncluttered background.',
+        videoPrompt: 'The lead demonstrates the user’s product with clear movements, completes the step, and finishes the line about the feature.',
         voiceover: '이 단계가 핵심이에요.',
         audioDescription: '제품을 조작하는 소리와 배경음',
         purpose: '说明'
@@ -213,8 +213,8 @@ function mockRemakeRaw(topic: string): any {
         duration: 5,
         shotSize: '클로즈업',
         cameraMovement: 'push',
-        visualPrompt: '用户产品包装特写，logo 清晰。',
-        videoPrompt: '镜头推到用户产品包装特写，logo 清楚，说完收口那句。',
+        visualPrompt: 'Close-up of the user’s product packaging with a clear view of the logo.',
+        videoPrompt: 'The camera pushes in for a close-up of the user’s product packaging with the logo in sharp focus as the closing line finishes.',
         voiceover: '이 제품으로 바꿔 보세요.',
         audioDescription: '테이블 위에 가볍게 내려놓는 소리',
         purpose: '收口'
@@ -247,31 +247,31 @@ export async function analyzeRemakeVideo(
     const parts: LLMContentPart[] = [
       {
         type: 'text',
-        text: `당신은 짧은 영상의 스토리보드 감독입니다. 참조 영상의 키프레임을 시간 순서로 제공합니다. 전체 길이는 약 ${duration.toFixed(1)}초, 화면 비율은 ${input.aspectRatio}입니다.
-내용, 샷마다 화면 크기·카메라 움직임·동작, 들리는 내레이션, 현장 환경음, 출연 캐릭터와 장면을 파악하세요.
-그다음 재현할 수 있는 스토리보드 대본을 쓰세요. 상품 외형에 원본 영상의 브랜드를 복사하지 마세요. 나중에 사용자가 업로드한 제품 이미지 ${input.productCount}장으로 바꾸므로 모델용 프롬프트에는 「用户产品」으로만 쓰세요.
+        text: `You are a short-form video storyboard director. The reference video keyframes are in chronological order. The video runs about ${duration.toFixed(1)} seconds and has an aspect ratio of ${input.aspectRatio}.
+Identify the content, shot size, camera movement, actions, audible narration, ambient sound, cast, and scenes.
+Then write a storyboard script that can be recreated. Do not copy the reference video’s branding onto the product. The product will be replaced using the ${input.productCount} user-uploaded product images, so refer to it only as “the user’s product” in generation prompts.
 
 Write titles and user-facing descriptions in Korean (한국어). Write image and video generation direction in English. Preserve verbatim narration from the reference and any requested Korean on-screen text. Return JSON only.
 {
-  "topic": "<짧은 제목>",
-  "summary": "<한두 문단의 줄거리>",
-  "aesthetic": "<영상 전체의 화면 분위기>",
+  "topic": "<short title>",
+  "summary": "<one or two paragraphs summarizing the story>",
+  "aesthetic": "<overall visual mood>",
   "subjects": [{ "name": "", "kind": "person|animal|other", "description": "", "role": "" }],
   "scenes": [{ "name": "", "description": "", "lighting": "", "mainAnchor": "" }],
   "shots": [{
-    "title": "<3-8자>",
+    "title": "<3–8 characters>",
     "duration": 5,
     "shotSize": "",
     "cameraMovement": "push|pull|pan|tilt|static|orbit",
     "purpose": "钩子|说明|反应|揭示|收口",
     "visualPrompt": "<Filmable English description using the user's product>",
     "videoPrompt": "<English direction with character expressions, action, environmental reactions, original dialogue, and camera motion. Do not repeat visualPrompt.>",
-    "voiceover": "<이 샷에서 들리는 내레이션 원문. 없으면 빈 문자열>",
-    "audioDescription": "<환경음을 짧은 문장으로 묘사>",
+    "voiceover": "<verbatim narration audible in this shot, or an empty string>",
+    "audioDescription": "<brief sentence describing ambient sound>",
     "audioMode": "tts"
   }]
 }
-내레이션은 샷에 맞춰 나누고 원본에 없는 효능이나 약속을 만들지 마세요. 샷마다 duration은 5–10초의 정수로 쓰세요. 모든 더빙은 후반 작업에서 합성하므로 audioMode는 tts로, 내레이션이 없으면 none으로 지정하세요. 영상 생성에는 사람 음성을 넣지 마세요.`
+Split narration to match the shots. Do not invent benefits or promises absent from the reference. Set each shot duration to an integer from 5 to 10 seconds. All dubbing is synthesized in postproduction, so set audioMode to tts, or to none when there is no narration. Exclude human voices from video generation.`
       }
     ]
     for (let i = 0; i < frames.length; i++) {
