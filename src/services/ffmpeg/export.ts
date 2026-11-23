@@ -203,7 +203,7 @@ export async function exportVideo(input: ExportInput): Promise<Blob> {
     }
 
     if (concatLines.length === 0) {
-      throw new Error('时间线上没有可导出的素材')
+      throw new Error('타임라인에 내보낼 자료가 없습니다.')
     }
 
     log(`✓ 准备 concat list:\n${concatLines.join('\n')}`)
@@ -783,11 +783,11 @@ async function safeExec(
     code = await ffmpeg.exec(args)
   } catch (e) {
     const cmd = ['ffmpeg', ...args].join(' ').slice(0, 400)
-    throw new Error(`[${stage}] 失败：${errorMessage(e)}\n命令: ${cmd}`)
+    throw new Error(`[${stage}] 실패 ${errorMessage(e)}\n명령 ${cmd}`)
   }
   if (typeof code === 'number' && code !== 0) {
     const cmd = ['ffmpeg', ...args].join(' ').slice(0, 400)
-    throw new Error(`[${stage}] FFmpeg 退出码 ${code}\n命令: ${cmd}`)
+    throw new Error(`[${stage}] FFmpeg 종료 코드 ${code}\n명령 ${cmd}`)
   }
 }
 
