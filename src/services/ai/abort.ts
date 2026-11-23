@@ -1,7 +1,7 @@
 import { t } from '@/i18n'
 import zh from '@/locales/zh'
 
-/** 写完整剧本 / 提炼节点：长 JSON 很容易超过 2 分钟 */
+/** 완성 대본과 노드 추출의 긴 JSON 응답에는 2분 이상 걸릴 수 있다. */
 export const PLAY_LLM_TIMEOUT_MS = 480_000
 
 export function throwIfAborted(signal?: AbortSignal) {
@@ -18,7 +18,7 @@ function errMessage(e: unknown) {
   return String(e ?? '')
 }
 
-/** fetch 被 abort 时，Chrome 一律报 The user aborted a request，需靠 signal.reason 区分超时/取消 */
+/** Chrome의 fetch 취소 오류는 signal.reason으로 취소와 시간 초과를 구분한다. */
 export function isAbortError(e: unknown): boolean {
   const name = errName(e)
   if (name === 'AbortError' || name === 'TimeoutError') return true
