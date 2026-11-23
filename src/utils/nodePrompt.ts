@@ -1,6 +1,6 @@
 /**
- * 节点上展示的提示词 = 真正发给出图/出视频接口的全文。
- * 框里有字就原样发送，不再背后拼接。
+ * 노드에 표시한 전체 프롬프트를 이미지 또는 영상 생성 API로 전송한다.
+ * 입력란에 내용이 있으면 별도의 지침을 덧붙이지 않고 그대로 전송한다.
  */
 import {
   characterPropSheetPrompt,
@@ -76,30 +76,30 @@ export function shotDirectorBrief(shot: Shot, project: Project): string {
     .replace(/\s*Location facts\s*:[\s\S]*$/i, '')
     .split('\n')
     .map((line) => line.trim())
-    .filter((line) => !/^(?:镜头|景别|地点|出场|站位|视线|动作承接|可见画面|道具|现场声|台词|对白|旁白|口播)\s*[：:]/.test(line))
-    .map((line) => line.replace(/^这一镜怎么演\s*[：:]\s*/, ''))
+    .filter((line) => !/^(?:镜头|景别|地点|出场|站位|视线|动作承接|可见画面|道具|现场声|台词|对白|旁白|口播|샷|샷 크기|장소|출연|동선|시선|동작 연결|화면|소품|현장음|대사|내레이션|Shot(?: size)?|Location|Cast|Blocking|Eyeline|Continuity|Visible action|Props?|On-location sound|Dialogue|Narration)\s*[：:]/i.test(line))
+    .map((line) => line.replace(/^(?:这一镜怎么演|연기|Performance)\s*[：:]\s*/i, ''))
     .filter(Boolean)
     .join('\n')
     .trim()
   const lines = [
-    shot.title ? `镜头：${shot.title}` : '',
-    shot.shotSize ? `景别：${shot.shotSize}` : '',
-    place.name ? `地点：${place.name}` : '',
-    cast.length ? `出场：${cast.map((item) => item.name).join('、')}` : '',
-    shot.blocking ? `站位：${shot.blocking}` : '',
-    shot.eyeline ? `视线：${shot.eyeline}` : '',
-    shot.continuity ? `动作承接：${shot.continuity}` : '',
-    shot.visualPrompt?.trim() ? `可见画面：${shot.visualPrompt.trim()}` : '',
-    performance ? `这一镜怎么演：${performance}` : '',
-    shot.propFocus && shot.propFocus !== '无' ? `道具：${shot.propFocus}` : '',
-    shot.audioDescription?.trim() ? `现场声：${shot.audioDescription.trim()}` : ''
+    shot.title ? `Shot: ${shot.title}` : '',
+    shot.shotSize ? `Shot size: ${shot.shotSize}` : '',
+    place.name ? `Location: ${place.name}` : '',
+    cast.length ? `Cast: ${cast.map((item) => item.name).join('、')}` : '',
+    shot.blocking ? `Blocking: ${shot.blocking}` : '',
+    shot.eyeline ? `Eyeline: ${shot.eyeline}` : '',
+    shot.continuity ? `Continuity: ${shot.continuity}` : '',
+    shot.visualPrompt?.trim() ? `Visible action: ${shot.visualPrompt.trim()}` : '',
+    performance ? `Performance: ${performance}` : '',
+    shot.propFocus && !/^(?:无|없음|none)$/i.test(shot.propFocus) ? `Props: ${shot.propFocus}` : '',
+    shot.audioDescription?.trim() ? `On-location sound: ${shot.audioDescription.trim()}` : ''
   ]
   return lines.filter(Boolean).join('\n')
 }
 
 /**
- * 本镜出场人物各自的声音描述。音色是中文，必须原样写进提示词开头，
- * 否则会被「正文去中文」的清洗一起抹掉，人物就只剩脸没有声音。
+ * 인물별 음성 설명은 프롬프트 첫머리에 원문 그대로 넣는다.
+ * 본문을 정리하는 과정에서 음성 설명이 제거되지 않도록 한다.
  */
 export function shotVoiceBlock(shot: Shot, project: Project): string {
   const cast = subjectsForShot(shot, project)
@@ -114,15 +114,15 @@ export function shotVoiceBlock(shot: Shot, project: Project): string {
           speakerLabel.includes(sub.name) ||
           sub.name.includes(speakerLabel))
     )
-    lines.push(`${sub.name}（${speaking ? '本镜说话' : '在场'}）：${voice}`)
+    lines.push(`${sub.name} (${speaking ? 'speaking' : 'present'}): ${voice}`)
   }
   if (!lines.length) {
     const own = shot.speakerVoice?.trim()
     if (!own) return ''
-    lines.push(`本镜说话人：${own}`)
+    lines.push(`Speaker for this shot: ${own}`)
   }
   return [
-    '人物声音（每个人自己的音色，开口时按这个来，不要互相串音色）：',
+    'Character voices (use each character\'s own vocal qualities when they speak):',
     ...lines
   ].join('\n')
 }
@@ -133,12 +133,12 @@ export function defaultVideoSendPrompt(shot: Shot, project: Project): string {
   const spoken = spokenTextOnly(shot.voiceover || '')
   const roster = pictureIdentityBlock({ prompt: '', imageSlots, duration: shot.duration })
   const camera: Record<string, string> = {
-    push: '从当前景别随人物注意力缓慢推近，落在动作结果上',
-    pull: '从动作细节缓慢后拉，逐步带出人物关系和完整空间',
-    pan: '顺着人物移动或视线平移，停在新出现的信息上',
-    tilt: '顺着人物抬头、俯身或物体方向俯仰，停在叙事焦点上',
-    orbit: '围绕人物做有明确起点和落点的小幅弧线运动，带出空间层次',
-    static: '机位是否保持不动服从具体动作；发生走位、揭示或环境变化时允许跟随和重新构图'
+    push: 'Slowly push in with the character\'s attention and settle on the result of the action.',
+    pull: 'Slowly pull back from the action detail to reveal the relationships and the full space.',
+    pan: 'Pan along the character\'s movement or gaze, then settle on the newly revealed detail.',
+    tilt: 'Tilt with the character\'s head or body movement or the direction of the object, then settle on the story focus.',
+    orbit: 'Use a short arc around the character with a clear starting and ending point to reveal spatial depth.',
+    static: 'Hold the camera when appropriate for the action. Follow or reframe for movement, a reveal, or an environmental change.'
   }
   const visual = String(shot.visualPrompt || '').trim()
   const performance = String(shot.videoPrompt || '').trim()
@@ -146,27 +146,27 @@ export function defaultVideoSendPrompt(shot: Shot, project: Project): string {
   return [
     roster,
     voices,
-    `镜头：${shot.title || `第${shot.index + 1}镜`}`,
-    `景别与运镜：${shot.shotSize || '按动作选择景别'}；${camera[shot.cameraMovement || 'static']}；在 ${shot.duration} 秒内完成并落到清楚的结束状态。`,
-    visual ? `画面与动作依据：${visual}` : '',
-    performance && performance !== visual ? `动态表演依据：${performance}` : '',
-    shot.blocking ? `人物调度：${shot.blocking}` : '',
-    shot.eyeline ? `视线关系：${shot.eyeline}` : '',
-    shot.continuity ? `动作承接：${shot.continuity}` : '',
-    shot.propFocus && shot.propFocus !== '无' ? `关键道具：${shot.propFocus}` : '',
-    shot.audioDescription ? `同步声音：${shot.audioDescription}` : '',
-    spoken ? `原词台词：${shot.voiceover}` : '无对白，不需要人物做说话口型。'
+    `Shot: ${shot.title || `Shot ${shot.index + 1}`}`,
+    `Framing and camera: ${shot.shotSize || 'Choose framing appropriate to the action'}. ${camera[shot.cameraMovement || 'static']} Complete the action in ${shot.duration} seconds and land on a clear final state.`,
+    visual ? `Visual and action reference: ${visual}` : '',
+    performance && performance !== visual ? `Performance reference: ${performance}` : '',
+    shot.blocking ? `Blocking: ${shot.blocking}` : '',
+    shot.eyeline ? `Eyelines: ${shot.eyeline}` : '',
+    shot.continuity ? `Continuity: ${shot.continuity}` : '',
+    shot.propFocus && !/^(?:无|없음|none)$/i.test(shot.propFocus) ? `Key props: ${shot.propFocus}` : '',
+    shot.audioDescription ? `Synchronized sound: ${shot.audioDescription}` : '',
+    spoken ? `Deliver the following dialogue verbatim in Korean unless the source specifies another language: ${shot.voiceover}` : 'There is no dialogue. Do not animate the characters speaking.'
   ]
     .filter(Boolean)
     .join('\n\n')
 }
 
-/** 出图前补上全片画风。已写明同一种画风时不重复堆。 */
+/** 이미지 생성 전에 전체 작품의 화풍을 적용한다. 같은 화풍이 명시되어 있으면 중복하지 않는다. */
 export function ensureStyleLock(prompt: string, project: Project): string {
   const look = lookFromScript(project.script)
-  const line = `画风要求：全片统一为「${look.medium}」。${mediumLockText(look)}`
+  const line = `Visual style: Use "${look.medium}" consistently throughout. ${mediumLockText(look)}`
   const body = prompt.trim()
-  if (body.includes(look.medium) && /画风|绘制媒介|必须按/.test(body)) return body
+  if (body.includes(look.medium) && /画风|绘制媒介|必须按|화풍|visual style|rendering medium/i.test(body)) return body
   return `${body}\n${line}`.trim()
 }
 
@@ -203,25 +203,25 @@ export function shotImageSendPrompt(shot: Shot, project: Project): string {
   return ensureStyleLock(shot.imagePrompt?.trim() || defaultShotImagePrompt(shot, project), project)
 }
 
-/** 运镜对结束帧构图的影响：结束帧不是把开场画面复制一遍，要走到运镜的落点 */
+/** 종료 프레임은 카메라 움직임이 끝났을 때의 구도를 담는다. */
 const CAMERA_END_TEXT: Record<string, string> = {
-  push: '运镜是推近：结束帧比开场更近，落在这镜要交代的动作结果或情绪上。',
-  pull: '运镜是后拉：结束帧比开场更远，把人物关系和完整空间带出来。',
-  pan: '运镜是平移：结束帧的视线落点移到新出现的信息上，起幅和落幅是同一个连续摇 process。',
-  tilt: '运镜是俯仰：结束帧跟着人物抬头或俯身走到叙事焦点上。',
-  orbit: '运镜是环绕：结束帧换到弧线运动落点的角度，仍是同一批人物和同一处空间。',
-  static: '机位固定：结束帧保持和开场一致的机位、焦段和构图，只有人物动作、表情和道具状态推进。'
+  push: 'Push in: end closer than the opening frame and settle on the result or emotion conveyed by the shot.',
+  pull: 'Pull back: end farther out and reveal the character relationships and surrounding space.',
+  pan: 'Pan: move the point of attention to the newly revealed detail in one continuous movement.',
+  tilt: 'Tilt: follow the character\'s upward or downward movement until the story focus is framed.',
+  orbit: 'Orbit: end at the angle reached by the arc while retaining the same characters and location.',
+  static: 'Locked camera: retain the opening camera position, focal length, and framing while advancing action, expressions, and prop state.'
 }
 
 /**
- * 把「起始快照 → 本镜可见变化 → 末态」拆成开场状态和结束状态两段。
- * 拆不出来就用可见画面兜底，结束状态再额外强调「动作已完成」。
+ * 시작 스냅샷, 샷에서 보이는 변화, 종료 상태를 시작과 종료로 나눈다.
+ * 구분할 수 없으면 화면 묘사를 쓰고 종료 프레임에서 동작이 끝났음을 명시한다.
  */
 function splitShotContinuity(shot: Shot): { start: string; end: string } {
   const raw = String(shot.continuity || '').trim()
   const segs = raw
     .split(/\s*(?:→|->|-->|—>|=>|⇒|\|)\s*/)
-    .map((item) => item.replace(/^(?:起始快照|本镜可见变化|末态|结束状态)\s*[：:]?\s*/, '').trim())
+    .map((item) => item.replace(/^(?:起始快照|本镜可见变化|末态|结束状态|시작 스냅샷|보이는 변화|종료 상태|Opening snapshot|Visible change|Final state|End state)\s*[：:]?\s*/i, '').trim())
     .filter(Boolean)
   const visual = String(shot.visualPrompt || '').trim()
   if (segs.length >= 2) {
@@ -230,14 +230,14 @@ function splitShotContinuity(shot: Shot): { start: string; end: string } {
   return { start: segs[0] || visual, end: segs[0] || visual }
 }
 
-/** 首尾帧专用画面词：起始帧画开场那一瞬，结束帧画动作完成后的末态。 */
+/** 시작 프레임은 움직이기 직전, 종료 프레임은 동작이 완료된 상태를 묘사한다. */
 export function defaultShotFramePrompts(shot: Shot, project: Project): { start: string; end: string } {
   const look = lookFromScript(project.script)
   const scene = sceneForShot(shot, project)
   const place = resolveShotPlace(shot, scene)
   const cast = subjectsForShot(shot, project)
   const { start, end } = splitShotContinuity(shot)
-  // 参考图编号对照：起始帧比结束帧多带一张（上一镜末帧 / 本镜起始帧），编号要跟着走
+  // 참조 이미지 번호는 이전 샷의 종료 프레임이나 현재 샷의 시작 프레임을 포함한 순서대로 붙인다.
   const refIds = collectShotRefIds(shot, project).ids
   const orderedShots = [...(project.shots ?? [])].sort((a, b) => a.index - b.index)
   const pos = orderedShots.findIndex((item) => item.id === shot.id)
@@ -247,7 +247,7 @@ export function defaultShotFramePrompts(shot: Shot, project: Project): { start: 
     project,
     refIds,
     prevTail
-      ? `图${refIds.length + 1}：上一镜的结束帧——从这一格的构图、机位和光线接着走，只是衔接参考，不要照抄成新画面。`
+      ? `Image ${refIds.length + 1}: The previous shot's final frame. Continue its composition, camera position, and lighting for continuity without duplicating it.`
       : ''
   )
   const endRoster = shotRefRoster(
@@ -255,7 +255,7 @@ export function defaultShotFramePrompts(shot: Shot, project: Project): { start: 
     project,
     refIds,
     shot.firstFrameAssetId
-      ? `图${refIds.length + 1}：本镜的起始帧——保持同一机位、同一焦段、同一服装、同一光线，只把动作走到结束状态。`
+      ? `Image ${refIds.length + 1}: This shot's opening frame. Keep the camera position, focal length, wardrobe, and lighting while advancing the action to its final state.`
       : ''
   )
   const ar = project.settings?.aspectRatio || '16:9'
@@ -264,37 +264,37 @@ export function defaultShotFramePrompts(shot: Shot, project: Project): { start: 
     .replace(/<d>[\s\S]*?<\/d>/gi, '')
     .trim()
   const common = [
-    look.medium ? `画风要求：全片统一为「${look.medium}」。` : '',
-    place.name ? `场景：${place.name}。` : '',
-    place.lighting ? `光线：${place.lighting}。` : '',
+    look.medium ? `Visual style: Consistently use "${look.medium}".` : '',
+    place.name ? `Scene: ${place.name}.` : '',
+    place.lighting ? `Lighting: ${place.lighting}.` : '',
     cast.length
-      ? `画面里的人：${cast.map((item) => (item.description ? `${item.name}（${item.description}）` : item.name)).join('、')}。`
+      ? `Cast in frame: ${cast.map((item) => (item.description ? `${item.name} (${item.description})` : item.name)).join(', ')}.`
       : '',
-    shot.shotSize ? `景别：${shot.shotSize}。` : '',
-    shot.blocking ? `站位：${shot.blocking}。` : '',
-    shot.propFocus && shot.propFocus !== '无' ? `关键道具：${shot.propFocus}。` : '',
-    `画面比例必须是 ${ar}，整张图按这个画幅输出，禁止另一种比例。`
+    shot.shotSize ? `Shot size: ${shot.shotSize}.` : '',
+    shot.blocking ? `Blocking: ${shot.blocking}.` : '',
+    shot.propFocus && !/^(?:无|없음|none)$/i.test(shot.propFocus) ? `Key props: ${shot.propFocus}.` : '',
+    `Use exactly a ${ar} aspect ratio for the entire image.`
   ].filter(Boolean)
-  const still = '只输出一张完整的单画面剧照：不要宫格、不要拼贴、不要编号、不要任何文字和对白字幕。'
+  const still = 'Output a single complete still. Avoid panels, collages, numbering, text, and dialogue subtitles.'
   const startPrompt = [
     startRoster,
-    `这是第 ${shot.index + 1} 镜「${shot.title || '本镜'}」的起始帧，镜头开始的第一格画面，动作还没发生。`,
-    start ? `开场状态：${start}。` : '',
-    visual ? `画面依据：${visual}。` : '',
+    `Opening frame for shot ${shot.index + 1} ("${shot.title || 'This shot'}"). Show the moment before the action begins.`,
+    start ? `Opening state: ${start}.` : '',
+    visual ? `Visual reference: ${visual}.` : '',
     ...common,
-    '人物处在动作起点，表情和身体还是进入这一镜时的初始状态，画面要能直接作为视频的第一帧开始运动。',
+    'Show the characters in their initial posture and expression, ready for the motion to start from this frame.',
     still
   ]
     .filter(Boolean)
     .join('\n')
   const endPrompt = [
     endRoster,
-    `这是第 ${shot.index + 1} 镜「${shot.title || '本镜'}」的结束帧：同一个镜头、同一批人物、同一处场景、同一种光线，只是动作已经走完，停在结束状态。`,
-    end ? `结束状态（末态）：${end}。` : '',
-    performance && performance !== visual ? `这一镜的动作过程：${performance}。` : '',
+    `Final frame for shot ${shot.index + 1} ("${shot.title || 'This shot'}"). Preserve the cast, location, and lighting. Show the completed action at rest.`,
+    end ? `Final state: ${end}.` : '',
+    performance && performance !== visual ? `Action during this shot: ${performance}.` : '',
     ...common,
     CAMERA_END_TEXT[shot.cameraMovement || 'static'] || CAMERA_END_TEXT.static,
-    '参考图里有本镜的起始帧：必须和它保持同一机位、同一焦段、同一服装、同一光线，只允许人物动作、位置、表情、道具状态和环境细节往前推进；不要换场景、不要换人、不要改变时间。',
+    'Match the opening reference frame\'s camera position, focal length, wardrobe, and lighting. Advance only the action, blocking, expressions, props, and environmental details. Preserve the location, cast, and time.',
     still
   ]
     .filter(Boolean)
@@ -320,7 +320,7 @@ function hasStoredPrompt(value: string | undefined): boolean {
 
 export function videoSendPrompt(shot: Shot, project: Project): string {
   void project
-  // 单一数据源：文本框字段就是接口参数。禁止清洗、补映射、迁移或自动改写。
+  // 입력란의 내용을 API에 그대로 전달한다. 정리, 매핑 추가, 마이그레이션 또는 자동 변경을 하지 않는다.
   return shot.compiledVideoPrompt ?? ''
 }
 
@@ -373,6 +373,6 @@ export function fillEmptyGeneratePrompt(
     if (hasStoredPrompt(shot.imagePrompt)) return null
     return { imagePrompt: defaultShotImagePrompt(shot, project) }
   }
-  // 视频框永不自动初始化、迁移或回填。只有用户主动点“按分镜重铺”才改它。
+  // 영상 입력란은 사용자가 스토리보드에서 다시 채우도록 요청할 때만 변경한다.
   return null
 }
