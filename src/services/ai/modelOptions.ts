@@ -1,15 +1,15 @@
-/** 接入助手从模型文档里抽出的节点选项。文档没写的字段保持空，节点就不显示。 */
+/** 도우미가 모델 문서에서 추출한 옵션만 노드에 표시한다. */
 
 export type DocImageResolution = '1k' | '2k' | '4k'
 
 export interface ModelNodeOptions {
-  /** 文档列出的出图档位，例如 1K / 2K */
+  /** 문서에서 지원하는 출력 해상도 옵션. 예를 들어 1K 또는 2K다. */
   imageResolutions?: DocImageResolution[]
-  /** 文档有音频开关时才为 true */
+  /** 모델 문서에 오디오 설정이 있으면 true다. */
   videoAudio?: boolean
-  /** 文档写明尾帧必填时才为 true */
+  /** 모델 문서에서 끝 프레임이 필수인 경우 true다. */
   lastFrameRequired?: boolean
-  /** 文档里的音频字段名，默认 audio */
+  /** 모델의 오디오 요청 필드명. 기본값은 audio다. */
   audioField?: string
 }
 
