@@ -809,7 +809,7 @@ function buildShotWorkBatches(play: string, targetBatches?: number): ShotWorkBat
     bodyStart: (match.index || 0) + match[0].length
   }))
   const sceneHeading = (title: string) =>
-    /^(?:场景\s*[一二三四五六七八九十百0-9]|第[^\n]{1,12}场(?:\b|[：:]?)|scene\b)/i.test(title)
+    /^(?:场景\s*[一二三四五六七八九十百0-9]|장면\s*\d+|第[^\n]{1,12}场(?:\b|[：:]?)|scene\b)/i.test(title)
   const scenes = headings
     .map((heading, index) => ({
       ...heading,
@@ -1055,14 +1055,26 @@ function inferOutlineAudioMode(voiceover: string, requested?: string): ShotAudio
   ) {
     return requested
   }
-  if (/旁白|画外音/.test(vo) || /^(成年|旁白)/.test(vo)) return 'h3-voiceover'
+  if (/旁白|画外音/.test(vo) || /^(?:成年|내레이션|화면 밖 음성|narrator|voiceover)/i.test(vo)) return 'h3-voiceover'
   return 'h3-dialogue'
 }
 
+const OUTLINE_SHOT = /(?:镜头|샷|Shot)\s*\d+\s*[：:]/i
+const OUTLINE_FIELDS = {
+  size: '景别|샷 크기|Shot size',
+  image: '画面|화면|Image|Visual',
+  action: '内容表现|内容|동작|내용|Action',
+  omit: '不拍|촬영 제외|Omit',
+  duration: '时长|길이|Duration',
+  sound: '声音|音效|소리|효과음|Sound|Audio',
+  speech: '口播|对白|台词|내레이션|대사|Narration|Dialogue'
+} as const
+
 function outlineField(block: string, names: string): string {
+  const labels = Object.values(OUTLINE_FIELDS).join('|')
   const m = block.match(
     new RegExp(
-      `(?:${names})[：:]\\s*([^\\n]+(?:\\n(?!(?:画面|内容|内容表现|不拍|时长|声音|音效|口播|对白|台词|镜头)\\s*\\d*\\s*[：:])[^\\n]+)*)`,
+      `(?:^|\\n)[ \\t]*(?:${names})[ \\t]*[：:][ \\t]*([^\\n]+(?:\\n(?![ \\t]*(?:(?:${labels})[ \\t]*[：:]|${OUTLINE_SHOT.source}))[^\\n]+)*)`,
       'i'
     )
   )
@@ -1076,25 +1088,25 @@ function parseOutlineText(content: string): ShotOutline[] {
     .replace(/```[\w]*\n?|\n?```/g, '')
     .trim()
   const blocks = text
-    .split(/\n(?=镜头\s*\d+\s*[：:])/)
+    .split(new RegExp(`\\n(?=[ \\t]*${OUTLINE_SHOT.source})`, 'i'))
     .map((b) => b.trim())
-    .filter((b) => /^镜头\s*\d+\s*[：:]/.test(b))
+    .filter((b) => b.search(OUTLINE_SHOT) === 0)
   return blocks
     .map((block, i) => {
-      const head = block.match(/^镜头\s*\d+\s*[：:]\s*([^\n]+)/)
+      const head = block.match(new RegExp(`^${OUTLINE_SHOT.source}\\s*([^\\n]+)`, 'i'))
       let title = (head?.[1] || `샷 ${i + 1}`).trim()
-      let shotSize = outlineField(block, '景别')
+      let shotSize = outlineField(block, OUTLINE_FIELDS.size)
       const paren = title.match(/[（(]([^）)]+)[）)]\s*$/)
       if (paren) {
         if (!shotSize) shotSize = paren[1].trim()
         title = title.slice(0, paren.index).trim() || title
       }
-      const visualPrompt = outlineField(block, '画面')
-      const videoPrompt = outlineField(block, '内容|内容表现')
-      const omitNote = outlineField(block, '不拍')
-      const audioDescription = outlineField(block, '声音|音效')
-      const voiceover = outlineField(block, '口播|对白|台词')
-      const duration = Number(block.match(/时长[：:]\s*(\d+(?:\.\d+)?)/)?.[1])
+      const visualPrompt = outlineField(block, OUTLINE_FIELDS.image)
+      const videoPrompt = outlineField(block, OUTLINE_FIELDS.action)
+      const omitNote = outlineField(block, OUTLINE_FIELDS.omit)
+      const audioDescription = outlineField(block, OUTLINE_FIELDS.sound)
+      const voiceover = outlineField(block, OUTLINE_FIELDS.speech)
+      const duration = Number(outlineField(block, OUTLINE_FIELDS.duration).match(/^\d+(?:\.\d+)?/)?.[0])
       return {
         title: title.trim() || `샷 ${i + 1}`,
         shotSize: shotSize || undefined,
@@ -1193,41 +1205,41 @@ async function extractShotOutline(
       ? '按剧本拍点出分镜场记（动作、对白、不拍清单）…'
       : '先把剧本交给模型出分镜场记（只要画面、时长、声音）…'
   )
-  const shortSystem = `${importedDirectorPrefix()}당신은 스토리보드 감독입니다. 대화에서 샷 목록을 적듯 짧고 빠르게, 촬영할 수 있는 현장 기록만 작성하세요.
-대본 순서대로 샷을 나누세요. 같은 공간의 대화는 한 샷에 담을 수 있습니다. 같은 인물의 짧은 연속 대사도 한 샷에 담을 수 있습니다.
-샷마다 제목(괄호 안에 샷 크기 또는 카메라 움직임), 화면(눈에 보이는 동작 2–4문장), 내용(이 샷에서 연기할 것), 길이, 소리를 쓰세요.
-대사가 있으면 「口播：캐릭터 이름：대사 원문」을 한 줄 추가하세요. 대본의 대사 원문을 한 줄도 빠뜨리지 마세요. 대사가 없는 빈 장면이나 이동만 하는 샷에서만 이 줄을 생략하세요.
-이야기의 배경을 성인이 된 인물의 내레이션으로 바꾸지 마세요.
-JSON, 사고 과정, continuity / blocking / 미학 설정을 출력하지 마세요.
-아래 형식을 정확히 따르고 샷 사이에는 빈 줄을 하나 넣으세요. 파서가 읽는 중국어 필드명은 그대로 두세요. 제목과 대사는 한국어로, 이미지·영상 생성 모델에 전달되는 画面과 内容은 중국어로 작성하세요.
+  // 일반·영화 제작 스토리보드의 출력 필드와 대사 보존 규칙.
+  const shortSystem = `${importedDirectorPrefix()}You are a storyboard director. Write concise production notes that describe shots a team can film.
+Split the script in story order. Consecutive dialogue in one space may remain in one shot, as may a series of short lines from the same person.
+For each shot, write its title (shot size or camera movement in parentheses), image (2–4 sentences of visible action), action (what happens in the shot), duration, and sound.
+If the shot contains dialogue, add a line in the form "Dialogue: Character name: Original line". Preserve every line from the script verbatim. Omit Dialogue only for shots without speech, such as empty establishing shots or travel shots.
+Do not turn the story background into narration by an older version of a character. Do not output JSON, reasoning, continuity, blocking, or aesthetic sections.
+Follow the format below exactly, with a blank line between shots. Write shot titles, shot sizes, sound notes, and user-facing descriptions in Korean (한국어). Write the Image and Action fields in English for the generation models. Preserve dialogue in its original language.
 
-镜头 1：한밤중의 질주（원경→중경）
-画面：村口浅滩，夜晚十一点，水面横着一条银白光带。牛郎挑着竹筐从草丛中冲出，两个孩子颠簸抓筐边。
-内容：牛郎从草丛冲出，孩子们抓着筐边颠簸，一只凉鞋陷进泥里。人看路和孩子，不要看镜头。
-时长：6 秒
-声音：풀을 밟는 소리, 가쁜 숨, 물이 흐르고 튀는 소리`
+Shot 1: 한밤중의 질주 (원경→중경)
+Image: At 11 p.m., a silvery band of light crosses the shallows by the village entrance. Niulang rushes out of the brush carrying a bamboo basket on a shoulder pole. Two children jolt and grip the rim.
+Action: Niulang bursts from the brush. As the children grip the bouncing rim, one sandal sinks into the mud. He watches the path and his children and keeps his gaze off the camera.
+Duration: 6 seconds
+Sound: 풀을 밟는 소리, 가쁜 숨, 물이 흐르고 튀는 소리`
 
-  const filmSystem = `${importedDirectorPrefix()}당신은 영화 스토리보드 감독입니다. 입력은 영화 챕터 전체 대본입니다. 대본 순서대로 촬영 가능한 샷을 나누세요. 모든 장면과 몽타주 항목을 충실히 담고 별도의 줄거리를 추가하지 마세요.
+  const filmSystem = `${importedDirectorPrefix()}You are a film storyboard director. The input is a complete chapter script. Break it into filmable shots in script order. Cover every scene and montage beat without inventing plot.
 
-샷을 나누는 원칙
-- 한 장면은 들어오기, 발견, 망설임, 발화, 반응, 떠나기처럼 극적 박자에 따라 나누세요. 장면 전체를 한 샷으로 압축하거나 대사 한 줄을 표정만 있는 세 샷으로 쪼개지 마세요.
-- 몽타주는 같은 의도를 가진 연속 화면 3–6개를 8–10초 샷 하나에 담으세요. 문틈의 빛이 오른쪽으로 이동하거나, 사과 심이 갈변하거나, 빗방울이 고여 웅덩이가 되는 식으로 눈에 보이는 연속 동작을 쓰세요. ‘시간이 흘렀다’나 ‘며칠이 지났다’라는 문구를 쓰지 마세요.
-- 같은 공간의 대화와 같은 인물의 짧은 연속 대사는 각각 한 샷에 담을 수 있습니다. 대본의 **캐릭터 이름：**「대사」는 대응하는 샷의 내레이션 필드에 원문 그대로 넣으세요. 대사를 빼거나 성인이 된 인물의 내레이션으로 앞 이야기를 요약하지 마세요.
-- 성인이 된 인물의 내레이션이나 화면 밖 음성은 대본에 화면 밖 음성으로 표시되어 있을 때만 「口播：旁白：대사 원문」으로 쓰세요. 화면 속 인물은 입을 다물어야 합니다. 화면에 나오는 인물이 말하면 실제 캐릭터 이름을 쓰세요.
-- 대본에 촬영 제외 사항(상처 클로즈업, 신상, 종교의식, 노숙자를 괴물처럼 촬영하는 등)이 있으면 각 샷에 「不拍：…」을 추가하세요.
-- 인물은 장면 속 사람이나 물건을 봅니다. 모두가 카메라를 보게 하지 마세요. 선의는 평범한 사람이 하는 작은 일로 표현하고 구원자가 등장하는 것처럼 쓰지 마세요.
-- 시대, 날씨, 옷이 젖거나 마른 상태, 걸음걸이는 대본을 따르세요.
-- 예상 샷 수는 ${longForm ? '25–60개이며 개별 장면과 몽타주로 챕터 전체를 담으세요' : '영상 길이에 따라 대략 6–14개입니다'}. 핵심 박자를 생략하거나 대사 한 줄을 표정만 있는 세 샷으로 쪼개지 마세요.
+Shot breakdown rules:
+- Split each scene by its dramatic beats: entering, noticing, hesitating, speaking, reacting, and leaving. Do not compress the entire scene into one shot or stretch one line into three shots of blank expressions.
+- Combine 3–6 consecutive images with the same purpose into one 8–10-second montage shot. Describe tangible progression, such as light moving right from a door crack, an apple core darkening, or raindrops gathering into a puddle. Avoid vague statements such as "time passes" or "several days pass."
+- A dialogue exchange in a single space and a continuous run of short lines from a single speaker can each stay in one shot. Copy each script line verbatim into the relevant Dialogue field. Do not omit lines or use narration by the character's older self to recap backstory.
+- Use "Dialogue: Narrator: Original line" only when the script identifies a line as off-screen narration. On-screen people keep their lips closed. For on-screen dialogue, name the actual speaker.
+- Add an Omit line to each applicable shot when the script excludes imagery such as wound close-ups, religious icons, rituals, or framing a homeless person as monstrous.
+- Have people look at someone or something in the scene. Do not pose the whole cast toward the lens. Show kindness as an ordinary person doing a small thing; avoid a savior entrance.
+- Follow the script's period, weather, wet or dry clothing, and gait.
+- Expected size: ${longForm ? '25–60 shots covering the entire chapter, including all scenes and montages' : 'about 6–14 shots, depending on the running time'}. Do not omit important beats or split one line into three shots of blank expressions.
 
-아래 형식을 정확히 따르고 샷 사이에는 빈 줄을 하나 넣으세요. JSON과 사고 과정은 출력하지 마세요. 파서가 읽는 중국어 필드명은 그대로 두세요. 제목과 대사는 한국어로, 이미지·영상 생성 모델에 전달되는 画面, 内容 및 不拍은 중국어로 작성하세요.
+Follow the format below exactly. Put one blank line between shots. Do not output JSON or reasoning. Write shot titles, shot sizes, sound notes, and user-facing descriptions in Korean (한국어). Write Image, Action, and Omit in English for the generation models. Preserve script dialogue verbatim.
 
-镜头 1：모퉁이에서 잠들다（중근경）
-画面：废弃仓房墙角，阿峰靠开裂墙壁坐地，手里苹果核，羽绒服脏湿。门缝透进灰白天光。
-内容：阿峰呼吸渐渐平稳，眼睛慢慢闭上。看向地面或虚空，不要看镜头。机位几乎不动。
-不拍：伤口特写、神像
-时长：8 秒
-声音：바깥의 빗소리, 멀리서 들리는 자동차 소리, 그의 숨소리
-口播：아펑：먼저 다 먹자. 심은 남겨 두고.`
+Shot 1: 모퉁이에서 잠들다 (중근경)
+Image: At the corner of an abandoned warehouse, Afeng sits against a cracked wall holding an apple core. His down jacket is wet and dirty. Pale gray daylight enters through a gap in the door.
+Action: Afeng's breathing steadies and his eyes close gradually. He looks at the floor or into the distance, away from the camera. The camera barely moves.
+Omit: Close-ups of wounds and religious icons
+Duration: 8 seconds
+Sound: 바깥의 빗소리, 멀리서 들리는 자동차 소리, 그의 숨소리
+Dialogue: 아펑: 먼저 다 먹자. 심은 남겨 두고.`
 
   const response = await callLLM({
     messages: [
@@ -2909,33 +2921,35 @@ export interface PlayRunResult {
 function playBibleGaps(md: string): string[] {
   const t = md || ''
   const gaps: string[] = []
-  if (!/##\s*(故事背景|本章承接)/.test(t)) gaps.push('故事背景（一句话故事、对抗引擎、完整梗概；禁止高潮切片）')
+  if (!/##\s*(?:故事背景|本章承接|이야기 배경|챕터 연결|Story background|Chapter handoff)/i.test(t)) {
+    gaps.push('Story background: include a one-sentence premise, the central conflict, and the full synopsis. Do not include only the climax.')
+  }
   else {
-    if (!/一句话故事/.test(t)) gaps.push('故事背景必须写明「一句话故事」')
-    if (!/对抗引擎/.test(t)) gaps.push('故事背景必须写明「对抗引擎」（对手是谁、要什么、如何抬高代价）')
+    if (!/一句话故事|한 문장 이야기|one-sentence (?:story|premise)/i.test(t)) gaps.push('Include a one-sentence premise in the story background.')
+    if (!/对抗引擎|갈등 구조|central conflict/i.test(t)) gaps.push('State the central conflict: who the opponent is, what they want, and how they raise the stakes.')
     if (/本片从|本段从哪一帧|从.*瞬间开始/.test(t) && !/完整梗概/.test(t)) {
       gaps.push('故事背景被写成高潮切片，必须补完整梗概：开端、对手、递进阻力、高潮选择、结局')
     }
   }
-  if (!/##\s*人物/.test(t)) {
-    gaps.push('人物（主角、对手、关键亲人；每人含欲望/恐惧/弧光/视觉锚点）')
+  if (!/##\s*(?:人物|캐릭터|인물|Characters)/i.test(t)) {
+    gaps.push('Characters: include the protagonist, opponent, and key family members. State each person’s desire, fear, arc, and visual anchor.')
   } else {
-    if (!/欲望/.test(t) || !/恐惧/.test(t) || !/弧光/.test(t)) {
-      gaps.push('人物小传缺少欲望、恐惧或弧光，按编剧手册补全每人字段')
+    if (!/欲望|욕망|desire/i.test(t) || !/恐惧|두려움|fear/i.test(t) || !/弧光|변화|character arc/i.test(t)) {
+      gaps.push('Character profiles need desires, fears, and character arcs. Fill in each missing field using the screenwriting guide.')
     }
-    const people = t.split(/##\s*人物/)[1]?.split(/##\s+/)[0] || ''
+    const people = t.split(/##\s*(?:人物|캐릭터|인물|Characters)/i)[1]?.split(/^##\s+/m)[0] || ''
     const charCount = (people.match(/^###\s+/gm) || []).length
     const looksLikeAd = /口播|带货|产品演示/.test(t)
     if (!looksLikeAd && charCount > 0 && charCount < 3) {
       gaps.push('人物表过薄：除路人外必须有主角、对手、关键亲人/导师；已故父亲和活人对手也要建档，不能只留两人高潮对手戏')
     }
   }
-  if (!/##\s*环境与场景/.test(t) && !/##\s*场景\s*$/m.test(t)) {
-    gaps.push('环境与场景（无人时的空间、天气、年代肌理）')
+  if (!/##\s*(?:环境与场景|환경과 장면|Environment and locations)/i.test(t) && !/##\s*场景\s*$/m.test(t)) {
+    gaps.push('Environment and locations: describe spaces without people, the weather, and period details.')
   }
-  const sceneCount = (t.match(/##\s*场景[一二三四五六七八九十百0-9]/g) || []).length
-  if (sceneCount > 0 && !/场次任务/.test(t)) {
-    gaps.push('每场必须有场次任务（目标 / 阻力 / 结果）')
+  const sceneCount = (t.match(/^##\s*(?:场景[一二三四五六七八九十百0-9]|(?:장면|Scene)\s*\d+)/gim) || []).length
+  if (sceneCount > 0 && !/场次任务|장면 과제|scene objective/i.test(t)) {
+    gaps.push('Give each scene an objective, obstacle, and outcome.')
   }
   const tableHits = t.match(/\*\*口播\*\*/g)?.length || 0
   if (tableHits >= 3) gaps.push('把口播/画面/时长四格改写成连续动作和对白，不要再填表')
@@ -3123,75 +3137,76 @@ async function ensurePlayNarrativeContinuity(
   }
 }
 
-const PLAY_MARKDOWN_SPEC = `playMarkdown에는 촬영하고 샷으로 나눌 수 있는 완전한 대본이 들어가야 합니다. 내레이션, 화면, 소리, 길이의 네 칸짜리 표로 압축하지 마세요. 이후 캐릭터, 장면, 스토리보드를 추출할 때 이 본문만 읽습니다. 배경, 캐릭터 설정, 환경이 대본에 없으면 스토리보드가 빈약하고 연결이 끊깁니다.
+// 한국어 대본의 구조, 장면·캐릭터 요건과 작성 규칙.
+const PLAY_MARKDOWN_SPEC = `Write playMarkdown as a complete script that can be filmed and broken into shots. Do not compress it into a table of narration, visuals, sound, and duration. Later extraction reads the script to identify characters, locations, and shots, so include the background, character profiles, and environments in the text.
 
-제목과 본문, 캐릭터 설명, 대사는 한국어로 작성하고 아래 구조를 따르세요. 파서와 검수기가 읽는 중국어 제목과 항목명은 그대로 사용하세요. 이야기에 필요한 만큼 장면을 작성하세요. 단편은 길이를 압축할 수 있지만 상대역, 핵심 가족, 갈등 구조를 빼면 안 됩니다. 설화나 IP를 각색할 때 절정만 잘라 내지 마세요. 영화 챕터는 필요한 장면을 모두 작성하세요.
+Write the title, headings, descriptions, and dialogue in Korean (한국어). Use the structural labels shown below. Write as many scenes as the story needs. A short film can be compressed without dropping the opponent, key family members, or central conflict. Do not reduce an adaptation of folklore or intellectual property to a clip from its climax. Cover all scenes needed for a film chapter.
 
 # 제목
-> 类型：…　时间：시대/계절/낮밤　地点：도시와 구체적인 구역　建议时长：…
+> 유형: …　시간: 시대/계절/낮밤　장소: 도시와 구체적인 구역　권장 길이: …
 
-## 故事背景
-다음 세 항목을 모두 작성하세요. 사용자가 특정 부분만 요청한 경우를 제외하고, 어느 프레임에서 시작한다는 말로 전체 이야기를 대신하지 마세요.
-- 一句话故事：[주인공]은 [외적 목표]를 위해 [어려운 행동]을 해야 한다. 실패하면 [대가]를 치른다.
-- 对抗引擎：상대역은 누구이며 무엇을 원하는지, 어떤 가치관에 따라 움직이는지, 대가를 어떻게 계속 키우는지 작성하세요.
-- 完整梗概：발단, 전환점, 점차 커지는 장애물, 절정의 선택, 결말까지 이어지는 산문으로 쓰세요. 상대역과 핵심 가족은 이야기 안에 등장해야 하며 배경 설명 한 줄로 처리하지 마세요.
+## 이야기 배경
+Include all three items. Do not replace the full story by saying where the opening frame begins unless the user explicitly requests an excerpt.
+- 한 문장 이야기: the protagonist must take a difficult action to reach an external goal or pay the cost of failure.
+- 갈등 구조: identify the opponent, what they want, their values, and how they keep raising the stakes.
+- 전체 줄거리: write connected prose from the beginning through turning points, escalating obstacles, the climactic choice, and the ending. Keep the opponent and key family members present in the story.
 
-## 人物
-이야기를 움직이는 인물마다 한 절(### 짧은 이름)을 배정하세요. 주인공, 상대역 또는 이를 인격화한 인물, 부모, 멘토, 법 집행자가 여기에 해당합니다. 사망하거나 자리에 없거나 후반부에야 등장하는 인물도 기록하세요. 행인은 간단히 언급하되 대사가 있거나 사건의 인과를 움직이는 인물을 ‘어떤 남자’로 뭉뚱그리지 마세요.
-각 절은 캐릭터 이미지를 그리거나 상대역과 연기할 수 있을 만큼 구체적으로 쓰세요.
-- 身份
-- 年龄与外形识别点：얼굴, 헤어스타일, 체형, 키의 인상
-- 性格与语感
-- 欲望
-- 恐惧与弱点
-- 关系
-- 弧光：이 챕터에서 어떤 상태로 시작해 어떻게 변하는가
-- AI视觉锚点：의상, 신발, 액세서리, 소지품, 닳거나 더러워진 부분(4면 설정 이미지를 그릴 수 있도록)
-- 跨场状态变化：허기, 옷이 젖거나 마른 상태, 부상, 손에 든 물건
-- 本片出场：화면 등장 / 사망해 화면 밖에 있음(유품 또는 초상화가 화면에 등장) / 상대역의 눈에 보이는 압박
+## 캐릭터
+Use one subsection (### short name) for each person who drives the story, including the protagonist, the opponent or their personified representative, parents, mentors, and law enforcement. Include people who are deceased, absent, or appear late. Passersby can be brief, but give people with dialogue or a causal role their own identities.
+Write each subsection with enough detail for a character sheet and actor direction:
+- 신분
+- 나이와 외모 식별 특징: face, hair, build, and impression of height
+- 성격과 말투
+- 욕망
+- 두려움과 약점
+- 관계
+- 변화: how they change over the chapter
+- AI 시각 기준점: clothes, shoes, accessories, possessions, and signs of wear or dirt, suitable for a four-view character sheet
+- 장면 간 상태 변화: hunger, wet or dry clothes, injury, and what they hold
+- 등장 방식: on screen, deceased and off screen with a keepsake or portrait, or visible pressure from the opponent
 
-## 环境与场景
-촬영할 장소마다 한 절(### 짧은 장소명)을 배정하세요. 이후 장면 이미지에 사용할 수 있도록 사람이 없는 공간을 묘사하세요.
-- 건축 구조, 출입구, 바닥, 주요 기준 소품
-- 날씨, 젖거나 마른 상태, 빛이 들어오는 방향
-- 시대와 도시의 질감(차량, 간판, 복장, 전선, 셔터 등을 대본의 연도와 지역에 맞춰 작성)
-이어지는 장면에서는 같은 날씨를 유지하세요. 한 장면에 폭우가 쏟아졌는데 다음 장면 바닥이 말라 있으면 안 됩니다.
+## 환경과 장면
+Use one subsection (### short place name) per location. Describe the empty space so it can be used for the location image.
+- Building structure, access points, ground, and a primary physical anchor
+- Weather, wet or dry surfaces, and the direction of the light
+- Period and city details, such as vehicles, signs, clothing, wiring, and shutters appropriate to the year and region
+Maintain continuous weather between scenes. Do not follow a downpour with an inexplicably dry ground.
 
-## 拍摄原则
-촬영에서 제외할 것, 선의가 행동으로 드러나는 방식, 고난을 절제해 보여 주는 방식을 명확히 쓰세요. 특별한 제한이 없어도 ‘사실적으로 표현하고 감정을 과장하지 않는다’고 적으세요.
+## 촬영 원칙
+State what to omit, how kindness appears in visible actions, and how to portray hardship with restraint. If no special limits apply, choose a realistic treatment and avoid melodrama.
 
-## 场景一｜현장 기록 제목
-**内景 또는 外景 중 하나｜장소 원래 이름｜날씨와 시간대**
-人物：이 장면에 있는 인물(유품이나 초상화로 대표되는 부재 인물이 있으면 표시)
-场次任务：목표 / 장애물 / 결과
+## 장면 1｜현장 기록 제목
+**실내｜장소 원래 이름｜날씨와 시간대**
+등장인물: List the people present and identify absent characters represented by a keepsake or portrait.
+장면 과제: goal / obstacle / outcome
 
-보거나 듣거나 실행할 수 있는 동작을 현재형으로 쓰세요. ■ 기호로 동작의 박자를 나열할 수 있습니다. 누가 가까이 또는 뒤에 있는지, 몸을 어느 방향으로 두는지, 무엇을 보고 무엇을 하는지 쓰세요. 앞쪽에 있는 인물은 옆을 향하거나 뒤돌아보고 카메라를 정면으로 보지 않게 하세요.
-대사는 다음 형식으로 쓰세요.
+Write visible, audible, performable action in the present tense. Use ■ for action beats if helpful. Specify who is in the foreground or background, how they face, what they see, and what they do. The foreground character can stand sideways or turn back instead of facing the camera.
+Use this dialogue format:
 
 **캐릭터 이름：**
 
 「대사 원문」
 
-인물이 소통하는 장면에는 동작만 적지 말고 주고받는 대사를 쓰세요. 이름 부르기, 묻고 답하기, 서로 알아보기, 대치, 만류, 작별에서는 최소 한 번씩 주고받으세요. 이야기 배경을 ‘성인이 된 인물’의 내레이션에 몰아넣지 마세요. 이 장면에 등장한 인물이 직접 말해야 합니다.
-절제한다는 것은 구호나 명언 같은 문장을 덜어 내는 것입니다. 전체 대사를 한두 마디로 줄이지 마세요. 이동만 하는 장면이나 인물 없는 장면에는 대사가 없어도 되지만, 인물들이 함께 연기하는 장면에는 대사가 필요합니다.
-장면 끝은 【节拍：触发/抉择/阻力/转向/高潮/回收】 형식으로 맺으세요.
-시간 압축이 필요하면 ### 蒙太奇를 사용하며 각 항목을 눈에 보이는 화면으로 쓰세요. ‘시간이 흘렀다’, ‘며칠이 지났다’ 같은 문구를 쓰지 마세요.
-성인이 된 인물의 내레이션은 인용 블록에 쓰고 화면 밖 음성임을 표시하세요.
-앞뒤 장면의 옷, 부상, 손에 든 물건, 날씨가 이어져야 합니다.
+Scenes involving interaction must include back-and-forth dialogue. Calling someone by name, questions and answers, recognition, confrontation, persuasion, and farewells need at least one line and a response. Let visible characters speak. Do not explain the backstory through narration by an older version of a character.
+Restraint means avoiding slogans and quotable maxims. Do not cut an entire film to one or two lines. Travel and empty establishing shots can remain silent, but scenes with interacting characters need dialogue.
+End each scene with a beat label: 【장면 박자：계기/선택/장애/전환/절정/회수】.
+For time compression, use ### 몽타주 and describe something visible in each entry. Do not write "time passes" or "days pass."
+Put older-character narration in a block quote and identify it as off-screen.
+Keep wardrobe, injuries, objects in hand, and weather consistent between scenes.
 
-（이후 장면은 场景二, 场景三…）
+(Continue with 장면 2, 장면 3, and so on.)
 
-## 本章情绪线
-시작부터 마무리까지 감정이 어떻게 바뀌는지 한 문단으로 분명히 써서 이후 스토리보드에서 인물의 표정이 비지 않게 하세요.
+## 챕터 감정선
+Describe the emotional progression from opening to ending in one paragraph so shot breakdown retains expressive performances.
 
-## 视觉与声音基调
-색채, 필름 또는 다큐멘터리 질감, 주요 환경음을 쓰세요. 따뜻한 장면은 뜨거운 물, 김, 사람 목소리로 표현하며 갑자기 화려한 공간을 만들지 마세요.
+## 시각 및 소리 기조
+Describe color, film or documentary texture, and real ambient sound. For warm scenes use hot water, steam, and people's voices. Do not suddenly introduce opulent surroundings.
 
-원칙
-- 이야기의 동력, 캐릭터 설정, 환경을 분명히 한 뒤 장면을 쓰세요. 대사만 있고 인물 위치가 빠져서는 안 됩니다.
-- 선의는 평범한 사람이 하는 작은 일입니다. 고난은 의상, 걸음걸이, 호흡, 환경으로 표현하세요.
-- 상품 판매나 내레이션에서는 진행자와 제품도 인물 섹션에 넣으세요. 내레이션 원문은 대사에 넣되, 장소, 바라보는 대상, 손에 든 물건을 장면에 명확히 쓰세요.
-- 장면마다 기계적으로 한 마디씩 배열하지 마세요. 하나의 의도로 이어지는 대사는 같은 장면에 두세요. 인물이 소통하는 장면에는 주고받는 대사를 쓰고 장면 전체를 무언으로 만들지 마세요.`
+Additional rules:
+- Establish the story engine, characterization, and environment before writing the scenes. Give speaking characters physical positions.
+- Show kindness through small things ordinary people do. Show hardship through clothes, gait, breathing, and environment.
+- In sales and presenter-led videos, include the host and product under characters. Put narration into dialogue, and specify the location, what the speaker looks at, and what they hold.
+- Keep lines that share one intention in the same scene. Do not force one line per scene or leave an interaction silent.`
 
 /**
  * 目标成片时长 → 剧本规模约束。
@@ -3221,31 +3236,31 @@ async function realGeneratePlay(input: StoryboardInput): Promise<{ result: PlayD
     messages: [
       {
         role: 'system',
-        content: `당신은 시나리오 작가입니다. 사용자의 요청과 기존 내용을 바탕으로 바로 대본을 작성하세요.
-Markdown 본문만 출력하세요. JSON, 설명, 자체 점검은 출력하지 마세요.
-제목과 본문, 캐릭터 설명, 대사는 한국어로 작성하세요. 제목, 이야기 배경, 캐릭터, 환경과 장면 순으로 쓴 다음 개별 장면을 작성하세요. 파싱에 필요한 섹션 제목은 정확히 「## 故事背景」, 「## 人物」, 「## 环境与场景」으로 쓰세요. 개별 장면 제목은 「## 场景N｜제목」 형식을 사용하세요. 장면 정보는 「**内景｜장소｜날씨와 시간대**」 또는 「**外景｜장소｜날씨와 시간대**」 형식을 사용하세요. 대사는 「**캐릭터 이름：**」 다음 줄에 「대사 원문」을 쓰세요.
-사용자가 길이를 지정하면 그 길이에 맞춰 완성하세요. 캐릭터가 서로 소통하는 장면에서는 실제로 말할 수 있는 대사를 쓰세요. 사용자가 언급하지 않은 가격이나 효능은 추가하지 마세요.`
+        content: `You are a screenwriter. Write the script directly from the user's request and the existing material.
+Return only the Markdown body. Do not output JSON, explanations, or self-review.
+Write the title, script, character descriptions, and dialogue in Korean (한국어). Start with the title, story background, characters, and environment and locations, then write each scene. Use the exact section headings "## 이야기 배경", "## 캐릭터", and "## 환경과 장면". Use "## 장면 N｜제목" for scene headings and "**실내｜장소｜날씨와 시간대**" or "**실외｜장소｜날씨와 시간대**" for the scene line. For dialogue, write "**캐릭터 이름：**" followed by 「대사 원문」 on the next line.
+Match the requested running time if supplied. Write speakable lines when characters interact. Do not add prices or efficacy claims that the user did not mention.`
       },
       {
         role: 'user',
         content: continueMode
-          ? `기존 대본 뒤에 이어 쓰세요. 기존 장면의 원문은 보존하고 뒤에만 추가하세요.
+          ? `Continue the script by appending new scenes. Preserve existing scenes verbatim.
 
-이어 쓸 방향
-${hint || '지금까지 일어난 사건에 이어서 쓰세요.'}
+Continuation direction
+${hint || 'Continue from what has already happened.'}
 
-현재 대본
-${existingPlay || '（비어 있음）'}
+Current script
+${existingPlay || '(empty)'}
 ${scaleBrief}`
-          : `아래 요구사항에 따라 완전한 대본을 작성하세요.
+          : `Write a complete script based on the following requirements.
 
-요구사항
-${input.topic || '（미입력）'}
+Requirements
+${input.topic || '(unspecified)'}
 
-기존 내용
-${input.content?.trim() || '（없음）'}
-${input.keywords?.length ? `키워드：${input.keywords.join('、')}` : ''}
-화면 비율：${input.aspectRatio || '16:9'}
+Existing material
+${input.content?.trim() || '(none)'}
+${input.keywords?.length ? `Keywords: ${input.keywords.join(', ')}` : ''}
+Aspect ratio: ${input.aspectRatio || '16:9'}
 ${scaleBrief}`
       }
     ],
