@@ -631,7 +631,7 @@ async function repairStoryboardOnce(
     messages: [
       {
         role: 'system',
-          content: `${importedDirectorPrefix()}당신은 숏폼 영상의 책임 편집자입니다. 이전 초안이 검수를 통과하지 못했습니다. JSON을 다시 추출하고 아래 문제를 모두 해결한 뒤 제출하세요.${durationBlock}사용자가 언급하지 않은 제품, 인물, 숫자나 사실을 추가하지 마세요. 요청 범위 안에서 이미 등장하거나 분명히 암시된 사건의 과정만 보완하세요. 범위 밖의 결과를 이어 쓰지 마세요.\n${extractHint}\n${NARRATIVE_CONTINUITY_RULES}\n${SPEAKER_STAGING_RULES}\n주요 사건의 과정이 누락됐거나 앞뒤 샷이 끊기는 경우 해당 구간의 샷을 나누거나 삽입하거나 재배치할 수 있습니다. 이번 회차 범위 안에서 보이는 과정과 반응을 보완하세요. 관련 부분만 수정하고 검수를 통과한 샷은 원래 의미를 유지하세요. 사용자가 긴장을 남기는 지점에서 멈추라고 하면 거기서 끝내세요. 완결을 만들려고 이후 사건을 쓰지 마세요. 새 샷마다 continuity를 ‘이전 샷의 분명한 끝 상태를 이어받음 → 현재 샷에서 보이는 변화 → 다음 샷으로 이어지는 분명한 끝 상태’ 형식으로 완전하게 작성하세요.\n샷마다 내용을 담은 서로 다른 3–8자의 title을 쓰세요. 모두 ‘샷’으로 쓰지 마세요. 사용자 원문을 의미 단위로 voiceover에 배분하고 기본 audioMode는 h3-dialogue로 설정하세요. 원문에 내레이션이라고 명시된 경우에만 h3-voiceover를 쓰세요. 샷마다 대사 한 마디를 기계적으로 배정하지 마세요. 같은 인물이 같은 의도로 이어 말하는 짧은 대사 2–4개는 7–10초 샷 하나에 우선 합치고 짧은 반응과 전환에는 한 마디만 둡니다. 전체 글자 수는 duration*4를 넘지 마세요. 화자를 식별하도록 voiceover의 ‘캐릭터 이름：대사’ 형식을 유지하세요. H3로 전송할 때 이름 접두사는 자동으로 제거됩니다.\n대사가 있는 샷의 화면 크기는 동작, 공간 관계, 환경 정보, 감정의 리듬을 먼저 따져 정하세요. 표정이 이야기의 핵심이고 환경을 보여 줄 필요가 없으면 가까이 잡을 수 있습니다. 물건 건네기, 다툼, 질문과 답변, 인물 간 거리, 환경의 압박이나 집단 반응이 중요하면 중경 또는 두 사람이나 여러 사람이 보이는 구도를 사용하세요. 모든 발화를 클로즈업으로 처리하지 마세요. 화자와 다른 사람의 반응을 명확히 쓰고 모두 동시에 입을 열지 않게 하세요.\nvisualPrompt는 샷 이미지 생성에 사용할 중국어 정지 화면 묘사입니다. 장면, 캐릭터 의상, 광원 등 화면에서 보이는 내용을 쓰세요.\n${videoPerformanceSpec(getVideoPromptStyle())}\nvisualPrompt를 영어로 번역하거나 두 프롬프트를 똑같이 쓰지 마세요. h3Aesthetic에는 전체 영상의 재질, 조명, 색, 촬영 질감을 영어로 쓰고 태그만 나열하지 마세요. 제목과 사용자용 설명은 한국어로 쓰세요.\n완전하고 유효한 JSON만 출력하세요.`
+          content: `${importedDirectorPrefix()}당신은 숏폼 영상의 책임 편집자입니다. 이전 초안이 검수를 통과하지 못했습니다. JSON을 다시 추출하고 아래 문제를 모두 해결한 뒤 제출하세요.${durationBlock}사용자가 언급하지 않은 제품, 인물, 숫자나 사실을 추가하지 마세요. 요청 범위 안에서 이미 등장하거나 분명히 암시된 사건의 과정만 보완하세요. 범위 밖의 결과를 이어 쓰지 마세요.\n${extractHint}\n${NARRATIVE_CONTINUITY_RULES}\n${SPEAKER_STAGING_RULES}\n주요 사건의 과정이 누락됐거나 앞뒤 샷이 끊기는 경우 해당 구간의 샷을 나누거나 삽입하거나 재배치할 수 있습니다. 이번 회차 범위 안에서 보이는 과정과 반응을 보완하세요. 관련 부분만 수정하고 검수를 통과한 샷은 원래 의미를 유지하세요. 사용자가 긴장을 남기는 지점에서 멈추라고 하면 거기서 끝내세요. 완결을 만들려고 이후 사건을 쓰지 마세요. 새 샷마다 continuity를 ‘이전 샷의 분명한 끝 상태를 이어받음 → 현재 샷에서 보이는 변화 → 다음 샷으로 이어지는 분명한 끝 상태’ 형식으로 완전하게 작성하세요.\n샷마다 내용을 담은 서로 다른 3–8자의 title을 쓰세요. 모두 ‘샷’으로 쓰지 마세요. 사용자 원문을 의미 단위로 voiceover에 배분하고 기본 audioMode는 h3-dialogue로 설정하세요. 원문에 내레이션이라고 명시된 경우에만 h3-voiceover를 쓰세요. 샷마다 대사 한 마디를 기계적으로 배정하지 마세요. 같은 인물이 같은 의도로 이어 말하는 짧은 대사 2–4개는 7–10초 샷 하나에 우선 합치고 짧은 반응과 전환에는 한 마디만 둡니다. 전체 글자 수는 duration*4를 넘지 마세요. 화자를 식별하도록 voiceover의 ‘캐릭터 이름：대사’ 형식을 유지하세요. H3로 전송할 때 이름 접두사는 자동으로 제거됩니다.\n대사가 있는 샷의 화면 크기는 동작, 공간 관계, 환경 정보, 감정의 리듬을 먼저 따져 정하세요. 표정이 이야기의 핵심이고 환경을 보여 줄 필요가 없으면 가까이 잡을 수 있습니다. 물건 건네기, 다툼, 질문과 답변, 인물 간 거리, 환경의 압박이나 집단 반응이 중요하면 중경 또는 두 사람이나 여러 사람이 보이는 구도를 사용하세요. 모든 발화를 클로즈업으로 처리하지 마세요. 화자와 다른 사람의 반응을 명확히 쓰고 모두 동시에 입을 열지 않게 하세요.\nWrite visualPrompt in English for the image generation model. Describe a visible still frame, including the setting, clothing, and light source. Preserve requested Korean text verbatim.\n${videoPerformanceSpec(getVideoPromptStyle())}\nKeep the image and video prompts distinct. Write h3Aesthetic in English with concrete material, lighting, color, and photographic texture, without a tag list. Write titles and user-facing descriptions in Korean (한국어).\n완전하고 유효한 JSON만 출력하세요.`
       },
       {
         role: 'user',
@@ -956,7 +956,7 @@ async function generateShotWorkBatch(
 생동감 있는 화면을 만드세요. 시작 화면에서 인물과 주요 물건의 상태, 동작을 일으키는 사건, 이어지는 행동과 반응, 카메라가 움직이는 이유와 도착점을 명시하세요. ‘카메라 고정’, ‘가볍고 자연스러운 흔들림’, ‘표정 유지’, ‘화면에 여백을 줌’처럼 반복되는 문구로 채우지 마세요. 이야기에 정지가 필요할 때만 static을 사용하세요. 카메라 움직임은 공간을 드러내거나, 인물 관계나 감정 변화를 보여 주는 데 쓰세요.
 이 구간의 보이는 동작과 대사를 모두 담고 다른 이야기를 만들지 마세요. voiceover에 대사를 글자 그대로 넣고 ‘캐릭터 이름：대사 원문’으로 쓰세요. 대본에서 내레이션이나 화면 밖 음성을 명시한 경우에만 h3-voiceover, 화면 속 대사에는 h3-dialogue를 사용하세요. 대사가 없을 때만 빈 문자열과 none을 쓰세요.
 visualPrompt는 대표 키프레임의 정지 화면입니다. videoPrompt는 구체적이고 연속적이며 실행 가능한 이미지→영상 타임라인입니다. 0초부터 샷이 끝날 때까지 실제 박자에 맞춰 2–5개 구간을 쓰세요. 구간마다 누가 행동하고 말하는지, 다른 사람의 위치와 반응, 표정 변화, 동기 있는 카메라 움직임을 명시하세요. 바람, 비, 연기, 옷자락, 빛과 그림자, 소품이 행동에 맞춰 반응하게 하세요. visualPrompt를 반복하거나 시간을 기계적으로 등분하지 마세요.
-샷마다 화면 크기와 인물들의 공간 관계를 명확하게 쓰세요. 인물은 장면 안의 사람이나 물건을 바라보게 하세요. 제목과 설명은 한국어로 쓰되 이미지·영상 모델에 전달되는 visualPrompt와 videoPrompt의 연출 문장은 중국어로 쓰고 대사 원문을 보존하세요.
+샷마다 화면 크기와 인물들의 공간 관계를 명확하게 쓰세요. 인물은 장면 안의 사람이나 물건을 바라보게 하세요. Write titles and user-facing descriptions in Korean (한국어). Write model-facing visualPrompt and videoPrompt in English, preserving original dialogue and requested Korean on-screen text.
 JSON 출력을 우선하세요. {"shots":[{"title":"3-8자","purpose":"극적 기능","shotSize":"샷 크기 변화","visualPrompt":"영화 키프레임 화면","videoPrompt":"220-650자. 0초부터 끝까지 2-5구간의 영화적 타임라인","duration":6,"audioDescription":"동기화된 현장음","voiceover":"캐릭터 이름：대사 원문 또는 빈 문자열","audioMode":"h3-dialogue|h3-voiceover|none","cameraMovement":"push|pull|pan|tilt|static|orbit","subjectNames":["짧은 캐릭터 이름"],"sceneName":"기존 장소의 짧은 이름"}]}. shots 배열에는 1–${limit}개의 항목만 넣으세요. JSON을 출력할 수 없으면 파서가 읽는 ‘镜头 N / 画面 / 内容 / 时长 / 声音 / 口播’ 형식으로 반환하세요.${retry ? '이전 응답에 파싱 가능한 샷이 없었습니다. 사고 과정을 쓰지 말고 결과를 바로 반환하세요.' : ''}`
         },
         {
@@ -1302,8 +1302,8 @@ async function expandOneShot(
 내레이션 및 대사는 기록에 있는 원문을 사용하세요. 기록에 대사가 있으면 빈 문자열은 유효하지 않습니다. 같은 공간의 대화는 한 샷에 담을 수 있습니다. 현장 기록에 화면 밖 음성이나 내레이션이 명시된 경우에만 audioMode=h3-voiceover를 사용하세요.
 videoPrompt는 필수입니다. 0초부터 샷이 끝날 때까지 실제 이야기의 박자에 따라 2–5개 구간으로 나누세요. 각 구간에 먼저 현재 행동하는 인물, 구체적인 행동과 표정을 쓰세요. 이어 화자와 대사 원문을 쓰고 다른 인물이 앞이나 뒤 어디에 서는지, 몸과 시선의 방향, 말이 없는 반응을 설명하세요. 마지막으로 해당 구간의 합리적인 카메라 움직임과 도착점을 쓰세요. 말하는 인물이 뒤에 있어도 됩니다. 앞쪽 인물은 옆으로 서거나 뒤돌아 화자를 보게 하세요. 단체 사진처럼 카메라를 보게 하거나 끝에 ‘카메라를 보지 마세요’만 덧붙이지 마세요.
 ${film ? '이 샷에 대응하는 이야기 박자를 대본 원문에서 찾을 수 있어야 합니다. 몽타주는 눈에 보이는 연속 동작으로 쓰세요. 대본의 촬영 제외 사항은 videoPrompt 마지막 문장에 쓰세요. 선의는 평범한 사람이 하는 작은 일입니다.' : ''}
-사용자가 읽는 제목과 설명은 한국어로 쓰세요. 기존 범주값과 캐릭터·장소 이름은 유지하세요. 생성 모델에 전달되는 visualPrompt와 videoPrompt의 연출 문장은 중국어로 쓰고, 대사가 포함되면 대사 원문을 유지하세요.
-JSON 객체 하나만 출력하세요. {"title":"3-8자","purpose":"钩子/说明/反应/揭示/转场/收口","shotSize":"샷 크기","blocking":"인물별 앞뒤 위치, 몸 방향, 상대적 위치","eyeline":"인물별로 바라보는 사람 또는 물체. 카메라를 보지 않음","continuity":"이전 샷의 마지막 상태 → 현재 샷의 변화 → 다음 샷의 시작 상태","propFocus":"소품 또는 없음","visualPrompt":"중국어 정지 화면 묘사","videoPrompt":"중국어 220-650자의 실행 가능한 타임라인. 0초부터 끝까지 2-5개 구간에 행동하는 인물, 동작과 표정, 화자와 대사 원문, 다른 인물의 위치와 반응, 카메라 움직임과 도착점, 동기화된 소리를 작성","audioDescription":"현장 소리","voiceover":"캐릭터 이름：대사. 없으면 빈 문자열","audioMode":"h3-dialogue|h3-voiceover|tts|none","speakerHint":"목소리 특성과 감정","duration":6,"cameraMovement":"push|pull|pan|tilt|static|orbit","subjectNames":["짧은 이름"],"sceneName":"장소 원래 이름"}`
+Write titles and user-facing descriptions in Korean (한국어). Preserve enum values and existing cast and place names. Write visualPrompt and videoPrompt in English for the generation models, keeping original dialogue and requested Korean on-screen text verbatim.
+JSON 객체 하나만 출력하세요. {"title":"3-8자","purpose":"钩子/说明/反应/揭示/转场/收口","shotSize":"샷 크기","blocking":"인물별 앞뒤 위치, 몸 방향, 상대적 위치","eyeline":"인물별로 바라보는 사람 또는 물체. 카메라를 보지 않음","continuity":"이전 샷의 마지막 상태 → 현재 샷의 변화 → 다음 샷의 시작 상태","propFocus":"소품 또는 없음","visualPrompt":"English still frame description","videoPrompt":"Filmable timeline in English. 0초부터 끝까지 2-5개 구간에 행동하는 인물, 동작과 표정, 화자와 대사 원문, 다른 인물의 위치와 반응, 카메라 움직임과 도착점, 동기화된 소리를 작성","audioDescription":"현장 소리","voiceover":"캐릭터 이름：대사. 없으면 빈 문자열","audioMode":"h3-dialogue|h3-voiceover|tts|none","speakerHint":"목소리 특성과 감정","duration":6,"cameraMovement":"push|pull|pan|tilt|static|orbit","subjectNames":["짧은 이름"],"sceneName":"장소 원래 이름"}`
         },
         {
           role: 'user',
@@ -1495,7 +1495,7 @@ async function realStoryboard(
     }
 
     const subjectSystem = `당신은 캐릭터 설정을 추출하는 에이전트입니다. 전체 대본의 「## 人物」에 있는 각 독립 절과 실제로 화면에 등장하거나 유품 또는 초상화로 표현되거나 눈에 보이는 압박을 주는 인물, 동물, 제품, 주요 대상만 추출하세요. 장면, 샷, 에셋 이미지나 소품 목록은 작성하지 마세요. 사망한 아버지와 현장에 없는 상대역도 인물 섹션에 ### 항목이 있으면 개별 기록으로 만드세요. 이번 회차의 화면 중앙에 서지 않는다는 이유로 빼지 마세요. 대본의 호칭을 그대로 유지하세요. 이름과 신분 호칭이 모두 있으면 name에는 대사와 현장 기록에서 가장 자주 쓰는 짧은 이름을, role에는 전체 신분과 별칭을 써서 다른 에이전트가 두 가지 모두로 연결할 수 있게 하세요. 외모는 나이, 얼굴형, 헤어스타일, 체형, 의상, 신발, 액세서리, 일관된 식별 특징까지 구체적으로 쓰세요. ‘주인공’이라는 말만 쓰지 마세요. description은 정체성과 외모만 고정하고 위치나 날씨를 쓰지 마세요. 이후 캐릭터 디자인 이미지는 이음새 없는 순백색 배경에 4면 설정 이미지로 만듭니다. stateVariants에는 이 챕터에서 달라지는 옷의 건조 상태, 얼룩, 허기, 절뚝거림, 손에 든 음식 등을 명시하세요. 변화가 없으면 「单一状态」를 쓰세요. 사용자에게 보이는 설명은 한국어로 쓰고 이름과 호칭은 대본을 따르세요.${productNote}
-voicePrompt에는 말할 때의 음색과 표현을 자동으로 생성하세요. kind가 person인 모든 캐릭터에 필수이며 나이와 성별, 음색의 질감(쉰 소리, 맑은 소리, 느긋함, 비음 등), 속도와 강도, 감정의 기조, 신분에 맞는 억양이나 말버릇을 더빙 감독이 배우에게 직접 줄 수 있는 25–60자 분량의 중국어 한 문장으로 쓰세요. 같은 캐릭터의 영상 전체에 한 문장만 쓰고 장면마다 목소리를 바꾸지 마세요. animal과 other에는 빈 문자열을 쓰세요.
+voicePrompt에는 말할 때의 음색과 표현을 자동으로 생성하세요. kind가 person인 모든 캐릭터에 필수이며 나이와 성별, 음색의 질감(쉰 소리, 맑은 소리, 느긋함, 비음 등), 속도와 강도, 감정의 기조, 신분에 맞는 억양이나 말버릇을 더빙 감독이 배우에게 직접 줄 수 있는 영어 한 문장으로 쓰세요. 같은 캐릭터의 영상 전체에 한 문장만 쓰고 장면마다 목소리를 바꾸지 마세요. animal과 other에는 빈 문자열을 쓰세요.
 JSON만 출력하세요. {"subjects":[{"name":"짧은 이름","kind":"person|animal|other","description":"구체적인 외모. 장면 묘사 제외","role":"신분, 이야기에서의 역할과 별칭","stateVariants":"회차 내 상태 변화. 없으면 单一状态","voicePrompt":"발화 시 음색과 표현. 사람이 아니면 빈 문자열","fromReference":false}]}. 출력 전 인물 섹션의 ### 항목을 모두 개별 기록으로 만들었는지, 대사나 동작이 있거나 화면에 보이는 사람을 행인으로 합치지 않았는지, 모든 person에 voicePrompt가 있는지 확인하세요.`
 
     const sceneSystem = `당신은 장면과 시각 설정을 추출하는 에이전트입니다. 이번 회차에서 촬영할 **장소**만 추출하고 인물을 쓰거나 샷을 나누지 마세요.
@@ -1881,8 +1881,8 @@ ${input.keywords?.length ? `关键词：${input.keywords.join('、')}` : ''}
 ${stylePriority}
 ${productNote}
 
-캐릭터, 장면과 개별 장면은 대본과 일치시켜야 합니다. 원문 대사는 해당 샷의 voiceover에 ‘캐릭터 이름：대사’로 넣으세요. 성인이 된 인물의 내레이션으로 바꾸거나 대사를 비우지 마세요. 같은 인물이 같은 의도로 이어 말하는 짧은 대사 2–4개는 가능한 한 한 샷에 넣고 대사마다 기계적으로 샷을 나누지 마세요. visualPrompt는 대본의 화면을 바탕으로 그릴 수 있는 중국어 정지 화면 프롬프트로 쓰세요. videoPrompt는 중국어로 0초부터 샷이 끝날 때까지 실제 박자에 따라 2–5구간으로 나누세요. 구간마다 인물의 시작 상태, 보는 대상, 동작, 화자와 대사 원문, 다른 인물의 위치와 반응, 감정 변화, 카메라 움직임과 도착점을 쓰세요. 기계적으로 등분하거나 ‘멍한 표정을 피한다’처럼 상투적인 문구를 넣지 마세요. 대사 중 화면을 좁힐지는 화면의 느낌, 동작, 공간 관계, 감정 리듬에 맞춰 정하세요. 표정을 강조할 때는 근경이나 클로즈업을, 관계나 환경을 유지할 때는 중경이나 두 사람 또는 여러 사람이 보이는 구도를 사용하세요. 모든 대사를 클로즈업으로 처리하거나 visualPrompt를 복사하지 마세요. JSON을 바로 출력하세요.`
-    : `시나리오 작성 지침에 따라 원고를 촬영할 수 있는 스토리보드로 나누세요. 내레이션은 말할 수 있게 쓰고 모델용 화면 묘사는 촬영팀이 이해할 수 있는 쉬운 중국어로 쓰세요. 영어 키워드를 무작위로 나열하지 마세요.${budgetLine}
+캐릭터, 장면과 개별 장면은 대본과 일치시켜야 합니다. 원문 대사는 해당 샷의 voiceover에 ‘캐릭터 이름：대사’로 넣으세요. 성인이 된 인물의 내레이션으로 바꾸거나 대사를 비우지 마세요. 같은 인물이 같은 의도로 이어 말하는 짧은 대사 2–4개는 가능한 한 한 샷에 넣고 대사마다 기계적으로 샷을 나누지 마세요. visualPrompt는 대본의 화면을 바탕으로 그릴 수 있는 영어 정지 화면 프롬프트로 쓰세요. videoPrompt는 영어로 0초부터 샷이 끝날 때까지 실제 박자에 따라 2–5구간으로 나누세요. 구간마다 인물의 시작 상태, 보는 대상, 동작, 화자와 대사 원문, 다른 인물의 위치와 반응, 감정 변화, 카메라 움직임과 도착점을 쓰세요. 기계적으로 등분하거나 ‘멍한 표정을 피한다’처럼 상투적인 문구를 넣지 마세요. 대사 중 화면을 좁힐지는 화면의 느낌, 동작, 공간 관계, 감정 리듬에 맞춰 정하세요. 표정을 강조할 때는 근경이나 클로즈업을, 관계나 환경을 유지할 때는 중경이나 두 사람 또는 여러 사람이 보이는 구도를 사용하세요. 모든 대사를 클로즈업으로 처리하거나 visualPrompt를 복사하지 마세요. JSON을 바로 출력하세요.`
+    : `시나리오 작성 지침에 따라 원고를 촬영할 수 있는 스토리보드로 나누세요. 내레이션은 말할 수 있게 쓰고 모델용 화면 묘사는 Write model-facing imagery in clear natural English instead of a list of disconnected prompt keywords.${budgetLine}
 
 원문의 사실을 유지하세요. 원문에 없는 가격, 제품 사양, 효능, 인물 관계, 브랜드 약속이나 결말을 추가하지 마세요. 숫자와 고유명사는 원문 그대로 유지하세요. 정보가 부족하면 화면으로 연결하고 사실을 만들어 채우지 마세요.
 
@@ -1928,7 +1928,7 @@ ${productNote}
 ${stylePriority}
 ${extractSystemExtra}
 
-【필드 언어】사용자가 읽는 제목과 설명은 한국어로 쓰세요. h3Aesthetic은 영어로 쓰세요. visualPrompt는 중국어로 그릴 수 있는 정지 화면을 묘사하세요. videoPrompt는 중국어로 이 샷의 영상 연출을 쓰고 대사는 원문을 유지하세요.
+Output languages: write titles and user-facing descriptions in Korean (한국어). Write h3Aesthetic, visualPrompt, and videoPrompt in English for the generation models. Keep title text requested in Korean and original dialogue verbatim.
 ${videoPerformanceSpec(getVideoPromptStyle())}
 
 【출력 JSON】
@@ -1946,7 +1946,7 @@ ${videoPerformanceSpec(getVideoPromptStyle())}
       "description": "<똑같은 옷을 시장에서 살 수 있을 정도의 외모 묘사. 나이, 헤어스타일, 의상, 신발, 흉터나 습관적 동작을 쓰고 장소와 날씨는 제외. 캐릭터 디자인은 순백색 배경의 4면 설정 이미지>",
       "role": "<영상에서 맡은 역할>",
       "stateVariants": "<옷이 바뀌는지 설명. 바뀌지 않으면 单一状态>",
-      "voicePrompt": "<말할 때의 음색과 표현. 나이와 성별, 음색 질감, 말의 빠르기와 강도, 감정의 기조, 억양이나 말버릇. 더빙 감독이 사용할 수 있는 중국어 25-60자. animal/other는 빈 문자열>",
+      "voicePrompt": "<말할 때의 음색과 표현. 나이와 성별, 음색 질감, 말의 빠르기와 강도, 감정의 기조, 억양이나 말버릇. One sentence in English for a dubbing director. animal/other는 빈 문자열>",
       "props": "<착용하거나 소지하는 가방, 신분증, 태블릿, 신발, 모자 등. 없으면 无>",
       "fromReference": false
     }
