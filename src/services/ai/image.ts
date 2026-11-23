@@ -448,7 +448,7 @@ async function realZealmanImage(
     [workflow.widthKey]: width,
     [workflow.heightKey]: height
   }
-  onProgress?.(`Zealman 이미지 작업을 제출하는 중(${workflow.name})…`)
+  onProgress?.(`Zealman 이미지 작업을 제출하고 있어요(${workflow.displayName})…`)
   const submitUrl = `${root}/api/workflow/generate`
   const submitBody = JSON.stringify({ workflow_id: workflow.id, input_values: inputValues })
   const postSubmit = (url: string) =>
