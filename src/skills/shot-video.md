@@ -1,28 +1,28 @@
 ---
 name: shot-video
-description: 캐릭터 디자인 이미지, 장면 이미지, 해당 샷의 스토리 개요판을 사용해 제어 가능한 MiniMax H3 영상을 생성한다.
-triggers: 视频,出片,图生视频,运镜,动起来,生成视频,영상,영상 생성,이미지→영상,카메라 움직임,움직이게
+description: Generate controllable MiniMax H3 video using character design images, the location image, and the shot's storyboard panel.
+triggers: 视频,出片,图生视频,运镜,动起来,生成视频,영상,영상 생성,이미지→영상,카메라 움직임,움직이게,video,generate video,image-to-video
 ---
 
-# 이미지→영상
+# Image-to-video
 
-영상을 생성할 때 캐릭터와 장면이 합성된 샷 이미지를 보내지 않는다. 참조 이미지는 최대 9장이다. 샷에 등장하는 캐릭터별 디자인 이미지, 해당 샷의 장면 이미지, 해당 샷의 스토리 개요판 순으로 전송한다. 먼저 장면 이미지와 캐릭터 디자인 이미지로 개요판을 생성한 뒤 해당 샷의 동작 계획으로 영상 모델에 전달한다.
+Send no composited character-and-location shot image. Use at most nine references in this order: each character design image for this shot, the current location image, and this shot's storyboard panel. Generate the panel from the character and location images first, then send it to the video model as the action plan.
 
-캐릭터 설정, 장면 이미지, 개요판이 빠졌으면 먼저 보완한다. 샷 이미지는 미리 생성하지 않는다. 화면 밖 음성이 나오는 샷에서 이름이 불린 사람은 입을 열지 않는다. 최종 영상은 온전한 단일 화면이어야 하며 4분할, 화면 분할, 테두리, 콜라주, 자막, 라벨을 포함하지 않는다.
+Provide missing character, location, or panel references before generating. In an off-screen narration shot, a person whose name is called keeps their lips closed. The final video must show one complete image with no grid, panel borders, collage, subtitles, or labels unless the user explicitly asks for on-screen text.
 
-영상 생성에는 `videoPrompt`의 동작과 연기 정보를 사용한다. 샷 이미지용 `visualPrompt`를 그대로 H3에 전송하지 않는다. `videoPrompt`는 0초부터 샷이 끝날 때까지 실제 이야기의 박자에 맞춰 2–5개 구간으로 나눈다. 각 구간에서 누가 무엇을 보고 무엇을 하는지, 누가 무엇을 말하고 다른 인물이 어떻게 반응하는지, 감정과 카메라 움직임이 어떻게 달라지는지 쓴다. 같은 길이로 기계적으로 나누거나 상투적인 문장으로 채우지 않는다. **H3**를 선택하면 ‘프롬프트 최적화’를 눌러 공식 세 부분으로 구성한다(`h3-prompt-writing` 참조). `integrated_multimodal_description` / `overall_soundscape` / `non_diegetic_music`. 결과 영상 한 편 안에서 `[Shot 1]` / `[Shot 2]` / `[Shot 3]`으로 전환할 수 있다. 첫 샷에는 타임스탬프를 붙이지 않고, 다음 샷부터 `At 00:03.000`처럼 쓴다. 인물은 `(S1)` `(S2)`로 캐릭터 참조 이미지에 고정하며 대사 순서대로 번호를 다시 붙이지 않는다. 대사는 원문을 보존하고 한국어면 `<d>[Korean] 대사 원문</d>`, 중국어면 `<d>[Chinese] 原词</d>`에 넣는다. 한 번에 한 명의 (S#)만 말하며 나머지는 입을 다문다. 캐릭터 설정 이미지를 I2VA의 시작 프레임으로 사용하지 않는다. Wan을 선택하면 이 형식을 적용하지 않는다.
+Use the action and performance in `videoPrompt`; do not send `visualPrompt` unchanged. Divide the full duration into 2–5 ranges based on the story's real beats. State who sees and does what, who speaks, how others react, and how emotion and camera motion change. Do not divide into equal generic blocks. For **H3**, use prompt optimization and follow `h3-prompt-writing` for the official `integrated_multimodal_description`, `overall_soundscape`, and `non_diegetic_music` format. One generated clip may have internal `[Shot 1]`, `[Shot 2]`, and `[Shot 3]` cuts. Leave the first shot untimed and use a timestamp such as `At 00:03.000` for later cuts. Bind each character to their assigned (S1), (S2), and reference image. Preserve the spoken words in their original language. Tag Korean as `<d>[Korean] 대사 원문</d>` and Chinese as `<d>[Chinese] 原词</d>`. Only one person speaks at a time. Character sheets are not I2VA first frames. Do not apply this H3 format to Wan.
 
-## 더빙
+## Dubbing
 
-- `h3-dialogue`는 기본값이다. H3가 화면에 등장하는 인물의 대사와 자연스러운 입 모양을 생성한다.
-- `h3-voiceover`는 H3가 화면 밖 내레이션을 생성하며 화면 속 인물은 말을 하는 입 모양을 만들지 않는다.
-- `tts`는 H3가 사람 음성을 생성하지 않으며 최종 합성에서 별도의 TTS를 믹싱한다.
-- `none`은 환경음만 사용한다.
+- `h3-dialogue` is the default. H3 generates on-screen dialogue and natural lip movement.
+- `h3-voiceover` generates off-screen narration with on-screen mouths closed.
+- `tts` disables H3 voices and mixes separate TTS into the final edit.
+- `none` uses ambient sound only.
 
-캐릭터 이름, 목소리 특성, 샷 설명은 대사와 구분한다. 최종 H3 프롬프트는 공식 영어 형식으로 쓰며 `<d>` 안의 대사만 소리 내어 읽힌다. 화면 속 인물이 말하는 동작은 태그 바깥에 쓴다. 화면 밖 내레이션은 `says in an off-screen voiceover`라고 쓰고 화면 속 인물은 입을 다물게 한다. 내레이션 필드에 샷 크기나 동작 설명이 들어 있다면 `No dialogue. No lips moving.`이라고 쓴다.
+Write the final generation prompt in English and keep Korean dialogue, narration, or user-requested Korean on-screen text verbatim. Names, vocal qualities, and shot directions go outside the spoken tag. For off-screen narration use `says in an off-screen voiceover` and specify closed lips. If the narration field only contains a shot size or direction, write `No dialogue. No lips moving.` Write user-facing explanations in Korean (한국어).
 
-## 동작과 대기열
+## Motion and queue
 
-- 샷마다 스토리보드가 지정한 주요 카메라 움직임 한 가지를 사용하며 지정 시간 안에 동작을 끝낸다.
-- 지정 샷에는 `generate_video + shotId`를, 전체 샷에는 `generate_all_videos`를 사용한다. AutoDL은 동시 실행을 지원하므로 영상이 없는 샷을 동시에 제출한다.
-- 어느 단계에서든 자체 점검이나 생성에 실패하면 후속 워크플로를 중단하고 해당 샷을 보고한다.
+- Use the storyboard's single main camera movement and complete the action within the allotted duration.
+- For an individual shot use `generate_video + shotId`; for all shots use `generate_all_videos`. AutoDL can submit multiple missing videos concurrently.
+- If self-check or generation fails, suspend later workflow steps and report the affected shot.
