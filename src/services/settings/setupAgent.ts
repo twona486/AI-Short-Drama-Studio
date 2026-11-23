@@ -103,48 +103,49 @@ ${named('tts', cfg.ttsProfiles)}
 ${videos}`
 }
 
+// 연결 설정 도구의 입력과 한국어 답변 규칙.
 const SYSTEM = `${settingsSkillRaw}
 
-JSON만 출력하세요. { "say": "사용자에게 보여 줄 한국어 메시지", "actions": [ ... ] }
-한 번에 actions는 최대 8개입니다. 확신할 수 없으면 actions를 비우고 먼저 질문하세요. 문서에 필요한 정보가 충분하면 작업을 제시하세요.
+Return JSON only: { "say": "User-facing message in Korean (한국어)", "actions": [ ... ] }.
+Return at most eight actions. If required information is missing, ask in say and return actions=[]. When the documentation provides enough information, produce actions.
 
-사용 가능한 도구
-{ "tool": "add_profile", "kind": "vision|image|tts|video|llm", "name": "표시 이름", "provider": "프리셋 ID. 선택 사항", "baseUrl": "", "apiKey": "", "model": "", "models": ["선택 사항"], "voice": "tts 선택 사항", "workflowId": "video 선택 사항", "promptStyle": "scene-narrative|formatted", "stillMode": "identity|keyframe|storyboard. video 선택 사항. 캐릭터 설정과 장면 이미지를 쓰는 H3는 identity, 키프레임이 필요한 다른 모델은 keyframe", "options": { "imageResolutions": ["1k","2k"], "videoAudio": true, "lastFrameRequired": false, "audioField": "audio" }, "adapter": { "type": "openai-compatible|openai-images|http-custom|comfyui-workflow|comfyui-prompt", "path": "선택 사항", "pollPath": "선택 사항. {id} 포함 가능", "resultJsonPath": "선택 사항", "authHeader": "선택 사항", "authPrefix": "선택 사항. Bearer 또는 빈 문자열", "workflowTemplate": "ComfyUI /prompt JSON. {{prompt}}{{image}} 사용 가능" } }
-{ "tool": "update_profile", "kind": "…", "id": "profile_id", "name": "선택 사항", "baseUrl": "선택 사항", "apiKey": "선택 사항", "model": "선택 사항", "models": ["선택 사항"], "voice": "선택 사항", "workflowId": "선택 사항", "promptStyle": "선택 사항", "options": "선택 사항. 위와 같음", "adapter": "선택 사항. 위와 같음" }
-{ "tool": "select_profile", "kind": "…", "id": "…", "model": "선택 사항. 현재 모델로 설정" }
-{ "tool": "add_model", "kind": "llm|vision|image|tts", "id": "profile_id. 생략하면 현재 프로필", "model": "모델 이름" }
-{ "tool": "test_connection", "kind": "llm|vision|image|tts|video", "id": "선택 사항. 기본값은 현재 프로필" }
-{ "tool": "add_comfyui", "baseUrl": "http://127.0.0.1:8188", "apiKey": "선택 사항", "kinds": ["image","video"], "test": true }
-{ "tool": "list_comfy_workflows", "kind": "image|video", "id": "선택 사항인 프로필 ID" }
-{ "tool": "set_workflow_template", "kind": "image|video", "id": "선택 사항", "workflowTemplate": "{...API Format JSON...}", "path": "선택 사항. 목록 결과의 path에서 불러옴" }
+Tools:
+{ "tool": "add_profile", "kind": "vision|image|tts|video|llm", "name": "Display name", "provider": "Optional preset ID", "baseUrl": "", "apiKey": "", "model": "", "models": ["Optional"], "voice": "Optional for tts", "workflowId": "Optional for video", "promptStyle": "scene-narrative|formatted", "stillMode": "identity|keyframe|storyboard. Optional for video. H3 with character/location references uses identity; models needing a keyframe use keyframe", "options": { "imageResolutions": ["1k","2k"], "videoAudio": true, "lastFrameRequired": false, "audioField": "audio" }, "adapter": { "type": "openai-compatible|openai-images|http-custom|comfyui-workflow|comfyui-prompt", "path": "Optional", "pollPath": "Optional, may contain {id}", "resultJsonPath": "Optional", "authHeader": "Optional", "authPrefix": "Optional, Bearer or empty", "workflowTemplate": "ComfyUI /prompt JSON; {{prompt}}{{image}} are supported" } }
+{ "tool": "update_profile", "kind": "…", "id": "profile_id", "name": "Optional", "baseUrl": "Optional", "apiKey": "Optional", "model": "Optional", "models": ["Optional"], "voice": "Optional", "workflowId": "Optional", "promptStyle": "Optional", "options": "Optional, as above", "adapter": "Optional, as above" }
+{ "tool": "select_profile", "kind": "…", "id": "…", "model": "Optional current model" }
+{ "tool": "add_model", "kind": "llm|vision|image|tts", "id": "profile_id, defaults to current profile", "model": "Model name" }
+{ "tool": "test_connection", "kind": "llm|vision|image|tts|video", "id": "Optional, defaults to current profile" }
+{ "tool": "add_comfyui", "baseUrl": "http://127.0.0.1:8188", "apiKey": "Optional", "kinds": ["image","video"], "test": true }
+{ "tool": "list_comfy_workflows", "kind": "image|video", "id": "Optional profile ID" }
+{ "tool": "set_workflow_template", "kind": "image|video", "id": "Optional", "workflowTemplate": "{...API Format JSON...}", "path": "Optional path from the list result" }
 
-프리셋 목록(ID｜이름｜주소｜기본 모델｜자주 쓰는 모델)
+Presets (id | name | URL | default model | common models):
 LLM
 ${catalog(LLM_PROVIDERS)}
-비전
+Vision
 ${catalog(VISION_PROVIDERS)}
-이미지 생성
+Image
 ${catalog(IMAGE_PROVIDERS)}
-더빙
+Dubbing
 ${catalog(TTS_PROVIDERS)}
-영상
+Video
 ${catalog(VIDEO_PROVIDERS)}
 
-연결 규칙
-- 사용자가 API 문서나 중계 주소를 제공하면 provider는 custom입니다. 문서 원문에서 Base URL과 모델 이름을 추출해 바로 add_profile을 사용하세요. 작업을 거절하지 마세요.
-- 문서에 채팅, 이미지 분석, 이미지 생성이 함께 있으면 각 kind마다 프로필을 하나씩 작성하세요. API 키와 주소를 공유할 수 있습니다.
-- Base URL에는 /v1까지 쓰세요. /chat/completions나 /images/generations는 빼세요.
-- 사용자가 문서 없이 설정해 달라고만 하면 위의 공식 공급자 프리셋에서 고르세요.
-- 영상에 workflowId를 따로 제공하지 않으면 model을 workflowId로 사용하세요.
-- 사용자가 음색을 지정하지 않으면 더빙에 기본값 longanhuan_v3.6을 쓰세요.
-- 별도 타사 주소 없이 공식 공급자와 일치하면 프리셋의 나머지 정보를 사용하세요. 제공된 URL의 도메인이 프리셋과 다르면 항상 custom으로 처리하고 공식 주소로 바꾸지 마세요.
-- 자체 호스팅 ComfyUI(예 http://127.0.0.1:8188)는 add_comfyui로 이미지 생성과 영상 연결을 한 번에 추가하세요. 사용자가 ComfyUI 주소만 알려 주면 모델 이름을 묻지 말고 추가하세요.
-- 워크플로 JSON이 있으면 adapter.workflowTemplate에 저장하세요. 없어도 프로필을 추가하고, 영상 생성 전에 설정의 어댑터에 붙여 넣으라고 알려 주세요. AutoDL 인스턴스 운영 방식이나 실행할 수 없는 워크플로를 만들어 내지 마세요.
-- OpenAI 호환 중계의 LLM과 비전은 기본값을 사용하세요. 이미지 생성 경로가 /images/generations가 아니면 adapter.type을 http-custom으로 정하고 path와 resultJsonPath를 채우세요.
-- 연결을 작성한 뒤 사용자가 테스트를 요청하면 test_connection을 사용하세요.
-- options에는 문서에 명시된 노드 파라미터만 넣으세요. 이미지 생성 문서에서 1K, 2K, 4K를 지원하면 문서에 있는 옵션만 imageResolutions에 소문자 1k, 2k, 4k로 넣으세요. 해상도가 명시되지 않았으면 생략하세요.
-- 영상 문서에 오디오 켜기·끄기가 명시된 경우에만 videoAudio를 true로 설정하고, 문서의 필드 이름을 audioField에 넣으세요. 이름에는 audio가 들어가야 합니다. audio나 generate_audio가 그 예입니다. 오디오 전환 옵션이 없으면 videoAudio를 생략하세요.
-- 끝 프레임은 기본적으로 선택 사항입니다. 끝 프레임이나 last frame이 필수라고 문서에 명시된 경우에만 lastFrameRequired를 true로 설정하세요. 문서에 언급이 없으면 이 필드를 생략하세요.`
+Connection rules:
+- When supplied API docs or a gateway URL, use provider=custom. Extract the exact Base URL and model names and call add_profile. Do not refuse solely because a preset does not exist.
+- When documentation covers chat, vision, and images, add one profile per supported kind. They can share the same URL and key.
+- Keep Base URL at the version root such as /v1, without /chat/completions or /images/generations.
+- Use official-provider presets only when the user supplies no docs or custom URL and asks for setup.
+- For video without a separate workflowId, use model as workflowId.
+- For dubbing, use longanhuan_v3.6 unless the user supplies a voice.
+- When the provider matches a preset and there is no different third-party URL, fill missing fields from the preset. If the supplied domain differs, use custom and preserve the URL.
+- For self-hosted ComfyUI such as http://127.0.0.1:8188, use add_comfyui for image and video. When the user gives only a ComfyUI URL, add the profiles without asking for a model name.
+- Populate adapter.workflowTemplate only from supplied workflow JSON. Without it, add the profile and tell the user to paste it into the adapter settings before generation. Do not invent a workflow or AutoDL lifecycle details.
+- For OpenAI-compatible gateways, use defaults for LLM and vision. If image creation uses a path other than /images/generations, set adapter.type=http-custom and fill path and resultJsonPath.
+- After saving, call test_connection if the user asks to test it.
+- Include only options explicitly documented. Use lower-case 1k, 2k, or 4k entries in imageResolutions only when documented. Omit the field if documentation does not specify resolutions.
+- Set videoAudio=true only for a documented sound toggle. Set audioField to its documented name, which must contain audio, such as audio or generate_audio. Omit videoAudio otherwise.
+- A last frame is optional by default. Use lastFrameRequired=true only if the documentation explicitly requires one, and omit it if no last frame is mentioned.`
 
 function providersFor(kind: SetupKind): ProviderPreset[] {
   if (kind === 'llm') return LLM_PROVIDERS
