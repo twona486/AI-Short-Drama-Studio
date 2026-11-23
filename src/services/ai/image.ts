@@ -106,7 +106,7 @@ async function realCustomOrComfy(input: ImageGenInput): Promise<ImageGenOutput> 
     })
     return { blob, mimeType, prompt: input.prompt }
   }
-  throw new Error(`[image] 未知适配器 ${adapterType}`)
+  throw new Error(`[image] 알 수 없는 어댑터 ${adapterType}`)
 }
 
 function isSeedreamModel(model: string): boolean {
@@ -135,7 +135,7 @@ async function imageResponseToBlob(
 ): Promise<{ blob: Blob; mimeType: string }> {
   const item = data.data?.[0]
   if (!item) {
-    throw new Error('图片 API 响应无 data[0]')
+    throw new Error('이미지 API 응답에 data[0]이 없습니다.')
   }
 
   // 情况 1：b64_json（Seedream / 兼容接口常用）
@@ -160,7 +160,7 @@ async function imageResponseToBlob(
       headers: apiKey ? { Authorization: `Bearer ${apiKey}` } : undefined,
       signal
     })
-    if (!r.ok) throw new Error(`下载图片失败：${r.status}`)
+    if (!r.ok) throw new Error(`이미지 다운로드에 실패했습니다. ${r.status}`)
     const blob = await r.blob()
     return { blob, mimeType: blob.type || 'image/jpeg' }
   }
@@ -304,7 +304,7 @@ function buildPrompt(input: ImageGenInput, _withRefs: boolean): string {
 async function realSeedream(input: ImageGenInput): Promise<ImageGenOutput> {
   const { baseUrl, apiKey, model } = imageConfig(input.model)
   if (!baseUrl || !apiKey) {
-    throw new Error('[image] 未配置 VITE_IMAGE_BASE_URL / VITE_IMAGE_API_KEY')
+    throw new Error('[image] VITE_IMAGE_BASE_URL 또는 VITE_IMAGE_API_KEY가 설정되지 않았습니다.')
   }
 
   const refs = (input.referenceImages ?? []).slice(0, 10)
@@ -343,7 +343,7 @@ async function realSeedream(input: ImageGenInput): Promise<ImageGenOutput> {
   })
 
   if (!resp.ok) {
-    throw new Error(`[image] 出图失败 ${resp.status} ${await resp.text()}`)
+    throw new Error(`[image] 이미지 생성에 실패했습니다. ${resp.status} ${await resp.text()}`)
   }
 
   const data = await resp.json()
@@ -356,7 +356,7 @@ async function realSeedream(input: ImageGenInput): Promise<ImageGenOutput> {
 async function realLegacyGenerate(input: ImageGenInput): Promise<ImageGenOutput> {
   const { baseUrl, apiKey, model } = imageConfig(input.model)
   if (!baseUrl || !apiKey) {
-    throw new Error('[image] 未配置 VITE_IMAGE_BASE_URL / VITE_IMAGE_API_KEY')
+    throw new Error('[image] VITE_IMAGE_BASE_URL 또는 VITE_IMAGE_API_KEY가 설정되지 않았습니다.')
   }
 
   const fullPrompt = buildPrompt(input, false)
@@ -377,7 +377,7 @@ async function realLegacyGenerate(input: ImageGenInput): Promise<ImageGenOutput>
   })
 
   if (!resp.ok) {
-    throw new Error(`[image] 文生图失败 ${resp.status} ${await resp.text()}`)
+    throw new Error(`[image] 텍스트→이미지 생성에 실패했습니다. ${resp.status} ${await resp.text()}`)
   }
 
   const data = await resp.json()
@@ -389,10 +389,10 @@ async function realLegacyGenerate(input: ImageGenInput): Promise<ImageGenOutput>
 async function realLegacyEdit(input: ImageGenInput): Promise<ImageGenOutput> {
   const { baseUrl, apiKey, model } = imageConfig(input.model)
   if (!baseUrl || !apiKey) {
-    throw new Error('[image] 未配置 VITE_IMAGE_BASE_URL / VITE_IMAGE_API_KEY')
+    throw new Error('[image] VITE_IMAGE_BASE_URL 또는 VITE_IMAGE_API_KEY가 설정되지 않았습니다.')
   }
   if (!input.referenceImages?.length) {
-    throw new Error('图编辑模式必须传 referenceImages')
+    throw new Error('이미지 편집 모드에는 referenceImages가 필요합니다.')
   }
 
   const fullPrompt = buildPrompt(input, true)
@@ -421,7 +421,7 @@ async function realLegacyEdit(input: ImageGenInput): Promise<ImageGenOutput> {
   })
 
   if (!resp.ok) {
-    throw new Error(`[image] 图编辑失败 ${resp.status} ${await resp.text()}`)
+    throw new Error(`[image] 이미지 편집에 실패했습니다. ${resp.status} ${await resp.text()}`)
   }
 
   const data = await resp.json()
@@ -436,7 +436,7 @@ async function realZealmanImage(
 ): Promise<ImageGenOutput> {
   const cfg = imageConfig(input.model)
   const root = normalizeZealmanBaseUrl(String(cfg.baseUrl || '').trim())
-  if (!root) throw new Error('[image] Zealman 生图需要先填写镜像 Base URL（设置 → Zealman 镜像）')
+  if (!root) throw new Error('[image] Zealman에서 이미지를 생성하려면 설정 → Zealman 미러에서 Base URL을 입력하세요.')
   const workflow = zealmanImageWorkflowById(cfg.model) || ZEALMAN_IMAGE_WORKFLOWS[0]
   const prompt = buildPrompt(input, Boolean(input.referenceImages?.length)).slice(0, 10000)
   const width = Math.max(256, Math.round(input.width) || workflow.defaultWidth)
@@ -470,17 +470,17 @@ async function realZealmanImage(
     text = await response.text()
   }
   if (!response.ok) {
-    throw new Error(`[image] Zealman 提交失败 HTTP ${response.status}\n${text.slice(0, 800)}`)
+    throw new Error(`[image] Zealman 작업 제출에 실패했습니다. HTTP ${response.status}\n${text.slice(0, 800)}`)
   }
   let data: any
   try {
     data = JSON.parse(text)
   } catch {
-    throw new Error('[image] Zealman 提交成功但响应不是 JSON')
+    throw new Error('[image] Zealman 작업이 제출됐지만 응답이 JSON 형식이 아닙니다.')
   }
-  if (data?.success === false) throw new Error(`[image] Zealman 提交失败：${data?.error || text.slice(0, 800)}`)
+  if (data?.success === false) throw new Error(`[image] Zealman 작업 제출에 실패했습니다.：${data?.error || text.slice(0, 800)}`)
   const promptId = String(data?.prompt_id || '').trim()
-  if (!promptId) throw new Error('[image] Zealman 响应中没有 prompt_id')
+  if (!promptId) throw new Error('[image] Zealman 응답에 prompt_id가 없습니다.')
 
   const deadline = Date.now() + 15 * 60 * 1000
   while (Date.now() < deadline) {
@@ -499,23 +499,23 @@ async function realZealmanImage(
       pollData = null
     }
     if (!poll.ok || pollData?.success === false) {
-      throw new Error(`[image] Zealman 查询失败：${pollData?.error || pollText.slice(0, 800)}`)
+      throw new Error(`[image] Zealman 상태 조회에 실패했습니다. ${pollData?.error || pollText.slice(0, 800)}`)
     }
     if (pollData?.pending === false) {
       const result = Array.isArray(pollData.results)
         ? pollData.results.find((item: any) => item?.type === 'image' && item?.url)
         : null
-      if (!result?.url) throw new Error('[image] Zealman 任务已结束，但没有返回图片')
+      if (!result?.url) throw new Error('[image] Zealman 작업이 완료됐지만 이미지를 반환하지 않았습니다.')
       const imageUrl = new URL(String(result.url), `${root}/`).toString()
       onProgress?.('下载 Zealman 生成的图片…')
       const dl = await fetch(imageUrl, { signal: input.signal })
-      if (!dl.ok) throw new Error(`[image] Zealman 图片下载失败 HTTP ${dl.status}`)
+      if (!dl.ok) throw new Error(`[image] Zealman 이미지 다운로드에 실패했습니다. HTTP ${dl.status}`)
       const blob = await dl.blob()
       return { blob, mimeType: blob.type || 'image/png', prompt }
     }
     await abortableDelay(1500, input.signal)
   }
-  throw new Error('[image] Zealman 生图超过 15 分钟，已停止轮询')
+  throw new Error('[image] Zealman 생성 시간이 15분을 넘어 상태 조회를 중단했습니다.')
 }
 
 export async function generateImage(
