@@ -1,5 +1,5 @@
 /**
- * 对话附件：把本地文本文件内容注入智能体本轮材料。
+ * 对话Attachment: 把本地文本文件内容注入智能体本轮材料。
  * 桌面端已在设置里授权文件访问；地址一律以用户给的路径为准。
  */
 import { desktop, isDesktop } from '@/services/desktop'
@@ -16,7 +16,7 @@ const MAX_TOTAL_CHARS = 500_000
 
 function limitedContent(content: string): string {
   if (content.length <= MAX_FILE_CHARS) return content
-  return `${content.slice(0, MAX_FILE_CHARS)}\n\n【内容过长，已截取前 ${MAX_FILE_CHARS.toLocaleString()} 个字符】`
+  return `${content.slice(0, MAX_FILE_CHARS)}\n\n【Truncated to the first ${MAX_FILE_CHARS.toLocaleString()} characters】`
 }
 
 /**
@@ -42,7 +42,7 @@ export async function buildMaterialBlock(
     totalChars += normalized.length
   }
   for (const a of attachments || []) {
-    append(`【附件：${a.name}】`, a.content)
+    append(`【Attachment: ${a.name}】`, a.content)
   }
   const known = new Set((attachments || []).map((a) => (a.path || a.name).toLowerCase()))
   for (const m of userText.matchAll(ANY_PATH_RE)) {
@@ -55,25 +55,25 @@ export async function buildMaterialBlock(
     const ext = extHit ? extHit[1].toLowerCase() : ''
     if (!extHit && /[^\\/]\.[A-Za-z0-9]{2,5}$/.test(p)) {
       // 有后缀但不是文本格式：不读，明说
-      parts.push(`【本地文件：${p} 暂不支持读取（不是文本格式）。请先转成 txt / md，或直接把内容粘贴进来】`)
-      onLog?.(`跳过非文本文件 ${p}`)
+      parts.push(`【Local file: ${p} is not a supported text file. Convert to TXT or Markdown, or paste its contents.】`)
+      onLog?.(`텍스트가 아닌 파일을 건너뛰었어요. ${p}`)
       continue
     }
     try {
       if (!isDesktop()) throw new Error('로컬 파일을 읽으려면 설치된 데스크톱 앱이 필요합니다.')
       const content = await desktop().readText(p)
-      append(`【本地文件：${p}】`, content)
-      onLog?.(`已读取本地文件 ${p}`)
+      append(`【Local file: ${p}】`, content)
+      onLog?.(`로컬 파일을 읽었어요. ${p}`)
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e)
       const dirHint = extHit
         ? ''
-        : '。如果这是文件夹路径，我列不出目录内容，请给我里面具体文件的完整路径（含后缀）'
-      parts.push(`【本地文件：${p} 读取失败：${msg}${dirHint}】`)
-      onLog?.(`读取 ${p} 失败`)
+        : '. If this is a directory, provide a complete path to a specific file, including its extension.'
+      parts.push(`【Local file: ${p} could not be read: ${msg}${dirHint}】`)
+      onLog?.(`${p} 파일을 읽지 못했어요.`)
     }
   }
   return parts.length
-    ? `以下是本轮可用的本地材料（用户通过附件或路径提供），直接使用这些内容干活，不要要求用户重新粘贴：\n\n${parts.join('\n\n')}`
+    ? `Use these local materials supplied by the user as attachments or paths. Do not ask the user to paste them again:\n\n${parts.join('\n\n')}`
     : ''
 }
