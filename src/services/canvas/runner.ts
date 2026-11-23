@@ -962,7 +962,7 @@ async function regenerateDigitalHumanShot(
   const rawSpeech = await synthesizeClonedSpeech(spoken, cloned.voiceId, cloned.model, signal)
   const speechBlob = (await toDigitalHumanWav(rawSpeech, onProgress)).blob
   const speechAsset = await assets.add(speechBlob, 'audio', 'ai-generated', {
-    filename: `口播_${String(shot.index + 1).padStart(2, '0')}_${Date.now().toString(36)}.wav`,
+    filename: `내레이션_${String(shot.index + 1).padStart(2, '0')}_${Date.now().toString(36)}.wav`,
     prompt: spoken,
     projectId: p.id,
     shotId: shot.id
@@ -1500,7 +1500,7 @@ export async function generateShotVideo(shot: Shot, onProgress?: (msg: string) =
   const extraDropped = allEntries.filter((entry) => entry.kind === 'extra').length
     - packed.filter((entry) => entry.kind === 'extra').length
   if (extraChars > 0 || extraDropped > 0) {
-    onProgress?.(`参考图已按最多 9 张打包：角色设计图、场景${stillMode === 'keyframe' ? '、四宫格关键帧' : stillMode === 'storyboard' ? '、故事看板' : ''}，再加你补充的参考`)
+    onProgress?.(`참조 이미지 최대 9장을 준비했어요. 캐릭터 설정 이미지, 장면${stillMode === 'keyframe' ? ', 4분할 키프레임' : stillMode === 'storyboard' ? ', 스토리 개요판' : ''}과 사용자가 추가한 참조 이미지가 포함돼요.`)
   }
 
   const promptStyle = getVideoPromptStyle()
@@ -2073,12 +2073,12 @@ export async function runExtractStoryboard(
     : 0
   onProgress?.(
     extractStartAt === 'subjects'
-      ? `${stage ? '重新提取人物' : '先拆人物'}；已有场景和分镜会保留…`
+      ? `${stage ? '캐릭터를 다시 추출하고 있어요.' : '캐릭터를 먼저 추출하고 있어요.'} 기존 장면과 스토리보드는 유지돼요…`
       : extractStartAt === 'scenes'
-        ? `${stage ? '重新提取场景描点' : '人物已保存；继续拆场景'}；已有人物和分镜会保留…`
+        ? `${stage ? '장면 기준물을 다시 추출하고 있어요.' : '캐릭터를 저장했고 장면을 추출하고 있어요.'} 기존 캐릭터와 스토리보드는 유지돼요…`
         : resumeCount
-          ? `${stage ? '重新提取分镜' : '继续拆分镜'}；发现 ${resumeCount} 个已完成的工作包，将直接续用…`
-          : `${stage ? '重新提取分镜' : '人物和场景已保存；继续拆分镜'}；已生成的看板/配图/视频按镜号保留…`
+          ? `${stage ? '스토리보드를 다시 추출하고 있어요.' : '스토리보드를 계속 추출하고 있어요.'} 완료한 작업 그룹 ${resumeCount}개의 결과를 재사용해요…`
+          : `${stage ? '스토리보드를 다시 추출하고 있어요.' : '캐릭터와 장면을 저장했고 스토리보드를 추출하고 있어요.'} 기존 개요판, 샷 이미지, 영상은 샷 번호별로 유지돼요…`
   )
   let finalStagePersisted = false
   const persistStage = async (
