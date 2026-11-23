@@ -1371,16 +1371,16 @@ async function realStoryboard(
   let productNote =
     input.productImages && input.productImages.length > 0
       ? `
-【첨부된 참조 이미지 ${input.productImages.length}장】
-이미지를 먼저 살핀 뒤 스토리보드를 작성하세요.
-- 이미지에 인물, 동물, 마스코트가 있으면 subjects에 넣으세요. 이미지에 보이는 외모를 그대로 쓰고 fromReference=true로 설정하세요. 새 얼굴을 지어내지 마세요.
-- 이미지에 제품이 있으면 kind=other로 분류하고 실제 제품에 맞춰 작성하세요.
-- 이후 모든 샷에서 subjects의 의상, 헤어스타일, 나이를 유지하세요.
-- 각 샷에서 제품이나 주인공이 잘 보이게 하세요.`
+[${input.productImages.length} reference images attached]
+Inspect the images before writing the storyboard.
+- Record visible people, animals, or mascots as subjects. Match their actual appearance and set fromReference=true. Do not invent faces.
+- For products, use kind=other and match the actual item.
+- Keep clothing, hairstyle, and age from subjects consistent in all later shots.
+- Keep the product or protagonist legible in each shot.`
       : `
-【참조 이미지 없음】
-먼저 원고에서 화면에 등장할 인물과 동물을 subjects에, 장소를 scenes에 정리하세요. 이름이 있거나 대사 또는 동작이 있는 인물마다 별도 subject를 만들고 조연을 한 명의 ‘주인공’으로 합치지 마세요.
-같은 인물은 영상 전체에서 외모를 유지합니다. 이름, 나이, 헤어스타일, 의상, 액세서리를 바꾸지 마세요.`
+[No reference images]
+List all on-screen people and animals under subjects and locations under scenes. Use a separate subject for every named or speaking person or anyone who acts. Do not merge supporting characters into a single protagonist.
+Preserve names, ages, hairstyles, clothes, and accessories throughout the film.`
 
   if (input.productImages?.length) {
     log(`→ 调用视觉工具分析 ${input.productImages.length} 张参考图`)
@@ -1392,12 +1392,12 @@ async function realStoryboard(
       })),
       {
         type: 'text',
-        text: `이미지 분석만 담당합니다. 대본을 쓰지 마세요. 각 이미지를 식별해 아래 항목을 한국어로 설명하세요.
-1. 인물, 동물, 마스코트의 수, 연령대, 얼굴형, 헤어스타일, 의상과 액세서리.
-2. 제품 유형, 외형, 색, 보이는 문구. 분명하지 않으면 ‘식별 불가’로 표시하고 추측하지 마세요.
-3. 장면, 구도, 조명.
-4. 샷 사이에서도 유지해야 하는 시각적 기준점.
-화면에 보이는 사실만 쓰고 브랜드, 제품 사양, 가격, 효능 또는 인물 관계를 추가하지 마세요.`
+        text: `Analyze the reference images only. Do not write the script. Write visible findings for each image in Korean (한국어):
+1. Count people, animals, and mascots, and describe age ranges, face shapes, hairstyles, clothing, and accessories.
+2. Report product type, appearance, colors, and legible text. If unclear, mark it unreadable without guessing.
+3. Describe location, composition, and lighting.
+4. Identify visual anchors to preserve across shots.
+Report visible facts only. Do not infer brands, specifications, prices, efficacy, or relationships.`
       }
     ]
     const visual = await callLLM({
@@ -1408,7 +1408,7 @@ async function realStoryboard(
       signal: input.signal,
       timeoutMs: 60_000
     })
-    productNote += `\n\n【비전 분석 결과(사실을 확인하는 근거로만 사용)】\n${visual.content.slice(0, 8_000)}`
+    productNote += `\n\n[Reference image findings: use only as factual evidence]\n${visual.content.slice(0, 8_000)}`
   }
 
   const stylePriority = buildStylePriorityBlock(input)
@@ -1449,7 +1449,7 @@ async function realStoryboard(
       const ask = async (extraUser?: string) =>
         callLLM({
           messages: [
-            { role: 'system', content: `${system}\n사고 과정과 일반 문장을 출력하지 마세요. 첫 문자는 {, 마지막 문자는 }여야 합니다.` },
+            { role: 'system', content: `${system}\nDo not output reasoning or natural-language preamble. The first character must be { and the last character must be }.` },
             { role: 'user', content: extraUser ? `${baseUser}\n\n${extraUser}` : baseUser }
           ],
           model: parallelModel,
@@ -1467,7 +1467,7 @@ async function realStoryboard(
         } catch {
           onProgress?.(`${label}의 JSON을 받지 못해 다시 요청하는 중…`)
           const salvage = await ask(
-            '이전 응답에는 사고 과정만 있고 JSON이 없었습니다. 이번에는 설명 없이 JSON 객체만 출력하세요.'
+            'The prior answer contained reasoning but no JSON. Return one JSON object with no explanation.'
           )
           raw = parseJsonRobust(salvage.content)
           if (validate && !validate(raw)) {
@@ -1479,7 +1479,7 @@ async function realStoryboard(
         if (validate && !validate(raw)) {
           onProgress?.(`${label} JSON 구조가 불완전해 자동 복구하는 중…`)
           const repaired = await ask(
-            repairInstruction || `이전 응답의 JSON 구조가 잘못됐습니다. 시스템 요구사항에 따라 완전한 ${label} JSON을 다시 출력하세요.`
+            repairInstruction || `The prior JSON had the wrong structure. Return complete ${label} JSON matching the system instructions.`
           )
           raw = parseJsonRobust(repaired.content)
           if (!validate(raw)) throw new Error(`${label} JSON을 복구했지만 필수 데이터 배열이 여전히 없습니다.`)
@@ -1496,18 +1496,21 @@ async function realStoryboard(
       }
     }
 
-    const subjectSystem = `당신은 캐릭터 설정을 추출하는 에이전트입니다. 전체 대본의 「## 人物」에 있는 각 독립 절과 실제로 화면에 등장하거나 유품 또는 초상화로 표현되거나 눈에 보이는 압박을 주는 인물, 동물, 제품, 주요 대상만 추출하세요. 장면, 샷, 에셋 이미지나 소품 목록은 작성하지 마세요. 사망한 아버지와 현장에 없는 상대역도 인물 섹션에 ### 항목이 있으면 개별 기록으로 만드세요. 이번 회차의 화면 중앙에 서지 않는다는 이유로 빼지 마세요. 대본의 호칭을 그대로 유지하세요. 이름과 신분 호칭이 모두 있으면 name에는 대사와 현장 기록에서 가장 자주 쓰는 짧은 이름을, role에는 전체 신분과 별칭을 써서 다른 에이전트가 두 가지 모두로 연결할 수 있게 하세요. 외모는 나이, 얼굴형, 헤어스타일, 체형, 의상, 신발, 액세서리, 일관된 식별 특징까지 구체적으로 쓰세요. ‘주인공’이라는 말만 쓰지 마세요. description은 정체성과 외모만 고정하고 위치나 날씨를 쓰지 마세요. 이후 캐릭터 디자인 이미지는 이음새 없는 순백색 배경에 4면 설정 이미지로 만듭니다. stateVariants에는 이 챕터에서 달라지는 옷의 건조 상태, 얼룩, 허기, 절뚝거림, 손에 든 음식 등을 명시하세요. 변화가 없으면 「单一状态」를 쓰세요. 사용자에게 보이는 설명은 한국어로 쓰고 이름과 호칭은 대본을 따르세요.${productNote}
-voicePrompt에는 말할 때의 음색과 표현을 자동으로 생성하세요. kind가 person인 모든 캐릭터에 필수이며 나이와 성별, 음색의 질감(쉰 소리, 맑은 소리, 느긋함, 비음 등), 속도와 강도, 감정의 기조, 신분에 맞는 억양이나 말버릇을 더빙 감독이 배우에게 직접 줄 수 있는 영어 한 문장으로 쓰세요. 같은 캐릭터의 영상 전체에 한 문장만 쓰고 장면마다 목소리를 바꾸지 마세요. animal과 other에는 빈 문자열을 쓰세요.
-JSON만 출력하세요. {"subjects":[{"name":"짧은 이름","kind":"person|animal|other","description":"구체적인 외모. 장면 묘사 제외","role":"신분, 이야기에서의 역할과 별칭","stateVariants":"회차 내 상태 변화. 없으면 单一状态","voicePrompt":"발화 시 음색과 표현. 사람이 아니면 빈 문자열","fromReference":false}]}. 출력 전 인물 섹션의 ### 항목을 모두 개별 기록으로 만들었는지, 대사나 동작이 있거나 화면에 보이는 사람을 행인으로 합치지 않았는지, 모든 person에 voicePrompt가 있는지 확인하세요.`
+    // 캐릭터 프로필은 한국어, 생성 모델용 음색 지시는 영어로 요청한다.
+    const subjectSystem = `You extract character records. Use every independent subsection under "## 캐릭터" (or legacy "## 人物") and any people, animals, products, or key subjects that appear, are seen through a keepsake or portrait, or exert visible pressure. Do not extract locations, shots, asset images, or prop lists. Include deceased parents and absent opponents when their ### records exist. Preserve names from the script. If someone has both a name and a role, put the most-used short name in name and the full identity and aliases in role for matching. Describe age, face shape, hair, build, wardrobe, shoes, accessories, and stable visual features. Do not only label someone the protagonist. Keep description focused on identity and appearance, with no place or weather. Character sheets will use four views on seamless white. In stateVariants, identify wardrobe wetness, stains, hunger, limping, or held food that changes; use the existing "单一状态" value when nothing changes. Write user-facing character descriptions and roles in Korean (한국어).
+${productNote}
+Write one voicePrompt in English for every person, covering age and gender, timbre (raspy, bright, slow, nasal, or similar), speed and intensity, emotional tone, and an appropriate accent or speaking habit. Use one consistent voice in the entire film. For animal and other, use an empty string.
+Output JSON only: {"subjects":[{"name":"Short name","kind":"person|animal|other","description":"Specific physical identity, excluding location","role":"Identity, dramatic function, and aliases","stateVariants":"Changes in this episode, or 单一状态","voicePrompt":"English vocal qualities and delivery, empty for non-person subjects","fromReference":false}]}. Before returning, verify a record for every ###, separate people who speak, act, or are seen, and a voicePrompt for every person.`
 
-    const sceneSystem = `당신은 장면과 시각 설정을 추출하는 에이전트입니다. 이번 회차에서 촬영할 **장소**만 추출하고 인물을 쓰거나 샷을 나누지 마세요.
-먼저 대본의 「## 环境与场景」에서 장소를 찾고, 다음으로 「内景｜장소｜날씨」 또는 「外景｜장소｜」 형식의 현장 기록을 확인하세요. 같은 장소는 한 번만 기록하고 「场景一、场景二」처럼 장면마다 복제하지 마세요.
-scene.name은 ‘낡은 창고’나 ‘무료 급식소 마당’처럼 장소의 짧은 이름을 사용하세요. 「场景一」을 이름으로 쓰지 마세요.
-각 장소에서 인물이 없을 때 보이는 바닥, 건축물, 날씨, 빛, 시대를 드러내는 물건을 쓰세요.
+    // 촬영 장소만 추출하고 장면 설명과 생성용 스타일의 언어를 지정한다.
+    const sceneSystem = `You extract locations and visual settings. Include only places actually filmed in this episode. Do not write characters or shots.
+Prefer locations under "## 환경과 장면" or legacy "## 环境与场景", then scene lines such as "실내｜장소｜날씨" or "内景｜地点｜天气". Deduplicate places; do not create a new record for every scene.
+Use a short existing location name, such as the old warehouse or charity kitchen yard. Do not use a generic scene number.
+Describe an unoccupied space, including the ground, building, weather, light, and period objects. Write user-facing descriptions in Korean (한국어), and write h3Aesthetic in English for the video model.
 ${productNote}
 ${stylePriority}
-JSON만 출력하세요. {"aesthetic":"영상 전체 분위기","h3Aesthetic":"English production aesthetic with concrete lighting, material, color and camera qualities","styleBrief":"이 회차의 갈등과 시각적 핵심","colorPalette":"화면에 보이는 색","lightingNote":"시간대와 광원","scenes":[{"name":"짧은 장소명","description":"인물이 없는 공간, 바닥, 건축물, 날씨, 움직임과 빛을 최소 80자로 묘사","mainAnchor":"주요 시각 기준물","anchors":"전경, 주요 기준물, 인물 배치 구역, 광원 또는 보조 기준물","lighting":"시간대와 광원"}]}
-사용자가 읽는 설명은 한국어로 쓰고 h3Aesthetic은 허용된 영어를 유지하세요. 최상위는 객체이고 scenes는 비어 있지 않은 배열이어야 합니다. data/result로 감싸거나 scenes를 객체로 만들지 마세요.`
+Return JSON only: {"aesthetic":"Overall tone of the film","h3Aesthetic":"English production aesthetic with concrete lighting, material, color and camera qualities","styleBrief":"Conflict and visual hook for this episode","colorPalette":"Visible colors","lightingNote":"Time and light source","scenes":[{"name":"Short location name","description":"At least 80 characters about the unoccupied space, ground, architecture, weather, movement, and lighting","mainAnchor":"Primary visual anchor","anchors":"Wide view; main anchor; ground and blocking area; light source or secondary anchor","lighting":"Time and light source"}]}
+Return a top-level object with a nonempty scenes array. Do not nest inside data or result or write scenes as an object.`
 
 
     const pullRecurringProps = async (script: string, subjects: Subject[]): Promise<StoryProp[]> => {
@@ -1588,7 +1591,7 @@ JSON만 출력하세요. {"aesthetic":"영상 전체 분위기","h3Aesthetic":"E
         const sceneUser = `主题：${input.topic || '（未填）'}
 比例：${input.aspectRatio}
 
-아래 장소와 개별 장면에서만 장면을 추출하세요. 새 장소를 만들지 마세요. 같은 장소는 한 번만 기록하세요.
+Extract locations only from the supplied locations and scene excerpts. Do not invent places. Record each place once.
 ${extractPlayForSceneStage(play)}`
         try {
           scenePart = await runPart(
@@ -1597,7 +1600,7 @@ ${extractPlayForSceneStage(play)}`
             8000,
             PLAY_LLM_TIMEOUT_MS,
             (raw) => extractSceneRows(raw).length > 0,
-            '이전 응답은 JSON이었지만 scenes 배열이 없거나 잘못된 위치에 있었습니다. 최상위에 비어 있지 않은 scenes 배열이 있는 객체 하나만 반환하세요. data나 result로 감싸거나 사고 과정을 쓰지 마세요.',
+            'The prior response omitted or misplaced scenes. Return one object with a nonempty top-level scenes array. Do not wrap it in data or result, and do not include reasoning.',
             sceneUser
           )
         } catch (error) {
