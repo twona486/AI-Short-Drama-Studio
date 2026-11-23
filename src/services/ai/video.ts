@@ -1,12 +1,12 @@
 /**
- * AI 视频生成（AutoDL.art ComfyUI 工作流 API）
+ * AutoDL.art ComfyUI 워크플로를 이용한 AI 영상 생성
  *
  *   POST {base}/api/v1/comfyui/comfyui_workflow/{workflow_id}
  *   GET  {base}/api/v1/comfyui/comfyui_workflow/result/{task_id}
  *
- * 参考图：prompt、duration、resolution、ref_image_0..8
- * 数字人音画同步：只传 audio_duration、ref_audio_0、ref_image_0、resolution
- * 工作流：minimax_h3_lightx2v_v5_15s / minimax_h3_lightx2v_v5 / minimax_h3_image_audio_to_video / minimax_h3_b99_002
+ * 참조 이미지에는 prompt, duration, resolution, ref_image_0..8을 사용한다.
+ * 디지털 휴먼 립싱크에는 audio_duration, ref_audio_0, ref_image_0, resolution만 보낸다.
+ * 워크플로 ID는 minimax_h3_lightx2v_v5_15s, minimax_h3_lightx2v_v5, minimax_h3_image_audio_to_video, minimax_h3_b99_002다.
  */
 
 import { t as translate } from '@/i18n'
@@ -35,37 +35,37 @@ import { toDigitalHumanWav } from '@/services/ffmpeg'
 import { normalizeZealmanBaseUrl, zealmanWorkflowById } from './zealman'
 
 export interface VideoGenInput {
-  /** 第一张参考图：角色设计图 / 场景图 / 故事看板之一，不是人物+场景配图 */
+  /** 첫 참조는 캐릭터 설정 이미지, 장면 이미지, 스토리 개요판 중 하나다. */
   imageBlob?: Blob
-  /** 其余参考图，按角色设计图 → 场景图 → 故事看板的顺序 */
+  /** 나머지 참조는 캐릭터 설정 이미지, 장면 이미지, 개요판 순으로 제공한다. */
   referenceImages?: Blob[]
   /**
-   * 发给出视频接口的提示词。promptAsIs 为真时不再编译/拼接。
+   * 영상 API에 보낼 프롬프트다. promptAsIs가 참이면 컴파일하거나 결합하지 않는다.
    */
   prompt: string
-  /** 框里的全文原样发送，不再套 H3 模板 */
+  /** 입력란의 전문을 H3 템플릿 없이 보낸다. */
   promptAsIs?: boolean
   /**
-   * 项目级整体氛围（中文，1-2 段）
-   * 会拼到 visualPrompt 前面
+   * 프로젝트 전체 분위기(1~2단락)
+   * visualPrompt 앞에 추가한다.
    */
   aesthetic?: string
   /**
-   * 音效描述（中文短句，比如"雨声、灯火燃烧声"）
-   * 写入 H3【声音设计】
+   * 비나 불꽃 소리 등 효과음을 설명한다.
+   * H3 소리 설계에 사용한다.
    */
   audioDescription?: string
   /**
-   * 口播/台词原文。人物名前缀会被剥离，只有正文进入 <d>[语言] 原词</d>。
+   * 화자 접두사를 빼고 원문과 언어 태그를 d 태그에 넣는다.
    */
   voiceover?: string
-  /** dialogue=H3 对口型；voiceover=H3 画外口播；none=不让 H3 生成人声 */
+  /** dialogue는 립싱크, voiceover는 화면 밖 음성, none은 인물 음성 없음이다. */
   voiceMode?: 'dialogue' | 'voiceover' | 'none'
-  /** 说话人音色/身份提示（不含台词） */
+  /** 대사를 제외한 화자 음색 및 신원 설명 */
   speakerHint?: string
-  /** 说话角色的音色描述（中文，来自人物节点 voicePrompt），出镜对白与画外音都会带上 */
+  /** 캐릭터 노드의 voicePrompt를 화면 속 대사와 화면 밖 음성에 모두 쓴다. */
   speakerVoice?: string
-  /** H3 官方多图提示词中的实际人物、场景与图片职责。 */
+  /** 공식 H3 참조 형식의 인물, 장면, 이미지 역할 */
   speakerName?: string
   sceneName?: string
   sceneDescription?: string
@@ -78,34 +78,34 @@ export interface VideoGenInput {
   duration: number
   width: number
   height: number
-  /** 比例标签（写到 prompt 最前面 [16:9] 这种） */
+  /** 프롬프트 앞에 붙이는 화면 비율 태그(예를 들어 [16:9]) */
   aspectRatio?: AspectRatio
   cameraMovement?: Shot['cameraMovement']
-  /** 0-1，仅 mock 使用 */
+  /** 데모 모드에서만 쓰는 0~1 값 */
   strength?: number
   signal?: AbortSignal
   promptStyle?: VideoPromptStyle
-  /** 图生视频节点模型。默认 H3 15s；h3-v5 为 10 秒 1080p */
+  /** 기본은 H3 15초다. h3-v5는 10초 영상으로 1080p를 지원한다. */
   videoModel?: VideoGenModel
-  /** 锁定设置中的视频接入，生成时不能回落到另一个供应商。 */
+  /** 영상 연결을 고정하고 다른 공급자 연동으로 전환하지 않는다. */
   videoProfileId?: string
-  /** h3-v5 可选 1080p */
+  /** h3-v5는 1080p를 선택할 수 있다. */
   videoResolution?: VideoResolution
-  /** H3：参考图生成或首尾帧。默认参考图。 */
+  /** H3는 기본으로 참조 이미지를 사용하며 시작·끝 프레임도 지원한다. */
   h3GenMode?: H3VideoGenMode
-  /** 首尾帧模式的尾帧图 */
+  /** 시작·끝 프레임 모드의 끝 이미지 */
   lastFrameBlob?: Blob
-  /** 文档有音频开关时，把节点上的有声/无声发给接口 */
+  /** 공급자가 지원하면 노드의 오디오 사용 여부를 API에 보낸다. */
   generateAudio?: boolean
-  /** 数字人口播：与画面同步的口播音频 */
+  /** 디지털 휴먼의 화면에 동기화할 내레이션 오디오 */
   audioBlob?: Blob
-  /** 走 MiniMax H3 图+音频同步工作流 */
+  /** MiniMax H3 이미지와 오디오 립싱크 워크플로를 사용한다. */
   audioSync?: boolean
-  /** H3 任务类型。多图人设/场景/看板用 R2VA；单张首帧用 I2VA。 */
+  /** 인물, 장면, 개요판을 함께 보내면 R2VA를, 시작 프레임 하나면 I2VA를 사용한다. */
   mode?: 'I2VA' | 'T2VA' | 'R2VA' | 'FL2VA' | 'L2VA'
-  /** 已提交的 AutoDL 工作流 task_id；传入后跳过提交，直接恢复轮询。 */
+  /** 기존 AutoDL task_id가 있으면 제출을 건너뛰고 조회를 재개한다. */
   resumeTaskId?: string
-  /** 新任务提交成功后立即回传 task_id，调用方应持久化用于断点恢复。 */
+  /** 제출 즉시 task_id를 전달한다. 호출자는 재개를 위해 저장한다. */
   onTaskSubmitted?: (taskId: string) => void | Promise<void>
 }
 
@@ -146,7 +146,7 @@ function resultUrl(r: any): string {
   return ''
 }
 
-/** 从 workflow results 里挑真正的视频，绝不回落到预览图 */
+/** 워크플로 결과에서 영상만 선택한다. 미리보기 이미지는 제외한다. */
 function pickWorkflowVideoResult(
   results: any[]
 ): { url: string; type?: string } | null {
@@ -162,7 +162,7 @@ function pickWorkflowVideoResult(
       if (/video/.test(type)) score += 60
       if (type === 'image' && !VIDEO_EXT_RE.test(url)) score -= 30
       if (/mp4|webm|mov|video/.test(blobText) && !IMAGE_EXT_RE.test(url)) score += 20
-      // OSS 签名链经常没有 .mp4 后缀
+      // OSS 서명 URL에는 .mp4 확장자가 없을 수 있다.
       if (!IMAGE_EXT_RE.test(url) && !VIDEO_EXT_RE.test(url) && /^https?:\/\//i.test(url)) {
         score += /video/.test(type) ? 20 : 10
       }
@@ -228,7 +228,7 @@ function isVideoMagic(bytes: Uint8Array): boolean {
   return false
 }
 
-/** 确认下载内容是视频容器，避免把预览 PNG/JPEG 存成「视频」 */
+/** 다운로드한 파일이 영상 컨테이너인지 확인해 미리보기 이미지 저장을 막는다. */
 async function assertVideoBlob(blob: Blob, mimeHint?: string): Promise<Blob> {
   if (blob.size < 1024) {
     throw new Error(`[video] 다운로드한 파일이 너무 작아 유효한 영상으로 볼 수 없습니다(${blob.size}바이트).`)
@@ -251,7 +251,7 @@ async function assertVideoBlob(blob: Blob, mimeHint?: string): Promise<Blob> {
     }
     return blob.type === mime ? blob : blob.slice(0, blob.size, mime)
   }
-  // 魔数不明时，若 hint 是 video/* 仍放行（少数代理剥掉头）
+  // 파일 서명이 불분명해도 프록시가 헤더를 생략할 수 있으므로 video/* 힌트가 있으면 허용한다.
   if (mime.startsWith('video/')) {
     return blob.type === mime ? blob : blob.slice(0, blob.size, mime)
   }
@@ -264,7 +264,7 @@ function asciiHintMp4(bytes: Uint8Array): boolean {
   return String.fromCharCode(...bytes.subarray(4, 8)) === 'ftyp'
 }
 
-/** Blob → data:base64 字符串 */
+/** Blob을 base64 데이터 URL로 변환한다. */
 export function blobToDataUrl(blob: Blob): Promise<string> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader()
@@ -326,7 +326,7 @@ type AutodlHttpResult = {
   text: () => Promise<string>
 }
 
-/** 桌面端走主进程 net.fetch，绕开渲染进程 CORS；浏览器仍用 fetch */
+/** 데스크톱은 메인 프로세스의 net.fetch를 사용하고 브라우저는 fetch를 사용한다. */
 export async function autodlRequest(
   url: string,
   init: {
@@ -439,8 +439,8 @@ async function dashscopeRequest(
 }
 
 function autodlResolution(input: VideoGenInput): string {
-  // 各工作流的 resolution 枚举以 AutoDL 目录声明为准（2026-10-20 核对）：
-  // 首尾帧 b99_002 只有 736p 三档；普通工作流是 480p/768p(/1080p) + 竖/横/(1:1)。
+  // 해상도 값은 AutoDL 워크플로 카탈로그를 따른다.
+  // b99_002는 736p만 쓴다. 일반 워크플로는 480p, 768p, 일부 1080p와 화면 방향을 조합한다.
   const isFl2va = input.h3GenMode === 'fl2va'
   const quality = isFl2va
     ? '736p'
@@ -449,7 +449,7 @@ function autodlResolution(input: VideoGenInput): string {
       : '768p'
   const ratio = String(input.aspectRatio || '')
   if (ratio === '9:16') return `${quality}竖`
-  // 数字人口播工作流没有 (1:1) 档，1:1 退化成横
+  // 디지털 휴먼 워크플로에 정사각형 옵션이 없어 가로 형식으로 처리한다.
   if (ratio === '1:1' && !input.audioSync) return `${quality}(1:1)`
   if (isLandscapeAspect(ratio) || ratio === '1:1') return `${quality}横`
   const landscape = (input.width || 0) >= (input.height || 0)
@@ -457,7 +457,7 @@ function autodlResolution(input: VideoGenInput): string {
 }
 
 function unwrapTaskPayload(json: any): any {
-  // data 有时直接就是 results 数组；数组也是 object，不能当任务对象拆。
+  // data 자체가 결과 배열인 경우 작업 객체로 해석하지 않는다.
   if (json?.data && typeof json.data === 'object' && !Array.isArray(json.data)) return json.data
   return json
 }
@@ -596,7 +596,7 @@ async function downloadGeneratedVideo(
   }
 }
 
-/** 提交到 AutoDL.art ComfyUI 工作流并轮询结果 */
+/** AutoDL.art ComfyUI 워크플로를 제출하고 결과를 조회한다. */
 async function realWorkflowVideo(
   input: VideoGenInput,
   onProgress?: (msg: string) => void
@@ -665,7 +665,7 @@ async function realWorkflowVideo(
     const prepared = await toDigitalHumanWav(input.audioBlob, onProgress)
     const audioUrl = await blobToTypedDataUrl(prepared.blob, 'audio/wav')
     audioDuration = Math.max(5, Math.min(15, prepared.duration || targetDuration))
-    // 该工作流只认这 4 个字段；时长必须 5–15，音频必须是 WAV/MP3
+    // 이 워크플로는 네 필드만 받으며 5~15초 WAV 또는 MP3를 요구한다.
     body = {
       audio_duration: audioDuration,
       ref_audio_0: audioUrl,
@@ -680,8 +680,8 @@ async function realWorkflowVideo(
       resolution
     }
     if (isFl2va) {
-      // b99_002 首尾帧工作流只声明 first_frame/last_frame（另加 prompt/duration/resolution/seed），
-      // 多传 ref_image_* 会被网关以「存在未定义的参数」直接打回，不要双写。
+      // b99_002 프레임 입력은 first_frame과 last_frame이다. prompt, duration, resolution, seed를 함께 보낸다.
+      // ref_image_*를 더 보내면 공급자에서 정의되지 않은 인수로 거부한다.
       body.first_frame = dataUrls[0]
       body.last_frame = dataUrls[1]
     } else {
@@ -753,10 +753,10 @@ async function realWorkflowVideo(
   }
 
   const start = Date.now()
-  // 旺时任务可能在队列中超过 15 分钟。保留到 30 分钟，并允许调用方随时 abort；
-  // 智能口播会逐段落库，因此取消或超时后可以从已完成段继续。
+  // 작업이 15분 넘게 대기할 수 있으므로 최대 30분 동안 조회하고 취소를 허용한다.
+  // 스마트 내레이션은 구간별로 저장하므로 취소나 시간 초과 후 재개할 수 있다.
   const deadline = start + 30 * 60 * 1000
-  /** AutoDL 常先标 SUCCESS 再把 mp4 写进 results（ComfyUI 落盘有竞态）。 */
+  /** AutoDL에서 SUCCESS를 반환한 뒤 결과 목록에 MP4가 나타날 수 있다. */
   const EMPTY_SUCCESS_GRACE_MS = 120_000
   let successEmptySince = 0
   let attempt = 0
@@ -845,7 +845,7 @@ async function realWorkflowVideo(
   throw new Error(`[video] 영상 생성 시간이 30분을 초과했습니다.，task_id=${taskId}`)
 }
 
-/** 百炼 wan3.0-video-prime：单张首帧，多张走全能参考（reference_image），固定 720P */
+/** Bailian wan3.0-video-prime은 720p 고정이며 단일 시작 프레임 또는 다중 참조를 지원한다. */
 async function realWanVideo(
   input: VideoGenInput,
   onProgress?: (msg: string) => void
@@ -870,7 +870,7 @@ async function realWanVideo(
   for (const blob of allBlobs) {
     urls.push(await blobToVideoImageDataUrl(blob))
   }
-  // 单张：严格首帧生视频。两张及以上：全能参考（不能和 first_frame/last_frame 混用）
+  // 이미지가 두 장 이상이면 reference_image를 사용하고 first_frame 및 last_frame과 섞지 않는다.
   const media =
     urls.length === 1
       ? [{ type: 'first_frame', url: urls[0] }]
@@ -1003,10 +1003,10 @@ async function realWanVideo(
   throw new Error(`[video] Wan 생성 시간이 15분을 초과했습니다.，task_id=${taskId}`)
 }
 
-/** 拼最终喂给 ComfyUI / MiniMax H3 的视频提示词（页面预览 / 实际生成共用）
+/** 미리보기와 실제 생성이 같은 ComfyUI 및 MiniMax H3 프롬프트를 사용한다.
  *
- * 选 H3 时：多图人设/场景/看板走官方 Ref2VA 六段；单张首帧走 I2VA。
- * 选万相时原样使用用户提示词，不套 H3 格式。
+ * H3의 다중 참조는 공식 Ref2VA 여섯 구역을, 시작 이미지 하나는 I2VA를 사용한다.
+ * Wan은 H3 형식으로 바꾸지 않고 사용자 프롬프트를 보낸다.
  */
 export function composeVideoPrompt(input: VideoGenInput): string {
   return buildPrompt(input)
@@ -1034,7 +1034,7 @@ function inferH3Mode(input: VideoGenInput): 'I2VA' | 'T2VA' | 'R2VA' | 'FL2VA' |
 }
 
 function buildPrompt(input: VideoGenInput): string {
-  // promptAsIs 是不可绕过的用户契约：任何模式都必须逐字发送输入框内容。
+  // promptAsIs는 모든 모드에서 입력란 원문을 그대로 보낸다.
   if (input.promptAsIs) return input.prompt
   const raw =
     input.videoModel === 'wan-prime'
@@ -1203,7 +1203,7 @@ async function realZealmanVideo(
     let finalSubmitUrl = submitUrl
     let response = await postSubmit(finalSubmitUrl)
     let text = await response.text()
-    // 部分 Zealman/Nginx 部署对结尾斜杠采用严格路由；405 时换一种形式重试一次。
+    // 일부 Zealman 및 Nginx 환경은 끝 슬래시를 구분한다. 405이면 다른 형식으로 한 번 재시도한다.
     if (response.status === 405) {
       finalSubmitUrl = `${submitUrl}/`
       onProgress?.('미러 API가 끝에 슬래시가 없는 경로를 거부했습니다. 호환 경로로 다시 시도하는 중…')
@@ -1312,7 +1312,7 @@ export async function generateVideo(
         throw new Error('[video] 실제 생성 모드에는 참조 이미지가 한 장 이상 필요합니다.')
       }
     }
-    // 真实模式失败不再静默回退 mock，避免把「假动画/静态图」当成成品视频
+    // 실제 생성이 실패하면 데모 영상을 반환하지 않는다.
     if (input.videoModel === 'wan-prime') {
       return await realWanVideo(input, onProgress)
     }
@@ -1324,8 +1324,8 @@ export async function generateVideo(
       return await realApimartVideo(request, onProgress)
     }
     const adapterType = resolveVideoAdapter(vcfg)
-    // 三条都要成立才走镜像：接入声明是 Zealman、适配器是 zealman-workflow、工作流 id 是内置 U 系列。
-    // 10 秒 H3 固定是 AutoDL 工作流，不能因为当前激活项是 Zealman 就改道。
+    // Zealman 연결과 zealman-workflow 어댑터 및 내장 U 시리즈 ID가 모두 필요하다.
+    // 10초 H3는 활성 Zealman 연결과 관계없이 AutoDL 워크플로를 사용한다.
     if (
       request.videoModel !== 'h3-v5' &&
       vcfg.provider === 'zealman' &&
@@ -1346,7 +1346,7 @@ export async function generateVideo(
     return await realWorkflowVideo(request, onProgress)
   }
 
-  // mock：只需要一张图（多张也只用第一张）
+  // 데모 영상은 첫 이미지만 사용한다.
   onProgress?.('데모 영상을 생성하는 중…')
   let imageBlob = input.imageBlob
   if (!imageBlob) {
