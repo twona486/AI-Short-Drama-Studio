@@ -1,23 +1,23 @@
 ---
 name: qa-verify
-description: 프로젝트 상태를 대조해 빠진 스토리보드, 캐릭터 설정, 장면 연결, 이미지와 영상을 점검한다. 사용자가 확인, 검수, 누락 점검을 요청하거나 일괄 생성이 끝났을 때 사용한다.
-triggers: 检查,验收,对一下,有没有漏,质检,看看齐了没,확인,검수,대조,누락,품질 점검,다 갖췄는지
+description: Compare project state against the required storyboard, character, continuity, image, and video assets. Use for an explicit quality check or after batch generation.
+triggers: 检查,验收,对一下,有没有漏,质检,看看齐了没,확인,검수,대조,누락,품질 점검,다 갖췄는지,quality check,review,missing
 ---
 
-# 검수
+# Quality check
 
-API 성공 여부와 별개로 결과물을 계속 편집할 수 있는지 확인한다.
+Verify that the results can move forward to editing, independent of API success.
 
-## 점검 목록
+## Checklist
 
-- 스토리보드가 있는가? 내레이션을 이어 읽으면 자연스러운가?
-- 반복 등장하는 모든 인물에 4면 설정 이미지가 있는가? 장면에 4분할 기준 이미지가 있는가? 스토리보드에 스토리 개요판이 있는가?
-- 스토리보드에 subjectIds / sceneId가 연결되어 있는가?
-- 스토리 개요판, 캐릭터 설정, 장면 이미지가 각각 어느 샷에서 빠졌는가? 개요판은 있지만 영상이 없는 샷은 무엇인가? 샷 이미지 없이도 영상을 생성할 수 있다.
-- 앞뒤 샷에서 옷이나 장소가 갑자기 바뀌거나 손에 든 물건이 사라지지 않는가?
+- Is there a storyboard? Does the narration sound natural when read in order?
+- Does every recurring person have a four-view character sheet? Does every location have a four-panel anchor image? Does every applicable shot have a storyboard panel?
+- Are subjectIds / sceneId linked to each storyboard shot?
+- Which shots lack a panel, character reference, or location image? Which have a panel but no video? A shot image is optional for video generation.
+- Does a person change clothes or locations abruptly, or does an object vanish from their hand?
 
-## 보고 방식
+## Report
 
-빠진 항목과 의심스러운 부분만 간단히 보고한다. 예를 들어 ‘6개 샷을 모두 확인했습니다. 아강의 캐릭터 설정과 4번 샷 이미지가 빠졌습니다. 2번 샷은 골목 입구, 3번 샷은 실내여서 사이에 전환이 필요합니다.’
+Write the report in Korean (한국어). Mention missing or questionable items concisely. For example: “6개 샷을 확인했습니다. 아강의 캐릭터 설정과 4번 샷 이미지가 빠졌습니다. 2번 샷은 골목 입구, 3번 샷은 실내여서 사이에 전환이 필요합니다.”
 
-모두 갖춰져 있으면 한 문장으로 보고한다.
+If everything is present, confirm that in one sentence.
