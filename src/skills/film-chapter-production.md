@@ -55,7 +55,7 @@ Use only when `script.workflowMode === film-chapter` and `pipelineMode !== remak
 - For H3 follow `h3-prompt-writing` and use `integrated_multimodal_description`, `overall_soundscape`, and `non_diegetic_music`. Character and location references and panels are not I2VA first frames.
 - Leave `[Shot 1]` untimed. Use `[Shot 2] At 00:03.000, ...` for later internal cuts, without `From 0.00s to 1.50s`. One canvas shot produces one clip, which can contain internal cuts. Write camera movements in the action, such as `The camera pushes in with small amplitude at slow speed`.
 - Introduce style, framing, appearance, and voice at the start of `[Shot 1]`. Use English descriptions and speaker IDs such as `the man (S1)`.
-- Place dialogue only inside tags in the original language. Use `<d>[Korean] 대사 원문</d>` for Korean or `<d>[Chinese] 原词</d>` for Chinese. Use `says in an off-screen voiceover` and specify closed lips for off-screen narration. Without dialogue, write `No dialogue. No lips moving.`
+- Place dialogue only inside tags in the original language. Use `<d>[Korean] 대사 원문</d>` for Korean or `<d>[Chinese] verbatim line</d>` for Chinese. Use `says in an off-screen voiceover` and specify closed lips for off-screen narration. Without dialogue, write `No dialogue. No lips moving.`
 - Use `N/A` for `non_diegetic_music`.
 - In a distant crowd shot, say who can move, who stays seated, and who can cross the frame. Avoid irrelevant serving, walking, or attention-grabbing actions.
 - Write exclusions for this shot's real risks. A static shot explicitly rules out pan, tilt, zoom, and push-in.
