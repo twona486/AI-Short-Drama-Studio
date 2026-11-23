@@ -373,7 +373,7 @@ export function extractUserStyleAuthority(
   }
 
   const kws = (keywords ?? []).map((k) => k.trim()).filter(Boolean)
-  if (kws.length) parts.push(`关键词：${kws.join('、')}`)
+  if (kws.length) parts.push(`Keywords: ${kws.join('、')}`)
 
   return parts.join('\n')
 }
@@ -599,7 +599,7 @@ async function polishStoryboardOnce(
   const structural = storyboardQualityIssues(parsed, input)
   onProgress?.('샷 연결과 대사별 화자를 확인하는 중…')
   const narrative = await auditStoryboardNarrative(parsed, input, model)
-  const issues = [...structural, ...narrative.map((issue) => `叙事承接：${issue}`)].slice(0, 16)
+  const issues = [...structural, ...narrative.map((issue) => `Narrative continuity: ${issue}`)].slice(0, 16)
   if (!issues.length) return parsed
 
   onProgress?.('개선할 항목을 모아 한 번 수정한 뒤 초안을 제공하는 중…')
@@ -766,7 +766,7 @@ function collapseShotBatches(
     for (let i = 0; i < out.length; i += per) {
       const chunk = out.slice(i, i + per)
       merged.push({
-        label: chunk.length > 1 ? `${chunk[0].label} 起` : chunk[0].label,
+        label: chunk.length > 1 ? `${chunk[0].label} 이후` : chunk[0].label,
         excerpt: chunk.map((item) => item.excerpt).join('\n\n')
       })
     }
@@ -790,8 +790,8 @@ function collapseShotBatches(
     out.splice(
       index,
       1,
-      { label: `${item.label} · 前段`, excerpt: left },
-      { label: `${item.label} · 后段`, excerpt: right }
+      { label: `${item.label} · 앞부분`, excerpt: left },
+      { label: `${item.label} · 뒷부분`, excerpt: right }
     )
   }
   return out
@@ -830,7 +830,7 @@ function buildShotWorkBatches(play: string, targetBatches?: number): ShotWorkBat
       text: normalized.slice(heading.bodyStart, heading.end).trim()
     }))
 
-  let sections = scenes.length ? scenes : [{ title: '完整剧情', text: normalized }]
+  let sections = scenes.length ? scenes : [{ title: '전체 줄거리', text: normalized }]
 
   // 场次比期望包数还多时，先把相邻场次并成一组——工作包数永远不会少于场次数，
   // 不合并的话长剧本照样拆出十几个小组。
@@ -841,7 +841,7 @@ function buildShotWorkBatches(play: string, targetBatches?: number): ShotWorkBat
     for (let i = 0; i < sections.length; i += per) {
       const chunk = sections.slice(i, i + per)
       merged.push({
-        title: chunk.length > 1 ? `${chunk[0].title} 等 ${chunk.length} 场` : chunk[0].title,
+        title: chunk.length > 1 ? `${chunk[0].title} 외 ${chunk.length - 1}개 장면` : chunk[0].title,
         text: chunk.map((s) => s.text).join('\n\n')
       })
     }
@@ -876,7 +876,7 @@ function buildShotWorkBatches(play: string, targetBatches?: number): ShotWorkBat
     const flush = () => {
       if (!current.trim()) return
       drafts.push({
-        label: paragraphs.length > 1 ? `${section.title} · 第${part++}段` : section.title,
+        label: paragraphs.length > 1 ? `${section.title} · ${part++}부` : section.title,
         excerpt: `## ${section.title}\n\n${current.trim()}`
       })
       current = ''
@@ -1147,14 +1147,14 @@ function attachCastToOutline(
 function formatOutlineNote(outline: ShotOutline, index: number): string {
   const size = outline.shotSize ? `（${outline.shotSize}）` : ''
   const lines = [
-    `镜头 ${index + 1}：${outline.title}${size}`,
-    `画面：${outline.visualPrompt}`,
-    `时长：${outline.duration || 6} 秒`,
-    `声音：${outline.audioDescription || '现场环境声'}`
+    `Shot ${index + 1}：${outline.title}${size}`,
+    `Visual: ${outline.visualPrompt}`,
+    `Duration: ${outline.duration || 6} seconds`,
+    `Sound: ${outline.audioDescription || 'Ambient sound on location'}`
   ]
-  if (outline.videoPrompt) lines.push(`内容：${outline.videoPrompt}`)
-  if (outline.omitNote) lines.push(`不拍：${outline.omitNote}`)
-  if (outline.voiceover) lines.push(`口播：${outline.voiceover}`)
+  if (outline.videoPrompt) lines.push(`Action: ${outline.videoPrompt}`)
+  if (outline.omitNote) lines.push(`Omit: ${outline.omitNote}`)
+  if (outline.voiceover) lines.push(`Dialogue: ${outline.voiceover}`)
   return lines.join('\n')
 }
 
@@ -1209,8 +1209,8 @@ async function extractShotOutline(
   const directives = extractPlayDirectives(play)
   onProgress?.(
     film
-      ? '按剧本拍点出分镜场记（动作、对白、不拍清单）…'
-      : '先把剧本交给模型出分镜场记（只要画面、时长、声音）…'
+      ? '대본에 맞춰 스토리보드의 동작, 대사, 촬영 제외 항목을 정리하고 있어요…'
+      : '대본을 바탕으로 스토리보드의 화면, 길이, 소리를 먼저 정리하고 있어요…'
   )
   // 일반·영화 제작 스토리보드의 출력 필드와 대사 보존 규칙.
   const shortSystem = `${importedDirectorPrefix()}You are a storyboard director. Write concise production notes that describe shots a team can film.
@@ -1346,7 +1346,7 @@ Expand this shot only.`
     const videoPrompt = String(shot.videoPrompt || outline.videoPrompt || '').trim()
     const omit = outline.omitNote
     const withOmit =
-      omit && videoPrompt && !videoPrompt.includes(omit) ? `${videoPrompt}不拍：${omit}。` : videoPrompt
+      omit && videoPrompt && !videoPrompt.includes(omit) ? `${videoPrompt} Omit: ${omit}.` : videoPrompt
     return {
       ...outlineToRawShot(outline),
       ...shot,
@@ -1433,12 +1433,12 @@ Report visible facts only. Do not infer brands, specifications, prices, efficacy
     const { model: configuredModel } = getLlmConfig()
     const parallelModel = resolvePlayModel(input) || configuredModel
     const play = input.content?.trim() || ''
-    const common = `Topic: ${input.topic || '(unspecified)'}\n比例：${input.aspectRatio}\n单镜时长参考：${input.shotDuration} 秒\n\n전체 대본\n${play}`
+    const common = `Topic: ${input.topic || '(unspecified)'}\nAspect ratio: ${input.aspectRatio}\nSuggested shot duration: ${input.shotDuration} seconds\n\nFull screenplay\n${play}`
     const startAt = input.extractStartAt || 'subjects'
     const stopAfter = input.extractStopAfter || startAt
     const stageOrder = { subjects: 0, scenes: 1, shots: 2 } as const
     onProgress?.(
-      `按步骤提炼：先人物，再场景，再分镜。本轮只做${startAt === 'subjects' ? '人物' : startAt === 'scenes' ? '场景' : '分镜'}。`
+      `Extract in order: characters, locations, then shots. This step handles only ${startAt === 'subjects' ? 'characters' : startAt === 'scenes' ? 'locations' : 'shots'}。`
     )
 
     const runPart = async (
@@ -1524,7 +1524,7 @@ Return a top-level object with a nonempty scenes array. Do not nest inside data 
       if (!rows.length && getAIMode() !== 'mock') {
         try {
           const part = await runPart(
-            '道具',
+            'Props',
             '영상에 반복해서 등장하는 동일한 소품만 추출하세요. 인물, 장소, 옷, 신발과 헤어스타일은 제외하세요. 검은 넥타이, 간식 통, 같은 열쇠처럼 찾거나 건네거나 여러 번 클로즈업하는 독립된 물건만 포함하세요. name에는 대본에서 사용하는 2–8자의 짧은 이름을 쓰세요. description에는 모양, 재질, 색, 닳은 상태와 식별 특징만 쓰고 방은 묘사하지 마세요. JSON만 출력하세요. {"props":[{"name":"검은 넥타이","description":"폭이 좁은 검은 실크 넥타이. 끝에 가는 금속 클립이 달려 있음"}]}. 소품이 없으면 {"props":[]}를 출력하세요.',
             1800,
             PLAY_LLM_TIMEOUT_MS,
@@ -1594,13 +1594,13 @@ Return a top-level object with a nonempty scenes array. Do not nest inside data 
         scenePart = { raw: { scenes: playScenes }, model: parallelModel }
       } else {
         const sceneUser = `Topic: ${input.topic || '(unspecified)'}
-比例：${input.aspectRatio}
+Aspect ratio: ${input.aspectRatio}
 
 Extract locations only from the supplied locations and scene excerpts. Do not invent places. Record each place once.
 ${extractPlayForSceneStage(play)}`
         try {
           scenePart = await runPart(
-            '场景',
+            'Locations',
             sceneSystem,
             8000,
             PLAY_LLM_TIMEOUT_MS,
@@ -1615,7 +1615,7 @@ ${extractPlayForSceneStage(play)}`
       }
       let rows = extractSceneRows(scenePart.raw)
       if (!rows.length && playScenes.length) rows = playScenes
-      if (!rows.length) throw new Error('장면 추출에 실패했습니다. 대본에 「环境与场景」이나 「内景｜장소」가 없고 모델도 장소를 반환하지 않았습니다. 캐릭터 노드는 저장됐습니다.')
+      if (!rows.length) throw new Error('장면을 추출하지 못했어요. 대본에 ‘환경과 장면’이나 ‘실내｜장소’가 없고 모델 응답에도 장소가 없어요. 캐릭터 노드는 저장했어요.')
       const normalized = normalizeStoryboard(
         { ...scenePart.raw, subjects: subjectPart.raw.subjects || [], scenes: rows, shots: [] },
         { style: input.style, topic: input.topic, content: input.content, keywords: input.keywords, maxShotDuration: input.maxShotDuration }
@@ -1803,8 +1803,8 @@ ${extractPlayForSceneStage(play)}`
         ...[...names].slice(0, 8).map((name) => ({
           name,
           kind: 'person',
-          description: `${name}，外貌与服装细节待在画布补充`,
-          role: '由分镜对白和动作识别出的出场人物',
+          description: `${name}의 외모와 의상 세부 정보는 캔버스에서 추가할 수 있어요.`,
+          role: '스토리보드의 대사와 동작에서 확인한 등장인물',
           stateVariants: '单一状态'
         }))
       )
@@ -1814,10 +1814,10 @@ ${extractPlayForSceneStage(play)}`
       sceneRows.push(
         ...names.slice(0, 8).map((name) => ({
           name,
-          description: `${name}，空间结构、地面材质、主锚与光线细节待在画布补充`,
-          mainAnchor: '场景中心视觉焦点',
-          anchors: '全景；主锚；地面站位区；光源',
-          lighting: '与本场剧情匹配的主光源'
+          description: `${name}의 공간 구조, 지면 재질, 주요 기준물과 조명은 캔버스에서 추가할 수 있어요.`,
+          mainAnchor: '장면 중심의 주요 기준물',
+          anchors: '전경, 주요 기준물, 인물 위치, 광원',
+          lighting: '이 장면의 전개에 맞는 주 광원'
         }))
       )
     }
@@ -1880,13 +1880,13 @@ ${extractPlayForSceneStage(play)}`
 
 전체 대본
 """
-${input.content?.trim() || '（空）'}
+${input.content?.trim() || '(empty)'}
 """
 
 Topic: ${input.topic || '(unspecified)'}
-${input.keywords?.length ? `关键词：${input.keywords.join('、')}` : ''}
-视频比例：${input.aspectRatio}
-时长参考：大约每镜 ${input.shotDuration} 秒（跟剧本里的场次走，别强行统一）
+${input.keywords?.length ? `Keywords: ${input.keywords.join('、')}` : ''}
+Aspect ratio: ${input.aspectRatio}
+Suggested duration: about ${input.shotDuration} seconds per shot. Follow the screenplay beats and vary shot lengths naturally.
 
 ${stylePriority}
 ${productNote}
@@ -1898,17 +1898,17 @@ Preserve the source facts. Do not add prices, specifications, efficacy, relation
 
 원고 주제
 """
-${input.topic || '（未填）'}
+${input.topic || '(not provided)'}
 """
 
 원고 내용
 """
 ${input.content?.trim() || '（본문 없음. 참조 이미지가 있다면 이미지에 맞춰 내레이션과 샷을 작성）'}
 """
-${input.keywords?.length ? `关键词：${input.keywords.join('、')}` : ''}
+${input.keywords?.length ? `Keywords: ${input.keywords.join('、')}` : ''}
 
-视频比例：${input.aspectRatio}
-时长参考：大约每镜 ${input.shotDuration} 秒（只是节奏，别所有镜头同一秒数）
+Aspect ratio: ${input.aspectRatio}
+Suggested pacing: about ${input.shotDuration} seconds per shot. Vary shot lengths.
 
 ${stylePriority}
 ${productNote}
@@ -1916,8 +1916,8 @@ ${productNote}
 Establish characters and locations before shot breakdown. Write visualPrompt as a visible still and videoPrompt as the performance for the current shot. Do not repeat the still prompt in the video prompt.
 ${
   hasUserStyle
-    ? `画风「${mediumPhrase}」在画面描述里点一次，写进桥、水、衣这些实物上。禁止第一句只写画风、结尾再抄一段技法套话。禁止只写「两人相对拱手」这种站位摘要。`
-    : `主题没提画风时，画面里带上「${styleCn}」，同样要写清环境实物与动态。`
+    ? `Mention “${mediumPhrase}” once and express it through tangible details such as the bridge, water, and clothing. Avoid a style-only opening, a generic technique paragraph at the end, or a blocking-only summary such as “two people clasp their hands in greeting.”`
+    : `If the topic gives no style, apply “${styleCn}” and describe tangible surroundings and motion.`
 }
 Return JSON only without explanation.`
 
@@ -1997,7 +1997,7 @@ ${videoPerformanceSpec(getVideoPromptStyle())}
 Visual style: express the user's wording through physical objects, without a separate style paragraph. Only use the dropdown value when the topic does not specify a style: ${styleCn}」。
 Reject visualPrompt if it only lists positions, omits physical surroundings, or opens or ends with generic style language.
 Reject videoPrompt if it omits any duration from zero to the end, lacks actions and speakers at actual beats, or fills equal time slots with generic language.
-${hasUserStyle && !look.matched ? '这是自定义画风，不要套页面下拉风格。' : `${styleGuide.avoid}。`}
+${hasUserStyle && !look.matched ? 'Use the custom visual style in place of the preset selected on the page.' : `${styleGuide.avoid}。`}
 Use H3 on-screen dialogue by default. Divide the original words into meaningful paragraphs for voiceover and set audioMode=h3-dialogue. Avoid one line per shot. The current model accepts at most ${shotDurationLimit(input)} seconds per shot. For a shared place, person, intention, or continuous action, prefer one complete 7–${shotDurationLimit(input)}-second shot when it fits. Do not force two 5-second shots to fill a template. Cut only when focus, time, place, axis, or dramatic purpose changes. Reserve a single line for brief reactions or transitions and allow about four characters per second. Use "Character name: dialogue" in voiceover and specify the speaker and vocal quality in speakerHint.
 Follow action, spacing, and emotion when choosing framing. Use close framing when the expression matters and no surroundings are needed; use medium, two-person, or group framing for handoffs, arguments, exchanges, distance, environmental pressure, or group reactions. Do not force close-ups; name who speaks and others' reactions so mouths do not open together.
 Use h3-voiceover only for explicit off-screen narration, tts for requested dubbing in postproduction, and none for a silent empty shot. Create a separate subject for each ### under characters. Show a deceased character's keepsake, portrait, or flashback in at least one shot, and a living opponent's confrontation or visible pressure in at least one shot. Give every shot its own specific 3–8-character Korean title. Verify adjacent continuity and apply the narrative rules to major changes instead of jumping from a result to explanatory speech.
@@ -2072,7 +2072,7 @@ function normalizeVoicePrompt(v: unknown, kind: Subject['kind']): string | undef
 
 /** 通用兜底声线：模型漏写 voicePrompt 时用，避免同一角色每镜声音漂移。 */
 export const FALLBACK_VOICE_PROMPT =
-  '自然口语的中文对白声线，语速中等、气息平稳，情绪贴合本场剧情，不要播音腔'
+  'Natural conversational delivery at a moderate pace with steady breath. Match the emotion to the scene and avoid an announcer cadence.'
 
 function spokenSentenceCount(text: string): number {
   const body = (text || '').replace(/^[^：:\n]{1,12}[：:]\s*/, '').trim()
@@ -2474,8 +2474,8 @@ function pickBoundScene(
 function stampCastNames(prompt: string, chars: Subject[]): string {
   const body = (prompt || '').trim()
   if (!chars.length) return body
-  const line = `出场：${chars.map((c) => c.name).join('、')}。必须是人设里这些人，脸、发型、衣服跟设计图一致，禁止另造路人。`
-  if (body.includes('出场：') && chars.every((c) => body.includes(c.name))) return body
+  const line = `Cast: ${chars.map((c) => c.name).join('、')}. Use only these characters. Match their faces, hairstyles, and clothing to the reference and add no bystanders.`
+  if (/(?:出场[：:]|등장[：:]|\bCast:)/i.test(body) && chars.every((c) => body.includes(c.name))) return body
   return body ? `${body}\n${line}` : line
 }
 
@@ -2549,7 +2549,7 @@ export function normalizeStoryboard(
   })
   const subjects: Subject[] = subjectRows.slice(0, 8).map((s: any, i: number) => ({
     id: `sub_${i + 1}`,
-    name: String(s?.name || `角色${i + 1}`).trim() || `角色${i + 1}`,
+    name: String(s?.name || `캐릭터 ${i + 1}`).trim() || `캐릭터 ${i + 1}`,
     kind: asKind(s?.kind),
     description: String(s?.description || '').trim(),
     role: optStr(s?.role),
@@ -2560,7 +2560,7 @@ export function normalizeStoryboard(
 
   const scenes: Scene[] = rawScenes.slice(0, 8).map((s: any, i: number) => ({
     id: `scn_${i + 1}`,
-    name: String(s?.name || `场景${i + 1}`).trim() || `场景${i + 1}`,
+    name: String(s?.name || `장면 ${i + 1}`).trim() || `장면 ${i + 1}`,
     description: String(s?.description || '').trim(),
     mainAnchor: optStr(s?.mainAnchor),
     anchors: optStr(s?.anchors),
@@ -2570,20 +2570,20 @@ export function normalizeStoryboard(
   if (subjects.length === 0) {
     subjects.push({
       id: 'sub_1',
-      name: '主角',
+      name: '주인공',
       kind: 'person',
-      description: '全片同一位主角，面部、发型、服装与配色保持完全一致',
-      role: '主角',
+      description: '영상 전체에 같은 주인공이 등장하며 얼굴, 헤어스타일, 의상과 색상을 유지해요.',
+      role: '주인공',
       stateVariants: '单一状态'
     })
   }
   if (scenes.length === 0) {
     scenes.push({
       id: 'scn_1',
-      name: '主场景',
-      description: '全片同一主场景，光线与建筑材质保持一致',
-      mainAnchor: '场景中心视觉焦点',
-      lighting: '与文案情绪匹配的主光源'
+      name: '주요 장면',
+      description: '영상 전체에 같은 주요 장소가 나오며 조명과 건물 재질을 유지해요.',
+      mainAnchor: '장면 중심의 주요 기준물',
+      lighting: '원고의 감정에 어울리는 주 광원'
     })
   }
 
@@ -2733,8 +2733,8 @@ export function normalizeStoryboard(
     styleBrief:
       optStr(raw?.styleBrief) ??
       (styleLockFromUser
-        ? `画风严格遵循用户主题：${styleLockFromUser.split('\n')[0]}`
-        : `${styleCn}短片，先让人看下去，再把事讲清楚`),
+        ? `요청한 화면 스타일을 적용해요. ${styleLockFromUser.split('\n')[0]}`
+        : `${styleCn} 스타일의 단편 영상. 시선을 끈 뒤 사건을 분명하게 전달해요.`),
     colorPalette: optStr(raw?.colorPalette),
     lightingNote: optStr(raw?.lightingNote),
     subjects,
@@ -2765,12 +2765,12 @@ function enrichVisualPrompt(
   if (!body) {
     body = [
       ctx.sceneName ? `${ctx.sceneName}` : '',
-      ctx.sceneAnchor ? `看得见${ctx.sceneAnchor}` : '',
-      ctx.sceneLighting ? `光线：${ctx.sceneLighting}` : '',
+      ctx.sceneAnchor ? `Visible anchor: ${ctx.sceneAnchor}` : '',
+      ctx.sceneLighting ? `Lighting: ${ctx.sceneLighting}` : '',
       ctx.blocking ? ctx.blocking : '',
       ctx.shotSize ? ctx.shotSize : '',
-      ctx.propFocus && ctx.propFocus !== '无' ? `手里/近处：${ctx.propFocus}` : '',
-      '写清地面、水或风是否在动、光从哪来。'
+      ctx.propFocus && ctx.propFocus !== '无' ? `In hand or nearby: ${ctx.propFocus}` : '',
+      'Show whether the ground, water, or wind is moving and where the light comes from.'
     ]
       .filter(Boolean)
       .join('。')
@@ -2825,18 +2825,18 @@ export async function generateStoryboard(
       onProgress?.(
         input.mode === 'extract'
           ? (input.extractStopAfter || input.extractStartAt) === 'scenes'
-            ? '第 2 步：只提炼场景锚点…'
+            ? '2단계에서 장면 기준물만 추출하고 있어요…'
             : (input.extractStopAfter || input.extractStartAt) === 'shots'
               ? '3단계 — 저장된 캐릭터와 장면을 바탕으로 스토리보드를 추출하는 중…'
               : '1단계 — 캐릭터를 추출하는 중…'
-          : `正在按「${look.medium}」拆能拍的镜头...`
+          : `「${look.medium}」 스타일로 촬영할 수 있는 샷을 나누고 있어요…`
       )
     try {
       const { result, model } = await realStoryboard(resolved, onProgress)
       onProgress?.(
         input.mode === 'extract' && !result.shots.length
           ? '✓ 현재 추출 단계를 완료하고 저장했습니다.'
-          : `✓ 已交付 ${result.shots.length}개의 편집 가능한 스토리보드 샷`
+          : `✓ ${result.shots.length}개의 편집 가능한 스토리보드 샷`
       )
       return { result, source: 'real', model }
     } catch (e: any) {
@@ -3289,7 +3289,7 @@ ${scaleBrief}`
   if (continueMode) playMarkdown = mergeContinuedPlay(existingPlay, playMarkdown)
   if (playMarkdown.length < 40) throw new Error('모델이 대본을 반환하지 않았습니다.')
   const result: PlayDraftResult = {
-    topic: playMarkdown.match(/^#\s+(.+)$/m)?.[1]?.trim() || input.topic?.trim() || '短视频剧本',
+    topic: playMarkdown.match(/^#\s+(.+)$/m)?.[1]?.trim() || input.topic?.trim() || '숏폼 대본',
     playMarkdown
   }
   return { result, model: resp.model ?? model }
