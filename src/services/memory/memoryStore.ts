@@ -1,15 +1,15 @@
 /**
- * 智能体本地记忆系统。
+ * 에이전트의 로컬 기억 저장 시스템
  *
- * 两层范围：
- * - global ：跨项目共享（用户偏好、习惯、长期事实）
- * - project：跟随当前项目 id（这个项目里的约定、剧情备注）
+ * 두 가지 범위에서 기억을 관리한다.
+ * global은 모든 프로젝트에서 사용자 선호, 습관 및 장기 정보를 공유한다.
+ * project는 현재 프로젝트 ID에 연결한 약속이나 줄거리 메모를 저장한다.
  *
- * 持久化：
- * - 桌面端：SQLite KV（<存储根>/app.db 的 kv 表），随存储根迁移
- * - 浏览器端：localStorage 兜底
+ * 저장 방식
+ * 데스크톱은 저장소 루트의 app.db에 있는 SQLite KV 테이블을 사용한다.
+ * 브라우저는 localStorage를 사용한다.
  *
- * 所有读写都走异步函数，UI 与 agent 共用同一份数据。
+ * UI와 에이전트는 동일한 비동기 읽기 및 쓰기 API를 사용한다.
  */
 import { desktop, isDesktop } from '@/services/desktop'
 import { useProjectStore } from '@/stores'
@@ -31,7 +31,7 @@ const GLOBAL_KEY = 'agent-memory:v1:global'
 const PROJECT_KEY_PREFIX = 'agent-memory:v1:project:'
 const MAX_PER_KEY = 60
 const MAX_CONTENT_LEN = 240
-/** 注入 prompt 时每个范围最多带多少条 */
+/** 모델에 제공하는 범위별 최대 기억 수 */
 const PROMPT_LIMIT_PER_SCOPE = 20
 
 function newId() {
@@ -63,7 +63,7 @@ async function kvWrite(key: string, value: string): Promise<void> {
     }
     window.localStorage.setItem(key, value)
   } catch {
-    /* 存储失败不阻断对话 */
+    /* 저장 오류가 발생해도 대화를 계속한다. */
   }
 }
 
@@ -91,7 +91,7 @@ function keyForScope(scope: MemoryScope, projectId: string | null): string | nul
   return projectId ? projectKey(projectId) : null
 }
 
-/** 列出记忆。不传 scope 时返回 全局 + 当前项目 的合并列表（置顶优先、新的在前）。 */
+/** 범위가 없으면 전역과 현재 프로젝트의 기억을 합친다. 고정 항목과 최신 항목이 먼저 온다. */
 export async function listMemories(scope?: MemoryScope): Promise<AgentMemoryEntry[]> {
   const pid = currentProjectId()
   const scopes: MemoryScope[] = scope ? [scope] : ['global', 'project']
@@ -140,7 +140,7 @@ export async function rememberMemory(
   return entry
 }
 
-/** 按 id 精确删除，或按关键词删除第一条匹配的记忆。返回删除的内容。 */
+/** ID로 정확히 일치하거나 키워드가 처음으로 일치하는 기억을 삭제하고 반환한다. */
 export async function forgetMemory(idOrKeyword: string, scope?: MemoryScope): Promise<string | null> {
   const pid = currentProjectId()
   const scopes: MemoryScope[] = scope ? [scope] : ['global', 'project']
@@ -188,7 +188,7 @@ const KIND_LABEL: Record<MemoryKind, string> = {
   note: 'Note'
 }
 
-/** 组装注入 LLM 上下文的记忆文本。没有记忆时返回空串。 */
+/** 기억을 모델 컨텍스트에 넣을 텍스트로 만든다. 없으면 빈 문자열을 반환한다. */
 export async function memoryContextPrompt(): Promise<string> {
   const entries = await listMemories()
   if (!entries.length) return ''
@@ -203,8 +203,8 @@ export async function memoryContextPrompt(): Promise<string> {
 }
 
 /**
- * 解析「记住… / 以后都… / 我喜欢…」这类显式记忆请求。
- * 返回要记忆的内容与推断类型；不像记忆请求时返回 null。
+ * 사용자가 명시적으로 기억해 달라고 한 요청을 해석한다.
+ * 기억할 본문과 추정 유형을 반환하거나 기억 요청이 아니면 null을 반환한다.
  */
 export function parseRememberRequest(
   text: string
@@ -234,7 +234,7 @@ export function parseRememberRequest(
   return { content, kind, scope }
 }
 
-/** 解析「忘掉 / 别记了 / 删除记忆」请求，返回关键词。 */
+/** 명시적인 기억 삭제 요청에서 대상 키워드를 반환한다. */
 export function parseForgetRequest(text: string): string | null {
   const m = text
     .trim()
