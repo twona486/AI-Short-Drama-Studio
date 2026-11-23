@@ -627,7 +627,7 @@ export async function generateShotImage(shot: Shot, onProgress?: (msg: string) =
     labels.push(bundle.labels[i])
   }
   let prompt = shotImageSendPrompt(shot, project.current)
-  if (!videoRequiresStoryboard(project.current) && !/2\s*列|四宫格|正好\s*4\s*格/.test(prompt)) {
+  if (!videoRequiresStoryboard(project.current) && !/2\s*列|四宫格|正好\s*4\s*格|4분할|2\s*[×x]\s*2|four-panel/i.test(prompt)) {
     prompt = defaultShotImagePrompt(shot, project.current)
   }
   if (prompt !== (shot.imagePrompt || '')) {
@@ -1722,14 +1722,13 @@ export async function generateShotAudio(shot: Shot, onProgress?: (msg: string) =
     onProgress?.('내레이션을 합성하는 중…')
     const instruction = [
       speaker?.voicePrompt?.trim(),
-      `自然、克制的中文短视频旁白；语速按 ${shot.duration} 秒内说完；标点处真实停顿，不要播音腔，不要夸张情绪。`
+      `Read the narration naturally in its original language. Finish within ${shot.duration} seconds. Pause naturally at punctuation. Avoid an announcer voice or exaggerated emotion.`
     ]
       .filter(Boolean)
       .join('；')
     const result = await generateSpeech({
       text,
       voice: p.settings.ttsVoice,
-      language: 'Chinese',
       instruction,
       signal
     })
