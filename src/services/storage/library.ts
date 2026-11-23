@@ -1,7 +1,7 @@
 /**
- * 公共资产库：跨项目共享图片
- * 桌面端：用户所选保存目录/_library/
- * 浏览器：IndexedDB assets（library: true）
+ * 프로젝트 사이에서 이미지를 공유하는 공용 에셋 라이브러리
+ * 데스크톱에서는 선택한 저장 디렉터리의 _library에 저장한다.
+ * 브라우저는 IndexedDB assets에서 library가 true인 항목을 사용한다.
  */
 
 import { toRaw } from 'vue'
@@ -164,7 +164,7 @@ export async function saveLibraryFolders(folders: LibraryFolder[]): Promise<void
   await desktop().writeText(await desktop().join(dir, FOLDERS_FILE), JSON.stringify(plain, null, 2))
 }
 
-/** 更新公共库素材元数据（分类文件夹等），不改二进制文件 */
+/** 분류 폴더 등 메타데이터만 갱신하고 파일 내용은 유지한다. */
 export async function updateLibraryAssetMeta(
   id: string,
   patch: { folderId?: string | null; filename?: string }
