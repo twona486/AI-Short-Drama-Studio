@@ -5,6 +5,7 @@
 export type { AIMode } from '@/stores/settings'
 export { getAIMode } from './runtime'
 
+import { t as translate } from '@/i18n'
 import { desktop, isDesktop } from '@/services/desktop'
 import { parseJsonRobust } from '@/utils/jsonRepair'
 import { mockLLM } from './mock'
@@ -189,8 +190,7 @@ export async function callLLM(req: LLMRequest): Promise<LLMResponse> {
   const model = req.model?.trim() || cfgModel
 
   if (!baseUrl || !apiKey) {
-    const label = req.provider === 'vision' ? '视觉模型' : 'LLM'
-    throw new Error(`[AI] 真实模式但没配 ${label} 地址或密钥，请到设置页配置`)
+    throw new Error(translate(req.provider === 'vision' ? 'providerErrors.visionConfig' : 'providerErrors.llmConfig'))
   }
 
   const withImages = hasImageParts(req.messages)

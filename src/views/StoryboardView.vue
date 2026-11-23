@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { confirmAction } from '@/utils/confirmAction'
 import { t as translate } from '@/i18n'
 import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
@@ -91,7 +92,7 @@ function hasDirectingNotes(s: Shot) {
 async function generate() {
   if (!project.current?.script) return
   if (shots.value.some((s) => s.imageAssetId || s.videoAssetId)) {
-    const ok = confirm(
+    const ok = await confirmAction(
       translate('storyboard.regenerateConfirm')
     )
     if (!ok) return
@@ -174,9 +175,9 @@ function addShot() {
   editing.value = newShot.id
 }
 
-function removeShot(id: string) {
+async function removeShot(id: string) {
   if (!project.current) return
-  if (!confirm(translate('storyboard.deleteConfirm'))) return
+  if (!await confirmAction(translate('storyboard.deleteConfirm'))) return
   const list = shots.value
     .filter((s) => s.id !== id)
     .map((s, i) => ({ ...s, index: i }))

@@ -7,6 +7,7 @@
  * - 第一个 `##` 之前的内容算「前言」，保留但不属于任何一集
  */
 
+import { t as translate } from '@/i18n'
 import type { ScriptEpisode } from '@/types'
 
 export interface ParsedScriptDoc {
@@ -61,7 +62,7 @@ export function parseScriptDoc(md: string): ParsedScriptDoc {
     return {
       title,
       preamble: '',
-      episodes: [{ title: '第 1 集', content: preamble }]
+      episodes: [{ title: translate('scripts.defaultEpisodeTitle', { p0: 1 }), content: preamble }]
     }
   }
   return { title, preamble, episodes: cleaned }
@@ -72,7 +73,7 @@ export function serializeScriptDoc(parsed: ParsedScriptDoc): string {
   if (parsed.title.trim()) chunks.push(`# ${parsed.title.trim()}\n`)
   if (parsed.preamble.trim()) chunks.push(`${parsed.preamble.trim()}\n`)
   for (const ep of parsed.episodes) {
-    chunks.push(`## ${ep.title.trim() || '未命名'}\n`)
+    chunks.push(`## ${ep.title.trim() || translate('scripts.untitledEpisode')}\n`)
     const body = (ep.content || '').trim()
     if (body) chunks.push(`${body}\n`)
   }
@@ -90,25 +91,18 @@ export function toEpisodes(parsed: ParsedScriptDoc, docId: string): ScriptEpisod
   }))
 }
 
-/** 生成下一集的默认标题：沿用「第 N 集」格式 */
+/** 生成下一集的默认标题 */
 export function nextEpisodeTitle(parsed: ParsedScriptDoc): string {
   const n = parsed.episodes.length + 1
-  return `第 ${n} 集`
+  return translate('scripts.defaultEpisodeTitle', { p0: n })
 }
-
-export const NEW_EPISODE_BODY = `> 一句话概括本集发生的事
-
-**场景**：
-**人物**：
-**剧情**：
-`
 
 /** 追加一集，返回新的 Markdown 与这一集的下标 */
 export function appendEpisode(md: string, title?: string): { markdown: string; index: number } {
   const parsed = parseScriptDoc(md)
   parsed.episodes.push({
     title: title?.trim() || nextEpisodeTitle(parsed),
-    content: NEW_EPISODE_BODY.trim()
+    content: translate('scripts.newEpisodeBody')
   })
   return { markdown: serializeScriptDoc(parsed), index: parsed.episodes.length - 1 }
 }
@@ -122,8 +116,8 @@ export function insertEpisode(
   const parsed = parseScriptDoc(md)
   const pos = Math.max(0, Math.min(parsed.episodes.length, at))
   parsed.episodes.splice(pos, 0, {
-    title: title?.trim() || `第 ${pos + 1} 集`,
-    content: NEW_EPISODE_BODY.trim()
+    title: title?.trim() || translate('scripts.defaultEpisodeTitle', { p0: pos + 1 }),
+    content: translate('scripts.newEpisodeBody')
   })
   return { markdown: serializeScriptDoc(parsed), index: pos }
 }
@@ -164,7 +158,7 @@ export function moveEpisode(md: string, from: number, to: number): string {
 
 /** 按一集一份 Markdown 导出（文件名安全） */
 export function episodeMarkdown(title: string, content: string): string {
-  const heading = title.trim() || '未命名'
+  const heading = title.trim() || translate('scripts.untitledEpisode')
   const body = (content || '').trim()
   return `# ${heading}\n\n${body}\n`
 }

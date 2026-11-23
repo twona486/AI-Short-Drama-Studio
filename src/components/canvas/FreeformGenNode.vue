@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { confirmAction } from '@/utils/confirmAction'
 import { t as translate } from '@/i18n'
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { Handle, Position, useVueFlow } from '@vue-flow/core'
@@ -527,9 +528,9 @@ function duplicateSelf() {
   selectCanvasNode(nid)
 }
 
-function removeSelf() {
+async function removeSelf() {
   moreOpen.value = false
-  if (!confirm(translate('common.confirmDeleteNode'))) return
+  if (!await confirmAction(translate('common.confirmDeleteNode'))) return
   project.removeCanvasNode(props.id)
 }
 </script>

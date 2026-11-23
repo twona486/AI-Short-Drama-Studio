@@ -9,6 +9,7 @@
  * 工作流：minimax_h3_lightx2v_v5_15s / minimax_h3_lightx2v_v5 / minimax_h3_image_audio_to_video / minimax_h3_b99_002
  */
 
+import { t as translate } from '@/i18n'
 import { getAIMode } from './client'
 import { comfyPromptGenerate, httpCustomMediaGenerate, isApimartHost, resolveVideoAdapter } from './adapters'
 import { apimartGenerateVideo, isApimartEndpoint } from './apimart'
@@ -616,7 +617,7 @@ async function realWorkflowVideo(
   throwIfAborted(input.signal)
 
   if (!apiKey) {
-    throw new Error('[video] 没配 AutoDL Token，请到设置页填写图生视频令牌')
+    throw new Error(translate('providerErrors.videoAutodlToken'))
   }
 
   const allBlobs = isFl2va
@@ -854,7 +855,7 @@ async function realWanVideo(
   const apiKey = tts.apiKey.trim()
   throwIfAborted(input.signal)
   if (!apiKey) {
-    throw new Error('[video] 没配百炼 Token，请到设置页填写口播 TTS 的 DashScope Key')
+    throw new Error(translate('providerErrors.videoDashscopeKey'))
   }
 
   const allBlobs = [input.imageBlob, ...(input.referenceImages ?? [])]
@@ -1075,7 +1076,7 @@ async function realApimartVideo(
 ): Promise<VideoGenOutput> {
   const cfg = getVideoConfig(input.videoProfileId)
   if (!cfg.apiKey) {
-    throw new Error('[video] 这条 APIMart 视频接入还没有自己的 API Key。不会使用 AutoDL 令牌。')
+    throw new Error(translate('providerErrors.videoApimartKey'))
   }
   const prompt = input.prompt.trim()
   if (!prompt) throw new Error('[video] 请填写视频内容描述')
@@ -1334,7 +1335,7 @@ export async function generateVideo(
       return await realZealmanVideo(request, onProgress)
     }
     if (request.videoModel === 'h3-v5' && vcfg.provider === 'zealman') {
-      throw new Error('[video] 10 秒 H3 走 AutoDL 工作流。当前没有可用的 AutoDL 接入，请到设置里保存 AutoDL 算力，不要用 Zealman 镜像。')
+      throw new Error(translate('providerErrors.h3AutodlConfig'))
     }
     if (adapterType === 'comfyui-prompt') {
       return await realComfyNativeVideo(request, onProgress)
