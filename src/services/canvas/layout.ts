@@ -156,7 +156,7 @@ export function nextFreeformPosition(
   return pos
 }
 
-/** 误用分组相对坐标时，节点会堆在画布左上角。拉回分镜视频组右侧。 */
+/** 误用分组相对坐标时，节点会堆在画布左上角。拉回샷 영상组右侧。 */
 export function rescueStrandedFreeformNodes(nodes: CanvasNode[]): CanvasNode[] | null {
   const groups = nodes.filter((n) => n.type === 'groupFrame')
   const free = nodes.filter(
@@ -206,7 +206,7 @@ export function rebuildCanvasGraph(project: Project, preservePositions = true): 
   const hadGroups = prevList.some((n) => n.type === 'groupFrame')
   const shotVideoPrev = prevList.filter((n) => n.type === 'shotVideo')
   const defaultStill = fallbackStillMode()
-  // 走首尾帧的镜头视频直接吃起始帧/结束帧，不再铺关键帧/看板节点；
+  // 走시작·끝 프레임的镜头视频直接吃起始帧/结束帧，不再铺关键帧/看板节点；
   // 已经画出来的关键帧保留在画布上（不藏用户的图），只是不再要求补。
   const shotsNeedingStills = shots.filter(
     (s) => !shotUsesFrames(s, project) || s.imageAssetId || s.boardAssetId
@@ -221,16 +221,16 @@ export function rebuildCanvasGraph(project: Project, preservePositions = true): 
       ? shotVideoPrev.some((n) => videoStillNeedsCanvas(stillModeFromNode(n)))
       : videoStillNeedsCanvas(defaultStill))
   const stillGroupLabel = shotVideoPrev.some((n) => stillModeFromNode(n) === 'storyboard')
-    ? '故事看板'
-    : '分镜关键帧'
+    ? '스토리 개요판'
+    : '샷 키프레임'
   const videosHomed =
     shots.length === 0 ||
     !prevList.some((n) => n.type === 'shotVideo') ||
     prevList
       .filter((n) => n.type === 'shotVideo')
       .every((n) => n.parentGroupId === 'group-videos')
-  // 首尾帧组只在真的要用首尾帧出片时出现：项目开了首尾帧链，或有镜头手动选了首尾帧。
-  // 它是给视频供图的，所以排在分镜关键帧之后、分镜视频之前。
+  // 시작·끝 프레임组只在真的要用시작·끝 프레임出片时出现：项目开了시작·끝 프레임链，或有镜头手动选了시작·끝 프레임。
+  // 它是给视频供图的，所以排在샷 키프레임之后、샷 영상之前。
   // 口径与「下一步」流水线、智能体判断共用 needsShotFrames，三边必须一致。
   const needFrames = shots.length > 0 && needsShotFrames(project)
   // 首次插入这一组时，后面的分组要整体右移，旧坐标会跟新分组撞在一起，只能重排一次。
@@ -268,7 +268,7 @@ export function rebuildCanvasGraph(project: Project, preservePositions = true): 
       type: 'script',
       position: scriptPos,
       data: {
-        label: project.script?.topic || project.name || '剧本',
+        label: project.script?.topic || project.name || '대본',
         width: scriptW,
         height: scriptH,
         kind: 'scriptDoc'
@@ -306,21 +306,21 @@ export function rebuildCanvasGraph(project: Project, preservePositions = true): 
     x += box.width + COL_GAP
   }
 
-  if (!bare || subjects.length) pushGroup('group-subjects', '人物角色', 'subject', subBox)
-  if (storyProps.length) pushGroup('group-props', '反复出现的道具', 'prop', propBox)
-  if (!bare || scenes.length) pushGroup('group-scenes', '场景锚点', 'scene', scnBox)
+  if (!bare || subjects.length) pushGroup('group-subjects', '캐릭터', 'subject', subBox)
+  if (storyProps.length) pushGroup('group-props', '반복 등장 소품', 'prop', propBox)
+  if (!bare || scenes.length) pushGroup('group-scenes', '장면 기준 이미지', 'scene', scnBox)
   if ((!bare || shots.length) && useStills) {
     pushGroup('group-shots', stillGroupLabel, 'shot', shotBox)
   }
   if ((!bare || shots.length) && needFrames) {
-    pushGroup('group-frames', '首尾帧', 'frames', frameBox)
+    pushGroup('group-frames', '시작·끝 프레임', 'frames', frameBox)
   }
   if (!bare || shots.length) {
-    pushGroup('group-videos', '分镜视频', 'video', vidBox)
+    pushGroup('group-videos', '샷 영상', 'video', vidBox)
   }
   if (!bare) {
-    pushGroup('group-audio', '口播', 'audio', audBox)
-    pushGroup('group-export', '合成视频', 'export', expBox)
+    pushGroup('group-audio', '내레이션', 'audio', audBox)
+    pushGroup('group-export', '영상 합성', 'export', expBox)
   }
 
   function attach(groupId: string, node: CanvasNode) {
@@ -339,7 +339,7 @@ export function rebuildCanvasGraph(project: Project, preservePositions = true): 
       return
     }
     node.parentGroupId = groupId
-    // 换组后不能沿用旧组里的相对坐标，否则会落到框外（例如从分镜第 2 列迁到分镜视频）
+    // 换组后不能沿用旧组里的相对坐标，否则会落到框外（例如从分镜第 2 列迁到샷 영상）
     node.position = sameParent ? pos(prev, node.id, node.position) : node.position
     nodes.push(node)
     const g = groups.find((x) => x.id === groupId)
@@ -420,7 +420,7 @@ export function rebuildCanvasGraph(project: Project, preservePositions = true): 
       prevVid?.data.videoStillMode === 'storyboard'
         ? prevVid.data.videoStillMode
         : stillModeForVideoModel(model, activeVideoProfile())
-    // 首尾帧镜头不铺关键帧节点；但这镜如果已经画过关键帧/看板，保留节点不删图
+    // 시작·끝 프레임镜头不铺关键帧节点；但这镜如果已经画过关键帧/看板，保留节点不删图
     const keepExistingStill = Boolean(shot.imageAssetId || shot.boardAssetId)
     const stillType =
       shotUsesFrames(shot, project) && !keepExistingStill ? null : stillTypeForMode(resolvedStill)
@@ -484,7 +484,7 @@ export function rebuildCanvasGraph(project: Project, preservePositions = true): 
         position: cell(i, 0, AUDIO_NODE_H),
         data: {
           shotId: shot.id,
-          label: needsExternalTts(shot, project) ? '后期 TTS' : effectiveShotAudioMode(shot).startsWith('h3-') ? 'H3 人声' : '无口播'
+          label: needsExternalTts(shot, project) ? '후반 TTS' : effectiveShotAudioMode(shot).startsWith('h3-') ? 'H3 음성' : '내레이션 없음'
         },
         status: persistStatus(
           prev.get(audId)?.status,
@@ -507,7 +507,7 @@ export function rebuildCanvasGraph(project: Project, preservePositions = true): 
         sourceHandle: 'out',
         targetHandle: stillType ? (idx === 0 ? 'char1' : 'char2') : 'in'
       })
-      // 首尾帧也要拿同一批人物去合成，所以人物节点同时连到帧节点
+      // 시작·끝 프레임也要拿同一批人物去合成，所以人物节点同时连到帧节点
       if (frameId) {
         edges.push({
           id: `e-${src}-${frameId}-${idx}`,
@@ -579,7 +579,7 @@ export function rebuildCanvasGraph(project: Project, preservePositions = true): 
       id: 'export',
       type: 'export',
       position: cell(0, 0, shotH),
-      data: { label: '合成视频' },
+      data: { label: '영상 합성' },
       status: persistStatus(prev.get('export')?.status, hasFinal),
       parentGroupId: 'group-export'
     })
@@ -587,7 +587,7 @@ export function rebuildCanvasGraph(project: Project, preservePositions = true): 
       id: 'final',
       type: 'final',
       position: cell(0, 1, shotH),
-      data: { label: '视频预览' },
+      data: { label: '영상 미리보기' },
       status: persistStatus(prev.get('final')?.status, hasFinal),
       parentGroupId: 'group-export'
     })
