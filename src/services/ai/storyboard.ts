@@ -631,11 +631,11 @@ async function repairStoryboardOnce(
     messages: [
       {
         role: 'system',
-          content: `${importedDirectorPrefix()}你是短视频总编审。上一稿验收未通过，现在把 JSON 打回来重新提炼，必须消掉下列问题后再交稿。${durationBlock}不新增用户没说的产品、人物、数字或事实；只补用户本次内容边界内已经出现或明确蕴含的事件过程，禁止续写边界之外的后果。\n${extractHint}\n${NARRATIVE_CONTINUITY_RULES}\n${SPEAKER_STAGING_RULES}\n如果问题指出重大事件被压扁或相邻镜头断层，可以拆分、插入或重排断层附近的镜头，补足本集边界内的可见过程与反应；只局部修相关段落，其他合格镜头保持原意。若用户指定停在悬念点，就停在那里，不得为了闭环继续讲下一步。每个新增镜头也必须写全 continuity，格式为“承接上一镜的明确末态 → 本镜可见变化 → 留给下一镜的明确末态”。\n每镜 title 使用不同的 3-8 字内容标题，禁止统一写“镜头”。把用户原文按语义段落分配进 voiceover，默认 audioMode=h3-dialogue；只有原文明说旁白时才用 h3-voiceover。不要机械地一镜只放一句：同一人物、同一表达意图的连续 2-4 个短句优先合在一个 7-10 秒镜头里，短促反应或转场才保留一句；总字数仍不得超过 duration*4。voiceover 保留“人物名：台词”便于识别说话人，真正送入 H3 时会自动去掉人物名前缀。\n说话镜头先判断动作、空间关系、环境信息和情绪节奏，再选景别。表情是叙事重点且不需交代环境时可以收近；需要保留递物、争执、问答、人物距离、环境压力或集体反应时，应使用合适的中景、双人或多人同框。特写只是可选倾向，禁止把每个说话镜头机械切成特写；但要写清谁在说、其他人如何反应，不能所有人同时张嘴。\nvisualPrompt 用中文描述可见静帧（场景、人物衣着、光源），这是给配图用的。\n${videoPerformanceSpec(getVideoPromptStyle())}\n禁止把 visualPrompt 翻译成英文，禁止两段写成一样。h3Aesthetic 用英文写全片材质、灯光、色彩和摄影质感。不得堆标签。\n只输出完整合法 JSON。`
+          content: `${importedDirectorPrefix()}당신은 숏폼 영상의 책임 편집자입니다. 이전 초안이 검수를 통과하지 못했습니다. JSON을 다시 추출하고 아래 문제를 모두 해결한 뒤 제출하세요.${durationBlock}사용자가 언급하지 않은 제품, 인물, 숫자나 사실을 추가하지 마세요. 요청 범위 안에서 이미 등장하거나 분명히 암시된 사건의 과정만 보완하세요. 범위 밖의 결과를 이어 쓰지 마세요.\n${extractHint}\n${NARRATIVE_CONTINUITY_RULES}\n${SPEAKER_STAGING_RULES}\n주요 사건의 과정이 누락됐거나 앞뒤 샷이 끊기는 경우 해당 구간의 샷을 나누거나 삽입하거나 재배치할 수 있습니다. 이번 회차 범위 안에서 보이는 과정과 반응을 보완하세요. 관련 부분만 수정하고 검수를 통과한 샷은 원래 의미를 유지하세요. 사용자가 긴장을 남기는 지점에서 멈추라고 하면 거기서 끝내세요. 완결을 만들려고 이후 사건을 쓰지 마세요. 새 샷마다 continuity를 ‘이전 샷의 분명한 끝 상태를 이어받음 → 현재 샷에서 보이는 변화 → 다음 샷으로 이어지는 분명한 끝 상태’ 형식으로 완전하게 작성하세요.\n샷마다 내용을 담은 서로 다른 3–8자의 title을 쓰세요. 모두 ‘샷’으로 쓰지 마세요. 사용자 원문을 의미 단위로 voiceover에 배분하고 기본 audioMode는 h3-dialogue로 설정하세요. 원문에 내레이션이라고 명시된 경우에만 h3-voiceover를 쓰세요. 샷마다 대사 한 마디를 기계적으로 배정하지 마세요. 같은 인물이 같은 의도로 이어 말하는 짧은 대사 2–4개는 7–10초 샷 하나에 우선 합치고 짧은 반응과 전환에는 한 마디만 둡니다. 전체 글자 수는 duration*4를 넘지 마세요. 화자를 식별하도록 voiceover의 ‘캐릭터 이름：대사’ 형식을 유지하세요. H3로 전송할 때 이름 접두사는 자동으로 제거됩니다.\n대사가 있는 샷의 화면 크기는 동작, 공간 관계, 환경 정보, 감정의 리듬을 먼저 따져 정하세요. 표정이 이야기의 핵심이고 환경을 보여 줄 필요가 없으면 가까이 잡을 수 있습니다. 물건 건네기, 다툼, 질문과 답변, 인물 간 거리, 환경의 압박이나 집단 반응이 중요하면 중경 또는 두 사람이나 여러 사람이 보이는 구도를 사용하세요. 모든 발화를 클로즈업으로 처리하지 마세요. 화자와 다른 사람의 반응을 명확히 쓰고 모두 동시에 입을 열지 않게 하세요.\nvisualPrompt는 샷 이미지 생성에 사용할 중국어 정지 화면 묘사입니다. 장면, 캐릭터 의상, 광원 등 화면에서 보이는 내용을 쓰세요.\n${videoPerformanceSpec(getVideoPromptStyle())}\nvisualPrompt를 영어로 번역하거나 두 프롬프트를 똑같이 쓰지 마세요. h3Aesthetic에는 전체 영상의 재질, 조명, 색, 촬영 질감을 영어로 쓰고 태그만 나열하지 마세요. 제목과 사용자용 설명은 한국어로 쓰세요.\n완전하고 유효한 JSON만 출력하세요.`
       },
       {
         role: 'user',
-        content: `用户原文 / 剧本：\n${input.content}\n\n主题：${input.topic || '（未填）'}\n\n验收未通过（必须全部修掉）：\n- ${issues.join('\n- ')}\n\n待修 JSON：\n${JSON.stringify(parsed)}`
+        content: `사용자 원문 또는 대본\n${input.content}\n\n主题：${input.topic || '（未填）'}\n\n검수를 통과하지 못한 항목(모두 수정)\n- ${issues.join('\n- ')}\n\n수정할 JSON\n${JSON.stringify(parsed)}`
       }
     ],
     model,
@@ -1297,15 +1297,15 @@ JSON 객체 하나만 출력하세요. {"title":"3-8자","purpose":"钩子/说�
           role: 'user',
           content: `已有人物：${subjectNames.join('、') || '（无）'}
 已有地点：${sceneNames.join('、') || '（无）'}
-${prev ? `上一镜：${formatOutlineNote(prev, index - 1)}` : '上一镜：无（本镜是开场）'}
+${prev ? `이전 샷 ${formatOutlineNote(prev, index - 1)}` : '이전 샷 없음(현재 샷이 시작)'}
 
-本镜场记：
+현재 샷 현장 기록
 ${formatOutlineNote(outline, index)}
 
-${next ? `下一镜：${formatOutlineNote(next, index + 1)}` : '下一镜：无（本镜是收尾）'}
-${extras?.directives ? `\n本章约束：\n${extras.directives}` : ''}
-${extras?.sceneSlice ? `\n本场剧本原文：\n${extras.sceneSlice}` : ''}
-只扩这一镜。`
+${next ? `다음 샷 ${formatOutlineNote(next, index + 1)}` : '다음 샷 없음(현재 샷이 마지막)'}
+${extras?.directives ? `\n챕터 제약\n${extras.directives}` : ''}
+${extras?.sceneSlice ? `\n이 장면의 대본 원문\n${extras.sceneSlice}` : ''}
+이 샷만 확장하세요.`
         }
       ],
       model,
@@ -1357,16 +1357,16 @@ async function realStoryboard(
   let productNote =
     input.productImages && input.productImages.length > 0
       ? `
-【参考图（已附带 ${input.productImages.length} 张）】
-先看图再写分镜：
-- 图里有人/动物/吉祥物，列为 subjects，外貌按图里真实样子写，fromReference=true，别另造一张脸
-- 图里是产品，列为 kind=other，按真实产品写
-- 后面每一镜的人都要和 subjects 同一套衣服、发型、年龄
-- 产品/主角每镜都要让人看清`
+【첨부된 참조 이미지 ${input.productImages.length}장】
+이미지를 먼저 살핀 뒤 스토리보드를 작성하세요.
+- 이미지에 인물, 동물, 마스코트가 있으면 subjects에 넣으세요. 이미지에 보이는 외모를 그대로 쓰고 fromReference=true로 설정하세요. 새 얼굴을 지어내지 마세요.
+- 이미지에 제품이 있으면 kind=other로 분류하고 실제 제품에 맞춰 작성하세요.
+- 이후 모든 샷에서 subjects의 의상, 헤어스타일, 나이를 유지하세요.
+- 각 샷에서 제품이나 주인공이 잘 보이게 하세요.`
       : `
-【没有参考图】
-先从文案里列出所有会在画面中出现的人/动物（subjects）和地点（scenes）。每个有名字、有台词或有动作的人都必须单独列一个 subject，不能把配角合并成一个“主角”。
-同一人全片同一套外貌：名字、年龄、发型、衣服、配饰不要变着写。`
+【참조 이미지 없음】
+먼저 원고에서 화면에 등장할 인물과 동물을 subjects에, 장소를 scenes에 정리하세요. 이름이 있거나 대사 또는 동작이 있는 인물마다 별도 subject를 만들고 조연을 한 명의 ‘주인공’으로 합치지 마세요.
+같은 인물은 영상 전체에서 외모를 유지합니다. 이름, 나이, 헤어스타일, 의상, 액세서리를 바꾸지 마세요.`
 
   if (input.productImages?.length) {
     log(`→ 调用视觉工具分析 ${input.productImages.length} 张参考图`)
@@ -1378,12 +1378,12 @@ async function realStoryboard(
       })),
       {
         type: 'text',
-        text: `你只负责看图，不负责写剧本。逐张识别并用简体中文给出：
-1. 人物/动物/吉祥物的数量、年龄段、脸型、发型、服装、配饰；
-2. 产品的品类、外观、颜色、可见文字（看不清就写“不可辨认”，严禁猜测）；
-3. 场景、构图与光线；
-4. 跨镜头必须保持不变的视觉锚点。
-只陈述画面里可见的事实，不补品牌、参数、价格、功效或人物关系。`
+        text: `이미지 분석만 담당합니다. 대본을 쓰지 마세요. 각 이미지를 식별해 아래 항목을 한국어로 설명하세요.
+1. 인물, 동물, 마스코트의 수, 연령대, 얼굴형, 헤어스타일, 의상과 액세서리.
+2. 제품 유형, 외형, 색, 보이는 문구. 분명하지 않으면 ‘식별 불가’로 표시하고 추측하지 마세요.
+3. 장면, 구도, 조명.
+4. 샷 사이에서도 유지해야 하는 시각적 기준점.
+화면에 보이는 사실만 쓰고 브랜드, 제품 사양, 가격, 효능 또는 인물 관계를 추가하지 마세요.`
       }
     ]
     const visual = await callLLM({
@@ -1394,7 +1394,7 @@ async function realStoryboard(
       signal: input.signal,
       timeoutMs: 60_000
     })
-    productNote += `\n\n【视觉工具识别结果（只作事实依据）】\n${visual.content.slice(0, 8_000)}`
+    productNote += `\n\n【비전 분석 결과(사실을 확인하는 근거로만 사용)】\n${visual.content.slice(0, 8_000)}`
   }
 
   const stylePriority = buildStylePriorityBlock(input)
@@ -1453,7 +1453,7 @@ async function realStoryboard(
         } catch {
           onProgress?.(`${label}未收到 JSON，正在补要一次…`)
           const salvage = await ask(
-            '上一轮只写了思考、没有 JSON。现在立刻只输出 JSON 对象，不要任何解释。'
+            '이전 응답에는 사고 과정만 있고 JSON이 없었습니다. 이번에는 설명 없이 JSON 객체만 출력하세요.'
           )
           raw = parseJsonRobust(salvage.content)
           if (validate && !validate(raw)) {
@@ -1465,7 +1465,7 @@ async function realStoryboard(
         if (validate && !validate(raw)) {
           onProgress?.(`${label} JSON 结构不完整，正在自动修复一次…`)
           const repaired = await ask(
-            repairInstruction || `上一轮 JSON 结构错误。请严格按系统要求重新输出完整的 ${label} JSON。`
+            repairInstruction || `이전 응답의 JSON 구조가 잘못됐습니다. 시스템 요구사항에 따라 완전한 ${label} JSON을 다시 출력하세요.`
           )
           raw = parseJsonRobust(repaired.content)
           if (!validate(raw)) throw new Error(`${label} JSON을 복구했지만 필수 데이터 배열이 여전히 없습니다.`)
@@ -1503,7 +1503,7 @@ JSON만 출력하세요. {"aesthetic":"영상 전체 분위기","h3Aesthetic":"E
         try {
           const part = await runPart(
             '道具',
-            '你只提炼成片里会反复入镜的同一件道具。不要人物，不要地点，不要把衣服、鞋、发型当道具。只有被寻找、交接、反复特写的独立物件才算，例如黑领带、零食罐、同一把钥匙。name 用剧本短名，2到8个字。description 只写形状、材质、颜色、新旧和辨识点，不写房间。只输出 JSON：{"props":[{"name":"黑领带","description":"窄版黑色丝绸领带，尖端有细金属夹"}]}。没有就输出 {"props":[]}。',
+            '영상에 반복해서 등장하는 동일한 소품만 추출하세요. 인물, 장소, 옷, 신발과 헤어스타일은 제외하세요. 검은 넥타이, 간식 통, 같은 열쇠처럼 찾거나 건네거나 여러 번 클로즈업하는 독립된 물건만 포함하세요. name에는 대본에서 사용하는 2–8자의 짧은 이름을 쓰세요. description에는 모양, 재질, 색, 닳은 상태와 식별 특징만 쓰고 방은 묘사하지 마세요. JSON만 출력하세요. {"props":[{"name":"검은 넥타이","description":"폭이 좁은 검은 실크 넥타이. 끝에 가는 금속 클립이 달려 있음"}]}. 소품이 없으면 {"props":[]}를 출력하세요.',
             1800,
             PLAY_LLM_TIMEOUT_MS,
             (raw) => Array.isArray(raw?.props)
@@ -1574,7 +1574,7 @@ JSON만 출력하세요. {"aesthetic":"영상 전체 분위기","h3Aesthetic":"E
         const sceneUser = `主题：${input.topic || '（未填）'}
 比例：${input.aspectRatio}
 
-只从下面的地点与场次提炼场景，不要另造地点。同一地点只建一条。
+아래 장소와 개별 장면에서만 장면을 추출하세요. 새 장소를 만들지 마세요. 같은 장소는 한 번만 기록하세요.
 ${extractPlayForSceneStage(play)}`
         try {
           scenePart = await runPart(
@@ -1583,7 +1583,7 @@ ${extractPlayForSceneStage(play)}`
             8000,
             PLAY_LLM_TIMEOUT_MS,
             (raw) => extractSceneRows(raw).length > 0,
-            '上一轮虽然是 JSON，但 scenes 数组缺失或放错了层级。立刻只输出一个对象，顶层必须有非空 scenes 数组。不要套 data、result，不要写思考。',
+            '이전 응답은 JSON이었지만 scenes 배열이 없거나 잘못된 위치에 있었습니다. 최상위에 비어 있지 않은 scenes 배열이 있는 객체 하나만 반환하세요. data나 result로 감싸거나 사고 과정을 쓰지 마세요.',
             sceneUser
           )
         } catch (error) {
@@ -1854,7 +1854,7 @@ ${extractPlayForSceneStage(play)}`
     : ''
 
   const userText = extractMode
-    ? `${verbatimSplitRule(input.verbatim)}下面是已经写好的完整剧本。请**忠实提炼**成画布节点 JSON（subjects / scenes / shots），不要重写故事、不要另起炉灶。${budgetLine}
+    ? `${verbatimSplitRule(input.verbatim)}아래에 완성된 대본이 있습니다. **원문에 충실하게** 캔버스 노드 JSON(subjects / scenes / shots)을 추출하세요. 이야기를 고치거나 새로 만들지 마세요.${budgetLine}
 
 전체 대본
 """
@@ -1869,19 +1869,19 @@ ${input.keywords?.length ? `关键词：${input.keywords.join('、')}` : ''}
 ${stylePriority}
 ${productNote}
 
-要求：人物/场景/分场与剧本一一对应；剧本对白原词必须进入对应镜头 voiceover（写成「人物名：台词」），禁止改成成年旁白，禁止清空成默片；同一人物同一意图的连续 2-4 个短句尽量合在一镜，不要机械拆成“一镜一句”；visualPrompt 按剧本「画面」写成静帧可画描述；videoPrompt 从0秒到镜头结束按剧情拍点分2–5段，逐段写谁从什么状态开始、看见什么、做什么、谁说原词、其他人怎样占位和反应、情绪怎样变化、镜头怎样运动并落下。不要机械等分，不要套「禁止呆脸空眼」这种话。说话时是否收近服从画面感、动作、空间关系与情绪节奏：需要强调表情时可用近景/特写，需要保留关系或环境时继续用中景、双人或多人同框；不要把每个说话镜头机械切成特写。禁止抄 visualPrompt。直接输出 JSON。`
-    : `按编剧手册把这段文案拆成能拍的分镜。口播要能念，画面用中文白话写给摄像，别写英文提示词沙拉。${budgetLine}
+캐릭터, 장면과 개별 장면은 대본과 일치시켜야 합니다. 원문 대사는 해당 샷의 voiceover에 ‘캐릭터 이름：대사’로 넣으세요. 성인이 된 인물의 내레이션으로 바꾸거나 대사를 비우지 마세요. 같은 인물이 같은 의도로 이어 말하는 짧은 대사 2–4개는 가능한 한 한 샷에 넣고 대사마다 기계적으로 샷을 나누지 마세요. visualPrompt는 대본의 화면을 바탕으로 그릴 수 있는 중국어 정지 화면 프롬프트로 쓰세요. videoPrompt는 중국어로 0초부터 샷이 끝날 때까지 실제 박자에 따라 2–5구간으로 나누세요. 구간마다 인물의 시작 상태, 보는 대상, 동작, 화자와 대사 원문, 다른 인물의 위치와 반응, 감정 변화, 카메라 움직임과 도착점을 쓰세요. 기계적으로 등분하거나 ‘멍한 표정을 피한다’처럼 상투적인 문구를 넣지 마세요. 대사 중 화면을 좁힐지는 화면의 느낌, 동작, 공간 관계, 감정 리듬에 맞춰 정하세요. 표정을 강조할 때는 근경이나 클로즈업을, 관계나 환경을 유지할 때는 중경이나 두 사람 또는 여러 사람이 보이는 구도를 사용하세요. 모든 대사를 클로즈업으로 처리하거나 visualPrompt를 복사하지 마세요. JSON을 바로 출력하세요.`
+    : `시나리오 작성 지침에 따라 원고를 촬영할 수 있는 스토리보드로 나누세요. 내레이션은 말할 수 있게 쓰고 모델용 화면 묘사는 촬영팀이 이해할 수 있는 쉬운 중국어로 쓰세요. 영어 키워드를 무작위로 나열하지 마세요.${budgetLine}
 
-事实保真：不得新增原文没有的价格、参数、功效、人物关系、品牌承诺或剧情结论。原文含数字、专有名词时必须原样保留。信息不够就用画面承接，不要编事实填空。
+원문의 사실을 유지하세요. 원문에 없는 가격, 제품 사양, 효능, 인물 관계, 브랜드 약속이나 결말을 추가하지 마세요. 숫자와 고유명사는 원문 그대로 유지하세요. 정보가 부족하면 화면으로 연결하고 사실을 만들어 채우지 마세요.
 
-文案主题：
+원고 주제
 """
 ${input.topic || '（未填）'}
 """
 
-文案内容：
+원고 내용
 """
-${input.content?.trim() || '（没写正文。有参考图就按图编口播和镜头。）'}
+${input.content?.trim() || '（본문 없음. 참조 이미지가 있다면 이미지에 맞춰 내레이션과 샷을 작성）'}
 """
 ${input.keywords?.length ? `关键词：${input.keywords.join('、')}` : ''}
 
@@ -1891,16 +1891,16 @@ ${input.keywords?.length ? `关键词：${input.keywords.join('、')}` : ''}
 ${stylePriority}
 ${productNote}
 
-顺序：先锁人物和地点，再拆镜头。每镜 visualPrompt 用镜头语言写静帧里能看见的东西；videoPrompt 写这一镜演什么，不要写成配图词。
+먼저 캐릭터와 장소를 고정한 뒤 샷을 나누세요. 샷마다 visualPrompt는 정지 화면에서 보이는 것을 샷 연출에 맞춰 쓰고, videoPrompt는 해당 샷에서 연기할 동작을 쓰세요. 샷 이미지 프롬프트를 반복하지 마세요.
 ${
   hasUserStyle
     ? `画风「${mediumPhrase}」在画面描述里点一次，写进桥、水、衣这些实物上。禁止第一句只写画风、结尾再抄一段技法套话。禁止只写「两人相对拱手」这种站位摘要。`
     : `主题没提画风时，画面里带上「${styleCn}」，同样要写清环境实物与动态。`
 }
-直接输出 JSON，不要解释。`
+설명 없이 JSON만 출력하세요.`
 
   const extractSystemExtra = extractMode
-    ? `\n【本轮任务】输入已是完整剧本。只做提炼与落库字段补全，禁止改口播原意，禁止合并剧本里已分开的人物。每个 subject 必须在至少一镜的 subjectIds 和 visualPrompt 里出场点名，不能只建档不入镜。`
+    ? `\n【이번 작업】입력은 완성된 대본입니다. 추출하고 저장에 필요한 필드만 보완하세요. 내레이션 원문의 의미를 바꾸거나 대본에서 구분한 인물을 합치지 마세요. 각 subject는 적어도 한 샷의 subjectIds에 연결하고 visualPrompt에서 이름을 언급해 화면에 등장시키세요.`
     : ''
 
   const messages: LLMMessage[] = [
