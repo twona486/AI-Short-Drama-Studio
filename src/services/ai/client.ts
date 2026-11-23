@@ -1,5 +1,5 @@
 /**
- * AI 服务通用 client
+ * 공통 AI 서비스 클라이언트
  */
 
 export type { AIMode } from '@/stores/settings'
@@ -23,12 +23,12 @@ export interface LLMMessage {
 export interface LLMRequest {
   messages: LLMMessage[]
   provider?: 'llm' | 'vision'
-  /** 覆盖设置页模型，例如视频复刻用 qwen3.8-max */
+  /** 설정의 모델을 재정의한다. 예를 들어 영상 재현은 qwen3.8-max를 사용할 수 있다. */
   model?: string
   temperature?: number
   maxTokens?: number
   jsonMode?: boolean
-  /** 豆包会先思考再回答。只要正文时关掉，直接返回文本。 */
+  /** Doubao 응답에서 본문만 필요하면 추론을 끈다. */
   disableThinking?: boolean
   signal?: AbortSignal
   timeoutMs?: number
@@ -87,7 +87,7 @@ function looksLikeShotList(text: string) {
   return /镜头\s*\d+\s*[：:]/.test(text) && /画面[：:]/.test(text)
 }
 
-/** 推理模型常把正文放进 reasoning_content；必须优先用带 JSON 的字段，不能把思考过程当成答案。 */
+/** reasoning_content에도 본문이 들어갈 수 있으므로 JSON이 있는 필드를 우선한다. */
 function pickMessageContent(message: any): string {
   const content = flattenText(message?.content).trim()
   const reasoning = flattenText(
@@ -155,7 +155,7 @@ type LlmHttpResult = {
   json: () => Promise<any>
 }
 
-/** 把图片压成 JPEG data URL，避免多模态请求过大（最多约 1280 边） */
+/** 멀티모달 요청 크기를 제한하도록 최대 약 1280픽셀 JPEG 데이터 URL로 압축한다. */
 export async function blobToChatImageUrl(
   blob: Blob,
   maxEdge = 1280,
@@ -175,7 +175,7 @@ export async function blobToChatImageUrl(
   return canvas.toDataURL('image/jpeg', quality)
 }
 
-/** LLM 通用调用（OpenAI 兼容 /chat/completions） */
+/** OpenAI 호환 /chat/completions 호출 */
 export async function callLLM(req: LLMRequest): Promise<LLMResponse> {
   if (getAIMode() === 'mock') {
     return mockLLM(req)
