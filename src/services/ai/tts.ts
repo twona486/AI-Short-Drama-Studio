@@ -169,7 +169,7 @@ function languageHint(language: string): string | undefined {
 
 async function downloadAudioUrl(audioUrl: string, signal?: AbortSignal): Promise<Blob> {
   const aResp = await fetch(audioUrl, { signal })
-  if (!aResp.ok) throw new Error(`[TTS] 下载音频失败 ${aResp.status}`)
+  if (!aResp.ok) throw new Error(`[TTS] 오디오 다운로드에 실패했습니다. ${aResp.status}`)
   const buf = await aResp.arrayBuffer()
   const ct = (aResp.headers.get('content-type') || '').toLowerCase()
   const mime =
@@ -241,7 +241,7 @@ async function speechSynthesizer(
   }
   const audioUrl = audio?.url
   if (!audioUrl) {
-    throw new Error(`[TTS] SpeechSynthesizer 无音频：${JSON.stringify(data).slice(0, 240)}`)
+    throw new Error(`[TTS] SpeechSynthesizer 응답에 오디오가 없습니다. ${JSON.stringify(data).slice(0, 240)}`)
   }
   return downloadAudioUrl(audioUrl, signal)
 }
@@ -287,7 +287,7 @@ async function nativeQwen3Speech(
   if (audio?.data) return blobFromBase64(String(audio.data), 'audio/wav')
   const audioUrl = audio?.url
   if (!audioUrl) {
-    throw new Error(`[TTS] native 无音频：${JSON.stringify(data).slice(0, 240)}`)
+    throw new Error(`[TTS] 네이티브 TTS 응답에 오디오가 없습니다. ${JSON.stringify(data).slice(0, 240)}`)
   }
   return downloadAudioUrl(audioUrl, signal)
 }
@@ -344,7 +344,7 @@ function mockSpeechWav(text: string): Blob {
 
 export async function generateSpeech(input: TTSInput): Promise<TTSOutput> {
   const text = normalizeForSpeech(clipText(spokenTextOnly(input.text || '')))
-  if (!text) throw new Error('没有口播文案，无法配音')
+  if (!text) throw new Error('내레이션 원고가 없어 더빙할 수 없습니다.')
 
   const cfg = ttsConfig()
   const voice = compatibleVoice(cfg.model, input.voice || cfg.voice)
@@ -400,5 +400,5 @@ export async function generateSpeech(input: TTSInput): Promise<TTSOutput> {
     }
   }
 
-  throw new Error(errors.join('\n') || 'TTS 失败')
+  throw new Error(errors.join('\n') || 'TTS에 실패했습니다.')
 }
