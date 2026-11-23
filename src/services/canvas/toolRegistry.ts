@@ -66,11 +66,11 @@ export interface AgentToolAction {
   sceneId?: string
   shotId?: string
   nodeId?: string
-  /** 连线 / 派生新节点的上游节点 id */
+  /** 연결하거나 새 노드를 파생할 상위 노드 ID */
   sourceNodeId?: string
-  /** 连线的下游节点 id */
+  /** 연결할 하위 노드 ID */
   targetNodeId?: string
-  /** 节点显示名（重命名用） */
+  /** 노드 이름을 변경할 때 사용할 표시 이름 */
   nodeLabel?: string
   visualPrompt?: string
   imagePrompt?: string
@@ -244,8 +244,8 @@ export function preflightRegisteredTool(raw: unknown): ToolPreflight {
           actions: [{ tool: 'generate_shot_image', shotId: shot.id }]
         }
       }
-      // 首尾帧模式：视频吃的就是这两张帧，缺了必须先画，否则这一镜等于没走首尾帧。
-      // 只在两张都缺时补一次——画过一半或用户自己指定过就不再拦，避免补帧失败反复重来。
+      // 시작·끝 프레임 모드에서는 영상에 입력할 프레임을 먼저 만든다.
+      // 두 프레임이 모두 없을 때 한 번만 생성한다. 기존 프레임이나 수동 선택은 유지한다.
       if (fl2vaShot && !shot.firstFrameAssetId && !shot.lastFrameAssetId) {
         return {
           state: 'repair',
@@ -425,7 +425,7 @@ function progress(ctx: ToolExecutionContext) {
   }
 }
 
-/** 把两个已有节点连起来（source → target），必要时把上游的产出作为参考图继承给下游 */
+/** 기존 두 노드를 연결하고 필요한 경우 상위 노드 결과를 하위 노드의 참조로 전달한다. */
 function linkCanvasNodes(sourceId: string, targetId: string): string {
   const project = useProjectStore()
   const canvas = project.current?.canvas
@@ -455,7 +455,7 @@ function linkCanvasNodes(sourceId: string, targetId: string): string {
     : `${sourceId} → ${targetId} 노드를 연결했습니다. ${refNote}`
 }
 
-/** 上游节点右侧的空位，已有几个下游就往下错开 */
+/** 상위 노드 오른쪽에서 기존 하위 노드의 수만큼 위치를 아래로 옮긴다. */
 function spotNextToSource(sourceId: string, fallbackX: number, fallbackY: number, count: number) {
   const canvas = useProjectStore().current?.canvas
   const source = canvas?.nodes.find((n) => n.id === sourceId)
@@ -737,7 +737,7 @@ const definitions: ToolDefinition[] = [
         .filter((s) => !s.firstFrameAssetId || !s.lastFrameAssetId)
         .sort((a, b) => a.index - b.index)
       if (!targets.length) return '모든 샷에 시작·끝 프레임이 있습니다.'
-      // 这一镜起始帧要接着上一镜结束帧，必须按镜号串行
+      // 이전 샷의 끝 프레임을 쓰므로 샷 번호순으로 실행한다.
       for (const shot of targets) {
         await generateShotFramePair(shot, (msg) => ctx.onLog?.(msg), ctx.signal)
       }
