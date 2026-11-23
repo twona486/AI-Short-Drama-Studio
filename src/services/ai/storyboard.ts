@@ -621,8 +621,8 @@ async function repairStoryboardOnce(
 ): Promise<StoryboardResult> {
   const extractHint =
     input.mode === 'extract'
-      ? '입력은 완성 대본이므로 추출 결과만 수정하세요. 내레이션의 의미를 바꾸거나 새 이야기를 만들지 마세요. 캐릭터 절의 각 ### 항목을 기록하세요. ‘형’처럼 기존 캐릭터를 부르는 말이면 해당 인물의 name/role/description에 넣고, 캐릭터 목록에 별도로 있는 인물은 개별 기록을 만드세요. 사망한 인물은 유품, 초상화 또는 회상으로 보여 줄 수 있습니다. 살아 있는 상대역은 대치나 눈에 보이는 압박을 담은 샷이 필요합니다. 기록한 인물마다 본인, 유품, 초상화 또는 눈에 보이는 압박으로 적어도 한 샷에 등장시켜 subjectIds에 연결하고 visualPrompt / videoPrompt에 이름을 쓰세요. 화면 중앙에 서지 않는다는 이유로 아버지, 형 또는 상대역을 목록에서 빼지 마세요. 캐릭터 카드를 만들고 스토리보드에서 행인이나 ‘어떤 남자’로 바꾸지 마세요.'
-      : '등장인물마다 subjects에 개별 기록을 만들고 한 명의 ‘주인공’으로 합치지 마세요.'
+      ? 'The input is a complete screenplay. Correct only the extraction. Do not change the meaning of narration or invent a new story. Record every ### entry in the Characters section. Include forms of address such as “older brother” in the existing character’s name, role, or description. Create separate records for characters listed separately. Show deceased characters through belongings, portraits, or flashbacks. Give each living antagonist a shot showing confrontation or visible pressure. Feature every recorded character in at least one shot in person, through belongings, in a portrait, or by showing the pressure they exert. Link the character through subjectIds and use their name in visualPrompt and videoPrompt. Do not omit the father, older brother, or counterpart just because they do not occupy the center of the frame. Make a character card for each and do not turn them into a passerby or “some man” in the storyboard.'
+      : 'Create an individual subjects record for every character. Do not compress them into a single “protagonist.”'
   const repairTargetSec =
     Number(input.targetDurationSec) || extractTargetDurationSec(input.topic, input.content)
   const repairShotCap = shotBudgetFromDuration(repairTargetSec, input.maxShotDuration)
@@ -2990,7 +2990,7 @@ async function fillPlayBibleIfThin(
         },
         {
           role: 'user',
-          content: `반드시 보완할 항목\n- ${gaps.join('\n- ')}\n\n사용자 요구사항\n${input.topic}\n${input.content}\n\n보완할 대본\n${draft.playMarkdown}`
+          content: `Required additions\n- ${gaps.join('\n- ')}\n\nUser requirements\n${input.topic}\n${input.content}\n\nScreenplay to complete\n${draft.playMarkdown}`
         }
       ],
       model,
@@ -3225,7 +3225,7 @@ function playScaleBrief(targetSec: number | undefined): string {
   const scenes = Math.max(2, Math.min(6, Math.round(target / 15)))
   const chars = Math.max(400, Math.round(target * 18))
   const lines = Math.max(4, Math.round(target / 5))
-  return `목표 영상 길이는 ${target}초입니다. 이 값을 기준으로 대본 분량을 반드시 정하세요. 완성 영상의 허용 범위는 ${target - DURATION_TOLERANCE_SEC}–${target + DURATION_TOLERANCE_SEC}초이며 범위를 벗어나면 요구사항을 충족하지 못합니다. ${target}초를 기준으로 장면은 최대 ${scenes}개, 캐릭터 소개와 환경 목록을 제외한 장면 본문은 ${chars}자 이내, 전체 대사는 ${lines}문장 이내로 쓰세요. 장면을 늘리기보다 짧고 밀도 있게 쓰세요. 장면이 하나 늘어날 때마다 이후 스토리보드가 샷 분량을 초과하고 완성 영상이 길어집니다.`
+  return `The target video length is ${target} seconds. Size the screenplay to fit that target. The finished video must run between ${target - DURATION_TOLERANCE_SEC} and ${target + DURATION_TOLERANCE_SEC} seconds. For ${target} seconds, use at most ${scenes} scenes, ${chars} characters across the scene text excluding the character introductions and setting list, and ${lines} sentences of dialogue in total. Keep scenes compact and dense. Each extra scene makes the later storyboard run over its shot budget and lengthens the finished video.`
 }
 
 async function realGeneratePlay(input: StoryboardInput): Promise<{ result: PlayDraftResult; model?: string }> {
