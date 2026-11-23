@@ -274,7 +274,7 @@ export async function providerHttp(
   if (preferProxy) {
     const api = desktop()
     if (typeof api.autodlFetch !== 'function') {
-      throw new Error('剧流 Studio를 완전히 종료하고 다시 시작하세요. 데스크톱 앱에 업데이트된 요청 경로가 필요합니다.')
+      throw new Error('AI Short Drama Studio를 완전히 종료하고 다시 시작하세요. 데스크톱 앱에 업데이트된 요청 경로가 필요합니다.')
     }
     const headers = init.headers || {}
     const auth =
@@ -573,7 +573,7 @@ export async function httpCustomMediaGenerate(opts: {
     const started = Date.now()
     const timeoutMs = kind === 'video' ? 15 * 60_000 : 6 * 60_000
     while (Date.now() - started < timeoutMs) {
-      if (opts.signal?.aborted) throw new Error('已取消')
+      if (opts.signal?.aborted) throw new DOMException('작업을 취소했어요.', 'AbortError')
       await new Promise((r) => setTimeout(r, 1500))
       const pollUrl = /^https?:\/\//i.test(pollTpl)
         ? pollTpl.replace(/\{id\}/g, encodeURIComponent(taskId))
@@ -920,7 +920,7 @@ export async function comfyPromptGenerate(opts: {
   const started = Date.now()
   const timeoutMs = opts.kind === 'video' ? 15 * 60_000 : 6 * 60_000
   while (Date.now() - started < timeoutMs) {
-    if (opts.signal?.aborted) throw new Error('已取消')
+    if (opts.signal?.aborted) throw new DOMException('작업을 취소했어요.', 'AbortError')
     await new Promise((r) => setTimeout(r, 1500))
     const pollUrl = joinUrl(base, pollPath.replace(/\{id\}/g, encodeURIComponent(promptId)))
     const poll = await providerHttp(pollUrl, {
