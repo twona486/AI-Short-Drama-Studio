@@ -76,70 +76,53 @@ export const VISUAL_STYLE_GUIDE: Record<
     sampleTail: string
   }
 > = {
-  cinematic: {
-    medium: '电影剧照 / 胶片摄影',
-    mustInclude:
-      '电影级调色、浅景深或景深层次、戏剧光比、镜头焦段感（如 35mm/50mm/85mm）、胶片颗粒或电影感对比、构图留白与引导线',
-    avoid: '禁止写成扁平插画、禁止二次元大眼睛、禁止卡通描边',
-    sampleTail:
-      '整体如院线电影剧照：青橙或暖冷对比调色，柔和胶片颗粒，高光克制，阴影通透，电影感构图。'
+  "cinematic": {
+    medium: "Film still / film photography",
+    mustInclude: "cinematic color grading, shallow or layered depth of field, dramatic lighting ratios, a clear lens perspective such as 35mm/50mm/85mm, film grain or cinematic contrast, negative space, and leading lines",
+    avoid: "Avoid flat illustration, oversized anime eyes, and cartoon outlines.",
+    sampleTail: "Use warm/cool or teal/orange contrast, soft film grain, controlled highlights, open shadows, and feature-film framing."
   },
-  anime: {
-    medium: '日系动画赛璐璐 / 剧场版动画帧',
-    mustInclude:
-      '清晰线稿或干净色块、赛璐璐上色、动画光影分阶、发丝与眼睛高光、二次元比例与表情、背景可略简化但空间清楚',
-    avoid: '禁止写成实拍照片、禁止真实皮肤毛孔、禁止油画笔触',
-    sampleTail:
-      '日系动画剧场版画风：干净线稿、赛璐璐上色、眼睛高光鲜明，背景有空气透视，整体明亮有动画感。'
+  "anime": {
+    medium: "Japanese cel animation / animated feature frame",
+    mustInclude: "clean line art or color shapes, cel shading, stepped lighting, highlights in hair and eyes, expressive anime proportions, and clear spatial relationships even in simplified backgrounds",
+    avoid: "Avoid live-action photography, visible skin pores, and oil brushwork.",
+    sampleTail: "Use clean line art, cel shading, visible eye highlights, and atmospheric perspective in a bright animated feature frame."
   },
-  photorealistic: {
-    medium: '商业摄影 / 纪实摄影',
-    mustInclude:
-      '真实材质与微细节（皮肤毛孔/织物纹理）、自然物理光、相机感（光圈景深、轻微镜头畸变可选）、可信的环境反射',
-    avoid: '禁止动漫脸、禁止明显笔触、禁止卡通描边',
-    sampleTail:
-      '超写实摄影质感：自然光与真实材质细节，浅景深，商业摄影级清晰度，无插画笔触。'
+  "photorealistic": {
+    medium: "Commercial photography / documentary photography",
+    mustInclude: "plausible materials and microtexture, such as pores and fabric weave, natural light, photographic depth of field, optional slight lens distortion, and credible reflections",
+    avoid: "Avoid anime faces, visible brushstrokes, and cartoon outlines.",
+    sampleTail: "Use natural light, realistic surface details, shallow depth of field, and commercial photographic sharpness without illustration strokes."
   },
-  '3d-render': {
-    medium: '三维渲染 / C4D·Blender·Octane',
-    mustInclude:
-      'PBR 材质、全局光照、柔和区域光或 HDRI、干净建模边缘、次表面散射（人物皮肤）、产品级高光反射',
-    avoid: '禁止手绘笔触、禁止像素块、禁止水墨晕染',
-    sampleTail:
-      '高质量三维渲染：PBR 材质、全局光照与柔和反射，建模干净，如 Octane/Blender 出品。'
+  "3d-render": {
+    medium: "3D render / C4D, Blender, or Octane",
+    mustInclude: "PBR materials, global illumination, soft area light or HDRI, clean modeled edges, skin subsurface scattering, and product-grade highlights",
+    avoid: "Avoid hand-painted brushwork, pixel blocks, and ink bleeding.",
+    sampleTail: "Use clean 3D models with PBR materials, global illumination, and soft reflections as in Octane or Blender."
   },
-  'oil-painting': {
-    medium: '古典油画',
-    mustInclude:
-      '可见笔触与厚涂、油画布纹理、古典光影（如伦勃朗光）、颜料层叠与色块混合、博物馆级构图',
-    avoid: '禁止数码锐利照片感、禁止赛璐璐平涂、禁止像素风',
-    sampleTail:
-      '古典油画质感：厚涂笔触、布面纹理、戏剧明暗，色彩沉稳如博物馆藏画。'
+  "oil-painting": {
+    medium: "Classical oil painting",
+    mustInclude: "visible strokes and impasto, canvas texture, classical chiaroscuro such as Rembrandt lighting, layered and mixed pigments, and museum-quality composition",
+    avoid: "Avoid digital photographic sharpness, flat cel shading, and pixel art.",
+    sampleTail: "Use impasto, canvas texture, dramatic light and dark, and restrained colors suited to a classical oil painting."
   },
-  watercolor: {
-    medium: '水彩画',
-    mustInclude:
-      '水彩晕染与水渍、纸纹透出、透明叠色、边缘偶尔渗化、留白呼吸感',
-    avoid: '禁止厚重油画堆砌、禁止超写实照片、禁止硬边缘矢量风',
-    sampleTail:
-      '水彩画风：透明叠色与自然晕染，纸纹隐现，边缘柔和渗化，清透抒情。'
+  "watercolor": {
+    medium: "Watercolor painting",
+    mustInclude: "pigment blooms and watermarks, visible paper grain, transparent layers, intermittent soft bleeding edges, and negative space",
+    avoid: "Avoid heavy oil impasto, hyperreal photography, and hard-edged vector shapes.",
+    sampleTail: "Use transparent washes with natural blooms, visible paper grain, soft bleeding edges, and a luminous, clear palette."
   },
-  'pixel-art': {
-    medium: '复古像素艺术',
-    mustInclude:
-      '明确像素格子、有限色板、无抗锯齿或受控抖动、16-bit/32-bit 游戏风、可读轮廓',
-    avoid: '禁止高清照片、禁止平滑矢量渐变、禁止写实毛孔',
-    sampleTail:
-      '复古像素画风：清晰像素格、有限色板、轻微抖动，如经典主机游戏画面。'
+  "pixel-art": {
+    medium: "Retro pixel art",
+    mustInclude: "visible pixel grids, a limited palette, no anti-aliasing or controlled dithering, 16-bit or 32-bit game aesthetics, and readable silhouettes",
+    avoid: "Avoid high-definition photography, smooth vector gradients, and realistic pores.",
+    sampleTail: "Use a clear pixel grid, a limited palette, and subtle dithering as in classic console games."
   },
-  'ink-wash': {
-    medium: '中国水墨 / 宣纸写意',
-    mustInclude:
-      '墨分五色（焦浓重淡清）、干湿飞白、中锋侧锋提按、大面积留白、宣纸纤维与水渍、写意人物衣纹或淡远山水',
-    avoid:
-      '禁止真人照片与皮肤毛孔、禁止摄影棚灰底三视图、禁止塑料三维、禁止赛璐璐平涂、禁止西方油画厚涂、禁止电影胶片调色套话',
-    sampleTail:
-      '中国水墨写意：宣纸上的笔墨，焦浓重淡清层次分明，飞白与留白得当，衣纹中锋勾勒，远景淡墨晕开，纸纹隐现。'
+  "ink-wash": {
+    medium: "Chinese ink wash / freehand ink on xuan paper",
+    mustInclude: "five ink tones from burnt black to pale wash, dry and wet strokes with flying white, centered and side brush techniques with pressure variation, ample negative space, xuan-paper fibers and watermarks, and freehand garment folds or distant landscapes",
+    avoid: "Avoid live-action photos and visible pores, gray studio character sheets, plastic 3D, flat cel shading, thick Western oil paint, and generic film color-grading language.",
+    sampleTail: "Use layered ink tones on xuan paper, controlled dry-brush texture and negative space, centered brush strokes for folds, and soft distant washes with visible paper grain."
   }
 }
 
@@ -337,12 +320,12 @@ export function mediumLockText(look: VisualLook): string {
   if (look.userNamed && look.matched) {
     const userBit =
       look.medium !== styleLabel(look.matched)
-        ? `必须按用户原词「${look.medium}」绘制。`
-        : `必须按「${styleLabel(look.matched)}」绘制。`
+        ? `Use the user's exact requested medium: ${look.medium}. `
+        : `Use ${VISUAL_STYLE_GUIDE[look.matched].medium}. `
     return `${userBit}${styleLockSuffix(look.matched)} ${professionalQualityLock(look.matched)}`
   }
   if (look.userNamed) {
-    return `必须按用户原词「${look.medium}」绘制，用该媒介自己的材料、技法和质感做到专业完成度。禁止改成用户没写的其他画风。`
+    return `Use the medium the user requested: ${look.medium}. Match its materials, techniques, and texture to production quality. Do not substitute a different style.`
   }
   return `${styleLockSuffix(look.style)} ${professionalQualityLock(look.style)}`
 }
@@ -355,21 +338,21 @@ export function promptHasTechnique(prompt: string, style: VisualStyle): boolean 
 export function professionalQualityLock(style: VisualStyle): string {
   const locks: Record<VisualStyle, string> = {
     'ink-wash':
-      '专业完成度：墨分五色（焦、浓、重、淡、清），笔锋有提按与飞白，宣纸纤维与水渍可见，构图大面积留白；禁止真人写真、禁止现代摄影棚、禁止光滑CG、禁止彩色厚涂油画。',
+      'Use five ink tones, varied brush pressure and flying white, visible xuan-paper fibers and watermarks, and broad negative space. Exclude live-action photography, modern studios, smooth CG, and colored oil impasto.',
     watercolor:
-      '专业完成度：透明叠色、纸纹与水渍自然，边缘渗化可控；禁止超写实照片，禁止厚重油画堆砌。',
+      'Use transparent layers, natural grain and watermarks, and controlled edge bleeding. Avoid photo realism and heavy oil impasto.',
     'oil-painting':
-      '专业完成度：可见厚涂笔触与布面纹理，古典明暗；禁止数码锐利照片感。',
+      'Use visible impasto and canvas grain, with classical chiaroscuro. Avoid digital photographic sharpness.',
     'pixel-art':
-      '专业完成度：清晰像素格、有限色板、轮廓可读；禁止高清照片平滑。',
+      'Use a clear pixel grid, limited palette, and readable silhouettes. Avoid smooth high-definition photo texture.',
     '3d-render':
-      '专业完成度：PBR 材质、全局光照、干净建模；禁止手绘涂抹。',
+      'Use PBR materials, global illumination, and clean models. Avoid hand-painted smears.',
     anime:
-      '专业完成度：干净线稿与赛璐璐分阶，眼睛高光明确；禁止真人皮肤毛孔。',
+      'Use clear line art, stepped cel shading, and distinct eye highlights. Avoid realistic skin pores.',
     photorealistic:
-      '专业完成度：真实材质与自然光，摄影级清晰；禁止插画笔触。',
+      'Use realistic materials, natural light, and photographic clarity. Avoid illustration brushwork.',
     cinematic:
-      '专业完成度：电影调色与光比，景深层次清楚；禁止扁平插画。'
+      'Use film color grading, intentional lighting contrast, and layered depth of field. Avoid flat illustration.'
   }
   return locks[style]
 }
@@ -379,24 +362,24 @@ export function buildStyleBriefForLLM(style: VisualStyle): string {
   const label = styleLabel(style)
   const g = VISUAL_STYLE_GUIDE[style]
   if (!g) {
-    return `用户选定画面风格：${style}。每镜 visualPrompt 必须明确写出该风格的媒介与技法。`
+    return `The user selected ${style}. State the medium and its techniques in each visualPrompt.`
   }
-  return `用户选定画面风格（必须严格遵守，不可换成别的画风）：
-- 枚举值：${style}
-- 中文名：${label}
-- 媒介：${g.medium}
-- 每镜 visualPrompt 必须写入：${g.mustInclude}
+  return `Follow the user's selected visual style. Do not substitute another style:
+- Enum: ${style}
+- Display name: ${label}
+- Medium: ${g.medium}
+- Include in each visualPrompt: ${g.mustInclude}
 - ${g.avoid}
-- 每镜结尾建议用类似句子锁风格：「${g.sampleTail}」
-- aesthetic / colorPalette / lightingNote 也必须服务该风格，不要写成通用「电影感」套话（除非用户选的就是 cinematic）`
+- End each shot with an appropriate style lock, for example: ${g.sampleTail}
+- Keep aesthetic, colorPalette, and lightingNote consistent with the selected style. Avoid generic cinematic wording unless the user selected cinematic. Write user-facing descriptions in Korean (한국어) and generation prompts in English.`
 }
 
 /** 配图 API 追加的短风格锁（中文，不用英文枚举） */
 export function styleLockSuffix(style: VisualStyle): string {
   const label = styleLabel(style)
   const g = VISUAL_STYLE_GUIDE[style]
-  if (!g) return `${label}风格，高清细节`
-  return `${label}风格（${g.medium}），${g.sampleTail}`
+  if (!g) return `Use the ${style} style with high-definition detail.`
+  return `Use ${g.medium}. ${g.sampleTail}`
 }
 
 /** 判断画面描述是否已体现该风格关键词（含口语别名，如「水墨风」） */
