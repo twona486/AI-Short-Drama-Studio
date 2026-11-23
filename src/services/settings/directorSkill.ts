@@ -20,7 +20,7 @@ export function parseDirectorSkill(text: string, filename = ''): DirectorSkillDo
   }
   const heading = rest.match(/^#\s+(.+)$/m)?.[1]?.trim() || ''
   const fileTitle = filename.replace(/\.[^.]+$/, '').replace(/^(readme|skill)$/i, '').trim()
-  const name = (pick('name') || (heading && !/^readme$/i.test(heading) ? heading : '') || fileTitle || '导演手册').slice(0, 80)
+  const name = (pick('name') || (heading && !/^readme$/i.test(heading) ? heading : '') || fileTitle || '연출 가이드').slice(0, 80)
   const body = rest.slice(0, MAX_BODY)
   if (body.length < 20) throw new Error(t('directorSkill.empty'))
   return {
@@ -40,9 +40,9 @@ export function currentDirectorSkill(): DirectorSkillDoc | null {
 }
 
 function manualText(skill: DirectorSkillDoc): string {
-  return `【用户导入的导演手册：${skill.name}】
-拆分镜头、写画面提示词和视频提示词时，按这份手册的写法来。
-系统硬约束仍然有效：成片时长窗口、单镜时长上限、对白逐字保留、必须能落库的字段。手册和这些冲突时，硬约束优先，镜头怎么拆、提示词怎么写以手册为准。
+  return `[User-imported director guide: ${skill.name}]
+Follow this guide for shot breakdown and writing image and video prompts.
+The exact video duration window, per-shot limit, verbatim dialogue, and required storage fields still apply. If the guide conflicts, those constraints take precedence. Otherwise follow the guide for shot breakdown and prompt writing. Write user-facing descriptions in Korean (한국어) and final model-facing generation prompts in English. Preserve requested Korean on-screen text and original spoken words.
 
 ${skill.body}`
 }
