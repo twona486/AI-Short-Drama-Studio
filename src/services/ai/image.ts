@@ -68,7 +68,7 @@ async function realCustomOrComfy(input: ImageGenInput): Promise<ImageGenOutput> 
   const adapterType = resolveImageAdapter(cfg)
   const prompt = withGptImageQuality(buildPrompt(input, Boolean(input.referenceImages?.length)), cfg.model)
   if (adapterType === 'http-custom') {
-    log(`→ 自定义 HTTP 生图 · ${cfg.model}`)
+    log(`→ 사용자 지정 HTTP 이미지 생성 · ${cfg.model}`)
     const imageUrls: string[] = []
     for (const blob of input.referenceImages || []) {
       imageUrls.push(await blobToDataUri(blob))
@@ -90,7 +90,7 @@ async function realCustomOrComfy(input: ImageGenInput): Promise<ImageGenOutput> 
     return { blob, mimeType, prompt: input.prompt }
   }
   if (adapterType === 'comfyui-prompt' || adapterType === 'comfyui-workflow') {
-    log(`→ ComfyUI 生图 · ${adapterType}`)
+    log(`→ ComfyUI 이미지 생성 · ${adapterType}`)
     let imageDataUrl: string | undefined
     if (input.referenceImages?.[0]) {
       imageDataUrl = await blobToDataUri(input.referenceImages[0])
@@ -117,7 +117,7 @@ function isGptImageModel(model: string): boolean {
   return /gpt[-_]?image|dall-e|dalle/i.test(model)
 }
 
-const GPT_IMAGE_QUALITY_SUFFIX = '去除燥波燥点，去除涂抹感，色彩平滑，画面严格执行干净质感。'
+const GPT_IMAGE_QUALITY_SUFFIX = 'Reduce noise, speckling, and smearing. Use smooth colors and a clean finish.'
 
 function withGptImageQuality(prompt: string, model: string): string {
   const base = String(prompt || '').trim()
@@ -174,7 +174,7 @@ async function imageResponseToBlob(
   }
 
   throw new Error(
-    `无法解析图片响应（既无 b64_json 也无 url）\n原始响应：${JSON.stringify(data).slice(0, 200)}`
+    `이미지 응답에 b64_json과 url이 없어 해석할 수 없습니다.\n원본 응답 ${JSON.stringify(data).slice(0, 200)}`
   )
 }
 
@@ -263,7 +263,7 @@ function blobToDataUri(blob: Blob): Promise<string> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader()
     reader.onload = () => resolve(String(reader.result))
-    reader.onerror = () => reject(new Error('参考图转 base64 失败'))
+    reader.onerror = () => reject(new Error('참조 이미지를 base64로 변환하지 못했습니다.'))
     reader.readAsDataURL(blob)
   })
 }
@@ -327,9 +327,9 @@ async function realSeedream(input: ImageGenInput): Promise<ImageGenOutput> {
     }
     body.image = images
     body.sequential_image_generation = 'disabled'
-    log(`→ Seedream 多图融合 ${images.length} 张参考 · ${model} · ${size}`)
+    log(`→ Seedream 참조 이미지 ${images.length}장 합성 · ${model} · ${size}`)
   } else {
-    log(`→ Seedream 文生图 · ${model} · ${size}`)
+    log(`→ Seedream 텍스트→이미지 · ${model} · ${size}`)
   }
 
   const resp = await fetch(`${baseUrl}/images/generations`, {
@@ -448,7 +448,7 @@ async function realZealmanImage(
     [workflow.widthKey]: width,
     [workflow.heightKey]: height
   }
-  onProgress?.(`提交 Zealman 生图任务（${workflow.name}）…`)
+  onProgress?.(`Zealman 이미지 작업을 제출하는 중(${workflow.name})…`)
   const submitUrl = `${root}/api/workflow/generate`
   const submitBody = JSON.stringify({ workflow_id: workflow.id, input_values: inputValues })
   const postSubmit = (url: string) =>
@@ -485,7 +485,7 @@ async function realZealmanImage(
   const deadline = Date.now() + 15 * 60 * 1000
   while (Date.now() < deadline) {
     throwIfAborted(input.signal)
-    onProgress?.('Zealman 正在生图…')
+    onProgress?.('Zealman에서 이미지를 생성하는 중…')
     const poll = await autodlRequest(
       `${root}/api/workflow/result?prompt_id=${encodeURIComponent(promptId)}`,
       { method: 'GET', signal: input.signal },
@@ -507,7 +507,7 @@ async function realZealmanImage(
         : null
       if (!result?.url) throw new Error('[image] Zealman 작업이 완료됐지만 이미지를 반환하지 않았습니다.')
       const imageUrl = new URL(String(result.url), `${root}/`).toString()
-      onProgress?.('下载 Zealman 生成的图片…')
+      onProgress?.('Zealman이 생성한 이미지를 다운로드하는 중…')
       const dl = await fetch(imageUrl, { signal: input.signal })
       if (!dl.ok) throw new Error(`[image] Zealman 이미지 다운로드에 실패했습니다. HTTP ${dl.status}`)
       const blob = await dl.blob()
@@ -522,14 +522,14 @@ export async function generateImage(
   input: ImageGenInput,
   onProgress?: (msg: string) => void
 ): Promise<ImageGenOutput> {
-  onProgress?.('准备生成图片...')
+  onProgress?.('이미지 생성을 준비하는 중…')
   const model = imageConfig(input.model).model
 
   if (getAIMode() === 'real') {
     const cfg = imageConfig(input.model)
     const adapterType = resolveImageAdapter(cfg)
     if (adapterType === 'zealman-workflow') {
-      onProgress?.('Zealman 出图...')
+      onProgress?.('Zealman에서 이미지를 생성하는 중…')
       return await realZealmanImage(input, onProgress)
     }
     if (
@@ -538,7 +538,7 @@ export async function generateImage(
       (isRelayImageEndpoint(cfg.baseUrl, cfg.provider) || adapterType === 'http-custom')
     ) {
       const prompt = withGptImageQuality(buildPrompt(input, Boolean(input.referenceImages?.length)), cfg.model)
-      onProgress?.(input.referenceImages?.length ? '中转站图生图...' : '中转站文生图...')
+      onProgress?.(input.referenceImages?.length ? '중계 API에서 이미지→이미지를 생성하는 중…' : '중계 API에서 텍스트→이미지를 생성하는 중…')
       const { blob, mimeType } = await apimartGenerateImage({
         baseUrl: cfg.baseUrl,
         apiKey: cfg.apiKey,
@@ -554,27 +554,27 @@ export async function generateImage(
       return { blob, mimeType, prompt }
     }
     if (adapterType === 'comfyui-prompt' || adapterType === 'comfyui-workflow') {
-      onProgress?.('ComfyUI 出图...')
+      onProgress?.('ComfyUI에서 이미지를 생성하는 중…')
       return await realCustomOrComfy(input)
     }
     if (isSeedreamModel(model)) {
       onProgress?.(
         input.referenceImages?.length
-          ? `多图融合（${input.referenceImages.length} 张参考）...`
-          : '文生图...'
+          ? `참조 이미지 ${input.referenceImages.length}장을 합성하는 중…`
+          : '텍스트→이미지를 생성하는 중…'
       )
       return await realSeedream(input)
     }
     if (input.referenceImages && input.referenceImages.length > 0) {
-      onProgress?.(`图生图（${input.referenceImages.length} 张参考）...`)
+      onProgress?.(`이미지→이미지 생성 중(참조 이미지 ${input.referenceImages.length}장)…`)
       return await realLegacyEdit(input)
     }
-    onProgress?.('文生图...')
+    onProgress?.('텍스트→이미지를 생성하는 중…')
     return await realLegacyGenerate(input)
   }
 
   if (input.referenceImages && input.referenceImages.length > 0) {
-    onProgress?.('(演示) 混合参考图...')
+    onProgress?.('(데모) 참조 이미지를 합성하는 중…')
     await abortableDelay(600, input.signal)
     return await generateMockWithReferences(input)
   }
@@ -628,7 +628,7 @@ async function generateMockWithReferences(
   ctx.font = `bold ${Math.round(input.width * 0.025)}px sans-serif`
   ctx.textAlign = 'center'
   ctx.fillText(
-    `[演示] ${refs.length} 张参考 + ${input.prompt.slice(0, 30)}`,
+    `[데모] 참조 이미지 ${refs.length}장 + ${input.prompt.slice(0, 30)}`,
     input.width / 2,
     input.height - 40
   )
