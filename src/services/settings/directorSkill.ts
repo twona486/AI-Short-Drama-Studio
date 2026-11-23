@@ -5,7 +5,7 @@ import { desktop, isDesktop } from '@/services/desktop'
 
 const MAX_BODY = 24_000
 
-/** 从 SKILL.md 前言或 README 标题里取出手册名和正文。没有前言时整篇 markdown 都是正文。 */
+/** SKILL.md 머리말이나 README 제목에서 이름과 본문을 읽는다. 머리말이 없으면 전문을 사용한다. */
 export function parseDirectorSkill(text: string, filename = ''): DirectorSkillDoc {
   const raw = String(text || '').replace(/^\uFEFF/, '').trim()
   if (!raw || raw.length < 20) throw new Error(t('directorSkill.tooShort'))
@@ -47,20 +47,20 @@ The exact video duration window, per-shot limit, verbatim dialogue, and required
 ${skill.body}`
 }
 
-/** 有导入手册时用手册，否则用内置分镜导演手册。 */
+/** 가져온 지침이 있으면 사용하고 없으면 내장 스토리보드 감독 지침을 사용한다. */
 export function directorPlaybookText(): string {
   const imported = currentDirectorSkill()
   if (imported) return manualText(imported)
   return getSkillBody('storyboard-director')
 }
 
-/** 只在用户导入后插入。没有导入时保持原来的提示词。 */
+/** 사용자가 가져온 지침이 있을 때만 기존 프롬프트에 추가한다. */
 export function importedDirectorPrefix(): string {
   const imported = currentDirectorSkill()
   return imported ? `${manualText(imported)}\n\n` : ''
 }
 
-/** 给 H3 英文成片稿用：吸收手册里的调度写法，输出格式仍是 (S#) 与 <d>。 */
+/** H3 영문 연출에 가져온 지침을 적용하면서 인물 식별자와 대사 태그 형식을 유지한다. */
 export function importedDirectorForH3(): string {
   const imported = currentDirectorSkill()
   if (!imported) return ''
@@ -74,7 +74,7 @@ async function readSkillFile(filePath: string): Promise<{ text: string; filename
   return { text: await desktop().readText(filePath), filename }
 }
 
-/** 选一个 SKILL.md / README.md，或一个里面放着这两份文件的文件夹。 */
+/** SKILL.md 또는 README.md 파일이나 해당 파일을 포함한 디렉터리를 선택한다. */
 export async function pickDirectorSkillFile(): Promise<{ text: string; filename: string } | null> {
   if (isDesktop()) {
     const paths = await desktop().pickFiles([
