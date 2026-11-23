@@ -2369,6 +2369,7 @@ export default {
     "loadFailed": "{source}에서 FFmpeg 코어를 불러오지 못했어요({error}).\nCDN의 CORP 헤더, Worker 파일, WASM MIME 유형을 확인해 주세요.\n코어 파일을 public/ffmpeg/에 다운로드해서 로컬 파일을 쓸 수 있어요."
   },
   "canvasRunner": {
+    "scriptReview": "왼쪽에서 전체 대본을 검토한 뒤 '승인'을 눌러 주세요. 승인하면 캐릭터 설정 이미지, 스토리 개요판, 영상을 만들 수 있어요. '전체 과정'이라고 요청하면 바로 진행해요.",
     "checkCharacter": "캐릭터 설정 이미지 파일을 확인하고 있어요…",
     "checkProp": "소품 이미지 파일을 확인하고 있어요…",
     "checkKeyProp": "주요 소품 이미지 파일을 확인하고 있어요…",

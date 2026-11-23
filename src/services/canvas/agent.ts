@@ -22,7 +22,7 @@ import {
 } from './pipeline'
 import {
   DOWNSTREAM_TOOLS,
-  PLAY_GATE_MSG,
+  playGateMessage,
   isApprovePlayRequest,
   isFullPipelineRequest,
   needsPlayReview
@@ -441,7 +441,7 @@ export async function runAgentTurn(
       (a) => a.tool === 'generate_storyboard' || a.tool === 'generate_play' || a.tool === 'continue_play' || a.tool === 'seed_script'
     )
   if (gated && !plan.actions.length) {
-    plan.say = PLAY_GATE_MSG
+    plan.say = playGateMessage()
   }
 
   if (!plan.actions.length) {
@@ -1259,7 +1259,7 @@ function heuristicPlan(userText: string): { say: string; actions: any[] } {
   if (!actions.length) {
     if (needsPlayReview(p)) {
       return {
-        say: PLAY_GATE_MSG,
+        say: playGateMessage(),
         actions: []
       }
     }

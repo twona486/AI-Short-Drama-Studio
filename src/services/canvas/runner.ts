@@ -74,7 +74,7 @@ import {
 } from '@/utils/nodePrompt'
 import { playTitleOf, topicFromBrief } from '@/utils/storyBrief'
 import { isNodeRunning, mapPool, withNodeJob, VIDEO_GEN_CONCURRENCY } from './jobs'
-import { isPlayApproved, PLAY_GATE_MSG } from './playGate'
+import { isPlayApproved, playGateMessage } from './playGate'
 import { generateFinalCut } from './exportFinal'
 import { setActiveProjectDir } from '@/services/storage'
 import { toDigitalHumanWav, extractVideoLastFrame } from '@/services/ffmpeg'
@@ -2239,7 +2239,7 @@ export async function runGenerateGroup(
     (groupId === 'group-shots' || groupId === 'group-frames' || groupId === 'group-videos') &&
     !isPlayApproved(p)
   ) {
-    throw new Error(PLAY_GATE_MSG)
+    throw new Error(playGateMessage())
   }
   const ids = groupChildNodeIds(groupId)
   if (!ids.length) throw new Error('이 그룹에 생성할 수 있는 노드가 없습니다.')
@@ -2688,7 +2688,7 @@ export async function runCanvasNode(
       node.type !== 'sceneProps' &&
       !isPlayApproved(p)
     ) {
-      throw new Error(PLAY_GATE_MSG)
+      throw new Error(playGateMessage())
     }
     patchNode(project, nodeId, 'running')
     if (node.type === 'export' || node.type === 'final') {

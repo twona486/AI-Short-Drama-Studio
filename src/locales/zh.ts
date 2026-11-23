@@ -2369,6 +2369,7 @@ export default {
     "loadFailed": "FFmpeg core 加载失败（{source}）：{error}\n可能原因：\n1) COEP=require-corp 阻止了无 CORP 头的 CDN 资源\n2) Worker 文件加载失败\n3) WASM MIME 类型不匹配\n推荐：把 core 文件下载到 public/ffmpeg/ 目录使用本地源。"
   },
   "canvasRunner": {
+    "scriptReview": "请先查看左侧完整剧本并点「确认通过」。验收后才做人设、故事看板或视频。除非你明确说全流程。",
     "checkCharacter": "校验人设图片文件...",
     "checkProp": "校验道具图片文件...",
     "checkKeyProp": "校验关键道具图文件...",
