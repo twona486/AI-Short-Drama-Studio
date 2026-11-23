@@ -2367,5 +2367,12 @@ export default {
     "noSource": "모든 FFmpeg 주소에 연결하지 못했어요.\n네트워크 시간 초과나 차단, COEP의 교차 출처 리소스 차단, CDN 파일 누락을 확인해 주세요.\n코어 파일을 public/ffmpeg/에 직접 추가하는 방법은 public/ffmpeg/README.md에 있어요.",
     "invalidMime": "core.wasm의 MIME 유형을 사용할 수 없어요({mime}).\napplication/wasm 또는 application/octet-stream을 사용해 주세요.\nVite에 에셋 유형을 지정하거나 vite preview에서 확인해 주세요.",
     "loadFailed": "{source}에서 FFmpeg 코어를 불러오지 못했어요({error}).\nCDN의 CORP 헤더, Worker 파일, WASM MIME 유형을 확인해 주세요.\n코어 파일을 public/ffmpeg/에 다운로드해서 로컬 파일을 쓸 수 있어요."
+  },
+  "canvasRunner": {
+    "checkCharacter": "캐릭터 설정 이미지 파일을 확인하고 있어요…",
+    "checkProp": "소품 이미지 파일을 확인하고 있어요…",
+    "checkKeyProp": "주요 소품 이미지 파일을 확인하고 있어요…",
+    "checkScene": "장면 이미지 파일을 확인하고 있어요…",
+    "aborted": "작업을 취소했어요."
   }
 }

@@ -2367,5 +2367,12 @@ export default {
     "noSource": "所有 FFmpeg 源都不可用。\n可能原因：\n1) 网络问题（被墙/超时）\n2) COEP 阻止了 cross-origin 资源\n3) CDN 资源不存在\n解决：手动下载 ffmpeg core 到 public/ffmpeg/ 目录。\n查看 public/ffmpeg/README.md 了解怎么放。",
     "invalidMime": "core.wasm 的 MIME 类型不对：{mime}\n期望 application/wasm 或 application/octet-stream。\n修复：Vite 配置里加 assets 识别，或用 vite preview 看是否正常。",
     "loadFailed": "FFmpeg core 加载失败（{source}）：{error}\n可能原因：\n1) COEP=require-corp 阻止了无 CORP 头的 CDN 资源\n2) Worker 文件加载失败\n3) WASM MIME 类型不匹配\n推荐：把 core 文件下载到 public/ffmpeg/ 目录使用本地源。"
+  },
+  "canvasRunner": {
+    "checkCharacter": "校验人设图片文件...",
+    "checkProp": "校验道具图片文件...",
+    "checkKeyProp": "校验关键道具图文件...",
+    "checkScene": "校验场景图片文件...",
+    "aborted": "任务已取消"
   }
 }

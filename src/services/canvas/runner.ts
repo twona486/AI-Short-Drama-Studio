@@ -1,3 +1,4 @@
+import { t as translate } from "@/i18n"
 import {
   useProjectStore,
   useAssetsStore,
@@ -134,7 +135,7 @@ function shotNodeAspect(
 }
 
 function ensureNotCancelled(signal?: AbortSignal) {
-  if (signal?.aborted) throw new DOMException('任务已取消', 'AbortError')
+  if (signal?.aborted) throw new DOMException(translate('canvasRunner.aborted'), 'AbortError')
 }
 
 function patchNode(
@@ -315,11 +316,11 @@ export async function generateSubjectSheet(sub: Subject, onProgress?: (msg: stri
   const look = lookFromScript(project.current.script)
   const style = look.style
   const product = await productRefBlobs()
-  const extras = await extraRefBlobs(latest.referenceAssetIds, `角色「${latest.name}」补充参考，外貌必须一致`)
+  const extras = await extraRefBlobs(latest.referenceAssetIds, `Additional reference for ${latest.name}. Match appearance exactly.`)
   const useProduct = product.length > 0 && (Boolean(latest.fromReference) || latest.kind === 'other')
   const refs = [...(useProduct ? product : []), ...extras.blobs].slice(0, 10)
   const labels = [
-    ...(useProduct ? product.map(() => `角色「${latest.name}」参考照片，外貌必须一致`) : []),
+    ...(useProduct ? product.map(() => `Reference photograph of ${latest.name}. Match appearance exactly.`) : []),
     ...extras.labels
   ].slice(0, 10)
   const prompt = subjectSendPrompt(latest, project.current)
@@ -348,7 +349,7 @@ export async function generateSubjectSheet(sub: Subject, onProgress?: (msg: stri
     prompt,
     projectId: project.current.id
   })
-  onProgress?.('校验人设图片文件...')
+  onProgress?.(translate('canvasRunner.checkCharacter'))
   const quality = await reviewImageQuality(result.blob, prompt, signal)
   if (!quality.passed) throw new Error(`4면 설정 이미지 파일이 유효하지 않습니다. ${quality.issues.join('；')}`)
   await saveGeneratedImageToSharedLibrary(result.blob, '角色', asset.filename, prompt, onProgress)
@@ -371,7 +372,7 @@ export async function generatePropSheet(prop: StoryProp, onProgress?: (msg: stri
   if (!project.current) throw new Error('열려 있는 프로젝트가 없습니다.')
   const latest = (project.current.props ?? []).find((item) => item.id === prop.id) || prop
   const look = lookFromScript(project.current.script)
-  const extras = await extraRefBlobs(latest.referenceAssetIds, `道具「${latest.name}」补充参考，形状材质必须一致`)
+  const extras = await extraRefBlobs(latest.referenceAssetIds, `Additional reference for the prop ${latest.name}. Match its shape and materials exactly.`)
   const prompt = propSendPrompt(latest, project.current)
   if (prompt !== (latest.sheetPrompt || '')) {
     project.updateProp(latest.id, { sheetPrompt: prompt })
@@ -398,7 +399,7 @@ export async function generatePropSheet(prop: StoryProp, onProgress?: (msg: stri
     prompt,
     projectId: project.current.id
   })
-  onProgress?.('校验道具图片文件...')
+  onProgress?.(translate('canvasRunner.checkProp'))
   const quality = await reviewImageQuality(result.blob, prompt, signal)
   if (!quality.passed) throw new Error(`소품의 다각도 이미지 파일이 유효하지 않습니다. ${quality.issues.join('；')}`)
   await saveGeneratedImageToSharedLibrary(result.blob, '道具', asset.filename, prompt, onProgress)
@@ -433,10 +434,10 @@ export async function generateScenePropSheet(
     const plate = await assets.getBlob(latest.plateAssetId)
     if (plate) {
       refs.push(plate)
-      labels.push(`场景锚点「${latest.name}」，关键道具的时代、材质与配色必须匹配这个场景`)
+      labels.push(`Location anchor for ${latest.name}. Match the featured prop to the period, materials, and colors of this setting.`)
     }
   }
-  const extras = await extraRefBlobs(latest.propReferenceAssetIds, `关键道具补充参考，物件外观必须一致`)
+  const extras = await extraRefBlobs(latest.propReferenceAssetIds, `Additional reference for the featured prop. Match its appearance exactly.`)
   refs.push(...extras.blobs)
   labels.push(...extras.labels)
   const clippedRefs = refs.slice(0, 10)
@@ -465,7 +466,7 @@ export async function generateScenePropSheet(
     prompt,
     projectId: project.current.id
   })
-  onProgress?.('校验关键道具图文件...')
+  onProgress?.(translate('canvasRunner.checkKeyProp'))
   const quality = await reviewImageQuality(result.blob, prompt, signal)
   if (!quality.passed) throw new Error(`주요 소품 이미지 파일이 유효하지 않습니다. ${quality.issues.join('；')}`)
   await saveGeneratedImageToSharedLibrary(result.blob, '道具', asset.filename, prompt, onProgress)
@@ -485,7 +486,7 @@ export async function generateScenePlate(scn: Scene, onProgress?: (msg: string) 
   const latest = (project.current.scenes ?? []).find((s) => s.id === scn.id) || scn
   const look = lookFromScript(project.current.script)
   const style = look.style
-  const extras = await extraRefBlobs(latest.referenceAssetIds, `场景「${latest.name}」参考，空间和光线必须一致`)
+  const extras = await extraRefBlobs(latest.referenceAssetIds, `Reference for ${latest.name}. Match the spatial layout and lighting exactly.`)
   const prompt = sceneSendPrompt(latest, project.current)
   if (!latest.platePrompt?.trim()) {
     project.updateScene(latest.id, { platePrompt: prompt })
@@ -512,7 +513,7 @@ export async function generateScenePlate(scn: Scene, onProgress?: (msg: string) 
     prompt,
     projectId: project.current.id
   })
-  onProgress?.('校验场景图片文件...')
+  onProgress?.(translate('canvasRunner.checkScene'))
   const quality = await reviewImageQuality(result.blob, prompt, signal)
   if (!quality.passed) throw new Error(`장면 기준 이미지 파일이 유효하지 않습니다. ${quality.issues.join('；')}`)
   await saveGeneratedImageToSharedLibrary(result.blob, '场景', asset.filename, prompt, onProgress)
@@ -2649,7 +2650,7 @@ export async function optimizeFreeformVideoPrompt(nodeId: string, signal?: Abort
   if (!source) throw new Error('먼저 프롬프트를 작성하세요.')
   const slotEntries = canvasReferenceSlotEntries(p, node)
   const pictures = slotEntries
-    .map((entry, index) => `图片${index + 1}：${entry.name || '参考图'}`)
+    .map((entry, index) => `Picture ${index + 1}: ${entry.name || 'reference image'}`)
     .join('\n')
   const compiled = await rewritePromptText({ source, pictures, signal })
   project.setCanvasNodePrompt(nodeId, compiled)
