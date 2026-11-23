@@ -486,23 +486,23 @@ async function parseJsonWithModelRepair(
 const QUALITY_REPAIR_ROUNDS = 3
 
 const NARRATIVE_CONTINUITY_RULES = `
-【叙事连续性硬规则】
-1. 先从用户要求中锁定“本次视频/本集”的起点、终点、时长和明确要展示的事件。边界指用户指定的集或段，不是把完整故事砍成高潮切片。用户要完整短片或完整改编时，必须写全对抗引擎与关键人物；只有用户明确只要某一段时才允许切片。禁止为了显得完整而续写下一集、提前揭晓用户要求停住的后果、补讲无关世界观或替用户推进到下一集。
-2. 允许在用户指定的任何节点结束，包括异变刚启动、穿越途中、刚落地、看到陌生人或其他悬念点。开放式结尾和悬念不是断层；结尾只需把当前状态落稳，不得擅自接着解释。
-3. 在本次边界内，每个镜头/场次必须由上一段的可见结果触发，并给下一段留下明确的可见状态；禁止只靠观众脑补人物怎么到场、怎么认识、为什么突然开始解释。
-4. 地点、时代、身份、关系、目标或身体状态发生重大变化时，只展开到本次视频终点为止的因果链。可用的拍点包括：触发征兆 → 变化过程 → 冲击结果 → 即时反应 → 观察确认 → 首次接触。根据用户要求与时长选取必要拍点，可以停在链条中间，但不能在实际展示的两个拍点之间无过渡跳跃。
-5. 穿越、事故、变身、发现秘密、重逢、背叛、战斗爆发等若是本集核心卖点，应获得与本集重要性相称的画面和时长；若用户只把它作为背景或明确要求略过，则服从用户，不强行扩写。
-6. 解释性台词要有当前剧情中的触发条件；但用户明确要求从讲解、复盘或既定关系开场时，服从该形式，不擅自补前情。
-7. 相邻段落逐对核对人物位置、姿势、朝向、手中物、伤势、情绪、已知信息和环境时间。后一段开头必须接住前一段末态；若跳时空，必须用用户允许的可见转场完成。
-8. 不用旁白代替本集本应看见的关键过程，也不为了补过程虚构用户未要求的新事实。`
+【이야기 연속성 필수 규칙】
+1. 사용자 요청에서 이번 영상이나 회차의 시작, 끝, 길이, 반드시 보여 줄 사건을 먼저 정하세요. 경계는 사용자가 지정한 회차나 구간입니다. 완전한 단편이나 각색을 원하면 갈등 구조와 핵심 인물을 모두 포함하세요. 사용자가 특정 구간만 명시한 경우에만 일부를 다루세요. 완결감을 만들려고 다음 회차를 쓰거나, 정해진 끝 이후의 결과를 미리 밝히거나, 무관한 세계관을 덧붙이거나, 임의로 다음 회차로 넘어가지 마세요.
+2. 이변이 시작되는 순간, 시간과 공간을 넘어가는 도중, 도착 직후, 낯선 사람을 발견하는 때 등 사용자가 지정한 지점에서 끝낼 수 있습니다. 열린 결말과 긴장감은 연속성 오류가 아닙니다. 현재 상태를 분명히 보여 주고 이후 설명은 덧붙이지 마세요.
+3. 범위 안의 모든 샷이나 장면은 이전 부분에서 눈에 보이는 결과를 받아 시작하고, 다음 부분에 명확하게 보이는 상태를 남기세요. 인물이 어떻게 도착했고 어떻게 알게 됐으며 갑자기 설명하는 이유가 무엇인지 관객의 추측에 맡기지 마세요.
+4. 장소, 시대, 정체성, 관계, 목표 또는 신체 상태에 큰 변화가 있으면 이번 영상의 끝까지만 인과관계를 보여 주세요. 계기의 징후 → 변화 과정 → 충격의 결과 → 즉각 반응 → 관찰과 확인 → 첫 접촉 순의 장면을 사용할 수 있습니다. 요청과 길이에 맞게 필요한 장면을 고르세요. 인과관계 도중에 멈출 수 있지만 실제로 보여 준 두 장면 사이의 전환을 건너뛰지 마세요.
+5. 시공간 이동, 사고, 변신, 비밀 발견, 재회, 배신, 전투 발발 등이 이번 회차의 핵심이면 중요도에 맞게 화면과 시간을 배정하세요. 사용자가 배경으로만 쓰거나 명시적으로 생략하라고 하면 따르세요.
+6. 설명 대사에는 현재 줄거리에서 계기가 있어야 합니다. 사용자가 설명이나 회고 또는 이미 형성된 관계에서 시작하라고 명시했으면 그 형식을 따르고 이전 이야기는 덧붙이지 마세요.
+7. 인접 부분마다 인물의 위치, 자세, 방향, 손에 든 물건, 부상, 감정, 알고 있는 정보, 환경의 시간대를 확인하세요. 다음 시작은 이전 끝의 상태를 이어야 합니다. 시공간을 건너뛸 때는 사용자가 허용하는 눈에 보이는 전환을 사용하세요.
+8. 이번 회차에서 보여 줘야 할 핵심 과정을 내레이션으로 대신하거나 과정을 연결하려고 사용자가 요구하지 않은 사실을 만들어 내지 마세요.`
 
 const SPEAKER_STAGING_RULES = `
-【出镜对白与站位】
-1. 开口的人嘴要可读，但不等于他必须正面朝向镜头、站在画面正中。说话者可以在后面、侧面、跪着。
-2. 画面里每一个人都要写进 blocking / eyeline / videoPrompt：在近处还是后面、身体朝哪、眼睛看谁或看什么。没写占位的人会被生成模型摆成合影看镜头。
-3. 前面的人如果不是说话者，必须侧对或背对镜头，回头/侧头看说话者或他指的东西，禁止正面看镜头。
-4. 同一空间的对白往来可以留在一镜。videoPrompt 必须从0秒到本镜结束按实际剧情拍点分成2–5段，逐段写清当前唯一说话者和其他人的反应；同一说话者连续2–4个短句也可以保留在同一段。
-5. voiceover 保留“人物名：台词”。videoPrompt 禁止只写说话者动作、再用一句「不要看镜头」带过其他人。每段必须写全所有在场人物的占位、视线和非语言反应。`
+【화면 속 대사와 인물 배치】
+1. 말하는 입 모양을 알아볼 수 있어야 합니다. 화자는 카메라를 정면으로 보거나 화면 중앙에 서지 않아도 됩니다. 뒤나 옆에 있거나 무릎을 꿇고 있어도 됩니다.
+2. 화면에 있는 모든 인물을 blocking / eyeline / videoPrompt에 넣으세요. 앞뒤 위치, 몸 방향, 보는 사람이나 물건을 쓰세요. 위치를 쓰지 않으면 생성 모델이 단체 사진처럼 인물들을 카메라 쪽으로 배치할 수 있습니다.
+3. 앞쪽 인물이 화자가 아니면 카메라를 옆이나 등으로 향하고, 뒤돌아보거나 고개를 돌려 화자나 화자가 가리킨 것을 보게 하세요. 카메라를 정면으로 보지 않게 하세요.
+4. 같은 공간에서 주고받는 대사는 한 샷에 유지할 수 있습니다. videoPrompt는 0초부터 샷의 끝까지 실제 이야기의 박자에 맞춰 2–5개 구간으로 나누세요. 각 구간에서 한 명의 화자와 다른 인물들의 반응을 명시하세요. 같은 화자의 짧은 연속 대사 2–4개는 한 구간에 유지할 수 있습니다.
+5. voiceover의 ‘캐릭터 이름：대사’ 형식을 유지하세요. videoPrompt에 화자의 동작만 쓰고 ‘카메라를 보지 마세요’ 한 줄로 다른 인물을 처리하지 마세요. 각 구간마다 현장에 있는 모든 인물의 위치, 시선, 말 없이 보이는 반응을 써야 합니다.`
 
 async function auditStoryboardNarrative(
   parsed: StoryboardResult,
@@ -525,12 +525,12 @@ async function auditStoryboardNarrative(
       messages: [
         {
           role: 'system',
-          content: `你是影视连续性编审，只找会让普通观众觉得“怎么突然就到这里了”的实质断层，不挑措辞和审美细节。${NARRATIVE_CONTINUITY_RULES}
-先依据用户原始要求判断本次视频的叙事边界，再逐对检查边界内的镜头。用户只要求第一集、片段、预告或悬念结尾时，不得把“没有继续讲后续”判为问题；只检查已经展示的相邻拍点之间是否跳步。只输出 JSON：{"issues":["第 1→2 镜：上一镜末态……，下一镜却……；在本集边界内应补……"]}。没有实质问题就输出 {"issues":[]}。最多 6 条，每条必须指出具体相邻镜头或边界内缺失的过渡。`
+          content: `영상의 연속성을 검수하세요. 일반 관객이 ‘왜 갑자기 이 장면이 나오지?’라고 느낄 실질적인 단절만 찾으세요. 표현이나 미학적 세부사항은 검수 대상에서 제외하세요.${NARRATIVE_CONTINUITY_RULES}
+원래 요청에서 영상의 이야기 범위를 먼저 정한 뒤 범위 안의 인접 샷을 둘씩 확인하세요. 첫 회차, 일부 장면, 예고편, 여운을 남기는 결말만 요청했다면 이후 이야기가 이어지지 않는 것을 문제로 판단하지 마세요. 이미 보여 준 인접 장면 사이의 비약만 확인하세요. JSON만 출력하세요. {"issues":["1→2번 샷의 마지막과 시작이 이어지지 않습니다. 이번 회차 안에서 보완할 장면은 …입니다."]}. 실질적인 문제가 없으면 {"issues":[]}를 출력하세요. 최대 6개로 제한하며 각 항목은 구체적인 인접 샷이나 범위 안에서 빠진 전환을 지목해야 합니다.`
         },
         {
           role: 'user',
-          content: `用户原始要求：\n${input.topic}\n${input.content}\n\n待审分镜：\n${JSON.stringify(compact)}`
+          content: `사용자 원래 요청\n${input.topic}\n${input.content}\n\n검수할 스토리보드\n${JSON.stringify(compact)}`
         }
       ],
       model,
@@ -899,7 +899,7 @@ function buildShotWorkBatches(play: string, targetBatches?: number): ShotWorkBat
 
 function verbatimSplitRule(verbatim?: boolean): string {
   if (!verbatim) return ''
-  return `【导入剧本 · 只拆不改】这是用户导入的成稿，拆分镜时禁止改写正文。不润色、不补情节、不换说法、不增删对白，也不要把对白改成旁白或把旁白改成对白。voiceover 必须逐字抄原文对白。visualPrompt 和 videoPrompt 只拍摄原文已经写明的人物、动作和场景，禁止添加原文没有的事件、道具、反应或结局。镜头顺序跟原文一致。\n`
+  return `【가져온 대본의 샷 나누기】사용자가 가져온 완성 대본입니다. 샷을 나눌 때 본문을 고치거나 다듬거나 줄거리를 보완하거나 표현을 바꾸거나 대사를 추가·삭제하지 마세요. 대사와 내레이션을 서로 바꾸지 마세요. voiceover에는 원문의 대사를 글자 그대로 옮기세요. visualPrompt와 videoPrompt에는 원문에 명시된 인물, 동작, 장면만 담으세요. 원문에 없는 사건, 소품, 반응, 결말을 추가하지 마세요. 샷은 원문 순서를 따르세요.\n`
 }
 
 async function generateShotWorkBatch(
@@ -924,7 +924,7 @@ async function generateShotWorkBatch(
   )
   const budgetLine =
     totalShotBudget && totalShotBudget > 0
-      ? `\n【镜数与时长硬上限】全片成片目标 ${targetDurationSec || '?'} 秒，允许上下浮动 ${DURATION_TOLERANCE_SEC} 秒。全片只批 ${totalShotBudget} 个小组；本工作包只出 ${limit} 镜，duration 合计必须是 ${durationCap || targetDurationSec || '?'} 秒。把本段动作与对白收进这 ${limit} 个镜头，靠运镜和画内调度表达，不要再拆小组。`
+      ? `\n【샷 수와 길이 제한】완성 영상의 목표 길이는 ${targetDurationSec || '?'}초이고 허용 오차는 ±${DURATION_TOLERANCE_SEC}초입니다. 영상 전체에는 ${totalShotBudget}개 작업 묶음만 허용합니다. 이 작업 묶음은 샷을 ${limit}개만 생성하고 duration의 합은 반드시 ${durationCap || targetDurationSec || '?'}초로 맞추세요. 이 구간의 동작과 대사를 ${limit}개 샷에 담고, 카메라 움직임과 화면 속 인물 배치로 표현하세요. 작업 묶음을 더 나누지 마세요.`
       : ''
   const parseBatch = (content: string): Record<string, unknown>[] => {
     try {
@@ -951,25 +951,25 @@ async function generateShotWorkBatch(
       messages: [
         {
           role: 'system',
-          content: `${importedDirectorPrefix()}${verbatimSplitRule(input.verbatim)}你是电影分镜导演小组。你只负责眼前这一小段剧本，不处理整部剧本。把本段拆成 1–${limit} 个真正能拍的连续镜头，绝对不得超过 ${limit} 个。${budgetLine}
+          content: `${importedDirectorPrefix()}${verbatimSplitRule(input.verbatim)}당신은 영화 스토리보드 감독 팀입니다. 전체 대본이 아닌 주어진 짧은 대본 구간을 담당합니다. 구간을 실제로 촬영할 수 있는 연속 샷 1–${limit}개로 나누고 ${limit}개를 넘지 마세요.${budgetLine}
 
-画面必须有生命：明确起幅里人物和关键物处于什么状态，什么事件触发动作，人物怎样连续行动和反应，摄影机为什么移动、最后落在哪里。不要用“固定镜头、轻微自然晃动、保持表情、让画面呼吸”这类模板填空；只有剧情确实需要静止时才用 static。运镜必须服务于空间揭示、人物关系或情绪变化。
-忠实覆盖本段所有可见动作与对白，不另编故事。对白逐字放进 voiceover，格式“人物名：原台词”；只有剧本明确写旁白/画外音才使用 h3-voiceover，否则出镜说话使用 h3-dialogue。没有对白才写空字符串和 none。
-visualPrompt 是最有代表性的关键帧静态画面；videoPrompt 是具体、连续、可执行的动态图生视频时间轴，从0秒到本镜结束按实际拍点分2–5段。每段写清谁行动、谁说话、其他人如何占位和反应、表情变化以及一个有动机的运镜，并让环境中的风、雨、烟、衣摆、光影或道具有合理反馈。不要复述 visualPrompt，不要机械等分时间。
-每镜要写清景别和人物空间关系。人物看场景内的人或物，不看镜头。
-优先输出 JSON：{"shots":[{"title":"3-8字","purpose":"戏剧作用","shotSize":"景别变化","visualPrompt":"电影关键帧画面","videoPrompt":"220-650字、从0秒覆盖到结束的2-5段电影化时间轴","duration":6,"audioDescription":"同步现场声","voiceover":"人物名：原台词或空字符串","audioMode":"h3-dialogue|h3-voiceover|none","cameraMovement":"push|pull|pan|tilt|static|orbit","subjectNames":["人物短名"],"sceneName":"已有地点短名"}]}。shots 数组只能有 1–${limit} 项。若不能输出 JSON，也可按“镜头 N / 画面 / 内容 / 时长 / 声音 / 口播”返回；系统可以解析。${retry ? '上一轮没有可解析镜头；这次直接交付，不要写思考过程。' : ''}`
+생동감 있는 화면을 만드세요. 시작 화면에서 인물과 주요 물건의 상태, 동작을 일으키는 사건, 이어지는 행동과 반응, 카메라가 움직이는 이유와 도착점을 명시하세요. ‘카메라 고정’, ‘가볍고 자연스러운 흔들림’, ‘표정 유지’, ‘화면에 여백을 줌’처럼 반복되는 문구로 채우지 마세요. 이야기에 정지가 필요할 때만 static을 사용하세요. 카메라 움직임은 공간을 드러내거나, 인물 관계나 감정 변화를 보여 주는 데 쓰세요.
+이 구간의 보이는 동작과 대사를 모두 담고 다른 이야기를 만들지 마세요. voiceover에 대사를 글자 그대로 넣고 ‘캐릭터 이름：대사 원문’으로 쓰세요. 대본에서 내레이션이나 화면 밖 음성을 명시한 경우에만 h3-voiceover, 화면 속 대사에는 h3-dialogue를 사용하세요. 대사가 없을 때만 빈 문자열과 none을 쓰세요.
+visualPrompt는 대표 키프레임의 정지 화면입니다. videoPrompt는 구체적이고 연속적이며 실행 가능한 이미지→영상 타임라인입니다. 0초부터 샷이 끝날 때까지 실제 박자에 맞춰 2–5개 구간을 쓰세요. 구간마다 누가 행동하고 말하는지, 다른 사람의 위치와 반응, 표정 변화, 동기 있는 카메라 움직임을 명시하세요. 바람, 비, 연기, 옷자락, 빛과 그림자, 소품이 행동에 맞춰 반응하게 하세요. visualPrompt를 반복하거나 시간을 기계적으로 등분하지 마세요.
+샷마다 화면 크기와 인물들의 공간 관계를 명확하게 쓰세요. 인물은 장면 안의 사람이나 물건을 바라보게 하세요. 제목과 설명은 한국어로 쓰되 이미지·영상 모델에 전달되는 visualPrompt와 videoPrompt의 연출 문장은 중국어로 쓰고 대사 원문을 보존하세요.
+JSON 출력을 우선하세요. {"shots":[{"title":"3-8자","purpose":"극적 기능","shotSize":"샷 크기 변화","visualPrompt":"영화 키프레임 화면","videoPrompt":"220-650자. 0초부터 끝까지 2-5구간의 영화적 타임라인","duration":6,"audioDescription":"동기화된 현장음","voiceover":"캐릭터 이름：대사 원문 또는 빈 문자열","audioMode":"h3-dialogue|h3-voiceover|none","cameraMovement":"push|pull|pan|tilt|static|orbit","subjectNames":["짧은 캐릭터 이름"],"sceneName":"기존 장소의 짧은 이름"}]}. shots 배열에는 1–${limit}개의 항목만 넣으세요. JSON을 출력할 수 없으면 파서가 읽는 ‘镜头 N / 画面 / 内容 / 时长 / 声音 / 口播’ 형식으로 반환하세요.${retry ? '이전 응답에 파싱 가능한 샷이 없었습니다. 사고 과정을 쓰지 말고 결과를 바로 반환하세요.' : ''}`
         },
         {
           role: 'user',
-          content: `工作包：${batch.label}
-已有人物：${subjectNames.join('、') || '（按原文识别）'}
-已有地点：${sceneNames.join('、') || '（按原文识别）'}
-当前视频模型单镜最长 ${shotDurationLimit(input)} 秒。${durationCap ? `本工作包的成片时长就是 ${durationCap} 秒，只出 ${limit} 镜，duration 写成 ${durationCap}。` : `每镜 duration 在 ${MIN_SHOT_SEC}–${shotDurationLimit(input)} 秒。`}同一地点、同一人物、同一连续行动能在上限内拍完时，优先合成一个完整长镜头。${budgetLine}
-${directives ? `\n全片约束（只用于保真）：\n${directives}\n` : ''}
-${batch.previousHint ? `上一工作包末尾（只用于承接，不要重复拍）：\n${batch.previousHint}\n` : ''}
-本工作包剧本原文：
+          content: `작업 묶음 ${batch.label}
+기존 캐릭터 ${subjectNames.join('、') || '（원문에서 식별）'}
+기존 장소 ${sceneNames.join('、') || '（원문에서 식별）'}
+현재 영상 모델의 샷당 최대 길이는 ${shotDurationLimit(input)}초입니다. ${durationCap ? `이 작업 묶음의 결과 길이는 ${durationCap}초입니다. 샷 ${limit}개만 생성하고 duration은 ${durationCap}으로 쓰세요.` : `샷마다 duration을 ${MIN_SHOT_SEC}–${shotDurationLimit(input)}초로 지정하세요.`} 같은 장소와 캐릭터의 연속 행동을 제한 시간 안에 촬영할 수 있으면 하나의 완전한 롱테이크로 구성하세요.${budgetLine}
+${directives ? `\n전체 영상 제약(원문 보존에만 사용)\n${directives}\n` : ''}
+${batch.previousHint ? `이전 작업 묶음의 끝(연결에만 사용하고 다시 촬영하지 않음)\n${batch.previousHint}\n` : ''}
+현재 작업 묶음의 대본 원문
 ${batch.excerpt}
-${batch.nextHint ? `\n下一工作包开头（只用于留下末态，不要提前拍）：\n${batch.nextHint}` : ''}`
+${batch.nextHint ? `\n다음 작업 묶음의 시작(끝 상태를 정하는 데만 사용하고 미리 촬영하지 않음)\n${batch.nextHint}` : ''}`
         }
       ],
       model,
@@ -997,7 +997,7 @@ ${batch.nextHint ? `\n下一工作包开头（只用于留下末态，不要提�
         sceneName: String(item.sceneName || inferredScene || '').trim() || undefined
       }
     })
-    if (!shots.length) throw new Error('模型回复中没有可解析的分镜')
+    if (!shots.length) throw new Error('모델 응답에 해석할 수 있는 스토리보드가 없습니다.')
     return { shots, model: response.model }
   } catch (error) {
     if (isAbortError(error) && !isTimeoutAbort(error)) throw error
@@ -1238,7 +1238,7 @@ JSON, 사고 과정, continuity / blocking / 미학 설정을 출력하지 마�
 已有地点：${sceneNames.join('、') || '（无）'}
 单镜时长：当前模型最长 ${shotDurationLimit(input)} 秒；${film ? `按场次动作在 5–${shotDurationLimit(input)} 秒内规划` : `参考 ${input.shotDuration}，可在 3–${shotDurationLimit(input)} 秒内规划`}。连续动作能在一个镜头完成就不要拆成多个短镜头
 
-${directives ? `本章必须遵守：\n${directives}\n` : ''}完整剧本：
+${directives ? `本章必须遵守：\n${directives}\n` : ''}전체 대본
 ${play}`
       }
     ],
@@ -1263,7 +1263,7 @@ ${play}`
     }
   }
   if (!outlines.length) {
-    throw new Error('粗分镜表是空的。人物和场景已保留，可直接重试拆分镜')
+    throw new Error('스토리보드 초안이 비어 있습니다. 캐릭터와 장면은 저장됐습니다. 스토리보드 추출을 다시 시도할 수 있습니다.')
   }
   onProgress?.(`✓ 已拿到 ${outlines.length} 个镜头场记，正在写入画布…`)
   return { outlines, model: response.model }
@@ -1414,7 +1414,7 @@ async function realStoryboard(
     const { model: configuredModel } = getLlmConfig()
     const parallelModel = resolvePlayModel(input) || configuredModel
     const play = input.content?.trim() || ''
-    const common = `主题：${input.topic || '（未填）'}\n比例：${input.aspectRatio}\n单镜时长参考：${input.shotDuration} 秒\n\n完整剧本：\n${play}`
+    const common = `主题：${input.topic || '（未填）'}\n比例：${input.aspectRatio}\n单镜时长参考：${input.shotDuration} 秒\n\n전체 대본\n${play}`
     const startAt = input.extractStartAt || 'subjects'
     const stopAfter = input.extractStopAfter || startAt
     const stageOrder = { subjects: 0, scenes: 1, shots: 2 } as const
@@ -1435,7 +1435,7 @@ async function realStoryboard(
       const ask = async (extraUser?: string) =>
         callLLM({
           messages: [
-            { role: 'system', content: `${system}\n禁止输出思考过程或自然语言。第一个字符必须是 {，最后一个字符必须是 }。` },
+            { role: 'system', content: `${system}\n사고 과정과 일반 문장을 출력하지 마세요. 첫 문자는 {, 마지막 문자는 }여야 합니다.` },
             { role: 'user', content: extraUser ? `${baseUser}\n\n${extraUser}` : baseUser }
           ],
           model: parallelModel,
@@ -1457,7 +1457,7 @@ async function realStoryboard(
           )
           raw = parseJsonRobust(salvage.content)
           if (validate && !validate(raw)) {
-            throw new Error(`${label} JSON 缺少必需的数据数组`)
+            throw new Error(`${label} JSON에 필수 데이터 배열이 없습니다.`)
           }
           onProgress?.(`✓ ${label}提炼完成`)
           return { raw, model: salvage.model }
@@ -1468,7 +1468,7 @@ async function realStoryboard(
             repairInstruction || `上一轮 JSON 结构错误。请严格按系统要求重新输出完整的 ${label} JSON。`
           )
           raw = parseJsonRobust(repaired.content)
-          if (!validate(raw)) throw new Error(`${label} JSON 修复后仍缺少必需的数据数组`)
+          if (!validate(raw)) throw new Error(`${label} JSON을 복구했지만 필수 데이터 배열이 여전히 없습니다.`)
           onProgress?.(`✓ ${label}提炼完成`)
           return { raw, model: repaired.model }
         }
@@ -1482,17 +1482,18 @@ async function realStoryboard(
       }
     }
 
-    const subjectSystem = `你是人物设定提炼子智能体。只从完整剧本「## 人物」提炼每一个独立小节，以及会实际入镜、入遗物/画像、或形成可见压力的人物、动物、产品或关键主体，不写场景，不拆分镜，不提炼资产图或道具清单。已故父亲、未到场的对手只要人物章有 ### 就必须建档，不要因为本集没站在镜头正中而删掉。忠实保留剧本称呼；有名字又有身份称呼时，name 用最常在对白和场记里出现的短名，role 写全身份和别称，便于另一智能体用名字或身份绑定。人物外貌必须具体到年龄、脸型、发型、体型、服装、鞋、配饰和稳定辨识点，不允许只写“主角”。description 只锁身份外貌，不要写他所在的地点或天气：后续角色设计图一律画在无缝纯白背景的四视图上。stateVariants 写清本章内会变的东西：衣服干湿、污渍、饥饿、跛行、手里的食物；没有变化就写单一状态。${productNote}
-voicePrompt 是这个角色开口说话时的音色与表达，必须自动写、不许空着：kind 为 person 的角色都要写，按「年龄性别 + 音色质地（沙哑/清亮/温吞/鼻音重等）+ 语速与力度 + 情绪基调 + 身份口音或口头习惯」写成一句中文，25–60 字，能直接当配音导演给演员的指令。同一个角色全片只写一条，不要每场换声线；动物和产品（kind 为 animal/other）写空字符串。\n只输出 JSON：{"subjects":[{"name":"短名","kind":"person|animal|other","description":"具体外貌锁定，不含场景","role":"身份、剧情作用和别称","stateVariants":"本集内状态变化，没有写单一状态","voicePrompt":"说话时的音色与表达，非人物写空","fromReference":false}]}。输出前自行检查：人物章每一个 ### 都单独建档；有台词、有动作或被镜头看见的人不能并成路人；每个 person 角色都有 voicePrompt。`
+    const subjectSystem = `당신은 캐릭터 설정을 추출하는 에이전트입니다. 전체 대본의 「## 人物」에 있는 각 독립 절과 실제로 화면에 등장하거나 유품 또는 초상화로 표현되거나 눈에 보이는 압박을 주는 인물, 동물, 제품, 주요 대상만 추출하세요. 장면, 샷, 에셋 이미지나 소품 목록은 작성하지 마세요. 사망한 아버지와 현장에 없는 상대역도 인물 섹션에 ### 항목이 있으면 개별 기록으로 만드세요. 이번 회차의 화면 중앙에 서지 않는다는 이유로 빼지 마세요. 대본의 호칭을 그대로 유지하세요. 이름과 신분 호칭이 모두 있으면 name에는 대사와 현장 기록에서 가장 자주 쓰는 짧은 이름을, role에는 전체 신분과 별칭을 써서 다른 에이전트가 두 가지 모두로 연결할 수 있게 하세요. 외모는 나이, 얼굴형, 헤어스타일, 체형, 의상, 신발, 액세서리, 일관된 식별 특징까지 구체적으로 쓰세요. ‘주인공’이라는 말만 쓰지 마세요. description은 정체성과 외모만 고정하고 위치나 날씨를 쓰지 마세요. 이후 캐릭터 디자인 이미지는 이음새 없는 순백색 배경에 4면 설정 이미지로 만듭니다. stateVariants에는 이 챕터에서 달라지는 옷의 건조 상태, 얼룩, 허기, 절뚝거림, 손에 든 음식 등을 명시하세요. 변화가 없으면 「单一状态」를 쓰세요. 사용자에게 보이는 설명은 한국어로 쓰고 이름과 호칭은 대본을 따르세요.${productNote}
+voicePrompt에는 말할 때의 음색과 표현을 자동으로 생성하세요. kind가 person인 모든 캐릭터에 필수이며 나이와 성별, 음색의 질감(쉰 소리, 맑은 소리, 느긋함, 비음 등), 속도와 강도, 감정의 기조, 신분에 맞는 억양이나 말버릇을 더빙 감독이 배우에게 직접 줄 수 있는 25–60자 분량의 중국어 한 문장으로 쓰세요. 같은 캐릭터의 영상 전체에 한 문장만 쓰고 장면마다 목소리를 바꾸지 마세요. animal과 other에는 빈 문자열을 쓰세요.
+JSON만 출력하세요. {"subjects":[{"name":"짧은 이름","kind":"person|animal|other","description":"구체적인 외모. 장면 묘사 제외","role":"신분, 이야기에서의 역할과 별칭","stateVariants":"회차 내 상태 변화. 없으면 单一状态","voicePrompt":"발화 시 음색과 표현. 사람이 아니면 빈 문자열","fromReference":false}]}. 출력 전 인물 섹션의 ### 항목을 모두 개별 기록으로 만들었는지, 대사나 동작이 있거나 화면에 보이는 사람을 행인으로 합치지 않았는지, 모든 person에 voicePrompt가 있는지 확인하세요.`
 
-    const sceneSystem = `你是场景与视觉设定提炼子智能体。只提炼本集会拍到的**地点**，不写人物，不拆分镜。
-地点来源优先：剧本「## 环境与场景」下的地点；其次场记行「内景｜地点｜天气」或「外景｜地点｜」。同一地点只建一条，不要按「场景一、场景二」每场复制一条。
-scene.name 用地点短名（如旧仓房、公益饭堂院子），不要用「场景一」。
-每个地点写无人时的空间：地面、建筑、天气、光、年代物件。
+    const sceneSystem = `당신은 장면과 시각 설정을 추출하는 에이전트입니다. 이번 회차에서 촬영할 **장소**만 추출하고 인물을 쓰거나 샷을 나누지 마세요.
+먼저 대본의 「## 环境与场景」에서 장소를 찾고, 다음으로 「内景｜장소｜날씨」 또는 「外景｜장소｜」 형식의 현장 기록을 확인하세요. 같은 장소는 한 번만 기록하고 「场景一、场景二」처럼 장면마다 복제하지 마세요.
+scene.name은 ‘낡은 창고’나 ‘무료 급식소 마당’처럼 장소의 짧은 이름을 사용하세요. 「场景一」을 이름으로 쓰지 마세요.
+각 장소에서 인물이 없을 때 보이는 바닥, 건축물, 날씨, 빛, 시대를 드러내는 물건을 쓰세요.
 ${productNote}
 ${stylePriority}
-只输出 JSON：{"aesthetic":"全片中文氛围","h3Aesthetic":"English production aesthetic with concrete lighting, material, color and camera qualities","styleBrief":"本集冲突和视觉抓点","colorPalette":"可见颜色","lightingNote":"时辰与光源","scenes":[{"name":"地点短名","description":"无人时的空间、地面、建筑、天气、动态和光线，至少80字","mainAnchor":"主视觉实物","anchors":"全景；主锚；地面站位区；光源或次锚","lighting":"时辰和光源"}]}
-顶层必须是对象，scenes 必须是非空数组。不要套 data/result，不要把 scenes 写成对象。`
+JSON만 출력하세요. {"aesthetic":"영상 전체 분위기","h3Aesthetic":"English production aesthetic with concrete lighting, material, color and camera qualities","styleBrief":"이 회차의 갈등과 시각적 핵심","colorPalette":"화면에 보이는 색","lightingNote":"시간대와 광원","scenes":[{"name":"짧은 장소명","description":"인물이 없는 공간, 바닥, 건축물, 날씨, 움직임과 빛을 최소 80자로 묘사","mainAnchor":"주요 시각 기준물","anchors":"전경, 주요 기준물, 인물 배치 구역, 광원 또는 보조 기준물","lighting":"시간대와 광원"}]}
+사용자가 읽는 설명은 한국어로 쓰고 h3Aesthetic은 허용된 영어를 유지하세요. 최상위는 객체이고 scenes는 비어 있지 않은 배열이어야 합니다. data/result로 감싸거나 scenes를 객체로 만들지 마세요.`
 
 
     const pullRecurringProps = async (script: string, subjects: Subject[]): Promise<StoryProp[]> => {
@@ -1539,7 +1540,7 @@ ${stylePriority}
         subjectPart = await runPart('人物', subjectSystem, 4000, PLAY_LLM_TIMEOUT_MS)
       }
       const rows = Array.isArray(subjectPart.raw?.subjects) ? subjectPart.raw.subjects : playPeople
-      if (!rows.length) throw new Error('提炼人物失败：剧本里没有人物节或对白名，模型也没给出名单')
+      if (!rows.length) throw new Error('캐릭터 추출에 실패했습니다. 대본에 캐릭터 섹션이나 대사의 화자 이름이 없고 모델도 명단을 반환하지 않았습니다.')
       const normalized = normalizeStoryboard(
         { subjects: rows, scenes: [], shots: [] },
         { style: input.style, topic: input.topic, content: input.content, keywords: input.keywords, maxShotDuration: input.maxShotDuration }
@@ -1592,7 +1593,7 @@ ${extractPlayForSceneStage(play)}`
       }
       let rows = extractSceneRows(scenePart.raw)
       if (!rows.length && playScenes.length) rows = playScenes
-      if (!rows.length) throw new Error('提炼场景失败：剧本里没有「环境与场景」或「内景｜地点」，模型也没给出地点。人物节点已经保留。')
+      if (!rows.length) throw new Error('장면 추출에 실패했습니다. 대본에 「环境与场景」이나 「内景｜장소」가 없고 모델도 장소를 반환하지 않았습니다. 캐릭터 노드는 저장됐습니다.')
       const normalized = normalizeStoryboard(
         { ...scenePart.raw, subjects: subjectPart.raw.subjects || [], scenes: rows, shots: [] },
         { style: input.style, topic: input.topic, content: input.content, keywords: input.keywords, maxShotDuration: input.maxShotDuration }
@@ -1624,7 +1625,7 @@ ${extractPlayForSceneStage(play)}`
     const slices = durationSlices(targetDurationSec, maxShotSec)
     const totalShotBudget = slices.length
     const workBatches = buildShotWorkBatches(play, totalShotBudget || undefined)
-    if (!workBatches.length) throw new Error('剧本正文为空，无法拆分镜')
+    if (!workBatches.length) throw new Error('대본 본문이 비어 있어 샷을 나눌 수 없습니다.')
     onProgress?.(
       slices.length
         ? `目标成片 ${targetDurationSec} 秒，单镜最长 ${maxShotSec} 秒 → ${workBatches.length} 个小组（${slices.join(' + ')} 秒）`
@@ -1765,7 +1766,7 @@ ${extractPlayForSceneStage(play)}`
       rawShots = rawShots.slice(0, totalShotBudget)
     }
     if (!rawShots.length) {
-      throw new Error(`所有分镜小组均失败。人物和场景已保留；请重试拆分镜。${failed[0]?.error ? `首个错误：${failed[0].error}` : ''}`)
+      throw new Error(`모든 스토리보드 작업 묶음이 실패했습니다. 캐릭터와 장면은 저장됐습니다. 스토리보드 추출을 다시 시도하세요.${failed[0]?.error ? `첫 번째 오류 ${failed[0].error}` : ''}`)
     }
     if (!subjectRows.length) {
       const names = new Set<string>()
@@ -1807,7 +1808,7 @@ ${extractPlayForSceneStage(play)}`
         total: workBatches.length
       })
       throw new Error(
-        `${failed.length}/${workBatches.length} 个分镜小组失败；其余 ${rawShots.length} 镜已经保存。失败段：${failed.map((item) => item.label).join('、')}`
+        `${failed.length}/${workBatches.length}개 스토리보드 작업 묶음이 실패했습니다. 나머지 ${rawShots.length}개 샷은 저장됐습니다. 실패한 구간 ${failed.map((item) => item.label).join('、')}`
       )
     }
     onProgress?.(`✓ ${workBatches.length} 个小组全部完成，共拆出 ${rawShots.length} 镜`)
@@ -1855,7 +1856,7 @@ ${extractPlayForSceneStage(play)}`
   const userText = extractMode
     ? `${verbatimSplitRule(input.verbatim)}下面是已经写好的完整剧本。请**忠实提炼**成画布节点 JSON（subjects / scenes / shots），不要重写故事、不要另起炉灶。${budgetLine}
 
-完整剧本：
+전체 대본
 """
 ${input.content?.trim() || '（空）'}
 """
@@ -1915,54 +1916,54 @@ ${productNote}
 ${stylePriority}
 ${extractSystemExtra}
 
-【字段语言】h3Aesthetic 用英文。visualPrompt 用中文写静帧可画内容。videoPrompt 用中文写这一镜的视频内容表现。
+【필드 언어】사용자가 읽는 제목과 설명은 한국어로 쓰세요. h3Aesthetic은 영어로 쓰세요. visualPrompt는 중국어로 그릴 수 있는 정지 화면을 묘사하세요. videoPrompt는 중국어로 이 샷의 영상 연출을 쓰고 대사는 원문을 유지하세요.
 ${videoPerformanceSpec(getVideoPromptStyle())}
 
-【输出 JSON】
+【출력 JSON】
 {
-  "aesthetic": "<一两句人话，说出全片味道，用用户主题里的词>",
+  "aesthetic": "<사용자 주제의 표현을 살려 영상 전체의 분위기를 자연스러운 한두 문장으로 설명>",
   "h3Aesthetic": "<English production aesthetic, concrete lighting/material/camera qualities>",
-  "styleBrief": "<这片图啥、冲突在哪、凭什么不划走>",
-  "colorPalette": "<几处能看见的颜色，别写色板编号>",
-  "lightingNote": "<几点钟、灯从哪来>",
+  "styleBrief": "<영상의 의도, 핵심 갈등, 계속 보게 만드는 이유>",
+  "colorPalette": "<몇 군데에서 보이는 색. 팔레트 번호는 제외>",
+  "lightingNote": "<시간과 빛의 출처>",
   "subjects": [
     {
       "id": "sub_1",
-      "name": "街上能喊出来的短名",
+      "name": "밖에서 부르기 쉬운 짧은 이름",
       "kind": "person|animal|other",
-      "description": "<外貌锁定，写成能去夜市买同款：年龄、发型、衣服、鞋、疤或习惯动作；不要写地点天气，角色设计图是纯白背景四视图>",
-      "role": "<这人在片里干什么>",
-      "stateVariants": "<会不会换衣服；不会就写单一状态>",
-      "voicePrompt": "<这人开口说话时的音色与表达：年龄性别、音色质地、语速力度、情绪基调、口音或口头习惯；25-60 字中文，能当配音导演指令；animal/other 写空字符串>",
-      "props": "<身上穿戴和随身物：包、证件、平板、鞋、帽子等，没有写无>",
+      "description": "<똑같은 옷을 시장에서 살 수 있을 정도의 외모 묘사. 나이, 헤어스타일, 의상, 신발, 흉터나 습관적 동작을 쓰고 장소와 날씨는 제외. 캐릭터 디자인은 순백색 배경의 4면 설정 이미지>",
+      "role": "<영상에서 맡은 역할>",
+      "stateVariants": "<옷이 바뀌는지 설명. 바뀌지 않으면 单一状态>",
+      "voicePrompt": "<말할 때의 음색과 표현. 나이와 성별, 음색 질감, 말의 빠르기와 강도, 감정의 기조, 억양이나 말버릇. 더빙 감독이 사용할 수 있는 중국어 25-60자. animal/other는 빈 문자열>",
+      "props": "<착용하거나 소지하는 가방, 신분증, 태블릿, 신발, 모자 등. 없으면 无>",
       "fromReference": false
     }
   ],
   "scenes": [
     {
       "id": "scn_1",
-      "name": "地点短名",
-      "description": "<人还没进来时这个地方：地面、水、植物、建筑、风是否在动、光从哪来，80字以上>",
-      "mainAnchor": "<摄像能对着的实在东西>",
-      "anchors": "<四宫格锚点，分号分隔：全景；主锚；地面站位；光源或次锚>",
-      "lighting": "<时辰和光源>"
+      "name": "짧은 장소명",
+      "description": "<인물이 들어오기 전의 바닥, 물, 식물, 건축물, 바람의 움직임, 빛의 출처. 80자 이상>",
+      "mainAnchor": "<카메라를 향할 수 있는 실제 기준물>",
+      "anchors": "<4분할 기준점. 세미콜론으로 전경, 주요 기준물, 인물이 서는 바닥, 광원 또는 보조 기준물을 구분>",
+      "lighting": "<시간대와 광원>"
     }
   ],
   "shots": [
     {
-      "title": "场记板上能写的 3-8 字",
+      "title": "현장 기록판에 쓸 수 있는 3-8자",
       "purpose": "钩子/说明/反应/揭示/收口",
-      "shotSize": "<远近 + 为什么>",
-      "blocking": "<每个人：近处还是后面、踩在什么上、身体朝哪。说话者可以在后。禁止正面排排站>",
-      "eyeline": "<每个人看谁或看什么；前面的人回头/侧头看说话者或他指的东西，禁止看镜头>",
-      "continuity": "<承接上一镜的具体末态（首镜写开场初态） → 本镜发生的可见变化 → 留给下一镜的具体末态；写清位置、姿势、朝向、手中物、情绪和已知信息>",
-      "propFocus": "<这镜要看清的物件及它现在的状态，没有写无>",
-      "visualPrompt": "<镜头语言：近到远写清画面里所有实物；水/风/衣摆动或不动；光从哪来；人穿什么、踩哪、手拿什么。这是静帧配图词。画风词点一次。禁止画风套话段，禁止只写站位>",
+      "shotSize": "<샷의 거리와 그 이유>",
+      "blocking": "<인물별 앞뒤 위치, 밟고 있는 것, 몸 방향. 화자는 뒤에 있어도 됨. 정면을 향해 나란히 세우지 않음>",
+      "eyeline": "<인물별로 보는 사람이나 물건. 앞쪽 인물은 고개를 돌려 화자나 가리키는 물건을 보고 카메라는 보지 않음>",
+      "continuity": "<이전 샷의 구체적인 끝 상태를 받음(첫 샷은 시작 상태) → 이번 샷의 눈에 보이는 변화 → 다음 샷에 남기는 구체적인 끝 상태. 위치, 자세, 방향, 손에 든 물건, 감정, 이미 아는 정보를 명시>",
+      "propFocus": "<이번 샷에서 잘 보여야 할 소품과 현재 상태. 없으면 无>",
+      "visualPrompt": "<가까운 곳부터 먼 곳까지 실제 물건을 명시. 물, 바람, 옷자락의 움직임 또는 정지, 광원, 의상, 발밑, 손에 든 물건을 묘사. 정지 화면 생성 프롬프트. 그림체는 한 번만 언급하고 상투적인 문단이나 위치만 적는 서술은 피함>",
       "videoPrompt": "${videoPromptJsonHint(getVideoPromptStyle())}",
-      "audioDescription": "<现场能听到的，逗号分隔>",
-      "voiceover": "<人物名：这一镜连续要说的 1-4 个短句；优先 2-4 句，没有就空字符串>",
+      "audioDescription": "<현장에서 들을 수 있는 소리. 쉼표로 구분>",
+      "voiceover": "<캐릭터 이름：이 샷에서 이어 말하는 짧은 대사 1-4개. 2-4개를 우선하며 없으면 빈 문자열>",
       "audioMode": "h3-dialogue|h3-voiceover|tts|none",
-      "speakerHint": "<说话人声音特征 / 情绪 / 表达方式；没有口播则空字符串>",
+      "speakerHint": "<화자의 목소리 특성, 감정, 표현 방식. 내레이션이나 대사가 없으면 빈 문자열>",
       "duration": <5-${shotDurationLimit(input)}>,
       "cameraMovement": "push|pull|pan|tilt|static|orbit",
       "subjectIds": ["sub_1"],
@@ -1976,7 +1977,7 @@ visualPrompt 若只有站位没有环境实物、或开头结尾是画风套话�
 videoPrompt 若没从0秒覆盖到镜头结束、没按拍点写清每段谁在做什么和谁在说什么，或只是机械等分后填套话，视为不合格。
 ${hasUserStyle && !look.matched ? '这是自定义画风，不要套页面下拉风格。' : `${styleGuide.avoid}。`}
 默认每镜使用 H3 出镜对白：把原文按语义段落分配到 voiceover，并设置 audioMode=h3-dialogue。不要机械地一镜一句；当前模型单镜最长 ${shotDurationLimit(input)} 秒，同一地点、同一人物、同一表达意图或连续动作能在上限内完成时，优先合成一个 7-${shotDurationLimit(input)} 秒的完整镜头，禁止为了凑固定时长拆成两个 5 秒镜头。只有视觉焦点、时空、轴线或戏剧任务真正改变时才切镜。短促反应或转场才只说一句，口播总量约每秒 4 个字。voiceover 写“人物名：台词”，speakerHint 同时写说话人和声线。说话镜头的景别服从画面感、动作、空间关系和情绪节奏：表情是重点且不需交代环境时可以收近；需要看清递物、争执、问答、人物距离、环境压力或集体反应时，保留中景、双人或多人同框。禁止按“只要说话就特写”的模板拆镜，但要写清当前谁说话、其余人如何反应，避免所有人同时张嘴。只有原文明说是旁白/画外音时才用 h3-voiceover，明确要求后期配音时才用 tts，明确无口播的空镜才用 none。人物章每一个 ### 都必须在 subjects 中单独建档；已故角色至少一镜出现遗物、画像或闪回，活人对手至少一镜出现对峙或可见压力。每镜 title 必须是不同的 3-8 字内容标题，禁止统一写“镜头”。逐对核对 continuity，后一镜开头必须接住前一镜结尾；重大状态变化按上面的叙事连续性硬规则展开，禁止从结果直接跳到讲解。
-只输出合法 JSON。`
+유효한 JSON만 출력하세요.`
     },
     {
       role: 'user',
@@ -2015,7 +2016,7 @@ ${hasUserStyle && !look.matched ? '这是自定义画风，不要套页面下拉
 
   if (!parsed?.shots || !Array.isArray(parsed.shots)) {
     throw new Error(
-      `LLM 响应结构不对，没有 shots 数组：${JSON.stringify(parsed).slice(0, 200)}`
+      `LLM 응답 구조에 shots 배열이 없습니다. ${JSON.stringify(parsed).slice(0, 200)}`
     )
   }
 
@@ -2802,16 +2803,16 @@ export async function generateStoryboard(
           ? (input.extractStopAfter || input.extractStartAt) === 'scenes'
             ? '第 2 步：只提炼场景锚点…'
             : (input.extractStopAfter || input.extractStartAt) === 'shots'
-              ? '第 3 步：按已保存的人物和场景拆分镜…'
-              : '第 1 步：只提炼人物角色…'
+              ? '3단계 — 저장된 캐릭터와 장면을 바탕으로 스토리보드를 추출하는 중…'
+              : '1단계 — 캐릭터를 추출하는 중…'
           : `正在按「${look.medium}」拆能拍的镜头...`
       )
     try {
       const { result, model } = await realStoryboard(resolved, onProgress)
       onProgress?.(
         input.mode === 'extract' && !result.shots.length
-          ? '✓ 当前提炼阶段已完成并保存'
-          : `✓ 已交付 ${result.shots.length} 个可编辑分镜`
+          ? '✓ 현재 추출 단계를 완료하고 저장했습니다.'
+          : `✓ 已交付 ${result.shots.length}개의 편집 가능한 스토리보드 샷`
       )
       return { result, source: 'real', model }
     } catch (e: any) {
@@ -2825,7 +2826,7 @@ export async function generateStoryboard(
           msg.startsWith('连不上') ||
           msg.startsWith('粗分镜')
           ? msg
-          : `脚本生成失败：${msg}`
+          : `대본 생성에 실패했습니다. ${msg}`
       )
     }
   }
@@ -3072,11 +3073,11 @@ async function ensurePlayNarrativeContinuity(
       messages: [
         {
           role: 'system',
-          content: `你是影视剧本连续性编审。${NARRATIVE_CONTINUITY_RULES}\n先判断用户这次只要求讲到哪里。只检查该边界内会导致情节突兀的实质问题，不把悬念结尾、未讲下一集或刻意留白判为缺失，不改风格，不挑遣词。只输出 JSON：{"issues":["具体问题及边界内应补的过渡拍点"]}；没有问题输出 {"issues":[]}。最多 6 条。`
+          content: `영상 대본의 연속성을 검수하세요.${NARRATIVE_CONTINUITY_RULES}\n사용자가 이번에 요청한 이야기 범위를 먼저 정하세요. 그 안에서 줄거리가 갑작스럽게 바뀌는 실질적인 문제만 검토하세요. 긴장을 남기는 결말, 다음 회차의 이야기, 의도적인 여백을 누락으로 판단하지 말고 스타일이나 표현은 그대로 두세요. JSON만 출력하세요. {"issues":["구체적인 문제와 요청 범위 안에서 보완할 전환 장면"]}. 문제가 없으면 {"issues":[]}를 출력하세요. 최대 6개입니다.`
         },
         {
           role: 'user',
-          content: `用户要求：\n${input.topic}\n${input.content}\n\n完整剧本：\n${draft.playMarkdown}`
+          content: `사용자 요청\n${input.topic}\n${input.content}\n\n전체 대본\n${draft.playMarkdown}`
         }
       ],
       model,
@@ -3098,11 +3099,11 @@ async function ensurePlayNarrativeContinuity(
       messages: [
         {
           role: 'system',
-          content: `你是影视编剧。只修复指出的叙事断层，保留用户事实、人物关系、重要台词、画风和已经成立的段落。${NARRATIVE_CONTINUITY_RULES}\n可以在断层附近新增、拆分或重排场次，使核心事件获得足够画面与时长；不要用旁白一句带过关键过程。必须保留或补全「故事背景 / 人物 / 环境与场景 / 拍摄原则」。禁止改回口播/画面/时长四格表。只输出 JSON：{"playMarkdown":"..."}。`
+          content: `영상 대본을 작성하는 시나리오 작가입니다. 지적된 이야기의 단절만 수정하고 사용자가 제공한 사실, 인물 관계, 주요 대사, 그림체와 기존에 잘 구성된 장면을 보존하세요.${NARRATIVE_CONTINUITY_RULES}\n단절 근처에 장면을 추가하거나 나누거나 재배치해 핵심 사건에 화면과 시간을 충분히 배정할 수 있습니다. 중요한 과정을 내레이션 한 문장으로 넘기지 마세요. 「故事背景 / 人物 / 环境与场景 / 拍摄原则」을 보존하거나 완성하고 본문과 대사는 한국어로 쓰세요. 내레이션, 화면, 길이가 들어간 네 칸 표로 바꾸지 마세요. JSON만 출력하세요. {"playMarkdown":"..."}.`
         },
         {
           role: 'user',
-          content: `用户要求：\n${input.topic}\n${input.content}\n\n必须修复：\n- ${issues.join('\n- ')}\n\n待修完整剧本：\n${draft.playMarkdown}`
+          content: `사용자 요청\n${input.topic}\n${input.content}\n\n반드시 수정할 항목\n- ${issues.join('\n- ')}\n\n수정할 전체 대본\n${draft.playMarkdown}`
         }
       ],
       model,
@@ -3259,7 +3260,7 @@ ${scaleBrief}`
     .replace(/\s*```$/, '')
     .trim()
   if (continueMode) playMarkdown = mergeContinuedPlay(existingPlay, playMarkdown)
-  if (playMarkdown.length < 40) throw new Error('模型没有返回剧本')
+  if (playMarkdown.length < 40) throw new Error('모델이 대본을 반환하지 않았습니다.')
   const result: PlayDraftResult = {
     topic: playMarkdown.match(/^#\s+(.+)$/m)?.[1]?.trim() || input.topic?.trim() || '短视频剧本',
     playMarkdown
@@ -3279,24 +3280,24 @@ export async function generatePlay(
   log(`${input.playMode === 'continue' ? '续写剧本' : '写剧本'} · AI 模式：${mode}`)
 
   if (mode === 'real') {
-    onProgress?.(input.playMode === 'continue' ? '正在续写剧本…' : '正在写完整剧本…')
+    onProgress?.(input.playMode === 'continue' ? '대본을 이어 쓰는 중…' : '전체 대본을 작성하는 중…')
     try {
       const { result, model } = await realGeneratePlay(resolved)
       onProgress?.(
         input.playMode === 'continue'
-          ? '✓ 已续写（保留原场次）'
-          : '✓ 完整剧本已写好（尚未提炼节点）'
+          ? '✓ 기존 장면을 보존하고 대본을 이어 썼습니다.'
+          : '✓ 전체 대본을 작성했습니다. 노드 추출은 아직 시작하지 않았습니다.'
       )
       return { result, source: 'real', model }
     } catch (e: any) {
       const msg = e?.message ?? String(e)
-      log(`✗ 写剧本失败：${msg}`)
+      log(`✗ 대본 작성에 실패했습니다. ${msg}`)
       if (isAbortError(e) && !isTimeoutAbort(e)) throw e
-      throw new Error(msg.startsWith('写剧本') || msg.startsWith('模型超过') ? msg : `写剧本失败：${msg}`)
+      throw new Error(msg.startsWith('写剧本') || msg.startsWith('模型超过') ? msg : `대본 작성에 실패했습니다. ${msg}`)
     }
   }
 
-  onProgress?.('🎭 演示模式写剧本')
+  onProgress?.('🎭 데모 모드에서 대본을 작성합니다.')
   return { result: mockPlayFromBrief(resolved), source: 'mock' }
 }
 
