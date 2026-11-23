@@ -532,7 +532,7 @@ Determine the narrative boundary from the original request, then check adjacent 
         },
         {
           role: 'user',
-          content: `사용자 원래 요청\n${input.topic}\n${input.content}\n\n검수할 스토리보드\n${JSON.stringify(compact)}`
+          content: `Original user request\n${input.topic}\n${input.content}\n\nStoryboard to check\n${JSON.stringify(compact)}`
         }
       ],
       model,
@@ -627,7 +627,7 @@ async function repairStoryboardOnce(
     Number(input.targetDurationSec) || extractTargetDurationSec(input.topic, input.content)
   const repairShotCap = shotBudgetFromDuration(repairTargetSec, input.maxShotDuration)
   const durationBlock = repairTargetSec
-    ? `\n【成片时长硬约束】用户要的是 ${repairTargetSec} 秒成片，允许 ${repairTargetSec - DURATION_TOLERANCE_SEC}–${repairTargetSec + DURATION_TOLERANCE_SEC} 秒，多 1 秒或少 1 秒超出这个窗口都不合格。全片镜头数不得超过 ${repairShotCap} 个。超了就把相邻、同地点、同组人物的镜头合并成长镜头（靠运镜与画内调度表达，不靠切镜），而不是删掉关键剧情；每镜 duration 在 ${MIN_SHOT_SEC}–${shotDurationLimit(input)} 秒内，全部镜头 duration 相加必须落在允许窗口里。`
+    ? `\n[Required final duration] The user requests ${repairTargetSec} seconds. Accept only ${repairTargetSec - DURATION_TOLERANCE_SEC}–${repairTargetSec + DURATION_TOLERANCE_SEC} seconds. Do not exceed ${repairShotCap} shots. If needed, combine adjacent shots in the same location with the same cast and use camera movement and blocking rather than cuts. Keep key events. Each duration must be ${MIN_SHOT_SEC}–${shotDurationLimit(input)} seconds, with a total in the requested range.`
     : ''
   const repair = await callLLM({
     messages: [
@@ -637,7 +637,7 @@ async function repairStoryboardOnce(
       },
       {
         role: 'user',
-        content: `사용자 원문 또는 대본\n${input.content}\n\n主题：${input.topic || '（未填）'}\n\n검수를 통과하지 못한 항목(모두 수정)\n- ${issues.join('\n- ')}\n\n수정할 JSON\n${JSON.stringify(parsed)}`
+        content: `User source or script\n${input.content}\n\nTopic: ${input.topic || '(unspecified)'}\n\nIssues to fix (all required)\n- ${issues.join('\n- ')}\n\nJSON to repair\n${JSON.stringify(parsed)}`
       }
     ],
     model,
@@ -926,7 +926,7 @@ async function generateShotWorkBatch(
   )
   const budgetLine =
     totalShotBudget && totalShotBudget > 0
-      ? `\n【샷 수와 길이 제한】완성 영상의 목표 길이는 ${targetDurationSec || '?'}초이고 허용 오차는 ±${DURATION_TOLERANCE_SEC}초입니다. 영상 전체에는 ${totalShotBudget}개 작업 묶음만 허용합니다. 이 작업 묶음은 샷을 ${limit}개만 생성하고 duration의 합은 반드시 ${durationCap || targetDurationSec || '?'}초로 맞추세요. 이 구간의 동작과 대사를 ${limit}개 샷에 담고, 카메라 움직임과 화면 속 인물 배치로 표현하세요. 작업 묶음을 더 나누지 마세요.`
+      ? `\n[Shot and duration limits] Target ${targetDurationSec || '?'} seconds with tolerance ±${DURATION_TOLERANCE_SEC} seconds. The full film has ${totalShotBudget} work groups. This group contains exactly ${limit} shots and must add to ${durationCap || targetDurationSec || '?'} seconds. Fit action and dialogue into those shots using movement and blocking. Do not split the group further.`
       : ''
   const parseBatch = (content: string): Record<string, unknown>[] => {
     try {
@@ -1248,11 +1248,11 @@ Dialogue: 아펑: 먼저 다 먹자. 심은 남겨 두고.`
       { role: 'system', content: film ? filmSystem : shortSystem },
       {
         role: 'user',
-        content: `已有人物：${subjectNames.join('、') || '（无）'}
-已有地点：${sceneNames.join('、') || '（无）'}
-单镜时长：当前模型最长 ${shotDurationLimit(input)} 秒；${film ? `按场次动作在 5–${shotDurationLimit(input)} 秒内规划` : `参考 ${input.shotDuration}，可在 3–${shotDurationLimit(input)} 秒内规划`}。连续动作能在一个镜头完成就不要拆成多个短镜头
+        content: `Existing characters: ${subjectNames.join(', ') || '(none)'}
+Existing locations: ${sceneNames.join(', ') || '(none)'}
+Shot duration. The current model allows up to ${shotDurationLimit(input)} seconds. ${film ? `Plan by scene action within 5–${shotDurationLimit(input)} seconds` : `Use ${input.shotDuration} seconds as a reference within 3–${shotDurationLimit(input)} seconds`}。Keep uninterrupted action in one shot when it fits.
 
-${directives ? `本章必须遵守：\n${directives}\n` : ''}전체 대본
+${directives ? `Chapter requirements:\n${directives}\n` : ''}전체 대본
 ${play}`
       }
     ],
@@ -1309,17 +1309,17 @@ Return one JSON object only. {"title":"3–8 character title","purpose":"钩子/
         },
         {
           role: 'user',
-          content: `已有人物：${subjectNames.join('、') || '（无）'}
-已有地点：${sceneNames.join('、') || '（无）'}
-${prev ? `이전 샷 ${formatOutlineNote(prev, index - 1)}` : '이전 샷 없음(현재 샷이 시작)'}
+          content: `Existing characters: ${subjectNames.join(', ') || '(none)'}
+Existing locations: ${sceneNames.join(', ') || '(none)'}
+${prev ? `Previous shot: ${formatOutlineNote(prev, index - 1)}` : 'Previous shot: none (opening)'}
 
-현재 샷 현장 기록
+Current shot notes
 ${formatOutlineNote(outline, index)}
 
-${next ? `다음 샷 ${formatOutlineNote(next, index + 1)}` : '다음 샷 없음(현재 샷이 마지막)'}
-${extras?.directives ? `\n챕터 제약\n${extras.directives}` : ''}
-${extras?.sceneSlice ? `\n이 장면의 대본 원문\n${extras.sceneSlice}` : ''}
-이 샷만 확장하세요.`
+${next ? `Next shot: ${formatOutlineNote(next, index + 1)}` : 'Next shot: none (ending)'}
+${extras?.directives ? `\nChapter constraints:\n${extras.directives}` : ''}
+${extras?.sceneSlice ? `\nOriginal scene text:\n${extras.sceneSlice}` : ''}
+Expand this shot only.`
         }
       ],
       model,
@@ -1428,7 +1428,7 @@ Report visible facts only. Do not infer brands, specifications, prices, efficacy
     const { model: configuredModel } = getLlmConfig()
     const parallelModel = resolvePlayModel(input) || configuredModel
     const play = input.content?.trim() || ''
-    const common = `主题：${input.topic || '（未填）'}\n比例：${input.aspectRatio}\n单镜时长参考：${input.shotDuration} 秒\n\n전체 대본\n${play}`
+    const common = `Topic: ${input.topic || '(unspecified)'}\n比例：${input.aspectRatio}\n单镜时长参考：${input.shotDuration} 秒\n\n전체 대본\n${play}`
     const startAt = input.extractStartAt || 'subjects'
     const stopAfter = input.extractStopAfter || startAt
     const stageOrder = { subjects: 0, scenes: 1, shots: 2 } as const
@@ -1588,7 +1588,7 @@ Return a top-level object with a nonempty scenes array. Do not nest inside data 
         onProgress?.(`대본에 장소가 있어 장면 ${playScenes.length}개를 바로 저장했습니다.`)
         scenePart = { raw: { scenes: playScenes }, model: parallelModel }
       } else {
-        const sceneUser = `主题：${input.topic || '（未填）'}
+        const sceneUser = `Topic: ${input.topic || '(unspecified)'}
 比例：${input.aspectRatio}
 
 Extract locations only from the supplied locations and scene excerpts. Do not invent places. Record each place once.
@@ -1867,7 +1867,7 @@ ${extractPlayForSceneStage(play)}`
     Number(input.targetDurationSec) || extractTargetDurationSec(input.topic, input.content)
   const budgetShots = shotBudgetFromDuration(budgetSec, input.maxShotDuration)
   const budgetLine = budgetShots
-    ? `\n【镜数与时长硬上限】用户要的是 ${budgetSec} 秒成片，单镜最长 ${shotDurationLimit(input)} 秒，所以只批 ${budgetShots} 个镜头。允许 ${budgetSec - DURATION_TOLERANCE_SEC}–${budgetSec + DURATION_TOLERANCE_SEC} 秒。全部镜头 duration 相加必须落在这个窗口。`
+    ? `\n[Shot and duration limits] The requested final duration is ${budgetSec} seconds, with a ${shotDurationLimit(input)}-second maximum per shot and ${budgetShots} shots total. Total duration must be within ${budgetSec - DURATION_TOLERANCE_SEC}–${budgetSec + DURATION_TOLERANCE_SEC} seconds.`
     : ''
 
   const userText = extractMode
@@ -1878,7 +1878,7 @@ ${extractPlayForSceneStage(play)}`
 ${input.content?.trim() || '（空）'}
 """
 
-主题：${input.topic || '（未填）'}
+Topic: ${input.topic || '(unspecified)'}
 ${input.keywords?.length ? `关键词：${input.keywords.join('、')}` : ''}
 视频比例：${input.aspectRatio}
 时长参考：大约每镜 ${input.shotDuration} 秒（跟剧本里的场次走，别强行统一）
@@ -3124,7 +3124,7 @@ async function ensurePlayNarrativeContinuity(
         },
         {
           role: 'user',
-          content: `사용자 요청\n${input.topic}\n${input.content}\n\n반드시 수정할 항목\n- ${issues.join('\n- ')}\n\n수정할 전체 대본\n${draft.playMarkdown}`
+          content: `사용자 요청\n${input.topic}\n${input.content}\n\nRequired fixes\n- ${issues.join('\n- ')}\n\nFull script to repair\n${draft.playMarkdown}`
         }
       ],
       model,
