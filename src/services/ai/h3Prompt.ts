@@ -217,8 +217,10 @@ function looksLikeSpokenDialogue(text: string): boolean {
 }
 
 function sanitizeDialogue(text: string): string {
+  const spoken = spokenTextOnly(text)
+  const source = detectDialogueLanguage(spoken) === 'Korean' ? spoken : normalizeForSpeech(spoken)
   const line = stripSpokenStageDirection(
-    normalizeForSpeech(spokenTextOnly(text))
+    source
       .replace(/<\/?d>/gi, '')
       .replace(/\[[^\]]{0,120}\]/g, '')
   )
@@ -1112,13 +1114,13 @@ function subjectPhrase(slot: LabeledSlot): string {
 
 function shotSizeEn(raw?: string): string {
   const t = String(raw || '')
-  if (/特写/.test(t)) return 'close-up'
-  if (/中近/.test(t)) return 'medium close-up'
-  if (/近景/.test(t)) return 'close-up'
-  if (/中全|全景/.test(t)) return 'medium-wide shot'
-  if (/中景/.test(t)) return 'medium shot'
-  if (/大远/.test(t)) return 'extreme wide shot'
-  if (/远景/.test(t)) return 'wide shot'
+  if (/特写|클로즈업/.test(t)) return 'close-up'
+  if (/中近|중근경/.test(t)) return 'medium close-up'
+  if (/近景|근경/.test(t)) return 'close-up'
+  if (/中全|全景|중원경|전경/.test(t)) return 'medium-wide shot'
+  if (/中景|중경/.test(t)) return 'medium shot'
+  if (/大远|대원경/.test(t)) return 'extreme wide shot'
+  if (/远景|원경/.test(t)) return 'wide shot'
   if (/medium close-up|close-up|wide shot|medium shot|medium-wide/i.test(t)) {
     return t.replace(/[㐀-鿿].*$/, '').trim() || 'medium shot'
   }
