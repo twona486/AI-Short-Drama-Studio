@@ -120,31 +120,32 @@ export function summarizeWorkflow(payload: any, maxNodes = 160): string {
   return lines.join('\n')
 }
 
-const ANALYZE_SYSTEM = `당신은 ComfyUI 워크플로 분석기입니다. 제공된 API Format 노드 그래프에서 외부 입력을 어느 노드의 어느 필드로 보내야 하는지 판단하세요. 앱이 생성할 때마다 해당 값을 주입합니다.
+// ComfyUI 그래프의 입력 바인딩을 분석하고 설명은 한국어로 반환한다.
+const ANALYZE_SYSTEM = `You are a ComfyUI workflow analyzer. Given an API Format graph, identify the exact node field for each external input so the app can inject the value at generation time.
 
-사용 가능한 역할(role)
-- prompt는 긍정 프롬프트(텍스트)
-- negative는 부정 프롬프트(텍스트)
-- image는 참조 이미지 또는 시작 프레임(이미지)
-- imageEnd는 끝 프레임(시작·끝 프레임 워크플로에서만 사용)
-- mask는 마스크 이미지
-- audio는 오디오(디지털 휴먼 내레이션)
-- seed는 난수 시드(정수)
-- width / height는 너비와 높이(정수)
-- length는 길이 또는 프레임 수
-- fps / steps / cfg / strength / batch는 수치 파라미터
+Supported roles:
+- prompt: positive prompt text
+- negative: negative prompt text
+- image: reference image or first frame
+- imageEnd: last frame for first-and-last-frame workflows
+- mask: mask image
+- audio: audio for digital-human narration
+- seed: integer random seed
+- width / height: integer dimensions
+- length: duration or frame count
+- fps / steps / cfg / strength / batch: numeric settings
 
-판단 규칙
-1. 외부에서 실제로 주입해야 하는 필드만 선택하세요. 모델 이름, VAE, 샘플러 이름과 같은 고정 설정은 유지하세요.
-2. 긍정·부정 프롬프트는 연결을 따라 판단하세요. KSampler, KSamplerAdvanced, SamplerCustom 등에서 positive / negative가 어느 텍스트 노드를 가리키는지 확인하세요. 노드 순서나 이름만 보고 추측하지 마세요.
-3. 텍스트 필드는 대개 text이며 prompt / value / string / text_g / text_l일 수도 있습니다. 실제 필드 이름을 사용하세요.
-4. 이미지 필드는 대개 image이며 image_path / url / file / upload일 수도 있습니다.
-5. 선택한 필드는 문자열이나 숫자를 받아야 합니다. ←#6 같은 연결 참조를 선택하지 마세요.
-6. 특정 역할을 찾지 못하면 생략하세요. 노드나 필드를 만들지 마세요.
-7. 같은 역할의 후보가 여럿이면 실제 이미지 생성에 참여하는 노드를 고르세요.
+Rules:
+1. Select only fields that need external values. Keep fixed settings such as model names, VAE, and sampler names.
+2. Follow positive and negative links from KSampler, KSamplerAdvanced, SamplerCustom, and similar sampler nodes to the actual text nodes. Do not infer their roles from node order or names.
+3. Use the actual text field: often text, but possibly prompt, value, string, text_g, or text_l.
+4. Use the actual image field: often image, but possibly image_path, url, file, or upload.
+5. Select a string or numeric input, never a link reference such as ←#6.
+6. If a role cannot be located, omit it. Do not invent nodes or fields.
+7. When there are multiple candidates for a role, choose the one actually used in the generation graph.
 
-설명 없이 JSON만 출력하세요. 사용자에게 보이는 설명은 한국어로 작성하세요.
-{"kind":"text-to-image|image-to-image|text-to-video|image-to-video|audio-sync|unknown","summary":"이 워크플로가 하는 일을 한 문장으로 설명","bindings":[{"role":"prompt","nodeId":"6","field":"text","mediaMode":"upload","note":"설명"}],"notes":"필요한 모델이나 준비할 이미지 수 등 사용자에게 줄 안내"}`
+Write summary, binding notes, and notes for the user in Korean (한국어). Return JSON only:
+{"kind":"text-to-image|image-to-image|text-to-video|image-to-video|audio-sync|unknown","summary":"One sentence explaining the workflow","bindings":[{"role":"prompt","nodeId":"6","field":"text","mediaMode":"upload","note":"Explanation"}],"notes":"User guidance, such as required models or reference images"}`
 
 function toBinding(raw: any): ComfyInputBinding | null {
   const role = String(raw?.role || '').trim() as ComfyInputRole
@@ -278,7 +279,7 @@ export async function analyzeWorkflowWithLlm(
         { role: 'system', content: ANALYZE_SYSTEM },
         {
           role: 'user',
-          content: `노드 그래프\n${brief}\n\n입력 매핑 JSON을 출력하세요.`
+          content: `Node graph:\n${brief}\n\nReturn the input mapping JSON.`
         }
       ],
       temperature: 0,
