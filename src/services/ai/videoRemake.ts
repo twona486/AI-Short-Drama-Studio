@@ -1,6 +1,6 @@
 /**
- * 视频复刻：抽帧 → Qwen3.8-Max 理解镜头 → 写成剧本/分镜
- * 配音一律后期 TTS；合成视频不让 H3 出人声。
+ * 영상 재현은 프레임을 추출하고 Qwen3.8-Max로 분석해 대본과 스토리보드를 작성한다.
+ * 후반 TTS로 더빙하고 H3 영상에는 인물 음성을 생성하지 않는다.
  */
 
 import { callLLM, blobToChatImageUrl, getAIMode, type LLMContentPart } from './client'
@@ -95,7 +95,7 @@ export async function extractVideoFrames(
       await video.play()
       video.pause()
     } catch {
-      /* 有的浏览器不允许自动播放，seek 仍然可用 */
+      /* 자동 재생이 차단돼도 시간 위치 이동은 계속한다. */
     }
     const duration = Number.isFinite(video.duration) && video.duration > 0 ? video.duration : 8
     const canvas = document.createElement('canvas')
