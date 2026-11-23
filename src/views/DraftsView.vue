@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { confirmAction } from '@/utils/confirmAction'
 import { t as translate } from '@/i18n'
 /**
  * 资源库
@@ -183,7 +184,7 @@ async function deleteVideo(shotId: string) {
 }
 
 async function deleteLibraryAsset(id: string) {
-  if (!confirm(translate('drafts.deleteAssetConfirm'))) return
+  if (!await confirmAction(translate('drafts.deleteAssetConfirm'))) return
   for (const s of shots.value) {
     const patch: Record<string, unknown> = {}
     if (s.imageAssetId === id) patch.imageAssetId = undefined
@@ -313,7 +314,7 @@ async function downloadScript(id: string) {
 async function removeScript(id: string) {
   const doc = scripts.docs.find((d) => d.id === id)
   if (!doc) return
-  if (!confirm(translate('common.deleteNamedScript', { p0: doc.title }))) return
+  if (!await confirmAction(translate('common.deleteNamedScript', { p0: doc.title }))) return
   await scripts.remove(id)
   toast.success(translate('common.deleted'))
 }

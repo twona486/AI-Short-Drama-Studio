@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { confirmAction } from '@/utils/confirmAction'
 import { t as translate } from '@/i18n'
 import { locale, setLocale } from '@/i18n'
 import { computed, onMounted, ref } from 'vue'
@@ -146,7 +147,7 @@ async function chooseStorageFolder() {
   try {
     const selected = await desktop().pickDirectory()
     if (!selected || selected === storageRoot.value) return
-    const ok = confirm(
+    const ok = await confirmAction(
       translate('settings.storage.confirm', { p0: selected })
     )
     if (!ok) return
@@ -277,7 +278,7 @@ function importProjectData() {
 }
 
 async function clearAll() {
-  if (!confirm(translate('settings.backup.confirm'))) return
+  if (!await confirmAction(translate('settings.backup.confirm'))) return
   for (const p of project.allProjects) {
     await project.remove(p.id)
   }

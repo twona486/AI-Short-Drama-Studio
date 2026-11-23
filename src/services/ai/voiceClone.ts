@@ -1,4 +1,5 @@
 /** Qwen3-TTS 声音复刻与非实时合成。复用设置页中的百炼 TTS 地址和 API Key。 */
+import { t as translate } from '@/i18n'
 import { getTtsConfig } from './runtime'
 import { normalizeForSpeech } from './tts'
 
@@ -39,7 +40,7 @@ async function downloadAudio(url: string, signal?: AbortSignal): Promise<Blob> {
 
 async function request(path: string, body: unknown, signal?: AbortSignal): Promise<any> {
   const config = getTtsConfig()
-  if (!config.apiKey.trim()) throw new Error('Bailian API 키가 없습니다. 설정에서 ‘내레이션 TTS’를 구성하세요.')
+  if (!config.apiKey.trim()) throw new Error(translate('providerErrors.voiceCloneDashscopeKey'))
   const response = await fetch(`${apiRoot(config.baseUrl)}${path}`, {
     method: 'POST',
     headers: {

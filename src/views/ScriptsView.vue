@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { confirmAction } from '@/utils/confirmAction'
 import { t as translate } from '@/i18n'
 /**
  * 剧本管理
@@ -96,8 +97,8 @@ async function select(id: string) {
   await loadContent(id)
 }
 
-function confirmDiscard(): boolean {
-  return window.confirm(translate('scripts.unsavedConfirm'))
+function confirmDiscard() {
+  return confirmAction(translate('scripts.unsavedConfirm'))
 }
 
 function markDirty() {
@@ -117,7 +118,7 @@ function flushDraft() {
   if (!draft.value || !activeId.value) return
   const { index, title, content } = draft.value
   markdown.value = updateEpisode(markdown.value, index, {
-    title: title.trim() || translate('common.episodeNumber', { p0: index + 1 }),
+    title: title.trim() || translate('scripts.defaultEpisodeTitle', { p0: index + 1 }),
     content
   })
   void persistQuiet()
@@ -199,7 +200,7 @@ async function removeEpisode(index: number) {
     return
   }
   const target = episodes.value[index]
-  if (!confirm(translate('scripts.deleteConfirm', { p0: target?.title ?? translate('common.episodeNumber', { p0: index + 1 }) }))) return
+  if (!await confirmAction(translate('scripts.deleteConfirm', { p0: target?.title ?? translate('scripts.defaultEpisodeTitle', { p0: index + 1 }) }))) return
   draft.value = null
   try {
     await scripts.removeEpisodeAt(activeId.value, index)
@@ -409,7 +410,7 @@ async function applyToProject() {
 async function removeActive() {
   const doc = activeDoc.value
   if (!doc) return
-  if (!confirm(translate('common.deleteNamedScript', { p0: doc.title }))) return
+  if (!await confirmAction(translate('common.deleteNamedScript', { p0: doc.title }))) return
   await scripts.remove(doc.id)
   activeId.value = ''
   markdown.value = ''

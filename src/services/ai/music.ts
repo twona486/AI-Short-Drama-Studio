@@ -10,6 +10,7 @@
  * （lyrics_generation 只写词，不出音频）
  */
 
+import { t as translate } from '@/i18n'
 import { getAIMode, callLLM } from './client'
 import { getMusicConfig } from './runtime'
 import type { Project, VisualStyle } from '@/types'
@@ -162,10 +163,7 @@ function audioFromPayload(audio: string, format: string): Promise<Blob> | Blob {
 async function realMinimaxMusic(prompt: string, model: string): Promise<MusicGenOutput> {
   const { apiKey, baseUrl } = musicConfig()
   if (!apiKey) {
-    throw new Error(
-      '[music] VITE_MUSIC_API_KEY(MiniMax API 키)가 설정되지 않았습니다.\n' +
-        '.env에 입력한 뒤 npm run dev를 다시 실행하세요.'
-    )
+    throw new Error(translate('providerErrors.musicKey'))
   }
 
   const format = 'mp3'

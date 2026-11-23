@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { confirmAction } from '@/utils/confirmAction'
 import { t as translate } from '@/i18n'
 import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
@@ -322,9 +323,9 @@ async function onPickerConfirm(ids: ID[]) {
   toast.success(translate('videos.videoSelected', { p0: shot.index + 1 }))
 }
 
-function next() {
+async function next() {
   if (shots.value.some((s) => !s.videoAssetId)) {
-    if (!confirm(translate('videos.goToEditConfirm'))) return
+    if (!await confirmAction(translate('videos.goToEditConfirm'))) return
   }
   router.push('/edit')
 }

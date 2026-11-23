@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { confirmAction } from '@/utils/confirmAction'
 import { t as translate } from '@/i18n'
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { Handle, Position, useVueFlow } from '@vue-flow/core'
@@ -199,7 +200,7 @@ async function approvePlay(ev: Event) {
 async function applyImportedMarkdown(text: string, filename: string) {
   if (!project.current) return
   const existing = (project.current.script?.content || '').trim()
-  if (existing && !confirm(translate('common.replaceScriptConfirm'))) return
+  if (existing && !await confirmAction(translate('common.replaceScriptConfirm'))) return
   try {
     const script = scriptFromImportedPlay(project.current, text, filename)
     project.setScript(script)

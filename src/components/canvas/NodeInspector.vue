@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { confirmAction } from '@/utils/confirmAction'
 import { t as translate } from '@/i18n'
 import { computed, ref, watch } from 'vue'
 import { useProjectStore, useAssetsStore, useToastStore, useSettingsStore } from '@/stores'
@@ -647,7 +648,7 @@ function patchScript(field: 'topic' | 'content', value: string) {
 async function importPlayMarkdown() {
   if (!project.current) return
   const existing = (project.current.script?.content || '').trim()
-  if (existing && !confirm(translate('common.replaceScriptConfirm'))) return
+  if (existing && !await confirmAction(translate('common.replaceScriptConfirm'))) return
   try {
     const picked = await pickPlayMarkdownFile()
     if (!picked) return

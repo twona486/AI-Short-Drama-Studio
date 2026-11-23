@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { confirmAction } from '@/utils/confirmAction'
 import { t as translate } from '@/i18n'
 import { ref, onMounted, onBeforeUnmount, computed, watch } from 'vue'
 import { useRouter } from 'vue-router'
@@ -166,8 +167,8 @@ async function quickCreate() {
   }
 }
 
-function deleteProject(id: string) {
-  if (!confirm(translate('home.confirmDeleteProject'))) return
+async function deleteProject(id: string) {
+  if (!await confirmAction(translate('home.confirmDeleteProject'))) return
   project.remove(id)
   toast.success(translate('home.projectDeleted'))
 }
@@ -292,7 +293,7 @@ async function uploadLibraryImages() {
 }
 
 async function removeLibraryItem(id: string) {
-  if (!confirm(translate('home.deleteImageConfirm'))) return
+  if (!await confirmAction(translate('home.deleteImageConfirm'))) return
   await library.remove(id)
   delete libUrls.value[id]
   const next = new Set(libSelected.value)
@@ -338,7 +339,7 @@ async function removeLibFolder(id: string, name: string) {
     n > 0
       ? translate('home.deleteNonEmptyFolderConfirm', { p0: name, p1: n })
       : translate('home.deleteFolderConfirm', { p0: name })
-  if (!confirm(msg)) return
+  if (!await confirmAction(msg)) return
   try {
     await library.deleteFolder(id)
     if (libFolderId.value === id) libFolderId.value = LIBRARY_PUBLIC_ID

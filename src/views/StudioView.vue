@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { confirmAction } from '@/utils/confirmAction'
 import { t as translate } from '@/i18n'
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
@@ -488,14 +489,14 @@ function duplicateNode(id: string | null | undefined) {
   })
 }
 
-function deleteCtxNode(id: string | null | undefined) {
+async function deleteCtxNode(id: string | null | undefined) {
   if (!id || !project.current) return
   const n = project.current.canvas?.nodes.find((x) => x.id === id)
   if (!n || !canDeleteNode(id)) {
     closeCtxMenu()
     return
   }
-  if (!confirm(translate('studio.deleteNodeConfirm'))) {
+  if (!await confirmAction(translate('studio.deleteNodeConfirm'))) {
     closeCtxMenu()
     return
   }

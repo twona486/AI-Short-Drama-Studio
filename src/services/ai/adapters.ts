@@ -3,6 +3,7 @@
  * 配置写在 settings 的 adapter 字段，运行时按 type 分流。
  */
 
+import { t as translate } from '@/i18n'
 import { desktop, isDesktop } from '@/services/desktop'
 import {
   applyComfyInputs,
@@ -1166,7 +1167,7 @@ export async function testEndpointConnection(
         return { ok: false, detail: `/system_stats 응답 ${res.status} ${await res.text().then((t) => t.slice(0, 120))}` }
       }
       // AutoDL 风格：用带鉴权的轻量请求；无公开 health 时验证 URL + Token 非空
-      if (!ep.apiKey?.trim()) return { ok: false, detail: 'AutoDL 토큰 또는 API 키가 없습니다.' }
+      if (!ep.apiKey?.trim()) return { ok: false, detail: translate('providerErrors.autodlToken') }
       if (!ep.workflowId?.trim() && adapterType === 'comfyui-workflow') {
         return { ok: false, detail: '워크플로 ID(workflowId)가 없습니다.' }
       }
@@ -1202,7 +1203,7 @@ export async function testEndpointConnection(
     }
 
     if (kind === 'tts' || kind === 'music') {
-      if (!ep.apiKey?.trim()) return { ok: false, detail: 'API 키가 없습니다.' }
+      if (!ep.apiKey?.trim()) return { ok: false, detail: translate('providerErrors.apiKey') }
       return { ok: true, detail: '주소와 API 키 필드를 확인했습니다. 이 유형에는 공통으로 쓸 수 있는 간단한 연결 확인 엔드포인트가 없습니다.' }
     }
 

@@ -9,6 +9,7 @@
  * 工作流：minimax_h3_lightx2v_v5_15s / minimax_h3_lightx2v_v5 / minimax_h3_image_audio_to_video / minimax_h3_b99_002
  */
 
+import { t as translate } from '@/i18n'
 import { getAIMode } from './client'
 import { comfyPromptGenerate, httpCustomMediaGenerate, isApimartHost, resolveVideoAdapter } from './adapters'
 import { apimartGenerateVideo, isApimartEndpoint } from './apimart'
@@ -616,7 +617,7 @@ async function realWorkflowVideo(
   throwIfAborted(input.signal)
 
   if (!apiKey) {
-    throw new Error('[video] AutoDL 토큰이 없습니다. 설정에서 이미지→영상 토큰을 입력하세요.')
+    throw new Error(translate('providerErrors.videoAutodlToken'))
   }
 
   const allBlobs = isFl2va
@@ -854,7 +855,7 @@ async function realWanVideo(
   const apiKey = tts.apiKey.trim()
   throwIfAborted(input.signal)
   if (!apiKey) {
-    throw new Error('[video] Bailian 토큰이 없습니다. 설정에서 내레이션 TTS의 DashScope 키를 입력하세요.')
+    throw new Error(translate('providerErrors.videoDashscopeKey'))
   }
 
   const allBlobs = [input.imageBlob, ...(input.referenceImages ?? [])]
@@ -1075,7 +1076,7 @@ async function realApimartVideo(
 ): Promise<VideoGenOutput> {
   const cfg = getVideoConfig(input.videoProfileId)
   if (!cfg.apiKey) {
-    throw new Error('[video] APIMart 영상 연결에 전용 API 키가 없습니다. 이 연결에는 APIMart 키가 필요합니다.')
+    throw new Error(translate('providerErrors.videoApimartKey'))
   }
   const prompt = input.prompt.trim()
   if (!prompt) throw new Error('[video] 영상 설명을 입력하세요.')
@@ -1334,7 +1335,7 @@ export async function generateVideo(
       return await realZealmanVideo(request, onProgress)
     }
     if (request.videoModel === 'h3-v5' && vcfg.provider === 'zealman') {
-      throw new Error('[video] 10초 H3는 AutoDL 워크플로를 사용합니다. 사용 가능한 AutoDL 연결이 없습니다. 설정에서 AutoDL 컴퓨팅 연결을 저장하세요.')
+      throw new Error(translate('providerErrors.h3AutodlConfig'))
     }
     if (adapterType === 'comfyui-prompt') {
       return await realComfyNativeVideo(request, onProgress)

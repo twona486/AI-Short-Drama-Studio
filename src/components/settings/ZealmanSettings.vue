@@ -86,7 +86,7 @@ function apply() {
       <h2>{{ $t('zealmanSettings.builtInImage') }}</h2>
       <div class="workflow-list">
         <article v-for="workflow in ZEALMAN_IMAGE_WORKFLOWS" :key="workflow.id">
-          <strong>{{ workflow.name }}</strong>
+          <strong>{{ workflow.displayName }}</strong>
           <span>{{ $t('zealmanSettings.textToImage') }}</span>
           <small>{{ $t('common.default') }} {{ workflow.defaultWidth }}×{{ workflow.defaultHeight }} {{ $t('zealmanSettings.pollResult') }}</small>
         </article>
@@ -96,7 +96,7 @@ function apply() {
       <h2>{{ $t('zealmanSettings.builtInWorkflow') }}</h2>
       <div class="workflow-list">
         <article v-for="workflow in ZEALMAN_WORKFLOWS" :key="workflow.id">
-          <strong>{{ workflow.name }}</strong>
+          <strong>{{ workflow.displayName }}</strong>
           <span>{{ workflow.mode === 'fl2va' ? $t('zealmanSettings.firstLast') : $t('zealmanSettings.multiReference') }}</span>
           <small>{{ $t('zealmanSettings.maximum') }} {{ workflow.maxDuration }} {{ $t('zealmanSettings.secondsMaximum') }} {{ workflow.maxImages }} {{ $t('zealmanSettings.inputImages') }}</small>
         </article>

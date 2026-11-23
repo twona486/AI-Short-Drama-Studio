@@ -505,6 +505,28 @@ app.whenReady().then(async () => {
     BrowserWindow.fromWebContents(event.sender)?.setTitle(nativeLocale === 'zh' ? zh.common.appName : ko.common.appName)
   })
 
+  const confirming = new Set<number>()
+  ipcMain.handle('desktop:confirmAction', async (event, message: unknown, locale: unknown) => {
+    const win = BrowserWindow.fromWebContents(event.sender)
+    if (!win || typeof message !== 'string' || confirming.has(win.id)) return false
+    const windowId = win.id
+    const { common } = locale === 'zh' ? zh : ko
+    confirming.add(windowId)
+    try {
+      const result = await dialog.showMessageBox(win, {
+        type: 'question',
+        message,
+        buttons: [common.cancel, common.ok],
+        cancelId: 0,
+        defaultId: 0,
+        noLink: true
+      })
+      return result.response === 1
+    } finally {
+      confirming.delete(windowId)
+    }
+  })
+
   ipcMain.handle('desktop:getRoot', async () => {
     const root = currentRoot()
     await ensureDir(root)

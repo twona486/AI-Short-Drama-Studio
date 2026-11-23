@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { confirmAction } from '@/utils/confirmAction'
 import { t as translate } from '@/i18n'
 import { ref, computed, onMounted, onBeforeUnmount, watch } from 'vue'
 import { useRouter } from 'vue-router'
@@ -59,29 +60,18 @@ const selectedReadyChapters = computed(() =>
 const presets = [
   {
     get name() { return translate('script.summerVlog') },
-    topic: '厦门三日游',
-    content: `清晨的鼓浪屿，海风轻拂，远处传来悠扬的钢琴声。
-午后骑行在环岛路，一边是椰林，一边是蔚蓝大海。
-傍晚曾厝垵的小巷里，灯笼亮起，空气中飘着沙茶面的香气。
-夜晚的海滩，篝火闪烁，星空格外清澈。`
+    get topic() { return translate('script.summerVlogTopic') },
+    get content() { return translate('script.summerVlogContent') }
   },
   {
     get name() { return translate('script.productLaunch') },
-    topic: '智能耳机新品上市',
-    content: `开场：极简线条勾勒耳机轮廓，金属质感彰显品质。
-核心：降噪技术演示，嘈杂街头瞬间安静。
-体验：佩戴轻盈，长时间无负担。
-续航：30 小时超长续航，告别频繁充电。
-结尾：自由掌控，静享每一刻。`
+    get topic() { return translate('script.productLaunchTopic') },
+    get content() { return translate('script.productLaunchContent') }
   },
   {
     get name() { return translate('script.scienceExplainer') },
-    topic: '一分钟了解黑洞',
-    content: `黑洞是一个引力极强的天体，连光都无法逃脱。
-它由大质量恒星坍缩形成，密度无限大。
-事件视界是黑洞的边界，越过就无法返回。
-霍金辐射告诉我们，黑洞也会缓慢蒸发。
-人类对黑洞的探索从未停止。`
+    get topic() { return translate('script.scienceExplainerTopic') },
+    get content() { return translate('script.scienceExplainerContent') }
   }
 ]
 
@@ -193,13 +183,13 @@ function addChapter() {
   persistDrama(false)
 }
 
-function removeChapter(id: string) {
+async function removeChapter(id: string) {
   if (chapters.value.length <= 1) {
     toast.warn(translate('script.keepOne'))
     return
   }
   const target = chapters.value.find((chapter) => chapter.id === id)
-  if (!target || !confirm(translate('script.confirmDeleteChapter', { p0: target.title }))) return
+  if (!target || !await confirmAction(translate('script.confirmDeleteChapter', { p0: target.title }))) return
   chapters.value = chapters.value.filter((chapter) => chapter.id !== id)
   const nextSelected = new Set(selectedChapterIds.value)
   nextSelected.delete(id)
