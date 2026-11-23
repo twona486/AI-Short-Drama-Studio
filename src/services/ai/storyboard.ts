@@ -2940,7 +2940,7 @@ function playBibleGaps(md: string): string[] {
     if (!/一句话故事|한 문장 이야기|one-sentence (?:story|premise)/i.test(t)) gaps.push('Include a one-sentence premise in the story background.')
     if (!/对抗引擎|갈등 구조|central conflict/i.test(t)) gaps.push('State the central conflict: who the opponent is, what they want, and how they raise the stakes.')
     if (/本片从|本段从哪一帧|从.*瞬间开始/.test(t) && !/完整梗概/.test(t)) {
-      gaps.push('故事背景被写成高潮切片，必须补完整梗概：开端、对手、递进阻力、高潮选择、结局')
+      gaps.push('The background is only a climax excerpt. Add a full synopsis with the opening, the antagonist, escalating obstacles, the decisive choice, and the ending.')
     }
   }
   if (!/##\s*(?:人物|캐릭터|인물|Characters)/i.test(t)) {
@@ -2953,7 +2953,7 @@ function playBibleGaps(md: string): string[] {
     const charCount = (people.match(/^###\s+/gm) || []).length
     const looksLikeAd = /口播|带货|产品演示/.test(t)
     if (!looksLikeAd && charCount > 0 && charCount < 3) {
-      gaps.push('人物表过薄：除路人外必须有主角、对手、关键亲人/导师；已故父亲和活人对手也要建档，不能只留两人高潮对手戏')
+      gaps.push('The character list is too thin. Beyond extras, include the lead, the antagonist, and key family or mentors. Profile the deceased father and living antagonist too. Do not reduce the screenplay to the two-person climax.')
     }
   }
   if (!/##\s*(?:环境与场景|환경과 장면|Environment and locations)/i.test(t) && !/##\s*场景\s*$/m.test(t)) {
@@ -2964,15 +2964,15 @@ function playBibleGaps(md: string): string[] {
     gaps.push('Give each scene an objective, obstacle, and outcome.')
   }
   const tableHits = t.match(/\*\*口播\*\*/g)?.length || 0
-  if (tableHits >= 3) gaps.push('把口播/画面/时长四格改写成连续动作和对白，不要再填表')
+  if (tableHits >= 3) gaps.push('Rewrite narration, visuals, and duration tables as continuous action and dialogue. Do not retain the table.')
   const looksLikeAd = /口播|带货|产品演示/.test(t)
   const quotes = t.match(/「[^」]{2,}」/g)?.length || 0
   const namedLines = t.match(/\*\*[^*：\n]{1,16}：\*\*/g)?.length || 0
   if (!looksLikeAd && sceneCount >= 3 && quotes + namedLines < Math.max(6, sceneCount)) {
-    gaps.push('对白过少：这是影视剧不是默片。相认、唤名、对峙、劝阻、问答必须写出可念的对白往来，禁止把前情塞进一句成年旁白、其余场次全哑巴')
+    gaps.push('There is too little dialogue for a screen drama. Write speakable exchanges for recognition, calling a name, confrontation, persuasion, or questions and answers. Do not bury the backstory in one adult narrator line while the other scenes remain silent.')
   }
   if (/成年[^「\n]{0,8}：/.test(t) && quotes < 4) {
-    gaps.push('禁止用「成年某某」旁白代替出镜对白；让本场人物自己开口')
+    gaps.push('Do not substitute narration from an older version of a character for on-screen dialogue. Let the characters in the scene speak for themselves.')
   }
   return gaps
 }
@@ -3016,76 +3016,76 @@ async function fillPlayBibleIfThin(
 }
 
 function mockPlayFromBrief(input: StoryboardInput): PlayDraftResult {
-  const topic = input.topic?.trim() || '短视频剧本'
+  const topic = input.topic?.trim() || '숏폼 대본'
   const brief = input.content?.trim() || topic
   if (input.playMode === 'continue' && brief.length > 80) {
     const next = mergeContinuedPlay(
       brief,
       [
-        '## 场景续｜往后',
+        '## 장면 계속｜이후',
         '',
-        '**外景｜主场景｜与上一场同一天气**',
+        '**실외｜주요 장면｜이전 장면과 같은 날씨**',
         '',
-        `从上一场结尾接着演。${(input.continueHint || '把这件事做完。').slice(0, 80)}`,
+        `이전 장면의 마지막 동작에서 이어진다. ${(input.continueHint || '이 일을 마무리한다.').slice(0, 80)}`,
         ''
       ].join('\n')
     )
     return {
       topic,
       playMarkdown: next,
-      aesthetic: `围绕「${topic}」的叙事`,
-      styleBrief: '演示模式续写'
+      aesthetic: `「${topic}」을 중심으로 한 이야기`,
+      styleBrief: '데모 모드에서 이어 쓴 대본'
     }
   }
   const playMarkdown = [
     `# ${topic}`,
     '',
-    '> 类型：剧情　时间：按文案　地点：按文案　建议时长：1 分钟内',
+    '> 장르: 드라마　시간: 원고 기준　장소: 원고 기준　권장 길이: 1분 이내',
     '',
-    '## 故事背景',
+    '## 이야기 배경',
     '',
     brief,
     '',
-    '## 人物',
+    '## 캐릭터',
     '',
-    '### 主角',
+    '### 주인공',
     '',
-    '年龄与外貌待按文案锁定。这一段的衣服、鞋和手里的东西保持统一。',
+    '인물의 나이와 외모는 원고를 따른다. 이 구간에서 옷, 신발, 손에 든 물건을 같은 상태로 유지한다.',
     '',
-    '## 环境与场景',
+    '## 환경과 장면',
     '',
-    '### 主场景',
+    '### 주요 장면',
     '',
-    '无人时的地面、建筑、光线和天气。年代物件与文案一致。',
+    '사람이 없는 상태의 지면, 건물, 빛, 날씨를 보여 준다. 시대를 드러내는 물건은 원고를 따른다.',
     '',
-    '## 拍摄原则',
+    '## 촬영 원칙',
     '',
-    '按写实，不煽情。人物看向场景里的人或物，不要看镜头。',
+    '사실적으로 찍고 감정을 과장하지 않는다. 인물은 장면 속 사람이나 물건을 보며 카메라를 바라보지 않는다.',
     '',
-    '## 场景一｜开场',
+    '## 장면 1｜시작',
     '',
-    '**外景｜主场景｜按文案时辰**',
+    '**실외｜주요 장면｜원고의 시간대**',
     '',
-    '从主场景切入，完成开场信息。',
+    '주요 장면에서 시작해 도입에 필요한 정보를 전달한다.',
     '',
-    '## 场景二｜收口',
+    '## 장면 2｜마무리',
     '',
-    '把这件事落到一个清楚的结束状态。',
+    '사건을 분명한 결말로 맺는다.',
     '',
-    '## 本章情绪线',
+    '## 챕터의 감정선',
     '',
-    '从进入到收口，情绪跟看见的事走。',
+    '도입부터 마무리까지 눈앞에서 벌어지는 사건에 따라 감정이 움직인다.',
     '',
-    '## 视觉与声音基调',
+    '## 영상과 소리의 기조',
     '',
-    '自然光，现场环境声。',
+    '자연광과 현장 환경음.',
     ''
   ].join('\n')
   return {
     topic,
     playMarkdown,
-    aesthetic: `围绕「${topic}」的叙事`,
-    styleBrief: '演示模式生成的完整剧本草稿'
+    aesthetic: `「${topic}」을 중심으로 한 이야기`,
+    styleBrief: '데모 모드에서 작성한 전체 대본 초안'
   }
 }
 
