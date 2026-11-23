@@ -71,7 +71,7 @@ export async function runAgentLoop(rawActions: unknown[], options: AgentLoopOpti
   await patchAgentTask(task.id, { status: 'running' })
   options.onEvent({
     kind: 'log',
-    label: `计划 ${graph.nodes.length} 步，约 ${estimate.calls} 次生成调用 / ${Math.max(1, Math.ceil(estimate.seconds / 60))} 分钟`
+    label: `${graph.nodes.length}단계, 생성 요청 약 ${estimate.calls}회, 예상 ${Math.max(1, Math.ceil(estimate.seconds / 60))}분`
   })
 
   const completed: AgentToolAction[] = []
@@ -92,7 +92,7 @@ export async function runAgentLoop(rawActions: unknown[], options: AgentLoopOpti
       if (!actions.length) {
         if (!options.continue || continuationRound >= maxContinuationRounds) break
         continuationRound++
-        options.onEvent({ kind: 'think', label: `重新查看画布，检查任务是否完成（${continuationRound}/${maxContinuationRounds}）…` })
+        options.onEvent({ kind: 'think', label: `캔버스를 다시 확인해 작업이 끝났는지 살펴보고 있어요(${continuationRound}/${maxContinuationRounds})…` })
         const next = await options.continue({
           completed: [...completed],
           results: [...results],
@@ -108,7 +108,7 @@ export async function runAgentLoop(rawActions: unknown[], options: AgentLoopOpti
         const nextEstimate = estimateToolActions(nextActions)
         if (budget > 0 && scheduledCalls + nextEstimate.calls > budget) {
           throw new Error(
-            `继续执行预计累计需要 ${scheduledCalls + nextEstimate.calls} 次生成调用，超过当前单次预算 ${budget}。已完成结果会保留。`
+            `계속하려면 생성 요청이 총 ${scheduledCalls + nextEstimate.calls}회 필요해 한도 ${budget}회를 초과해요. 완료된 결과는 저장돼요.`
           )
         }
         scheduledCalls += nextEstimate.calls
@@ -119,12 +119,12 @@ export async function runAgentLoop(rawActions: unknown[], options: AgentLoopOpti
         })
         options.onEvent({
           kind: 'log',
-          label: `根据最新画布继续 ${nextActions.length} 步：${nextActions.map((item) => TOOL_LABEL[item.tool] || item.tool).join('、')}`
+          label: `현재 캔버스를 기준으로 ${nextActions.length}단계를 이어서 실행해요. ${nextActions.map((item) => TOOL_LABEL[item.tool] || item.tool).join('、')}`
         })
         actions = nextActions
         continue
       }
-      if (options.signal?.aborted) throw new AgentToolError('任务已取消', 'agent', 'cancelled')
+      if (options.signal?.aborted) throw new AgentToolError('작업을 취소했어요.', 'agent', 'cancelled')
       const action = actions.shift()!
       const stepKey = `${action.tool}:${action.shotId || action.subjectId || action.sceneId || action.nodeId || ''}`
       const stepLabel = TOOL_LABEL[action.tool] || action.tool
@@ -144,9 +144,9 @@ export async function runAgentLoop(rawActions: unknown[], options: AgentLoopOpti
       }
       if (preflight.state === 'skip') {
         completed.push(action)
-        results.push({ tool: action.tool, ok: true, detail: preflight.detail || '已满足，无需重复执行' })
+        results.push({ tool: action.tool, ok: true, detail: preflight.detail || '이미 완료된 작업이라 건너뛰었어요.' })
         options.onEvent({ kind: 'step', step: stepKey, label: stepLabel, status: 'done' })
-        options.onEvent({ kind: 'log', label: `自检跳过：${preflight.detail || stepLabel}` })
+        options.onEvent({ kind: 'log', label: `검사 결과에 따라 건너뛰었어요. ${preflight.detail || stepLabel}` })
         continue
       }
       if (preflight.state === 'repair') {
@@ -154,7 +154,7 @@ export async function runAgentLoop(rawActions: unknown[], options: AgentLoopOpti
         dependencyAttempts.set(stepKey, count)
         if (count > 3 || !preflight.actions?.length) {
           const toolError = new AgentToolError(
-            `${preflight.detail || stepLabel}，自动补依赖后仍未满足`,
+            `${preflight.detail || stepLabel}의 선행 작업을 다시 실행했지만 필요한 조건을 충족하지 못했어요.`,
             action.tool,
             'postcondition_failed',
             false
@@ -171,7 +171,7 @@ export async function runAgentLoop(rawActions: unknown[], options: AgentLoopOpti
         const projected = estimateToolActions([...completed, ...candidate])
         if (budget > 0 && projected.calls > budget) {
           const toolError = new AgentToolError(
-            `发现缺失依赖，但补齐后预计需要 ${projected.calls} 次生成调用，超过预算 ${budget}`,
+            `누락된 선행 작업까지 실행하면 생성 요청이 ${projected.calls}회로 한도 ${budget}회를 초과해요.`,
             action.tool,
             'postcondition_failed',
             false
@@ -182,7 +182,7 @@ export async function runAgentLoop(rawActions: unknown[], options: AgentLoopOpti
           })
           return { results, graph, stopped: true, error: toolError }
         }
-        options.onEvent({ kind: 'log', label: `执行前自检：${preflight.detail}` })
+        options.onEvent({ kind: 'log', label: `실행 전 검사 ${preflight.detail}` })
         await patchAgentTask(task.id, {
           repairCount: (dependencyAttempts.get(stepKey) || 0) + replanAttempt,
           lastRecovery: preflight.detail
@@ -201,7 +201,7 @@ export async function runAgentLoop(rawActions: unknown[], options: AgentLoopOpti
         const verificationIssue = verifyRegisteredTool(action)
         if (verificationIssue) {
           throw new AgentToolError(
-            `工具返回成功，但结果验收未通过：${verificationIssue}`,
+            `도구 실행은 완료됐지만 결과가 검수를 통과하지 못했어요. ${verificationIssue}`,
             action.tool,
             'postcondition_failed',
             true
@@ -210,7 +210,7 @@ export async function runAgentLoop(rawActions: unknown[], options: AgentLoopOpti
         completed.push(action)
         results.push({ tool: action.tool, ok: true, detail })
         if (recoveringSteps.delete(stepKey)) {
-          options.onEvent({ kind: 'log', label: `自动修复成功，继续后续任务：${stepLabel}` })
+          options.onEvent({ kind: 'log', label: `자동으로 수정했어요. 다음 작업을 진행해요. ${stepLabel}` })
         }
         options.onEvent({ kind: 'step', step: stepKey, label: stepLabel, status: 'done' })
         await patchAgentTask(task.id, {
@@ -235,7 +235,7 @@ export async function runAgentLoop(rawActions: unknown[], options: AgentLoopOpti
         ) {
           replanAttempt++
           recoveringSteps.add(stepKey)
-          options.onEvent({ kind: 'log', label: `结果未达标，正在诊断并重新规划（${replanAttempt}/${maxReplans}）：${toolError.message}` })
+          options.onEvent({ kind: 'log', label: `결과가 기준을 충족하지 못해 원인을 확인하고 계획을 다시 세워요(${replanAttempt}/${maxReplans}). ${toolError.message}` })
           await patchAgentTask(task.id, {
             repairCount: replanAttempt + [...dependencyAttempts.values()].reduce((sum, value) => sum + value, 0),
             lastRecovery: `${toolError.code}：${toolError.message}`
@@ -253,7 +253,7 @@ export async function runAgentLoop(rawActions: unknown[], options: AgentLoopOpti
         }
 
         results.push({ tool: action.tool, ok: false, detail: toolError.message })
-        options.onEvent({ kind: 'log', label: sameFailureCount >= 2 ? `同一错误重复出现，已停止盲目重试：${toolError.message}` : `已暂停：${toolError.message}` })
+        options.onEvent({ kind: 'log', label: sameFailureCount >= 2 ? `같은 오류가 반복되어 재시도를 중단했어요. ${toolError.message}` : `작업을 일시 중지했어요. ${toolError.message}` })
         await patchAgentTask(task.id, {
           status: toolError.code === 'cancelled' ? 'cancelled' : 'failed',
           failedTool: action.tool,
