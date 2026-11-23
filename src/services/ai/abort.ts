@@ -22,7 +22,7 @@ function errMessage(e: unknown) {
 export function isAbortError(e: unknown): boolean {
   const name = errName(e)
   if (name === 'AbortError' || name === 'TimeoutError') return true
-  return /aborted a request|operation was aborted|작업을 취소했어요.|The user aborted/i.test(errMessage(e))
+  return /aborted a request|operation was aborted|任务已取消|작업을 취소했어요|The user aborted/i.test(errMessage(e))
 }
 
 export function isTimeoutAbort(e: unknown, signal?: AbortSignal): boolean {
@@ -35,7 +35,7 @@ export function isTimeoutAbort(e: unknown, signal?: AbortSignal): boolean {
 export function llmAbortError(e: unknown, signal?: AbortSignal, timeoutMs = 120_000): Error {
   if (isTimeoutAbort(e, signal)) {
     const sec = Math.max(1, Math.round(timeoutMs / 1000))
-    return new Error(`${sec}초 안에 모델 응답을 받지 못했어요. 긴 대본은 시간이 더 걸릴 수 있으니 다시 생성해 주세요.`)
+    return new DOMException(t('aiError.timeout', { seconds: sec }), 'TimeoutError')
   }
   if (signal?.aborted || isAbortError(e)) {
     return new DOMException('작업을 취소했어요.', 'AbortError')
