@@ -48,8 +48,8 @@ export function buildPlanFromActions(actions: AgentToolAction[], intentLabel: st
   }))
   const summary =
     steps.length === 1
-      ? `计划 1 步：${steps[0].title}`
-      : `计划 ${steps.length} 步：${steps.map((s) => s.title).join(' → ')}`
+      ? `1단계 계획 ${steps[0].title}`
+      : `${steps.length}단계 계획 ${steps.map((s) => s.title).join(' → ')}`
   return {
     intentLabel,
     summary,
