@@ -901,7 +901,7 @@ function buildShotWorkBatches(play: string, targetBatches?: number): ShotWorkBat
 
 function verbatimSplitRule(verbatim?: boolean): string {
   if (!verbatim) return ''
-  return `【가져온 대본의 샷 나누기】사용자가 가져온 완성 대본입니다. 샷을 나눌 때 본문을 고치거나 다듬거나 줄거리를 보완하거나 표현을 바꾸거나 대사를 추가·삭제하지 마세요. 대사와 내레이션을 서로 바꾸지 마세요. voiceover에는 원문의 대사를 글자 그대로 옮기세요. visualPrompt와 videoPrompt에는 원문에 명시된 인물, 동작, 장면만 담으세요. 원문에 없는 사건, 소품, 반응, 결말을 추가하지 마세요. 샷은 원문 순서를 따르세요.\n`
+  return `[Imported script: break down without rewriting] This is the user's complete script. Do not polish, rephrase, extend, or alter lines. Do not turn dialogue into narration or narration into dialogue. Copy the original spoken words verbatim into voiceover. Use only specified people, actions, and locations in visualPrompt and videoPrompt. Do not add events, props, reactions, or outcomes. Preserve shot order from the script.\n`
 }
 
 async function generateShotWorkBatch(
@@ -1871,7 +1871,7 @@ ${extractPlayForSceneStage(play)}`
     : ''
 
   const userText = extractMode
-    ? `${verbatimSplitRule(input.verbatim)}아래에 완성된 대본이 있습니다. **원문에 충실하게** 캔버스 노드 JSON(subjects / scenes / shots)을 추출하세요. 이야기를 고치거나 새로 만들지 마세요.${budgetLine}
+    ? `${verbatimSplitRule(input.verbatim)}The following script is complete. Extract the canvas node JSON (subjects / scenes / shots) faithfully. Do not rewrite or invent a new story.${budgetLine}
 
 전체 대본
 """
@@ -1886,10 +1886,10 @@ ${input.keywords?.length ? `关键词：${input.keywords.join('、')}` : ''}
 ${stylePriority}
 ${productNote}
 
-캐릭터, 장면과 개별 장면은 대본과 일치시켜야 합니다. 원문 대사는 해당 샷의 voiceover에 ‘캐릭터 이름：대사’로 넣으세요. 성인이 된 인물의 내레이션으로 바꾸거나 대사를 비우지 마세요. 같은 인물이 같은 의도로 이어 말하는 짧은 대사 2–4개는 가능한 한 한 샷에 넣고 대사마다 기계적으로 샷을 나누지 마세요. visualPrompt는 대본의 화면을 바탕으로 그릴 수 있는 영어 정지 화면 프롬프트로 쓰세요. videoPrompt는 영어로 0초부터 샷이 끝날 때까지 실제 박자에 따라 2–5구간으로 나누세요. 구간마다 인물의 시작 상태, 보는 대상, 동작, 화자와 대사 원문, 다른 인물의 위치와 반응, 감정 변화, 카메라 움직임과 도착점을 쓰세요. 기계적으로 등분하거나 ‘멍한 표정을 피한다’처럼 상투적인 문구를 넣지 마세요. 대사 중 화면을 좁힐지는 화면의 느낌, 동작, 공간 관계, 감정 리듬에 맞춰 정하세요. 표정을 강조할 때는 근경이나 클로즈업을, 관계나 환경을 유지할 때는 중경이나 두 사람 또는 여러 사람이 보이는 구도를 사용하세요. 모든 대사를 클로즈업으로 처리하거나 visualPrompt를 복사하지 마세요. JSON을 바로 출력하세요.`
-    : `시나리오 작성 지침에 따라 원고를 촬영할 수 있는 스토리보드로 나누세요. 내레이션은 말할 수 있게 쓰고 모델용 화면 묘사는 Write model-facing imagery in clear natural English instead of a list of disconnected prompt keywords.${budgetLine}
+Match every character, location, and scene to the script. Copy original dialogue into voiceover as “Character name: line.” Do not replace lines with older-character narration or silence. Keep 2–4 consecutive short lines by one character with the same intent in a shot when possible. Write the visible still in English as visualPrompt. Write videoPrompt in English from zero through the ending in 2–5 actual beats. For each beat describe the starting state, perception, action, speaker and original words, others’ blocking and reactions, emotional changes, and camera motion and endpoint. Avoid equal divisions and generic expressions. Frame speaking from action, spacing, and emotion: use close framing for an important expression and medium or group framing for relationships and surroundings. Do not repeat visualPrompt. Write titles and user-facing descriptions in Korean (한국어). Return JSON directly.`
+    : `Use the screenwriting guide to break the brief into filmable shots. Write speakable narration in Korean (한국어). Write model-facing imagery in clear natural English, without disconnected prompt keywords.${budgetLine}
 
-원문의 사실을 유지하세요. 원문에 없는 가격, 제품 사양, 효능, 인물 관계, 브랜드 약속이나 결말을 추가하지 마세요. 숫자와 고유명사는 원문 그대로 유지하세요. 정보가 부족하면 화면으로 연결하고 사실을 만들어 채우지 마세요.
+Preserve the source facts. Do not add prices, specifications, efficacy, relationships, brand promises, or plot outcomes absent from the source. Keep numbers and proper nouns verbatim. Use visible action to bridge missing detail instead of inventing facts.
 
 원고 주제
 """
@@ -1908,13 +1908,13 @@ ${input.keywords?.length ? `关键词：${input.keywords.join('、')}` : ''}
 ${stylePriority}
 ${productNote}
 
-먼저 캐릭터와 장소를 고정한 뒤 샷을 나누세요. 샷마다 visualPrompt는 정지 화면에서 보이는 것을 샷 연출에 맞춰 쓰고, videoPrompt는 해당 샷에서 연기할 동작을 쓰세요. 샷 이미지 프롬프트를 반복하지 마세요.
+Establish characters and locations before shot breakdown. Write visualPrompt as a visible still and videoPrompt as the performance for the current shot. Do not repeat the still prompt in the video prompt.
 ${
   hasUserStyle
     ? `画风「${mediumPhrase}」在画面描述里点一次，写进桥、水、衣这些实物上。禁止第一句只写画风、结尾再抄一段技法套话。禁止只写「两人相对拱手」这种站位摘要。`
     : `主题没提画风时，画面里带上「${styleCn}」，同样要写清环境实物与动态。`
 }
-설명 없이 JSON만 출력하세요.`
+Return JSON only without explanation.`
 
   const extractSystemExtra = extractMode
     ? `\n【이번 작업】입력은 완성된 대본입니다. 추출하고 저장에 필요한 필드만 보완하세요. 내레이션 원문의 의미를 바꾸거나 대본에서 구분한 인물을 합치지 마세요. 각 subject는 적어도 한 샷의 subjectIds에 연결하고 visualPrompt에서 이름을 언급해 화면에 등장시키세요.`
@@ -1989,9 +1989,9 @@ ${videoPerformanceSpec(getVideoPromptStyle())}
   ]
 }
 
-画风：用户原词写进画面实物，不要单独成段。主题完全没提才用下拉「${styleCn}」。
-visualPrompt 若只有站位没有环境实物、或开头结尾是画风套话，视为不合格。
-videoPrompt 若没从0秒覆盖到镜头结束、没按拍点写清每段谁在做什么和谁在说什么，或只是机械等分后填套话，视为不合格。
+Visual style: express the user's wording through physical objects, without a separate style paragraph. Only use the dropdown value when the topic does not specify a style: ${styleCn}」。
+Reject visualPrompt if it only lists positions, omits physical surroundings, or opens or ends with generic style language.
+Reject videoPrompt if it omits any duration from zero to the end, lacks actions and speakers at actual beats, or fills equal time slots with generic language.
 ${hasUserStyle && !look.matched ? '这是自定义画风，不要套页面下拉风格。' : `${styleGuide.avoid}。`}
 Use H3 on-screen dialogue by default. Divide the original words into meaningful paragraphs for voiceover and set audioMode=h3-dialogue. Avoid one line per shot. The current model accepts at most ${shotDurationLimit(input)} seconds per shot. For a shared place, person, intention, or continuous action, prefer one complete 7–${shotDurationLimit(input)}-second shot when it fits. Do not force two 5-second shots to fill a template. Cut only when focus, time, place, axis, or dramatic purpose changes. Reserve a single line for brief reactions or transitions and allow about four characters per second. Use "Character name: dialogue" in voiceover and specify the speaker and vocal quality in speakerHint.
 Follow action, spacing, and emotion when choosing framing. Use close framing when the expression matters and no surroundings are needed; use medium, two-person, or group framing for handoffs, arguments, exchanges, distance, environmental pressure, or group reactions. Do not force close-ups; name who speaks and others' reactions so mouths do not open together.
