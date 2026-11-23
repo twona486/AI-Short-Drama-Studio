@@ -94,8 +94,8 @@ function snapshot() {
         `- [video] ${p.name} (${p.id}) url=${p.baseUrl || '空'} key=${maskKey(p.apiKey)} workflow=${p.workflowId || '空'} adapter=${p.adapter?.type || '默认'} style=${p.promptStyle} still=${p.stillMode || 'identity'}`
     )
     .join('\n')
-  return `当前本机配置（Key 已脱敏）：
-LLM 是否可用：${endpointReady(cfg.llm) ? '是' : '否'}
+  return `현재 기기의 설정(API 키 마스킹 적용)
+LLM 사용 가능 여부 ${endpointReady(cfg.llm) ? '가능' : '불가'}
 ${named('llm', cfg.llms)}
 ${named('vision', cfg.visions)}
 ${named('image', cfg.images)}
@@ -105,46 +105,46 @@ ${videos}`
 
 const SYSTEM = `${settingsSkillRaw}
 
-只输出 JSON：{ "say": "给用户看的话", "actions": [ ... ] }
-一次最多 8 个 actions。没有把握就 actions 为空，先问。文档已经够写的时候不要空 actions。
+JSON만 출력하세요. { "say": "사용자에게 보여 줄 한국어 메시지", "actions": [ ... ] }
+한 번에 actions는 최대 8개입니다. 확신할 수 없으면 actions를 비우고 먼저 질문하세요. 문서에 필요한 정보가 충분하면 작업을 제시하세요.
 
-可用工具：
-{ "tool": "add_profile", "kind": "vision|image|tts|video|llm", "name": "显示名", "provider": "预设id，可选", "baseUrl": "", "apiKey": "", "model": "", "models": ["可选"], "voice": "tts可选", "workflowId": "video可选", "promptStyle": "scene-narrative|formatted", "stillMode": "identity|keyframe|storyboard，video可选。H3用人设+场景填 identity，其它模型要关键帧填 keyframe", "options": { "imageResolutions": ["1k","2k"], "videoAudio": true, "lastFrameRequired": false, "audioField": "audio" }, "adapter": { "type": "openai-compatible|openai-images|http-custom|comfyui-workflow|comfyui-prompt", "path": "可选", "pollPath": "可选含{id}", "resultJsonPath": "可选", "authHeader": "可选", "authPrefix": "可选，Bearer 或空", "workflowTemplate": "ComfyUI /prompt JSON，可用{{prompt}}{{image}}" } }
-{ "tool": "update_profile", "kind": "…", "id": "profile_id", "name": "可选", "baseUrl": "可选", "apiKey": "可选", "model": "可选", "models": ["可选"], "voice": "可选", "workflowId": "可选", "promptStyle": "可选", "options": "可选，同上", "adapter": "可选，同上" }
-{ "tool": "select_profile", "kind": "…", "id": "…", "model": "可选，设为当前模型" }
-{ "tool": "add_model", "kind": "llm|vision|image|tts", "id": "profile_id，可省略表示当前套", "model": "模型名" }
-{ "tool": "test_connection", "kind": "llm|vision|image|tts|video", "id": "可选，默认当前套" }
-{ "tool": "add_comfyui", "baseUrl": "http://127.0.0.1:8188", "apiKey": "可选", "kinds": ["image","video"], "test": true }
-{ "tool": "list_comfy_workflows", "kind": "image|video", "id": "可选 profile id" }
-{ "tool": "set_workflow_template", "kind": "image|video", "id": "可选", "workflowTemplate": "{...API Format JSON...}", "path": "可选，从 list 结果里的 path 拉取" }
+사용 가능한 도구
+{ "tool": "add_profile", "kind": "vision|image|tts|video|llm", "name": "표시 이름", "provider": "프리셋 ID. 선택 사항", "baseUrl": "", "apiKey": "", "model": "", "models": ["선택 사항"], "voice": "tts 선택 사항", "workflowId": "video 선택 사항", "promptStyle": "scene-narrative|formatted", "stillMode": "identity|keyframe|storyboard. video 선택 사항. 캐릭터 설정과 장면 이미지를 쓰는 H3는 identity, 키프레임이 필요한 다른 모델은 keyframe", "options": { "imageResolutions": ["1k","2k"], "videoAudio": true, "lastFrameRequired": false, "audioField": "audio" }, "adapter": { "type": "openai-compatible|openai-images|http-custom|comfyui-workflow|comfyui-prompt", "path": "선택 사항", "pollPath": "선택 사항. {id} 포함 가능", "resultJsonPath": "선택 사항", "authHeader": "선택 사항", "authPrefix": "선택 사항. Bearer 또는 빈 문자열", "workflowTemplate": "ComfyUI /prompt JSON. {{prompt}}{{image}} 사용 가능" } }
+{ "tool": "update_profile", "kind": "…", "id": "profile_id", "name": "선택 사항", "baseUrl": "선택 사항", "apiKey": "선택 사항", "model": "선택 사항", "models": ["선택 사항"], "voice": "선택 사항", "workflowId": "선택 사항", "promptStyle": "선택 사항", "options": "선택 사항. 위와 같음", "adapter": "선택 사항. 위와 같음" }
+{ "tool": "select_profile", "kind": "…", "id": "…", "model": "선택 사항. 현재 모델로 설정" }
+{ "tool": "add_model", "kind": "llm|vision|image|tts", "id": "profile_id. 생략하면 현재 프로필", "model": "모델 이름" }
+{ "tool": "test_connection", "kind": "llm|vision|image|tts|video", "id": "선택 사항. 기본값은 현재 프로필" }
+{ "tool": "add_comfyui", "baseUrl": "http://127.0.0.1:8188", "apiKey": "선택 사항", "kinds": ["image","video"], "test": true }
+{ "tool": "list_comfy_workflows", "kind": "image|video", "id": "선택 사항인 프로필 ID" }
+{ "tool": "set_workflow_template", "kind": "image|video", "id": "선택 사항", "workflowTemplate": "{...API Format JSON...}", "path": "선택 사항. 목록 결과의 path에서 불러옴" }
 
-预设目录（id｜名称｜地址｜默认模型｜常用模型）：
+프리셋 목록(ID｜이름｜주소｜기본 모델｜자주 쓰는 모델)
 LLM
 ${catalog(LLM_PROVIDERS)}
-视觉
+비전
 ${catalog(VISION_PROVIDERS)}
-生图
+이미지 생성
 ${catalog(IMAGE_PROVIDERS)}
-配音
+더빙
 ${catalog(TTS_PROVIDERS)}
-视频
+영상
 ${catalog(VIDEO_PROVIDERS)}
 
-注意：
-- 用户贴 API 文档或中转地址时：provider 必须是 custom，按文档原文抽 Base URL 和模型名，立刻 add_profile。禁止拒绝。
-- 文档同时含聊天 / 看图 / 生图时，每种 kind 各写一条，可共用同一套 Key 和地址。
-- Base URL 写到 /v1 这一层即可，不要带 /chat/completions 或 /images/generations。
-- 只有用户没给任何文档、只说「帮我配」时，才从上面的大厂预设里选。
-- 视频的 model 若没单独给 workflowId，就当作 workflowId。
-- 配音默认音色 longanhuan_v3.6，用户没提音色就用这个。
-- provider 对得上大厂预设、且用户没另给第三方地址时，用预设补全；用户给的 URL 与预设域名不一致时一律当 custom，不要改写成官方地址。
-- 自建 ComfyUI（如 http://127.0.0.1:8188）：优先用 add_comfyui 一次加生图+视频。用户只说「我的 ComfyUI 在 xxx」或只贴地址时立刻添加，不要追问模型名。
-- 有工作流 JSON 再写入 adapter.workflowTemplate；没有也不要拒绝添加，提醒出片前在设置页适配器粘贴。不要编造 AutoDL 生命周期或假工作流。
-- OpenAI 兼容中转：LLM/视觉用默认；生图若不是 /images/generations，设 adapter.type=http-custom 并填 path、resultJsonPath。
-- 写完接入后，若用户要求「测一下」，调用 test_connection。
-- options 只写文档里明确出现的节点参数，禁止编造。生图文档列出 1K/2K/4K 时，imageResolutions 只收录文档有的档位，写成小写 1k、2k、4k。文档没写分辨率就不要填 imageResolutions。
-- 视频文档有音频开关时 videoAudio 才写 true，并把文档里的字段名写入 audioField（必须含 audio，例如 audio 或 generate_audio）。没有音频开关就不要写 videoAudio。
-- 尾帧默认不是必填。只有文档写明尾帧、结束帧或 last frame 必填时，lastFrameRequired 才写 true。文档没提尾帧，就不要写这个字段。`
+연결 규칙
+- 사용자가 API 문서나 중계 주소를 제공하면 provider는 custom입니다. 문서 원문에서 Base URL과 모델 이름을 추출해 바로 add_profile을 사용하세요. 작업을 거절하지 마세요.
+- 문서에 채팅, 이미지 분석, 이미지 생성이 함께 있으면 각 kind마다 프로필을 하나씩 작성하세요. API 키와 주소를 공유할 수 있습니다.
+- Base URL에는 /v1까지 쓰세요. /chat/completions나 /images/generations는 빼세요.
+- 사용자가 문서 없이 설정해 달라고만 하면 위의 공식 공급자 프리셋에서 고르세요.
+- 영상에 workflowId를 따로 제공하지 않으면 model을 workflowId로 사용하세요.
+- 사용자가 음색을 지정하지 않으면 더빙에 기본값 longanhuan_v3.6을 쓰세요.
+- 별도 타사 주소 없이 공식 공급자와 일치하면 프리셋의 나머지 정보를 사용하세요. 제공된 URL의 도메인이 프리셋과 다르면 항상 custom으로 처리하고 공식 주소로 바꾸지 마세요.
+- 자체 호스팅 ComfyUI(예 http://127.0.0.1:8188)는 add_comfyui로 이미지 생성과 영상 연결을 한 번에 추가하세요. 사용자가 ComfyUI 주소만 알려 주면 모델 이름을 묻지 말고 추가하세요.
+- 워크플로 JSON이 있으면 adapter.workflowTemplate에 저장하세요. 없어도 프로필을 추가하고, 영상 생성 전에 설정의 어댑터에 붙여 넣으라고 알려 주세요. AutoDL 인스턴스 운영 방식이나 실행할 수 없는 워크플로를 만들어 내지 마세요.
+- OpenAI 호환 중계의 LLM과 비전은 기본값을 사용하세요. 이미지 생성 경로가 /images/generations가 아니면 adapter.type을 http-custom으로 정하고 path와 resultJsonPath를 채우세요.
+- 연결을 작성한 뒤 사용자가 테스트를 요청하면 test_connection을 사용하세요.
+- options에는 문서에 명시된 노드 파라미터만 넣으세요. 이미지 생성 문서에서 1K, 2K, 4K를 지원하면 문서에 있는 옵션만 imageResolutions에 소문자 1k, 2k, 4k로 넣으세요. 해상도가 명시되지 않았으면 생략하세요.
+- 영상 문서에 오디오 켜기·끄기가 명시된 경우에만 videoAudio를 true로 설정하고, 문서의 필드 이름을 audioField에 넣으세요. 이름에는 audio가 들어가야 합니다. audio나 generate_audio가 그 예입니다. 오디오 전환 옵션이 없으면 videoAudio를 생략하세요.
+- 끝 프레임은 기본적으로 선택 사항입니다. 끝 프레임이나 last frame이 필수라고 문서에 명시된 경우에만 lastFrameRequired를 true로 설정하세요. 문서에 언급이 없으면 이 필드를 생략하세요.`
 
 function providersFor(kind: SetupKind): ProviderPreset[] {
   if (kind === 'llm') return LLM_PROVIDERS
@@ -695,7 +695,7 @@ function parseAgentJson(text: string): { say: string; actions: Record<string, un
   try {
     const obj = parseJsonRobust(text)
     return {
-      say: String(obj.say || obj.reply || '好的'),
+      say: String(obj.say || obj.reply || '확인했습니다.'),
       actions: Array.isArray(obj.actions) ? obj.actions : []
     }
   } catch {
@@ -770,10 +770,10 @@ export async function runSetupAgentTurn(
     return {
       reply: result.notes.join('\n'),
       chips: [
-        { label: '去看生图', text: '__open_image__' },
-        { label: '去看视频', text: '__open_video__' },
+        { label: '이미지 생성 설정 열기', text: '__open_image__' },
+        { label: '영상 설정 열기', text: '__open_video__' },
         {
-          label: '粘贴工作流',
+          label: '워크플로 붙여 넣기',
           text: '下面是我的 Comfy API 工作流 JSON，请写入当前 Comfy 接入的 workflowTemplate：\n'
         }
       ],
@@ -785,7 +785,7 @@ export async function runSetupAgentTurn(
   const looksLikeDocs =
     userText.length > 400 || /https?:\/\//i.test(userText) || Boolean(comfyTpl)
   const userPayload = looksLikeDocs
-    ? `以下是用户贴的接口说明、API 文档或 ComfyUI 工作流 JSON（可能来自中转站、自定义网关或本机 Comfy）。必须解析并写成 provider=custom 的接入，禁止拒绝，禁止改写成大厂官方地址。若含 Comfy API 格式 JSON（含 class_type），写入 adapter.type=comfyui-prompt 与 adapter.workflowTemplate。不要编造可运行的默认工作流。文档里有几种能力就写几条 add_profile。\n\n${userText}`
+    ? `아래는 사용자가 제공한 API 설명, API 문서 또는 ComfyUI 워크플로 JSON입니다. 중계 서비스, 사용자 지정 게이트웨이 또는 로컬 ComfyUI에서 가져왔을 수 있습니다. 문서를 분석해 provider=custom 연결을 만들고 공식 공급자 주소로 바꾸지 마세요. class_type이 있는 Comfy API JSON이 포함되면 adapter.type=comfyui-prompt를 쓰고 adapter.workflowTemplate에 JSON을 저장하세요. 실행 가능한 기본 워크플로를 지어내지 마세요. 문서에 나온 기능 유형마다 add_profile을 하나씩 작성하세요.\n\n${userText}`
     : userText
   const res = await callLLM({
     messages: [
@@ -806,7 +806,7 @@ export async function runSetupAgentTurn(
     if (fallback.length) {
       parsed.actions = fallback
       if (/无法|不能|不支持|拒绝|配不了/.test(parsed.say)) {
-        parsed.say = '已按你贴的文档写成自定义接入。密钥只留在这台电脑。'
+        parsed.say = '제공한 문서에 맞춰 사용자 지정 연결을 작성했습니다. API 키는 이 기기에만 저장합니다.'
       }
     }
   }
