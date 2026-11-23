@@ -1938,49 +1938,49 @@ ${videoPerformanceSpec(getVideoPromptStyle())}
 
 【출력 JSON】
 {
-  "aesthetic": "<사용자 주제의 표현을 살려 영상 전체의 분위기를 자연스러운 한두 문장으로 설명>",
+  "aesthetic": "<One or two natural sentences in Korean about the overall tone, using the user's wording>",
   "h3Aesthetic": "<English production aesthetic, concrete lighting/material/camera qualities>",
-  "styleBrief": "<영상의 의도, 핵심 갈등, 계속 보게 만드는 이유>",
-  "colorPalette": "<몇 군데에서 보이는 색. 팔레트 번호는 제외>",
-  "lightingNote": "<시간과 빛의 출처>",
+  "styleBrief": "<Purpose, central conflict, and why a viewer keeps watching>",
+  "colorPalette": "<Visible colors in the scene, without palette numbers>",
+  "lightingNote": "<Time of day and source of light>",
   "subjects": [
     {
       "id": "sub_1",
-      "name": "밖에서 부르기 쉬운 짧은 이름",
+      "name": "Short, speakable character name",
       "kind": "person|animal|other",
-      "description": "<똑같은 옷을 시장에서 살 수 있을 정도의 외모 묘사. 나이, 헤어스타일, 의상, 신발, 흉터나 습관적 동작을 쓰고 장소와 날씨는 제외. 캐릭터 디자인은 순백색 배경의 4면 설정 이미지>",
-      "role": "<영상에서 맡은 역할>",
-      "stateVariants": "<옷이 바뀌는지 설명. 바뀌지 않으면 单一状态>",
-      "voicePrompt": "<말할 때의 음색과 표현. 나이와 성별, 음색 질감, 말의 빠르기와 강도, 감정의 기조, 억양이나 말버릇. One sentence in English for a dubbing director. animal/other는 빈 문자열>",
-      "props": "<착용하거나 소지하는 가방, 신분증, 태블릿, 신발, 모자 등. 없으면 无>",
+      "description": "<Identity details concrete enough to match at a market: age, hairstyle, clothes, shoes, scars, or habitual movements. Exclude place and weather. The character sheet has four views on white>",
+      "role": "<Role in the film>",
+      "stateVariants": "<Wardrobe changes, or 单一状态 if unchanged>",
+      "voicePrompt": "<One English sentence for dubbing direction, covering age and gender, timbre, pace and intensity, emotional tone, accent or speech habits. Empty for animal or other>",
+      "props": "<Items worn or carried, such as bag, ID, tablet, shoes, or hat. Use 无 if none>",
       "fromReference": false
     }
   ],
   "scenes": [
     {
       "id": "scn_1",
-      "name": "짧은 장소명",
-      "description": "<인물이 들어오기 전의 바닥, 물, 식물, 건축물, 바람의 움직임, 빛의 출처. 80자 이상>",
-      "mainAnchor": "<카메라를 향할 수 있는 실제 기준물>",
-      "anchors": "<4분할 기준점. 세미콜론으로 전경, 주요 기준물, 인물이 서는 바닥, 광원 또는 보조 기준물을 구분>",
-      "lighting": "<시간대와 광원>"
+      "name": "Short place name",
+      "description": "<At least 80 characters on ground, water, vegetation, buildings, wind, and light before people enter>",
+      "mainAnchor": "<Physical anchor visible to the camera>",
+      "anchors": "<Four anchors separated by semicolons: wide view, main anchor, ground or blocking area, light source or secondary anchor>",
+      "lighting": "<Time and light source>"
     }
   ],
   "shots": [
     {
-      "title": "현장 기록판에 쓸 수 있는 3-8자",
+      "title": "3–8 character title suitable for a slate",
       "purpose": "钩子/说明/反应/揭示/收口",
-      "shotSize": "<샷의 거리와 그 이유>",
-      "blocking": "<인물별 앞뒤 위치, 밟고 있는 것, 몸 방향. 화자는 뒤에 있어도 됨. 정면을 향해 나란히 세우지 않음>",
-      "eyeline": "<인물별로 보는 사람이나 물건. 앞쪽 인물은 고개를 돌려 화자나 가리키는 물건을 보고 카메라는 보지 않음>",
-      "continuity": "<이전 샷의 구체적인 끝 상태를 받음(첫 샷은 시작 상태) → 이번 샷의 눈에 보이는 변화 → 다음 샷에 남기는 구체적인 끝 상태. 위치, 자세, 방향, 손에 든 물건, 감정, 이미 아는 정보를 명시>",
-      "propFocus": "<이번 샷에서 잘 보여야 할 소품과 현재 상태. 없으면 无>",
-      "visualPrompt": "<가까운 곳부터 먼 곳까지 실제 물건을 명시. 물, 바람, 옷자락의 움직임 또는 정지, 광원, 의상, 발밑, 손에 든 물건을 묘사. 정지 화면 생성 프롬프트. 그림체는 한 번만 언급하고 상투적인 문단이나 위치만 적는 서술은 피함>",
+      "shotSize": "<Framing and reason for it>",
+      "blocking": "<Foreground and background position, what each person stands on, and body orientation. The speaker may be behind others. Avoid frontal lineups>",
+      "eyeline": "<Eyeline per person. Foreground people look back or sideways toward the speaker or indicated object, away from the camera>",
+      "continuity": "<Previous concrete ending or opening state for the first shot → current visible change → specific state for the next shot. State position, pose, orientation, held items, emotion, and knowledge>",
+      "propFocus": "<Prop to show clearly and its current state, or 无 if none>",
+      "visualPrompt": "<Write a visible English still-frame prompt. Specify objects from near to far, movement or stillness in water, wind, and clothing, light source, wardrobe, ground, and objects in hand. Mention the medium once. Avoid generic style paragraphs or blocking alone>",
       "videoPrompt": "${videoPromptJsonHint(getVideoPromptStyle())}",
-      "audioDescription": "<현장에서 들을 수 있는 소리. 쉼표로 구분>",
-      "voiceover": "<캐릭터 이름：이 샷에서 이어 말하는 짧은 대사 1-4개. 2-4개를 우선하며 없으면 빈 문자열>",
+      "audioDescription": "<Audible scene sounds, separated by commas>",
+      "voiceover": "<Character name: 1–4 consecutive short original lines. Prefer 2–4, or leave empty if silent>",
       "audioMode": "h3-dialogue|h3-voiceover|tts|none",
-      "speakerHint": "<화자의 목소리 특성, 감정, 표현 방식. 내레이션이나 대사가 없으면 빈 문자열>",
+      "speakerHint": "<Voice quality, emotion, delivery, or empty if silent>",
       "duration": <5-${shotDurationLimit(input)}>,
       "cameraMovement": "push|pull|pan|tilt|static|orbit",
       "subjectIds": ["sub_1"],
@@ -1993,8 +1993,10 @@ ${videoPerformanceSpec(getVideoPromptStyle())}
 visualPrompt 若只有站位没有环境实物、或开头结尾是画风套话，视为不合格。
 videoPrompt 若没从0秒覆盖到镜头结束、没按拍点写清每段谁在做什么和谁在说什么，或只是机械等分后填套话，视为不合格。
 ${hasUserStyle && !look.matched ? '这是自定义画风，不要套页面下拉风格。' : `${styleGuide.avoid}。`}
-默认每镜使用 H3 出镜对白：把原文按语义段落分配到 voiceover，并设置 audioMode=h3-dialogue。不要机械地一镜一句；当前模型单镜最长 ${shotDurationLimit(input)} 秒，同一地点、同一人物、同一表达意图或连续动作能在上限内完成时，优先合成一个 7-${shotDurationLimit(input)} 秒的完整镜头，禁止为了凑固定时长拆成两个 5 秒镜头。只有视觉焦点、时空、轴线或戏剧任务真正改变时才切镜。短促反应或转场才只说一句，口播总量约每秒 4 个字。voiceover 写“人物名：台词”，speakerHint 同时写说话人和声线。说话镜头的景别服从画面感、动作、空间关系和情绪节奏：表情是重点且不需交代环境时可以收近；需要看清递物、争执、问答、人物距离、环境压力或集体反应时，保留中景、双人或多人同框。禁止按“只要说话就特写”的模板拆镜，但要写清当前谁说话、其余人如何反应，避免所有人同时张嘴。只有原文明说是旁白/画外音时才用 h3-voiceover，明确要求后期配音时才用 tts，明确无口播的空镜才用 none。人物章每一个 ### 都必须在 subjects 中单独建档；已故角色至少一镜出现遗物、画像或闪回，活人对手至少一镜出现对峙或可见压力。每镜 title 必须是不同的 3-8 字内容标题，禁止统一写“镜头”。逐对核对 continuity，后一镜开头必须接住前一镜结尾；重大状态变化按上面的叙事连续性硬规则展开，禁止从结果直接跳到讲解。
-유효한 JSON만 출력하세요.`
+Use H3 on-screen dialogue by default. Divide the original words into meaningful paragraphs for voiceover and set audioMode=h3-dialogue. Avoid one line per shot. The current model accepts at most ${shotDurationLimit(input)} seconds per shot. For a shared place, person, intention, or continuous action, prefer one complete 7–${shotDurationLimit(input)}-second shot when it fits. Do not force two 5-second shots to fill a template. Cut only when focus, time, place, axis, or dramatic purpose changes. Reserve a single line for brief reactions or transitions and allow about four characters per second. Use "Character name: dialogue" in voiceover and specify the speaker and vocal quality in speakerHint.
+Follow action, spacing, and emotion when choosing framing. Use close framing when the expression matters and no surroundings are needed; use medium, two-person, or group framing for handoffs, arguments, exchanges, distance, environmental pressure, or group reactions. Do not force close-ups; name who speaks and others' reactions so mouths do not open together.
+Use h3-voiceover only for explicit off-screen narration, tts for requested dubbing in postproduction, and none for a silent empty shot. Create a separate subject for each ### under characters. Show a deceased character's keepsake, portrait, or flashback in at least one shot, and a living opponent's confrontation or visible pressure in at least one shot. Give every shot its own specific 3–8-character Korean title. Verify adjacent continuity and apply the narrative rules to major changes instead of jumping from a result to explanatory speech.
+Return valid JSON only.`
     },
     {
       role: 'user',
