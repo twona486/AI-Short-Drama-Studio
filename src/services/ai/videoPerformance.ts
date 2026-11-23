@@ -63,15 +63,15 @@ export async function enrichVideoPerformance(opts: {
       messages: [
         {
           role: 'system',
-          content: `${importedDirectorPrefix()}이미지→영상의 연출 프롬프트를 작성하세요. 생성 모델에 전달할 videoPrompt의 연출 문장은 중국어로 쓰고 대사 원문은 유지하세요. ${videoPerformanceSpec(getVideoPromptStyle())}
-JSON만 출력하세요. {"videoPrompt":"..."}
-배우에게 장면을 설명하는 말투로 쓰세요. 표를 채우는 방식은 피하고 이 샷의 ${opts.shot.duration}초 동안 일어나는 일만 쓰세요.
-0초부터 ${opts.shot.duration}초까지 실제 이야기의 박자에 맞춰 2–5구간으로 나누세요. 시간을 기계적으로 등분하지 마세요. 구간별로 행동하는 인물, 동작과 표정, 화자와 대사 원문, 나머지 인물의 위치와 시선, 동기 있는 카메라 움직임과 도착점을 명시하세요. 타임라인은 감독의 연출 지시입니다. 네 줄로 요약하지 말고 구간마다 눈에 보이는 변화를 넣으세요.
-화면에 등장하는 인물마다 앞뒤 위치, 몸 방향(측면 또는 4분의 3 방향이며 카메라 정면은 피함), 보는 사람이나 물건을 쓰세요. 화자는 뒤쪽에 있어도 됩니다. 앞쪽 인물은 고개를 돌려 화자나 화자가 가리킨 물건을 봅니다. 캐릭터 설정 이미지의 정면 구도를 최종 영상의 단체 사진 구도로 가져오지 마세요.
-나쁜 예 「林遥指着田垄说话。老农和差役在场。人物看向场景里的人或物，不要看镜头。」
-좋은 예 「近处：老农和差役侧对镜头站在石板路上。林遥在他们身后稍远，从跪姿撑起半身，泥手指向田垄。老农回头眯眼打量林遥，差役视线跟着那只手看向田垄。三个人都不看镜头。」
-샷 이미지용 정지 프레임 프롬프트는 배경 설정으로만 쓰세요. continuity에 화살표가 있으면 가운데 구간만 연출하고 앞뒤 샷까지 포함하지 마세요.
-대본의 각색 원칙, 촬영 제외 목록, 시대와 날씨를 지키세요. 성인이 된 인물의 내레이션은 화면 밖 음성이며 화면 속 사람들은 입을 다뭅니다. 선의는 평범한 사람이 하는 작은 일로 표현하고 구원자가 등장하는 것처럼 쓰지 마세요.`
+          content: `${importedDirectorPrefix()}Write image-to-video direction. Write the final videoPrompt in English for the video generation model, retaining verbatim dialogue and requested Korean on-screen text. ${videoPerformanceSpec(getVideoPromptStyle())}
+Return JSON only: {"videoPrompt":"..."}.
+Direct the actors. Cover only the ${opts.shot.duration} seconds of this shot.
+Divide zero through ${opts.shot.duration} seconds into 2–5 ranges by the story's actual beats. Do not divide the time mechanically. In each range specify current actions and expressions, the speaker and their original words, other actors' blocking and eyelines, a motivated camera move, and its endpoint. Each range must add visible progression.
+For each visible person, state foreground or background position, profile or three-quarter orientation, and their eyeline. A speaker can be farther back. Foreground characters look back or sideways toward the speaker or the indicated object. Do not reproduce the frontal character-sheet pose as a group portrait.
+Weak: Lin Yao points at the ridge and talks. The farmer and constable are present. They look at something within the scene.
+Better: In the foreground, the farmer and constable face sideways on the stone path. Behind them, Lin Yao rises partway from his knees and points a muddy hand at the ridge. The farmer squints back at Lin Yao and the constable follows his hand toward the ridge. None looks at the camera.
+Treat still-frame notes as set context. When continuity uses arrows, perform only the middle part of the chain. Do not replay the previous or next shot.
+Follow the script's adaptation rules, exclusions, period, and weather. Older-character narration is off screen. People in the frame keep their mouths closed. Show kindness through small actions ordinary people take.`
         },
         {
           role: 'user',
