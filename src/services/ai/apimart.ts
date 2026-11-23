@@ -1,9 +1,9 @@
 /**
- * APIMart 内置协议。用户只填接口地址和 API Key。
- * 默认地址 https://api.aishuch.com
- * 图片：POST /v1/images/generations
- * 视频：POST /v1/videos/generations（Grok Imagine 1.5 字段）
- * 查询：GET /v1/tasks/{task_id}?language=zh
+ * APIMart 내장 연동. 사용자는 API 주소와 키를 입력한다.
+ * 기본 주소 https://api.aishuch.com
+ * 이미지 POST /v1/images/generations
+ * 영상 POST /v1/videos/generations(Grok Imagine 1.5 필드)
+ * 조회 GET /v1/tasks/{task_id}?language=zh
  */
 
 import { t as translate } from '@/i18n'
@@ -16,7 +16,7 @@ export const APIMART_VIDEO_MODEL = 'grok-imagine-1.5-video-ext'
 const VIDEO_SIZES = new Set(['16:9', '9:16', '1:1', '3:2', '2:3'])
 const RELAY_RATIOS = ['1:1', '16:9', '9:16', '4:3', '3:4', '3:2', '2:3', '21:9', '5:2'] as const
 
-/** 上游不接受 aspect_ratio=auto，只接受固定比例。 */
+/** 공급자 API는 aspect_ratio에 고정 비율을 요구한다. */
 export function concreteAspectRatio(raw?: string, width?: number, height?: number): string {
   const ratio = String(raw || '').trim()
   if ((RELAY_RATIOS as readonly string[]).includes(ratio)) return ratio
@@ -42,7 +42,7 @@ export function isApimartEndpoint(baseUrl?: string, provider?: string): boolean 
   return isApimartHost(baseUrl || '')
 }
 
-/** APIMart 和其他中转站的生图格式相同：提交 /v1/images/generations，再查任务。官方生图和本机 ComfyUI 除外。 */
+/** APIMart와 중계 API는 이미지 생성 요청을 보낸 뒤 작업을 조회한다. 공식 이미지 API와 로컬 ComfyUI는 별도 경로를 사용한다. */
 export function isRelayImageEndpoint(baseUrl?: string, provider?: string): boolean {
   if (isApimartEndpoint(baseUrl, provider)) return true
   if (provider && provider !== 'custom') return false
@@ -206,7 +206,7 @@ async function downloadMedia(
   authorization: string,
   signal?: AbortSignal
 ): Promise<{ blob: Blob; mimeType: string }> {
-  // 结果文件在图床上。带上生图用的 Bearer，或 Accept: application/json，图床会回 400。
+  // 결과 파일은 별도 이미지 호스트에 있다. 생성용 Bearer 또는 JSON Accept 헤더를 보내면 400이 반환된다.
   const load = (auth?: string) =>
     providerHttp(url, {
       method: 'GET',
@@ -365,7 +365,7 @@ function isCancelled(error: unknown, signal?: AbortSignal): boolean {
   return name === 'AbortError' || /已取消|任务已取消/i.test(message)
 }
 
-/** 这个地址没有上传接口时记住，后面的参考图不再重复打它。 */
+/** 업로드 API가 없는 주소를 기억하고 이후 참조 이미지에 같은 요청을 반복하지 않는다. */
 const uploadUnsupported = new Set<string>()
 
 async function uploadReferenceImage(
@@ -406,7 +406,7 @@ async function referenceImageDataUrls(
   return urls
 }
 
-/** 先走上传接口。接口不存在或上传失败时，改为把图直接交给生成接口。 */
+/** 먼저 업로드 API를 호출한다. API가 없거나 업로드에 실패하면 생성 요청에 이미지를 넣는다. */
 async function referenceImageUrls(
   root: string,
   authorization: string,
@@ -461,7 +461,7 @@ async function imageFromSubmit(
   return pollTask({ root, taskId, authorization, kind: 'image', signal, onProgress })
 }
 
-/** gpt-image 的参考图必须走编辑接口，把文件本身传上去。文生图接口会丢掉 image_urls。 */
+/** gpt-image 참조 파일은 편집 API에 직접 업로드한다. 텍스트→이미지 API는 image_urls를 무시한다. */
 async function postImageEdits(opts: {
   root: string
   authorization: string
