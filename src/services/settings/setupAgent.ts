@@ -68,14 +68,14 @@ export interface SetupTurnResult {
 function catalog(presets: ProviderPreset[]) {
   return presets
     .filter((p) => p.id !== 'custom')
-    .map((p) => `${p.id}｜${p.name}｜${p.baseUrl}｜默认 ${p.defaultModel}｜${p.models.join(', ')}`)
+    .map((p) => `${p.id}｜${p.name}｜${p.baseUrl}｜기본값 ${p.defaultModel}｜${p.models.join(', ')}`)
     .join('\n')
 }
 
 function maskKey(key: string) {
   const k = key.trim()
-  if (!k) return '未填'
-  if (k.length <= 6) return '已填写'
+  if (!k) return '미입력'
+  if (k.length <= 6) return '입력됨'
   return `${k.slice(0, 3)}…${k.slice(-4)}`
 }
 
@@ -85,13 +85,13 @@ function snapshot() {
     list
       .map(
         (p) =>
-          `- [${kind}] ${p.name} (${p.id}) url=${p.baseUrl || '空'} key=${maskKey(p.apiKey)} model=${p.model || '空'} adapter=${p.adapter?.type || '默认'} models=${(p.models || []).join(', ') || '无'}`
+          `- [${kind}] ${p.name} (${p.id}) url=${p.baseUrl || '없음'} key=${maskKey(p.apiKey)} model=${p.model || '없음'} adapter=${p.adapter?.type || '기본값'} models=${(p.models || []).join(', ') || '없음'}`
       )
       .join('\n')
   const videos = cfg.videos
     .map(
       (p) =>
-        `- [video] ${p.name} (${p.id}) url=${p.baseUrl || '空'} key=${maskKey(p.apiKey)} workflow=${p.workflowId || '空'} adapter=${p.adapter?.type || '默认'} style=${p.promptStyle} still=${p.stillMode || 'identity'}`
+        `- [video] ${p.name} (${p.id}) url=${p.baseUrl || '없음'} key=${maskKey(p.apiKey)} workflow=${p.workflowId || '없음'} adapter=${p.adapter?.type || '기본값'} style=${p.promptStyle} still=${p.stillMode || 'identity'}`
     )
     .join('\n')
   return `현재 기기의 설정(API 키 마스킹 적용)
@@ -222,11 +222,11 @@ async function runAction(action: Record<string, unknown>): Promise<{ ok: boolean
   const settings = useSettingsStore()
   const tool = String(action.tool || '')
   const kind = parseKind(action.kind)
-  if (!kind) return { ok: false, detail: '缺少有效的 kind' }
+  if (!kind) return { ok: false, detail: '유효한 kind가 없습니다.' }
 
   if (tool === 'list_comfy_workflows') {
     if (kind !== 'image' && kind !== 'video') {
-      return { ok: false, detail: 'list_comfy_workflows 仅支持 image/video', kind: kind || undefined }
+      return { ok: false, detail: 'list_comfy_workflows는 image와 video를 지원합니다.', kind: kind || undefined }
     }
     const id = String(action.id || '').trim()
     const ep =
@@ -237,7 +237,7 @@ async function runAction(action: Record<string, unknown>): Promise<{ ok: boolean
         : id
           ? settings.config.videos.find((p) => p.id === id)
           : settings.config.video
-    if (!ep?.baseUrl) return { ok: false, detail: '当前没有 Comfy 地址，请先 add_comfyui', kind }
+    if (!ep?.baseUrl) return { ok: false, detail: 'ComfyUI 주소가 없습니다. 먼저 add_comfyui를 실행하세요.', kind }
     const res = await discoverComfyWorkflows({
       baseUrl: ep.baseUrl,
       apiKey: ep.apiKey,
@@ -257,7 +257,7 @@ async function runAction(action: Record<string, unknown>): Promise<{ ok: boolean
 
   if (tool === 'set_workflow_template') {
     if (kind !== 'image' && kind !== 'video') {
-      return { ok: false, detail: 'set_workflow_template 仅支持 image/video', kind: kind || undefined }
+      return { ok: false, detail: 'set_workflow_template은 image와 video를 지원합니다.', kind: kind || undefined }
     }
     const id = String(action.id || '').trim()
     if (id) {
@@ -281,7 +281,7 @@ async function runAction(action: Record<string, unknown>): Promise<{ ok: boolean
     }
     if (!template) {
       // 尝试从用户最近消息不够，要求字段
-      return { ok: false, detail: '请提供 workflowTemplate JSON，或 path（来自 list_comfy_workflows）', kind }
+      return { ok: false, detail: 'workflowTemplate JSON 또는 list_comfy_workflows의 path를 제공하세요.', kind }
     }
     const parsed = parseComfyWorkflowJson(template)
     if (!parsed.ok || !parsed.template) return { ok: false, detail: parsed.detail, kind }
@@ -305,18 +305,18 @@ async function runAction(action: Record<string, unknown>): Promise<{ ok: boolean
       return {
         ok: true,
         detail: checked.bindings.length
-          ? `已写入 ${kind} 的 workflowTemplate，助手判定为${describeWorkflowKind(checked.kind)}，接入输入：${describeInputMap(checked)}${error ? `（${error}）` : ''}`
-          : `已写入 ${kind} 的 workflowTemplate，但助手没定位到可注入的输入节点（${error || '未知原因'}），生成时会跑工作流里写死的内容`,
+          ? `${kind}의 workflowTemplate을 저장했습니다. 유형은 ${describeWorkflowKind(checked.kind)}입니다. 입력 매핑 ${describeInputMap(checked)}${error ? `（${error}）` : ''}`
+          : `${kind}의 workflowTemplate을 저장했지만 값을 주입할 입력 노드를 찾지 못했습니다(${error || '알 수 없는 원인'}). 생성 시 워크플로의 고정값을 사용합니다.`,
         kind
       }
     } catch {
-      return { ok: true, detail: `已写入 ${kind} 的 workflowTemplate（助手分析未执行，可在设置页点「用助手分析工作流」）`, kind }
+      return { ok: true, detail: `${kind}의 workflowTemplate을 저장했습니다. 분석하려면 설정의 ‘도우미로 워크플로 분석’을 누르세요.`, kind }
     }
   }
 
   if (tool === 'add_comfyui') {
     const baseUrl = normalizeComfyBaseUrl(String(action.baseUrl || ''))
-    if (!baseUrl) return { ok: false, detail: 'add_comfyui 需要 baseUrl' }
+    if (!baseUrl) return { ok: false, detail: 'add_comfyui에는 baseUrl이 필요합니다.' }
     const kindsRaw = Array.isArray(action.kinds) ? action.kinds.map(String) : ['image', 'video']
     const kinds = kindsRaw.filter((k): k is 'image' | 'video' => k === 'image' || k === 'video')
     const result = await addComfyUiProfiles({
@@ -338,7 +338,7 @@ async function runAction(action: Record<string, unknown>): Promise<{ ok: boolean
     else if (kind === 'image') ep = id ? settings.config.images.find((p) => p.id === id) : settings.config.image
     else if (kind === 'tts') ep = id ? settings.config.ttsProfiles.find((p) => p.id === id) : settings.config.tts
     else if (kind === 'video') ep = id ? settings.config.videos.find((p) => p.id === id) : settings.config.video
-    if (!ep) return { ok: false, detail: '找不到要测试的接入', kind }
+    if (!ep) return { ok: false, detail: '시험할 연결을 찾을 수 없습니다.', kind }
     if (id) {
       if (kind === 'llm') settings.selectLlm(id)
       else if (kind === 'vision') settings.selectVision(id)
@@ -347,7 +347,7 @@ async function runAction(action: Record<string, unknown>): Promise<{ ok: boolean
       else if (kind === 'video') settings.selectVideo(id)
     }
     const result = await testEndpointConnection(kind, ep)
-    return { ok: result.ok, detail: result.ok ? `连通测试通过：${result.detail}` : `连通测试失败：${result.detail}`, kind }
+    return { ok: result.ok, detail: result.ok ? `연결 테스트 통과 ${result.detail}` : `연결 테스트 실패 ${result.detail}`, kind }
   }
 
   if (tool === 'add_profile') {
@@ -359,7 +359,7 @@ async function runAction(action: Record<string, unknown>): Promise<{ ok: boolean
       ? action.models.map(String)
       : merged.models
     const model = String(action.model || merged.model || models[0] || '').trim()
-    if (!baseUrl) return { ok: false, detail: `${name} 还缺接口地址`, kind }
+    if (!baseUrl) return { ok: false, detail: `${name}의 API 주소가 없습니다.`, kind }
     let adapter = normalizeAdapterInput(action.adapter)
     const pastedWf = String(
       action.workflowTemplate ||
@@ -377,7 +377,7 @@ async function runAction(action: Record<string, unknown>): Promise<{ ok: boolean
         adapter?.type === 'comfyui-prompt' ||
         /localhost|127\.0\.0\.1/i.test(baseUrl)
       if (!workflowId && isComfyPrompt) workflowId = 'comfyui-local'
-      if (!workflowId) return { ok: false, detail: `${name} 还缺工作流 ID`, kind }
+      if (!workflowId) return { ok: false, detail: `${name}의 워크플로 ID가 없습니다.`, kind }
       const stillRaw = String(action.stillMode || '').trim()
       const stillMode =
         stillRaw === 'keyframe' || stillRaw === 'storyboard' || stillRaw === 'identity'
@@ -397,9 +397,9 @@ async function runAction(action: Record<string, unknown>): Promise<{ ok: boolean
         adapter: resolvedAdapter,
         options: normalizeModelNodeOptions(action.options)
       })
-      return { ok: true, detail: `已保存视频接入「${name}」(${id})`, kind }
+      return { ok: true, detail: `영상 연결 ‘${name}’을 저장했습니다.(${id})`, kind }
     }
-    if (!model && adapter?.type !== 'comfyui-prompt') return { ok: false, detail: `${name} 还缺模型名`, kind }
+    if (!model && adapter?.type !== 'comfyui-prompt') return { ok: false, detail: `${name}의 모델 이름이 없습니다.`, kind }
     const seed = {
       name,
       baseUrl,
@@ -420,12 +420,12 @@ async function runAction(action: Record<string, unknown>): Promise<{ ok: boolean
     else if (kind === 'tts') {
       settings.addTts({ ...seed, voice: String(action.voice || 'longanhuan_v3.6') })
     }
-    return { ok: true, detail: `已保存${labelOf(kind)}「${name}」`, kind }
+    return { ok: true, detail: `${labelOf(kind)} 연결 ‘${name}’을 저장했습니다.`, kind }
   }
 
   if (tool === 'update_profile') {
     const id = String(action.id || '').trim()
-    if (!id) return { ok: false, detail: '更新需要 id', kind }
+    if (!id) return { ok: false, detail: '갱신하려면 id가 필요합니다.', kind }
     const patch: Record<string, unknown> = {}
     if (action.name) patch.name = String(action.name).trim()
     if (action.baseUrl) patch.baseUrl = normalizeBaseUrl(String(action.baseUrl))
@@ -449,10 +449,10 @@ async function runAction(action: Record<string, unknown>): Promise<{ ok: boolean
         patch.stillMode = action.stillMode
       }
       const cur = settings.config.videos.find((p) => p.id === id)
-      if (!cur) return { ok: false, detail: '找不到这套视频接入', kind }
+      if (!cur) return { ok: false, detail: '이 영상 연결을 찾을 수 없습니다.', kind }
       settings.selectVideo(id)
       settings.patchVideo(patch)
-      return { ok: true, detail: `已更新视频接入「${cur.name}」`, kind }
+      return { ok: true, detail: `영상 연결 ‘${cur.name}’을 갱신했습니다.`, kind }
     }
     const list =
       kind === 'llm'
@@ -463,7 +463,7 @@ async function runAction(action: Record<string, unknown>): Promise<{ ok: boolean
             ? settings.config.images
             : settings.config.ttsProfiles
     const cur = list.find((p) => p.id === id)
-    if (!cur) return { ok: false, detail: '找不到这套接入', kind }
+    if (!cur) return { ok: false, detail: '이 연결을 찾을 수 없습니다.', kind }
     if (kind === 'llm') {
       settings.selectLlm(id)
       settings.patchLlm(patch)
@@ -477,13 +477,13 @@ async function runAction(action: Record<string, unknown>): Promise<{ ok: boolean
       settings.selectTts(id)
       settings.patchTts(patch)
     }
-    return { ok: true, detail: `已更新${labelOf(kind)}「${cur.name}」`, kind }
+    return { ok: true, detail: `${labelOf(kind)} 연결 ‘${cur.name}’을 갱신했습니다.`, kind }
   }
 
   if (tool === 'select_profile') {
     const id = String(action.id || '').trim()
     const model = String(action.model || '').trim()
-    if (!id) return { ok: false, detail: '选择需要 id', kind }
+    if (!id) return { ok: false, detail: '선택하려면 id가 필요합니다.', kind }
     if (kind === 'llm') {
       if (model) settings.selectLlmModel(id, model)
       else settings.selectLlm(id)
@@ -497,13 +497,13 @@ async function runAction(action: Record<string, unknown>): Promise<{ ok: boolean
       if (model) settings.selectTtsModel(id, model)
       else settings.selectTts(id)
     } else if (kind === 'video') settings.selectVideo(id)
-    return { ok: true, detail: `已切换到这套${labelOf(kind)}`, kind }
+    return { ok: true, detail: `이 ${labelOf(kind)} 연결로 전환했습니다.`, kind }
   }
 
   if (tool === 'add_model') {
     const model = String(action.model || '').trim()
-    if (!model) return { ok: false, detail: '还缺模型名', kind }
-    if (kind === 'video' || kind === 'music') return { ok: false, detail: '视频请改工作流 ID', kind }
+    if (!model) return { ok: false, detail: '모델 이름이 없습니다.', kind }
+    if (kind === 'video' || kind === 'music') return { ok: false, detail: '영상 연결에서는 워크플로 ID를 변경하세요.', kind }
     const id = String(action.id || '').trim()
     if (id) {
       if (kind === 'llm') settings.selectLlm(id)
@@ -512,20 +512,20 @@ async function runAction(action: Record<string, unknown>): Promise<{ ok: boolean
       else if (kind === 'tts') settings.selectTts(id)
     }
     settings.addModel(kind, model)
-    return { ok: true, detail: `已加入模型 ${model}`, kind }
+    return { ok: true, detail: `모델 ${model}을 추가했습니다.`, kind }
   }
 
-  return { ok: false, detail: `未知工具 ${tool}` }
+  return { ok: false, detail: `알 수 없는 도구 ${tool}` }
 }
 
 function labelOf(kind: SetupKind) {
   return {
-    llm: '语言模型',
-    vision: '视觉',
-    image: '生图',
-    tts: '配音',
-    video: '视频',
-    music: '配乐'
+    llm: '언어 모델',
+    vision: '비전',
+    image: '이미지 생성',
+    tts: '더빙',
+    video: '영상',
+    music: '배경음악'
   }[kind]
 }
 
@@ -640,7 +640,7 @@ function nameFromUrl(url: string, kind: SetupKind) {
   try {
     return `${new URL(url).host.replace(/^www\./, '')} ${labelOf(kind)}`
   } catch {
-    return `自定义${labelOf(kind)}`
+    return `사용자 지정 ${labelOf(kind)}`
   }
 }
 
@@ -705,7 +705,7 @@ function parseAgentJson(text: string): { say: string; actions: Record<string, un
     try {
       const obj = JSON.parse(text.slice(start, end + 1))
       return {
-        say: String(obj.say || '好的'),
+        say: String(obj.say || '확인했습니다.'),
         actions: Array.isArray(obj.actions) ? obj.actions : []
       }
     } catch {
@@ -731,12 +731,12 @@ export async function runSetupAgentTurn(
 ): Promise<SetupTurnResult> {
   if (!llmSetupReady()) {
     return {
-      reply: '先在左侧「语言模型」填好接口地址和 API Key。配好之后我就能帮你加视觉、生图、配音和视频。',
-      chips: [{ label: '去配语言模型', text: '__open_llm__' }]
+      reply: '왼쪽의 ‘언어 모델’에서 API 주소와 API 키를 먼저 입력하세요. 설정을 마치면 비전, 이미지 생성, 더빙, 영상 연결을 추가할 수 있습니다.',
+      chips: [{ label: '언어 모델 설정 열기', text: '__open_llm__' }]
     }
   }
 
-  onProgress?.({ kind: 'think', label: '在想怎么接入…', status: 'running' })
+  onProgress?.({ kind: 'think', label: '연결 방법을 확인하는 중…', status: 'running' })
   const recent = history.slice(-12).map((m) => ({
     role: m.role,
     content: m.content
@@ -774,7 +774,7 @@ export async function runSetupAgentTurn(
         { label: '영상 설정 열기', text: '__open_video__' },
         {
           label: '워크플로 붙여 넣기',
-          text: '下面是我的 Comfy API 工作流 JSON，请写入当前 Comfy 接入的 workflowTemplate：\n'
+          text: '아래 Comfy API 워크플로 JSON을 현재 ComfyUI 연결의 workflowTemplate에 저장해 줘.\n'
         }
       ],
       opened: result.videoId ? 'video' : result.imageId ? 'image' : undefined
@@ -823,7 +823,7 @@ export async function runSetupAgentTurn(
         kind: 'image',
         workflowTemplate: comfyTpl
       })
-      parsed.say = parsed.say || '已把粘贴的 Comfy API 工作流写入当前生图/视频接入。'
+      parsed.say = parsed.say || '붙여 넣은 Comfy API 워크플로를 현재 이미지 생성 및 영상 연결에 저장했습니다.'
     }
     for (const raw of parsed.actions) {
       if (!raw || typeof raw !== 'object') continue
@@ -839,7 +839,7 @@ export async function runSetupAgentTurn(
       parsed.actions.push({
         tool: 'add_profile',
         kind: 'video',
-        name: '自建 ComfyUI',
+        name: '자체 호스팅 ComfyUI',
         provider: 'custom',
         baseUrl: extractBaseUrls(userText)[0] || 'http://127.0.0.1:8188',
         apiKey: extractApiKey(userText),
@@ -848,7 +848,7 @@ export async function runSetupAgentTurn(
         adapter: { type: 'comfyui-prompt', workflowTemplate: comfyTpl }
       })
       if (!parsed.say || /无法|不能|拒绝/.test(parsed.say)) {
-        parsed.say = '已把你粘贴的 Comfy 工作流写入 adapter.workflowTemplate。请确认本机 ComfyUI 已加载对应模型后再出片。'
+        parsed.say = '제공한 ComfyUI 워크플로를 adapter.workflowTemplate에 저장했습니다. 로컬 ComfyUI에 해당 모델이 로드됐는지 확인한 뒤 영상을 생성하세요.'
       }
     }
   }
@@ -856,7 +856,7 @@ export async function runSetupAgentTurn(
   let opened: SetupKind | undefined
   for (const [i, raw] of parsed.actions.slice(0, 8).entries()) {
     const action = raw && typeof raw === 'object' ? (raw as Record<string, unknown>) : {}
-    const label = String(action.tool || '写入')
+    const label = String(action.tool || '저장')
     onProgress?.({
       kind: 'step',
       step: `act-${i}`,
@@ -864,7 +864,7 @@ export async function runSetupAgentTurn(
       status: 'running'
     })
     const result = await runAction(action)
-    notes.push(result.ok ? result.detail : `失败：${result.detail}`)
+    notes.push(result.ok ? result.detail : `실패 ${result.detail}`)
     if (result.ok && result.kind) opened = result.kind
     onProgress?.({
       kind: 'step',
@@ -878,19 +878,19 @@ export async function runSetupAgentTurn(
   const chips =
     opened && opened !== 'llm'
       ? [
-          { label: `去看${labelOf(opened)}`, text: `__open_${opened}__` },
-          { label: '再配一套生图', text: '帮我再加一套生图接入' },
-          { label: '配视频', text: '帮我配视频生成' }
+          { label: `${labelOf(opened)} 설정 열기`, text: `__open_${opened}__` },
+          { label: '이미지 생성 연결 추가', text: '이미지 생성 연결을 하나 더 추가해 줘.' },
+          { label: '영상 설정', text: '영상 생성 연결을 설정해 줘.' }
         ]
       : [
-          { label: '配视觉', text: '帮我配视觉理解' },
-          { label: '配生图', text: '帮我配图像生成' },
-          { label: '配配音', text: '帮我配 TTS 配音' },
-          { label: '配视频', text: '帮我配视频生成' },
-          { label: '测连通', text: '帮我测试当前接入的连通性' },
-          { label: '加自建 ComfyUI', text: '我的 ComfyUI 在 http://127.0.0.1:8188 ，请直接添加生图和视频接入' },
-          { label: '列出 Comfy 工作流', text: '帮我列出当前 ComfyUI 上已保存的工作流' },
-          { label: '从文档接入', text: '下面是我的 API 文档，请按文档写成自定义接入（可以是中转站）：\n' }
+          { label: '비전 설정', text: '이미지를 분석하는 비전 연결을 설정해 줘.' },
+          { label: '이미지 생성 설정', text: '이미지 생성 연결을 설정해 줘.' },
+          { label: '더빙 설정', text: 'TTS 더빙 연결을 설정해 줘.' },
+          { label: '영상 설정', text: '영상 생성 연결을 설정해 줘.' },
+          { label: '연결 테스트', text: '현재 연결을 테스트해 줘.' },
+          { label: '자체 호스팅 ComfyUI 추가', text: '내 ComfyUI 주소는 http://127.0.0.1:8188이야. 이미지 생성과 영상 연결을 추가해 줘.' },
+          { label: 'ComfyUI 워크플로 목록', text: '현재 ComfyUI에 저장된 워크플로를 보여 줘.' },
+          { label: '문서에서 연결 설정', text: '아래 API 문서에 맞춰 사용자 지정 연결을 만들어 줘. 중계 주소도 사용할 수 있어.\n' }
         ]
 
   return {
