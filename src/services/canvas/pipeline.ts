@@ -104,7 +104,7 @@ export function nextPipelineStep(p: Project | null | undefined): PipelineStep | 
       focusNodeId: 'group-shots'
     }
   }
-  // 首尾帧模式：视频用的就是这两张帧，必须先画，否则这一列会被整条流水线跳过。
+  // 시작·끝 프레임 모드에서는 영상보다 프레임을 먼저 만든다.
   if (frameStagePending(p)) {
     return {
       id: 'frames',
@@ -145,7 +145,7 @@ export function isContinueRequest(text: string) {
   )
 }
 
-/** 打招呼 / 闲聊，不应当成「需求含糊」去套澄清模板 */
+/** 인사나 일상 대화는 바로 대화로 처리한다. */
 export function isGreetingOrChitchat(text: string) {
   const t = text.trim()
   if (!t) return false
