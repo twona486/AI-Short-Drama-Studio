@@ -210,32 +210,32 @@ function nodeActivityLabel(node: CanvasNode, p: NonNullable<ReturnType<typeof us
   const shots = p.shots ?? []
   const shotNo = (id?: string) => {
     const shot = shots.find((item) => item.id === id)
-    return shot ? `第${shot.index + 1}镜` : '分镜'
+    return shot ? translate('canvasRunner.shotNumber', { number: shot.index + 1 }) : translate('canvasRunner.storyboard')
   }
   switch (node.type) {
     case 'script':
-      return '写完整剧本'
+      return translate('canvasRunner.writeScript')
     case 'subject':
-      return `四视图「${subjects.find((s) => s.id === node.data.subjectId)?.name || '角色'}」`
+      return `四视图「${subjects.find((s) => s.id === node.data.subjectId)?.name || translate('canvasRunner.character')}」`
     case 'prop':
-      return `道具多角度「${(p.props ?? []).find((item) => item.id === node.data.propId)?.name || '道具'}」`
+      return `道具多角度「${(p.props ?? []).find((item) => item.id === node.data.propId)?.name || translate('canvasRunner.prop')}」`
     case 'subjectProps':
-      return `资产图「${subjects.find((s) => s.id === node.data.subjectId)?.name || '角色'}」`
+      return `资产图「${subjects.find((s) => s.id === node.data.subjectId)?.name || translate('canvasRunner.character')}」`
     case 'scene':
-      return `场景锚点「${scenes.find((s) => s.id === node.data.sceneId)?.name || '场景'}」`
+      return `场景锚点「${scenes.find((s) => s.id === node.data.sceneId)?.name || translate('canvasRunner.scene')}」`
     case 'sceneProps':
-      return `关键道具「${scenes.find((s) => s.id === node.data.sceneId)?.name || '场景'}」`
+      return `关键道具「${scenes.find((s) => s.id === node.data.sceneId)?.name || translate('canvasRunner.scene')}」`
     case 'shotBoard':
-      return `故事看板 ${shotNo(node.data.shotId)}`
+      return translate('canvasRunner.panelLabel', { shot: shotNo(node.data.shotId) })
     case 'shotImage':
-      return `分镜配图 ${shotNo(node.data.shotId)}`
+      return translate('canvasRunner.imageLabel', { shot: shotNo(node.data.shotId) })
     case 'shotVideo':
-      return `分镜视频 ${shotNo(node.data.shotId)}`
+      return translate('canvasRunner.videoLabel', { shot: shotNo(node.data.shotId) })
     case 'audio':
-      return `口播 ${shotNo(node.data.shotId)}`
+      return translate('canvasRunner.narrationLabel', { shot: shotNo(node.data.shotId) })
     case 'export':
     case 'final':
-      return '合成成片'
+      return translate('canvasRunner.assemble')
     default:
       return node.data.label || node.type
   }
@@ -243,11 +243,11 @@ function nodeActivityLabel(node: CanvasNode, p: NonNullable<ReturnType<typeof us
 
 function scriptActivityLabel(kind: 'play' | 'extract' | 'continue', stage?: ExtractStage) {
   if (kind === 'extract') {
-    if (stage) return `提炼${extractStageNoun(stage)}`
+    if (stage) return translate('canvasRunner.extractStage', { stage: extractStageNoun(stage) })
     return extractStageLabel(useProjectStore().current)
   }
-  if (kind === 'continue') return '续写剧本'
-  return '写完整剧本'
+  if (kind === 'continue') return translate('canvasRunner.continueScript')
+  return translate('canvasRunner.writeScript')
 }
 
 function trackActivity(
@@ -327,7 +327,7 @@ export async function generateSubjectSheet(sub: Subject, onProgress?: (msg: stri
   if (prompt !== (latest.sheetPrompt || '')) {
     project.updateSubject(latest.id, { sheetPrompt: prompt })
   }
-  onProgress?.(refs.length ? `生成四视图（${refs.length} 张参考）...` : '生成四视图...')
+  onProgress?.(refs.length ? translate('canvasRunner.generateViewsWithRefs', { count: refs.length }) : translate('canvasRunner.generateViews'))
   const size = imageGenSize('sheet')
   const result = await generateImage(
     {
@@ -377,7 +377,7 @@ export async function generatePropSheet(prop: StoryProp, onProgress?: (msg: stri
   if (prompt !== (latest.sheetPrompt || '')) {
     project.updateProp(latest.id, { sheetPrompt: prompt })
   }
-  onProgress?.(extras.blobs.length ? `生成道具多角度图（${extras.blobs.length} 张参考）...` : '生成道具多角度图...')
+  onProgress?.(extras.blobs.length ? translate('canvasRunner.generatePropViewsWithRefs', { count: extras.blobs.length }) : translate('canvasRunner.generatePropViews'))
   const size = imageGenSize('sheet')
   const result = await generateImage(
     {
@@ -442,7 +442,7 @@ export async function generateScenePropSheet(
   labels.push(...extras.labels)
   const clippedRefs = refs.slice(0, 10)
   const clippedLabels = labels.slice(0, 10)
-  onProgress?.(clippedRefs.length ? `生成关键道具图（${clippedRefs.length} 张参考）...` : '生成关键道具图...')
+  onProgress?.(clippedRefs.length ? translate('canvasRunner.generateKeyPropWithRefs', { count: clippedRefs.length }) : translate('canvasRunner.generateKeyProp'))
   const size = imageGenSize('sheet')
   const result = await generateImage(
     {
@@ -491,7 +491,7 @@ export async function generateScenePlate(scn: Scene, onProgress?: (msg: string) 
   if (!latest.platePrompt?.trim()) {
     project.updateScene(latest.id, { platePrompt: prompt })
   }
-  onProgress?.(extras.blobs.length ? `生成场景锚点图（${extras.blobs.length} 张参考）...` : '生成场景锚点图...')
+  onProgress?.(extras.blobs.length ? translate('canvasRunner.generateSceneWithRefs', { count: extras.blobs.length }) : translate('canvasRunner.generateScene'))
   const size = imageGenSize('sheet')
   const result = await generateImage(
     {
@@ -714,12 +714,12 @@ async function renderShotFrame(
   const look = lookFromScript(project.current.script)
   const aspectRatio = shotNodeAspect(project.current, shot.id, 'shotImage')
   const size = imageGenSize('shot', aspectRatio)
-  const word = which === 'start' ? '起始帧' : '结束帧'
+  const word = which === 'start' ? translate('canvasRunner.firstFrame') : translate('canvasRunner.lastFrame')
   onProgress?.(`이 샷의 ${word}을 생성하는 중(캐릭터·장면 참조 이미지 ${blobs.length}장)…`)
   const fail = (e: any) => {
-    const reason = friendlyAiError(e) || e?.message || '未知原因'
+    const reason = friendlyAiError(e) || e?.message || translate('canvasRunner.unknownCause')
     // 把失败定位到「第几镜的哪一张帧」，否则节点上只显示一句笼统的失败
-    return new Error(`第 ${shot.index + 1} 镜${word}没画出来：${reason}`)
+    return new Error(translate('canvasRunner.frameFailed', { number: shot.index + 1, frame: word, reason: reason }))
   }
   let result
   try {
@@ -743,7 +743,7 @@ async function renderShotFrame(
   }
   onProgress?.(`${word} 파일을 확인하는 중…`)
   const quality = await reviewImageQuality(result.blob, prompt, signal)
-  if (!quality.passed) throw fail(new Error(`${word}文件无效：${quality.issues.join('；')}`))
+  if (!quality.passed) throw fail(new Error(translate('canvasRunner.invalidFrame', { frame: word, reason: quality.issues.join('；') })))
   try {
     const asset = await assets.add(result.blob, 'image', 'ai-generated', {
       filename: `shot${shot.index + 1}_${which}frame_${Date.now().toString(36)}`,
@@ -1030,7 +1030,7 @@ async function regenerateDigitalHumanShot(
   p.speechWorkflow = {
     ...flow,
     generatedVideoAssetIds: generatedIds,
-    progress: `第 ${shot.index + 1} 段已用原人物参考图重新生成。`,
+    progress: translate('canvasRunner.regenerated', { number: shot.index + 1 }),
     updatedAt: Date.now()
   }
   await project.save()
@@ -1209,7 +1209,7 @@ export async function grabVideoLastFrameNode(
   })
 
   const frameNodeId = `lastFrame:${node.id}`
-  const label = shot ? `第 ${shot.index + 1} 镜 · 尾帧` : '成片尾帧'
+  const label = shot ? translate('canvasRunner.shotEnd', { number: shot.index + 1 }) : translate('canvasRunner.finalFrame')
   const existing = p.canvas.nodes.find((n) => n.id === frameNodeId)
   if (existing) {
     const old = existing.data.outputAssetId
@@ -1446,7 +1446,7 @@ export async function generateShotVideo(shot: Shot, onProgress?: (msg: string) =
         {
           id: chained.id,
           kind: 'extra',
-          name: '上一镜末帧',
+          name: 'Previous shot’s last frame',
           label: 'starting frame of [Shot 1]; the exact image this shot must begin from'
         },
         ...packed.filter((entry) => entry.id !== chained.id)
@@ -1523,14 +1523,14 @@ export async function generateShotVideo(shot: Shot, onProgress?: (msg: string) =
   onProgress?.('노드의 전체 프롬프트로 영상을 생성하는 중…')
   const slotNames = packed.map((entry, index) =>
     entry.kind === 'character'
-      ? `图${index + 1}「${entry.name}」人设`
+      ? `Picture ${index + 1}: ${entry.name}, character reference`
       : entry.kind === 'scene'
-        ? `图${index + 1}场景`
+        ? `Picture ${index + 1}: location reference`
         : entry.kind === 'extra'
-          ? `图${index + 1}补充参考`
+          ? `Picture ${index + 1}: additional reference`
             : entry.kind === 'keyframe'
-            ? `图${index + 1}四宫格关键帧`
-            : `图${index + 1}故事看板`
+            ? `Picture ${index + 1}: four-panel storyboard keyframe`
+            : `Picture ${index + 1}: storyboard panel`
   )
   onProgress?.(`영상 생성 중(${slotNames.join('、')})…`)
   const result = await generateVideo(
@@ -1657,7 +1657,7 @@ export async function optimizeShotVideoPrompt(shot: Shot, signal?: AbortSignal):
   const source = box || performance
   if (!source) throw new Error('먼저 프롬프트를 작성하세요.')
   const pictures = imageSlots
-    .map((slot) => `图片${slot.index}：${slot.sourceName || slot.name}`)
+    .map((slot) => `Picture ${slot.index}: ${slot.sourceName || slot.name}`)
     .join('\n')
   const compiled = await rewritePromptText({ source, pictures, signal })
   project.setShotVideoPrompt(shot.id, compiled)
@@ -1766,10 +1766,10 @@ export async function archivePlayToScriptLibrary(
       mode: options.mode ?? 'write',
       prompt: options.prompt
     })
-    options.onLog?.('剧本已存入剧本库（本地 Markdown）')
+    options.onLog?.(translate('canvasRunner.savedScript'))
   } catch (e: any) {
-    console.warn('[script-library] 归档剧本失败', e)
-    options.onLog?.(`剧本没能写入剧本库：${e?.message ?? String(e)}`)
+    console.warn('[script-library] Could not archive screenplay', e)
+    options.onLog?.(translate('canvasRunner.saveScriptFailed', { reason: e?.message ?? String(e) }))
   }
 }
 
@@ -1889,8 +1889,8 @@ export async function runGeneratePlay(
     const added = countAddedPlayScenes(previousPlay, run.result.playMarkdown)
     onProgress?.(
       added > 0
-        ? `已续写 ${added} 场。已有人物和场景未动，要同步新场请在「分镜关键帧」分组点重新提取。`
-        : '剧本已更新。已有节点未动，要同步请在对应分组点重新提取。'
+        ? translate('canvasRunner.continuedCount', { count: added })
+        : translate('canvasRunner.updatedScript')
     )
   }
   return run
@@ -2250,17 +2250,17 @@ export async function runGenerateGroup(
     const source = onProgress ? 'agent' : 'canvas'
     const noun =
       groupId === 'group-subjects'
-        ? '人物四视图'
+        ? translate('canvasRunner.characterViews')
         : groupId === 'group-props'
-          ? '道具多角度图'
+          ? translate('canvasRunner.propViews')
         : groupId === 'group-scenes'
-          ? '场景锚点图'
+          ? translate('canvasRunner.sceneAnchor')
           : groupId === 'group-videos'
-            ? '分镜视频'
+            ? translate('canvasRunner.shotVideo')
             : groupId === 'group-frames'
-              ? '首尾帧'
-              : '分镜关键帧'
-    const activity = trackActivity(groupId, `一键生成${noun}`, source, (msg) => onProgress?.(groupId, msg))
+              ? translate('canvasRunner.firstLast')
+              : translate('canvasRunner.shotKeyframe')
+    const activity = trackActivity(groupId, translate('canvasRunner.batchGenerate', { name: noun }), source, (msg) => onProgress?.(groupId, msg))
     try {
       // 点「分镜视频」一键生成时，首尾帧模式先把帧补齐：视频吃的就是这两张图，
       // 不补就变成跳过首尾帧列直接出片。
@@ -2275,17 +2275,17 @@ export async function runGenerateGroup(
       const ordered = chain ? sortNodeIdsByShotIndex(p, pending) : pending
       activity.progress(
         groupId === 'group-frames'
-          ? `按镜号串行画 ${ordered.length} 镜的首尾帧（这一镜起始帧接着上一镜结束帧）…`
+          ? translate('canvasRunner.batchFrames', { count: ordered.length })
           : chain
-            ? `首尾帧链模式：按镜号串行生成 ${ordered.length} 镜（下一镜首帧取自上一镜末帧）…`
-            : `同时生成 ${ordered.length} 个节点…`
+            ? translate('canvasRunner.batchChain', { count: ordered.length })
+            : translate('canvasRunner.batchParallel', { count: ordered.length })
       )
       await mapPool(
         ordered,
         chain ? 1 : groupId === 'group-videos' ? VIDEO_GEN_CONCURRENCY : IMAGE_GEN_CONCURRENCY,
         (id) => runCanvasNode(id, (nid, msg) => onProgress?.(nid, msg), signal)
       )
-      activity.done(chain ? `${noun}已按镜号顺序全部生成` : `${noun}已全部提交`)
+      activity.done(chain ? translate('canvasRunner.batchOrderedDone', { name: noun }) : translate('canvasRunner.batchSubmitted', { name: noun }))
     } catch (e: any) {
       activity.fail(e)
       throw e
@@ -2313,13 +2313,13 @@ export async function runExtractGroup(
     ensureNotCancelled(signal)
     const project = useProjectStore()
     const source = onProgress ? 'agent' : 'canvas'
-    const label = `重新提取${extractStageNoun(stage)}`
+    const label = translate('canvasRunner.extractAgain', { stage: extractStageNoun(stage) })
     const activity = trackActivity(groupId, label, source, (msg) => onProgress?.(groupId, msg))
     patchNode(project, groupId, 'running')
     try {
       await runExtractStoryboard(activity.progress, signal, model, stage)
       patchNode(project, groupId, 'success')
-      activity.done(`${extractStageNoun(stage)}已重新写入画布`)
+      activity.done(translate('canvasRunner.extractionUpdated', { stage: extractStageNoun(stage) }))
     } catch (e: any) {
       patchNode(project, groupId, 'failed', e?.message ?? String(e))
       activity.fail(e)
@@ -2355,10 +2355,10 @@ export async function runScriptNode(
       patchNode(project, 'script', 'success')
       activity.done(
         kind === 'extract'
-          ? `${label}已写入画布`
+          ? translate('canvasRunner.canvasWritten', { label: label })
           : kind === 'continue'
-            ? '续写已保存到左侧剧本'
-            : '完整剧本已写到画布左侧'
+            ? translate('canvasRunner.continuedSaved')
+            : translate('canvasRunner.scriptWritten')
       )
     } catch (e: any) {
       patchNode(project, 'script', 'failed', e?.message ?? String(e))
@@ -2391,7 +2391,7 @@ export async function runVideoRemake(
   if (!input.videoFile) throw new Error('재현할 참조 영상을 업로드하세요.')
 
   project.current.pipelineMode = 'remake'
-  const topic = project.current.script?.topic?.trim() || '视频复刻'
+  const topic = project.current.script?.topic?.trim() || translate('canvasRunner.remake')
   let productIds = [...(input.productIds ?? [])]
 
   if (!input.skipSaveAssets) {
@@ -2534,7 +2534,7 @@ export async function generateFreeformImage(
     signal
   })
   const asset = await assets.add(result.blob, 'image', 'ai-generated', {
-    filename: `${node.data.label || '图片'}.png`,
+    filename: `${node.data.label || translate('canvasRunner.image')}.png`,
     prompt,
     projectId: p.id
   })
@@ -2574,8 +2574,8 @@ export async function generateFreeformVideo(
   const library = useLibraryStore()
   const blobs: Blob[] = []
   if (useFl2va) {
-    blobs.push(await loadRefImageBlob(firstId, '首帧'))
-    if (lastId) blobs.push(await loadRefImageBlob(lastId, '尾帧'))
+    blobs.push(await loadRefImageBlob(firstId, translate('canvasRunner.firstFrameShort')))
+    if (lastId) blobs.push(await loadRefImageBlob(lastId, translate('canvasRunner.lastFrameShort')))
   } else {
     for (const id of ids) {
       const b = (await assets.getBlob(id)) || (await library.getBlob(id))
@@ -2629,7 +2629,7 @@ export async function generateFreeformVideo(
     onProgress
   )
   const asset = await assets.add(result.blob, 'video', 'ai-generated', {
-    filename: `${node.data.label || '视频'}.mp4`,
+    filename: `${node.data.label || translate('canvasRunner.video')}.mp4`,
     prompt: result.prompt,
     projectId: p.id
   })
@@ -2745,7 +2745,7 @@ export async function runCanvasNode(
       patchNode(project, nodeId, 'success')
       if (node.type === 'export') patchNode(project, 'final', 'success')
       if (node.type === 'final') patchNode(project, 'export', 'success')
-      activity.done(`${label}已完成`)
+      activity.done(translate('canvasRunner.completed', { label: label }))
     } catch (e: any) {
       patchNode(project, nodeId, 'failed', e?.message ?? String(e))
       if (node.type === 'export') patchNode(project, 'final', 'failed', e?.message ?? String(e))
