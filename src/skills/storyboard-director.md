@@ -31,7 +31,7 @@ For sales and presenter-led narration, include the host and product in character
 - Keep 2–4 consecutive short lines with the same speaker and intent together. Interactions need spoken exchanges; do not force one line per scene.
 - Restraint means avoiding slogans and maxims. Include visible exchanges for recognition, calling someone's name, confrontation, persuasion, questions, and farewells. Do not recap the backstory through narration by an older version of a character.
 - Choose framing from action, spatial relationships, and emotion rather than making every speaker a close-up.
-- Avoid vague promotional expressions such as 赋能, 沉浸式, 质感拉满, cinematic, and aesthetic.
+- Avoid vague promotional expressions such as empowering, immersive, premium-looking, cinematic, and aesthetic.
 - Write people as recognizable individuals and locations as concrete places at definite times, including physical obstacles.
 - Cover the number of scenes the story needs. Compress a short film without losing the opponent, key family, and central conflict. Do not reduce a folk tale or adaptation to a 3–5-scene climax. Use all the scenes and montage beats needed for a film chapter.
 - Pin down the requested boundaries: full story, first episode, excerpt, trailer, or suspense point. A complete short film or adaptation must retain its core characters and conflicts. Only excerpt when asked. Do not add a later episode or reveal an outcome where the user requested a suspenseful stop.
