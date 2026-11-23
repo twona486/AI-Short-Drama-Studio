@@ -351,10 +351,10 @@ export async function generateSpeech(input: TTSInput): Promise<TTSOutput> {
   const cfg = ttsConfig()
   const voice = compatibleVoice(cfg.model, input.voice || cfg.voice)
   const language = input.language || detectSpeechLanguage(text)
-  log(`口播文本：${text.slice(0, 80)}${text.length > 80 ? '…' : ''}  lang=${language}`)
+  log(`내레이션 텍스트 ${text.slice(0, 80)}${text.length > 80 ? '…' : ''}  lang=${language}`)
 
   if (getAIMode() !== 'real' || !cfg.apiKey) {
-    log('演示模式：生成占位音轨')
+    log('데모 모드에서 임시 오디오 트랙을 만들어요.')
     const blob = mockSpeechWav(text)
     return { blob, mimeType: blob.type, model: 'mock-tts' }
   }
@@ -378,14 +378,14 @@ export async function generateSpeech(input: TTSInput): Promise<TTSOutput> {
     return { blob, mimeType: blob.type, model: cfg.model }
   } catch (e: any) {
     errors.push(e?.message ?? String(e))
-    log(`SpeechSynthesizer 失败：${e?.message ?? e}`)
+    log(`음성 합성에 실패했어요. ${e?.message ?? e}`)
   }
 
-  // 若仍配置了旧版 qwen3-tts-*，再试 multimodal 兜底
+  // 若仍配置了旧版 qwen3-tts-*，再试 멀티모달 모델로 다시 시도해요.
   if (/^qwen3-tts/i.test(cfg.model) || /^qwen-tts/i.test(cfg.model)) {
     try {
       const origin = apiRoot.replace(/\/api\/v1$/i, '')
-      log(`→ multimodal 兜底 (${cfg.model}, ${voice})`)
+      log(`→ 멀티모달 모델로 다시 시도해요. (${cfg.model}, ${voice})`)
       const blob = await nativeQwen3Speech(
         origin,
         cfg.apiKey,
