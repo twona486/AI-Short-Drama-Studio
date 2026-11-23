@@ -75,34 +75,34 @@ Follow the script's adaptation rules, exclusions, period, and weather. Older-cha
         },
         {
           role: 'user',
-          content: `캐릭터
-${roster || '（화면에 이미 있는 캐릭터를 따름）'}
+          content: `Characters
+${roster || '(Use the characters already in frame.)'}
 
-장면
-${scene || '（참조 화면을 따름）'}
+Scene
+${scene || '(Follow the reference frame.)'}
 
-이전 샷(연결에만 사용. 다시 연출하지 않음) ${shotLine(opts.prevShot)}
-다음 샷(이번 샷에 포함하지 않음) ${shotLine(opts.nextShot)}
+Previous shot (continuity only, do not replay) ${shotLine(opts.prevShot)}
+Next shot (exclude from the current shot) ${shotLine(opts.nextShot)}
 
-현재 샷 제목 ${opts.shot.title}
-길이 ${opts.shot.duration}초
-카메라 움직임 ${opts.shot.cameraMovement}
-인물 배치 ${opts.shot.blocking || ''}
-시선 ${opts.shot.eyeline || '각 인물이 보는 대상을 명시하고 카메라를 보지 않게 하세요.'}
-현재 샷의 캐릭터(각 인물의 위치와 시선 포함) ${names.join('、') || '（화면에 이미 있는 캐릭터를 따름）'}
-현재 샷의 동작(이 부분만 촬영) ${thisShotAction(opts.shot.continuity) || opts.shot.blocking || opts.shot.title || ''}
-소품 ${opts.shot.propFocus || '없음'}
-대사 원문 ${opts.shot.voiceover || '（없음）'}
-기존 초안(상투적인 문장이라면 다시 작성)
+Current shot title ${opts.shot.title}
+Duration ${opts.shot.duration} seconds
+Camera movement ${opts.shot.cameraMovement}
+Blocking ${opts.shot.blocking || ''}
+Eyeline ${opts.shot.eyeline || 'Specify what each person is looking at and have them keep their eyes off the camera.'}
+Current cast (include each person’s position and eyeline) ${names.join('、') || '(Use the characters already in frame.)'}
+Current action (film only this beat) ${thisShotAction(opts.shot.continuity) || opts.shot.blocking || opts.shot.title || ''}
+Props ${opts.shot.propFocus || 'none'}
+Verbatim dialogue ${opts.shot.voiceover || '(none)'}
+Existing draft (rewrite if it relies on clichés)
 ${own || current}
 
-이 챕터의 필수 제약
-${opts.chapterNotes || '（없음）'}
+Mandatory chapter constraints
+${opts.chapterNotes || '(none)'}
 
-이 장면의 대본 원문(원문을 따르고 사건을 만들지 않음)
-${opts.sceneExcerpt || '（없음. 현재 샷의 현장 기록을 따름）'}
+Original scene excerpt (follow it without inventing events)
+${opts.sceneExcerpt || '(None. Follow the current shot’s continuity notes.)'}
 
-참조 정지 화면(배경 설정으로만 사용. 다시 서술하지 않음)
+Reference still (use as set context only, do not describe it again)
 ${(opts.shot.visualPrompt || '').slice(0, 400)}`
         }
       ],
