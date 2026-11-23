@@ -1,6 +1,6 @@
 /**
- * 去掉剧本常见的“人物名：”前缀，只保留真正需要朗读的内容。
- * 项目里仍保存完整原文，便于字幕和编辑器显示；仅在送入 H3/TTS 时清洗。
+ * 대사에서 화자 이름 접두사를 제거한다.
+ * 자막과 편집기에는 원문을 보존하고 H3 및 TTS에 보내기 전에만 정리한다.
  */
 
 const SPEAKER_RE = /^(旁白|画外音|解说|主持人|人声|台词|对白|내레이션|화면 밖 음성|해설|진행자|대사|narrator|voiceover)$/i
@@ -15,7 +15,7 @@ const PERF_HINT_RE =
 const PERF_PREFIX_RE =
   /^(?:带着[^：:\n]{1,8}|哭着|笑着|低声|轻声|小声|大声|哽咽|颤抖|喘着气|冷冷地|平静地|泣声)[地的]?\s*[：:]\s*/
 
-/** 「无」「无对白」不是台词，不能进 <d>，否则会被念出来。 */
+/** 없음이나 무대사 표식은 발화 태그에 넣지 않는다. */
 export function isPlaceholderSpokenLine(text: string): boolean {
   const t = String(text || '')
     .replace(/<\/?d>/gi, '')
@@ -32,7 +32,7 @@ function clipSpokenBody(body: string): string {
   return body.trim()
 }
 
-/** 镜头描述、场记、宫格说明不能当台词念。 */
+/** 연출, 현장 기록과 개요판 문구는 대사로 읽지 않는다. */
 export function looksLikeShotDirection(text: string): boolean {
   const t = (text || '').trim()
   if (!t) return false
@@ -53,7 +53,7 @@ export function looksLikeShotDirection(text: string): boolean {
   return false
 }
 
-/** 表演提示不能进 <d>，否则会被念出来。只留真正要说的字。 */
+/** 연기 지시는 태그 밖에 두고 발화 원문만 유지한다. */
 export function stripSpokenStageDirection(text: string): string {
   let t = String(text || '').trim()
   if (!t) return ''
