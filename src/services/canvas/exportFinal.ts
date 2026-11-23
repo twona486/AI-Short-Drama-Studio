@@ -25,7 +25,7 @@ export async function generateFinalCut(onProgress?: (msg: string) => void) {
     throw new Error('타임라인이 비어 있어 합성할 수 없습니다.')
   }
 
-  onProgress?.('准备素材...')
+  onProgress?.('소재를 준비하고 있어요…')
   const digitalHuman = isDigitalHumanSpeechProject(p)
   const mediaMap = new Map<string, { blob: Blob; kind: 'video' | 'image' }>()
   for (const clip of timeline) {
@@ -44,7 +44,7 @@ export async function generateFinalCut(onProgress?: (msg: string) => void) {
 
   let working = timeline
   if (digitalHuman && p.speechWorkflow?.options.removePauses !== false) {
-    onProgress?.('正在切掉句首句尾气口...')
+    onProgress?.('문장 앞뒤의 숨소리를 잘라내고 있어요…')
     working = await trimTimelineBySpeech(working, async (shotId) => mediaMap.get(shotId)?.blob)
     project.setTimeline(working)
   }
@@ -170,10 +170,10 @@ export async function generateFinalCut(onProgress?: (msg: string) => void) {
     onProgress
   })
 
-  onProgress?.('写入视频...')
+  onProgress?.('영상을 저장하고 있어요…')
   const asset = await assets.add(blob, 'video', 'ai-generated', {
     filename: `final_${p.name || 'cut'}_${Date.now().toString(36)}.mp4`,
-    prompt: `视频 · ${p.script?.topic || p.name || ''}`,
+    prompt: `영상 · ${p.script?.topic || p.name || ''}`,
     projectId: p.id
   })
   project.setFinalVideo(asset.id)
