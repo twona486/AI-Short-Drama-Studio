@@ -28,7 +28,7 @@ import { extractJsonText, parseJsonRobust } from '@/utils/jsonRepair'
 import { boundSubjectIds, inferSubjectsFromText, shotCastText, subjectMatchKeys } from '@/utils/consistency'
 import { sceneConflictsWithShot, shotMentionsScene } from '@/utils/shotPlace'
 import { isPlaceholderSpokenLine } from './dialogue'
-import { mergeContinuedPlay } from '@/utils/playContinue'
+import { mergeContinuedPlay, playSceneHeadings } from '@/utils/playContinue'
 import {
   extractPlayDirectives,
   extractSceneSlice,
@@ -3022,7 +3022,7 @@ function mockPlayFromBrief(input: StoryboardInput): PlayDraftResult {
     const next = mergeContinuedPlay(
       brief,
       [
-        '## 장면 계속｜이후',
+        `## 장면 ${playSceneHeadings(brief).length + 1}｜이후`,
         '',
         '**실외｜주요 장면｜이전 장면과 같은 날씨**',
         '',
