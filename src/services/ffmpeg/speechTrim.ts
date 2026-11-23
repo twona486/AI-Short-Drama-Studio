@@ -1,6 +1,6 @@
 /**
- * 按音量找出有效人声区间，切掉句首句尾气口和静音。
- * 数字人口播每段视频常在句末留一截没声音，不切的话拼起来会一顿一顿。
+ * 볼륨으로 발화 구간을 찾아 처음과 끝의 숨소리와 무음을 제거한다.
+ * 디지털 휴먼 클립 끝의 무음을 잘라 이어 붙인 영상이 끊기지 않게 한다.
  */
 
 import { getFFmpeg, writeFile, readFile, clearFS } from './client'
@@ -81,7 +81,7 @@ async function decodeMonoPcm(blob: Blob): Promise<{ samples: Float32Array; sampl
     await ctx.close().catch(() => undefined)
     if (samples.length > 80) return { samples, sampleRate }
   } catch {
-    /* 有的 mp4 浏览器解不了，改走 FFmpeg */
+    /* MP4를 브라우저에서 디코딩하지 못하면 FFmpeg를 사용한다. */
   }
   return extractPcmWithFfmpeg(blob)
 }
