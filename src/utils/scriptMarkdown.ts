@@ -699,7 +699,7 @@ export function extractSubjectsFromPlay(markdown: string): Array<{
       kind: 'person',
       description: (description || `${name}，外貌与服装按剧本补全`).slice(0, 1200),
       role: roleText.slice(0, 200),
-      stateVariants: stateText || '单一状态',
+      stateVariants: stateText || 'none',
       fromReference: false
     })
   }

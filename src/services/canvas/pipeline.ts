@@ -138,7 +138,7 @@ export function isContinueRequest(text: string) {
     return false
   }
   return (
-    /^(?:계속|다음\s*단계)[\s,.!?。！]*$/.test(t) ||
+    /^(?:계속|다음\s*단계|continue|next step)[\s,.!?。！]*$/i.test(t) ||
     /^(继续|下一步|接着做|往下|往下做|可以往下|可以|好的|好|要|嗯|行|开始|开始做|帮我做|做一下)([，,。!！ ]*)$/.test(
       t
     ) || /^(继续往下|继续做|继续吧|接着做|接着往下|下一步|往下做)([，,。!！ ]*)$/.test(t)
@@ -167,7 +167,7 @@ export function isVagueRequest(text: string, p: Project | null | undefined) {
   if (!t) return true
   if (isGreetingOrChitchat(t)) return false
   if (
-    /拆分镜|拆镜|故事板|故事看板|看板图|出分镜|生成分镜|剧本|续写|接着写|人设|四视图|资产图|角色图|场景图|底板|配图|出图|视频|口播|第.+镜|全流程|全部做完|确认通过|验收|继续|下一步/.test(
+    /拆分镜|拆镜|故事板|故事看板|看板图|出分镜|生成分镜|剧本|续写|接着写|人设|四视图|资产图|角色图|场景图|底板|配图|出图|视频|口播|第.+镜|全流程|全部做完|确认通过|验收|继续|下一步|대본|스토리보드|캐릭터 시트|장면 이미지|키프레임|영상 생성|더빙|전체 과정|\b(?:screenplay|storyboard|character sheets?|scene images?|keyframes?|generate videos?|dubbing|full workflow)\b/i.test(
       t
     )
   ) {

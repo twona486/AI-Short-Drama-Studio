@@ -228,8 +228,7 @@ export function durationWindowIssue(totalSec: number, targetSec: number): string
   if (Math.abs(total - target) <= DURATION_TOLERANCE_SEC) return ''
   const lo = target - DURATION_TOLERANCE_SEC
   const hi = target + DURATION_TOLERANCE_SEC
-  const delta = total - target
-  return `심각: 완성 영상이 ${total}초로 목표 ${target}초의 허용 구간인 ${lo}–${hi}초(±${DURATION_TOLERANCE_SEC}초)를 벗어났습니다. 현재 ${Math.abs(delta)}초 ${delta > 0 ? '초과했습니다' : '부족합니다'}. 샷을 재구성해 전체 duration 합을 허용 구간에 맞추세요. 길면 같은 장소와 캐릭터가 이어지는 샷을 합쳐 줄이고, 짧으면 기존 샷을 늘리세요. 시간을 맞추기 위해 핵심 줄거리를 삭제하지 마세요.`
+  return `Critical: The video runs ${total} seconds, outside the ${lo}–${hi}-second window for the ${target}-second target. Merge adjacent shots with the same cast and location if too long, or extend existing shots if too short. Retain all key story events.`
 }
 
 /**
@@ -264,11 +263,15 @@ export function shotBudgetFromDuration(targetSec: number | undefined, maxShotSec
   return durationSlices(targetSec, maxShotSec).length
 }
 
+const AD_COPY = /口播|带货|产品演示|내레이션|라이브\s*커머스|제품\s*시연|\b(?:narration|product demo|shoppable video|live commerce)\b/i
+const ADULT_NARRATOR = /成年|성인|어른이\s*된|\badult\b/i
+const NUMBERED_SCENE = /^##[ \t]+(?:场景[ \t]*[一二三四五六七八九十百0-9]|(?:장면|Scene)[ \t]+\d+)/gim
+
 function isLongFormPlay(input: Pick<StoryboardInput, 'workflowMode' | 'content'>, play = ''): boolean {
   const text = play || input.content || ''
   if (input.workflowMode === 'film-chapter') return true
-  if (/建议时长[：:\s]*\d+\s*[—\-～~]?\s*\d*\s*分钟/.test(text)) return true
-  const scenes = [...text.matchAll(/^##\s+场景[一二三四五六七八九十百0-9]/gm)]
+  if (/(?:建议时长|권장\s*길이|recommended\s*(?:duration|length))[：:\s]*\d+\s*(?:[—–\-～~]\s*\d+\s*)?(?:分钟|분|minutes?\b)/i.test(text)) return true
+  const scenes = [...text.matchAll(NUMBERED_SCENE)]
   return scenes.length >= 5
 }
 
@@ -415,7 +418,7 @@ Original topic: preserve its mood; no medium was specified.
 ${userAuth}
 """
 
-Use the dropdown medium (current selection: ${styleLabel(input.style)} / ${input.style}）：
+Use the dropdown medium (current selection: ${VISUAL_STYLE_GUIDE[input.style].medium} / ${input.style}):
 ${fallback}`
   }
 
@@ -672,7 +675,7 @@ async function ensureStoryboardQuality(
   for (let round = 0; round <= QUALITY_REPAIR_ROUNDS; round++) {
     const issues = storyboardQualityIssues(current, input)
     if (!issues.length) return current
-    const severe = issues.filter((issue) => issue.startsWith('심각:'))
+    const severe = issues.filter((issue) => /^(?:Critical:|심각:)/.test(issue))
     if (round > 0 && !severe.length) {
       log(`⚠ 검토할 문제가 있어요. 현재 초안을 사용해요. ${issues.join('；')}`)
       return current
@@ -1418,8 +1421,8 @@ Report visible facts only. Do not infer brands, specifications, prices, efficacy
 
   const stylePriority = buildStylePriorityBlock(input)
   const look = lookFromTexts(input.style, input.topic, input.content, input.keywords)
-  const styleCn = styleLabel(look.style)
   const styleGuide = VISUAL_STYLE_GUIDE[look.style]
+  const presetMedium = styleGuide.medium
   const mediumPhrase = extractUserMediumPhrase(
     input.topic,
     input.content,
@@ -1502,10 +1505,10 @@ Report visible facts only. Do not infer brands, specifications, prices, efficacy
     }
 
     // 캐릭터 프로필은 한국어, 생성 모델용 음색 지시는 영어로 요청한다.
-    const subjectSystem = `You extract character records. Use every independent subsection under "## 캐릭터" (or legacy "## 人物") and any people, animals, products, or key subjects that appear, are seen through a keepsake or portrait, or exert visible pressure. Do not extract locations, shots, asset images, or prop lists. Include deceased parents and absent opponents when their ### records exist. Preserve names from the script. If someone has both a name and a role, put the most-used short name in name and the full identity and aliases in role for matching. Describe age, face shape, hair, build, wardrobe, shoes, accessories, and stable visual features. Do not only label someone the protagonist. Keep description focused on identity and appearance, with no place or weather. Character sheets will use four views on seamless white. In stateVariants, identify wardrobe wetness, stains, hunger, limping, or held food that changes; use the existing "单一状态" value when nothing changes. Write user-facing character descriptions and roles in Korean (한국어).
+    const subjectSystem = `You extract character records. Use every independent subsection under "## 캐릭터" (or legacy "## 人物") and any people, animals, products, or key subjects that appear, are seen through a keepsake or portrait, or exert visible pressure. Do not extract locations, shots, asset images, or prop lists. Include deceased parents and absent opponents when their ### records exist. Preserve names from the script. If someone has both a name and a role, put the most-used short name in name and the full identity and aliases in role for matching. Describe age, face shape, hair, build, wardrobe, shoes, accessories, and stable visual features. Do not only label someone the protagonist. Keep description focused on identity and appearance, with no place or weather. Character sheets will use four views on seamless white. In stateVariants, identify wardrobe wetness, stains, hunger, limping, or held food that changes; use "none" when nothing changes. Write user-facing character descriptions and roles in Korean (한국어).
 ${productNote}
 Write one voicePrompt in English for every person, covering age and gender, timbre (raspy, bright, slow, nasal, or similar), speed and intensity, emotional tone, and an appropriate accent or speaking habit. Use one consistent voice in the entire film. For animal and other, use an empty string.
-Output JSON only: {"subjects":[{"name":"Short name","kind":"person|animal|other","description":"Specific physical identity, excluding location","role":"Identity, dramatic function, and aliases","stateVariants":"Changes in this episode, or 单一状态","voicePrompt":"English vocal qualities and delivery, empty for non-person subjects","fromReference":false}]}. Before returning, verify a record for every ###, separate people who speak, act, or are seen, and a voicePrompt for every person.`
+Output JSON only: {"subjects":[{"name":"Short name","kind":"person|animal|other","description":"Specific physical identity, excluding location","role":"Identity, dramatic function, and aliases","stateVariants":"Changes in this episode, or none","voicePrompt":"English vocal qualities and delivery, empty for non-person subjects","fromReference":false}]}. Before returning, verify a record for every ###, separate people who speak, act, or are seen, and a voicePrompt for every person.`
 
     // 촬영 장소만 추출하고 장면 설명과 생성용 스타일의 언어를 지정한다.
     const sceneSystem = `You extract locations and visual settings. Include only places actually filmed in this episode. Do not write characters or shots.
@@ -1805,7 +1808,7 @@ ${extractPlayForSceneStage(play)}`
           kind: 'person',
           description: `${name}의 외모와 의상 세부 정보는 캔버스에서 추가할 수 있어요.`,
           role: '스토리보드의 대사와 동작에서 확인한 등장인물',
-          stateVariants: '单一状态'
+          stateVariants: 'none'
         }))
       )
     }
@@ -1917,7 +1920,7 @@ Establish characters and locations before shot breakdown. Write visualPrompt as 
 ${
   hasUserStyle
     ? `Mention “${mediumPhrase}” once and express it through tangible details such as the bridge, water, and clothing. Avoid a style-only opening, a generic technique paragraph at the end, or a blocking-only summary such as “two people clasp their hands in greeting.”`
-    : `If the topic gives no style, apply “${styleCn}” and describe tangible surroundings and motion.`
+    : `If the topic gives no style, apply “${presetMedium}” and describe tangible surroundings and motion.`
 }
 Return JSON only without explanation.`
 
@@ -1955,9 +1958,9 @@ ${videoPerformanceSpec(getVideoPromptStyle())}
       "kind": "person|animal|other",
       "description": "<Identity details concrete enough to match at a market: age, hairstyle, clothes, shoes, scars, or habitual movements. Exclude place and weather. The character sheet has four views on white>",
       "role": "<Role in the film>",
-      "stateVariants": "<Wardrobe changes, or 单一状态 if unchanged>",
-      "voicePrompt": "<One English sentence for dubbing direction, covering age and gender, timbre, pace and intensity, emotional tone, accent or speech habits. Empty for animal or other>",
-      "props": "<Items worn or carried, such as bag, ID, tablet, shoes, or hat. Use 无 if none>",
+      "stateVariants": "<Wardrobe changes, or none if unchanged>",
+      "voicePrompt": "<One English sentence of about 15–35 words for dubbing direction, covering age and gender, timbre, pace and intensity, emotional tone, accent or speech habits. Empty for animal or other>",
+      "props": "<Items worn or carried, such as bag, ID, tablet, shoes, or hat. Use none if no items are present>",
       "fromReference": false
     }
   ],
@@ -1979,7 +1982,7 @@ ${videoPerformanceSpec(getVideoPromptStyle())}
       "blocking": "<Foreground and background position, what each person stands on, and body orientation. The speaker may be behind others. Avoid frontal lineups>",
       "eyeline": "<Eyeline per person. Foreground people look back or sideways toward the speaker or indicated object, away from the camera>",
       "continuity": "<Previous concrete ending or opening state for the first shot → current visible change → specific state for the next shot. State position, pose, orientation, held items, emotion, and knowledge>",
-      "propFocus": "<Prop to show clearly and its current state, or 无 if none>",
+      "propFocus": "<Prop to show clearly and its current state, or none>",
       "visualPrompt": "<Write a visible English still-frame prompt. Specify objects from near to far, movement or stillness in water, wind, and clothing, light source, wardrobe, ground, and objects in hand. Mention the medium once. Avoid generic style paragraphs or blocking alone>",
       "videoPrompt": "${videoPromptJsonHint(getVideoPromptStyle())}",
       "audioDescription": "<Audible scene sounds, separated by commas>",
@@ -1994,13 +1997,13 @@ ${videoPerformanceSpec(getVideoPromptStyle())}
   ]
 }
 
-Visual style: express the user's wording through physical objects, without a separate style paragraph. Only use the dropdown value when the topic does not specify a style: ${styleCn}」。
+Visual style: express the user's wording through physical objects, without a separate style paragraph. Only use the dropdown value when the topic does not specify a style: "${presetMedium}".
 Reject visualPrompt if it only lists positions, omits physical surroundings, or opens or ends with generic style language.
 Reject videoPrompt if it omits any duration from zero to the end, lacks actions and speakers at actual beats, or fills equal time slots with generic language.
-${hasUserStyle && !look.matched ? 'Use the custom visual style in place of the preset selected on the page.' : `${styleGuide.avoid}。`}
+${hasUserStyle && !look.matched ? 'Use the custom visual style in place of the preset selected on the page.' : `${styleGuide.avoid}`}
 Use H3 on-screen dialogue by default. Divide the original words into meaningful paragraphs for voiceover and set audioMode=h3-dialogue. Avoid one line per shot. The current model accepts at most ${shotDurationLimit(input)} seconds per shot. For a shared place, person, intention, or continuous action, prefer one complete 7–${shotDurationLimit(input)}-second shot when it fits. Do not force two 5-second shots to fill a template. Cut only when focus, time, place, axis, or dramatic purpose changes. Reserve a single line for brief reactions or transitions and allow about four characters per second. Use "Character name: dialogue" in voiceover and specify the speaker and vocal quality in speakerHint.
 Follow action, spacing, and emotion when choosing framing. Use close framing when the expression matters and no surroundings are needed; use medium, two-person, or group framing for handoffs, arguments, exchanges, distance, environmental pressure, or group reactions. Do not force close-ups; name who speaks and others' reactions so mouths do not open together.
-Use h3-voiceover only for explicit off-screen narration, tts for requested dubbing in postproduction, and none for a silent empty shot. Create a separate subject for each ### under characters. Show a deceased character's keepsake, portrait, or flashback in at least one shot, and a living opponent's confrontation or visible pressure in at least one shot. Give every shot its own specific 3–8-character Korean title. Verify adjacent continuity and apply the narrative rules to major changes instead of jumping from a result to explanatory speech.
+Use h3-voiceover only for explicit off-screen narration, tts for requested dubbing in postproduction, and none for a silent empty shot. Create a separate subject for each ### under characters. If a form of address such as “older brother” refers to an existing character, record it in name, role, or description. Include every character in at least one shot, link them through subjectIds, and name them in visualPrompt and videoPrompt. Keep the father, older brother, and antagonist even if they never occupy the center of the frame. Create a character card for each and do not replace them in shots with a passerby or “a man.” Show a deceased character's keepsake, portrait, or flashback in at least one shot, and a living opponent's confrontation or visible pressure in at least one shot. Give every shot its own specific 3–8-character Korean title. Verify adjacent continuity and apply the narrative rules to major changes instead of jumping from a result to explanatory speech.
 Return valid JSON only.`
     },
     {
@@ -2249,20 +2252,20 @@ export function storyboardQualityIssues(
   input: Pick<StoryboardInput, 'content' | 'topic' | 'targetDurationSec' | 'maxShotDuration'>
 ): string[] {
   const issues: string[] = []
-  if (!result.shots.length) issues.push('심각: 생성된 스토리보드 샷이 없습니다.')
+  if (!result.shots.length) issues.push('Critical: No storyboard shots were generated.')
   const targetSec = Number(input.targetDurationSec) || extractTargetDurationSec(input.topic, input.content)
   const shotCap = shotBudgetFromDuration(targetSec, input.maxShotDuration) || 12
   if (result.shots.length > shotCap) {
     issues.push(
-      `${targetSec ? '심각: ' : ''}스토리보드 샷 ${result.shots.length}개가 ${targetSec ? `목표 ${targetSec}초에 해당하는 ${shotCap}` : shotCap}개 한도를 넘었습니다. 숏폼 영상의 리듬에 맞게 줄이세요.`
+      `${targetSec ? 'Critical: ' : ''}The storyboard has ${result.shots.length} shots, exceeding the limit of ${shotCap}${targetSec ? ` for ${targetSec} seconds` : ''}. Reduce the shot count for short-form pacing.`
     )
   }
   if (
     result.subjects?.length === 1 &&
-    result.subjects[0]?.name === '主角' &&
+    /^(?:主角|주인공|protagonist)$/i.test(result.subjects[0]?.name || '') &&
     (input.content || '').trim()
   ) {
-    issues.push('심각: 사용자 원문에서 캐릭터를 충분히 추출하지 못하고 기본 ‘주인공’만 생성했습니다.')
+    issues.push('Critical: The extraction returned only a generic protagonist. Extract the other characters named in the source.')
   }
   const sourceText = `${input.topic || ''}\n${input.content || ''}`
   const castText = (result.subjects ?? [])
@@ -2274,48 +2277,48 @@ export function storyboardQualityIssues(
     '顾客', '主持人', '女孩', '男孩', '女人', '男人'
   ].filter((role) => sourceText.includes(role) && !castText.includes(role))
   if (visibleRoles.length) {
-    issues.push(`심각: subjects에서 다음 원문 인물이 빠졌습니다. ${visibleRoles.join('、')}`)
+    issues.push(`Critical: The following source characters are missing from subjects: ${visibleRoles.join('、')}`)
   }
   const normalizedTitles = result.shots.map((shot) => shot.title.trim())
   if (
-    normalizedTitles.some((title) => /^(?:镜头|샷)\s*\d*$/.test(title)) ||
+    normalizedTitles.some((title) => /^(?:镜头|샷|Shot)\s*\d*$/i.test(title)) ||
     new Set(normalizedTitles).size !== normalizedTitles.length
   ) {
-    issues.push('심각: 스토리보드 제목이 없거나 중복됩니다. 샷마다 내용에 맞는 제목을 쓰세요. 모두 ‘샷’으로 적지 마세요.')
+    issues.push('Critical: Shot titles are missing or duplicated. Give every shot a specific title. Do not use the generic title “Shot.”')
   }
   const targetDuration = targetSec
   const totalDuration = result.shots.reduce((sum, shot) => sum + shot.duration, 0)
   const durationIssue = durationWindowIssue(totalDuration, targetDuration)
   if (durationIssue) issues.push(durationIssue)
   if (!result.h3Aesthetic || result.h3Aesthetic.length < 35) {
-    issues.push('H3에 바로 보낼 영어 Aesthetic이 없습니다.')
+    issues.push('Provide an English aesthetic description suitable for H3.')
   }
   const people = (result.subjects ?? []).filter((s) => s.kind !== 'other')
   const voicedShots = result.shots.filter((shot) => (shot.voiceover || '').trim())
-  const looksLikeAd = /带货|产品演示|口播文案/.test(`${input.topic || ''}\n${input.content || ''}`)
+  const looksLikeAd = AD_COPY.test(`${input.topic || ''}\n${input.content || ''}`)
   if (
     !looksLikeAd &&
     people.length >= 2 &&
     result.shots.length >= 4 &&
     voicedShots.length < Math.max(3, Math.ceil(result.shots.length * 0.35))
   ) {
-    issues.push('대사가 너무 적습니다. 여러 인물이 함께 있는 샷에서 거의 말하지 않습니다. 이름 부르기, 질문과 답변, 서로 알아보기, 대치, 만류는 voiceover에 대사를 써야 합니다. 앞 이야기를 전부 첫 샷의 성인이 된 인물 내레이션에 넣지 마세요.')
+    issues.push('Add dialogue to shots with multiple characters. Write lines for calling names, questions and answers, recognition, confrontation, and persuasion. Do not put the entire backstory in the first shot’s adult narration.')
   }
   if (
-    voicedShots.some((shot) => /成年/.test(shot.voiceover)) &&
-    voicedShots.filter((shot) => !/成年/.test(shot.voiceover)).length < 2
+    voicedShots.some((shot) => ADULT_NARRATOR.test(shot.voiceover)) &&
+    voicedShots.filter((shot) => !ADULT_NARRATOR.test(shot.voiceover)).length < 2
   ) {
-    issues.push('화면 속 대사가 성인이 된 인물의 내레이션으로 바뀌었습니다. 이 장면에서 보이는 인물이 직접 말해야 합니다. 배경을 내레이션으로 요약하지 마세요.')
+    issues.push('Restore on-screen dialogue instead of narration by an older version of a character. Let the visible characters speak and do not summarize the backstory in narration.')
   }
   if (
     totalDuration >= 25 &&
     voicedShots.length >= 3 &&
     voicedShots.every((shot) => spokenSentenceCount(shot.voiceover) <= 1)
   ) {
-    issues.push('대사가 샷마다 한 마디씩 기계적으로 나뉘었습니다. 같은 인물이 같은 의도로 이어 말하는 2–4마디를 7–10초 샷 하나에 넣으세요. 짧은 반응에만 한 마디를 쓰세요.')
+    issues.push('Dialogue is split mechanically into one line per shot. Combine 2–4 successive lines by the same speaker with the same intent into one 7–10-second shot. Reserve a single line for brief reactions.')
   }
   result.shots.forEach((shot, index) => {
-    const label = `${index + 1}번 샷`
+    const label = `Shot ${index + 1}`
     const speakers = voiceoverSpeakerLabels(shot.voiceover || '')
     const speaker = speakers[0]
     if (shot.audioMode === 'h3-dialogue' && speaker) {
@@ -2323,16 +2326,16 @@ export function storyboardQualityIssues(
         .filter(Boolean)
         .join('\n')
       if (!staging.includes(speaker)) {
-        issues.push(`${label}의 화면 속 대사에서 화자 ‘${speaker}’를 지목하지 않았습니다.`)
+        issues.push(`${label} does not identify “${speaker}” as the on-screen speaker.`)
       }
     }
     if ((shot.visualPrompt || '').trim().length < 50) {
-      issues.push(`${label}의 화면 묘사가 너무 짧아 안정적으로 생성하기 어렵습니다.`)
+      issues.push(`${label} needs a longer, more concrete visual description for reliable generation.`)
     }
     const performance = (shot.videoPrompt || '').trim()
     const still = (shot.visualPrompt || '').trim()
     if (!performance || performance === still) {
-      issues.push(`${label}의 영상 연출이 빠졌습니다. 누가 무엇을 하고 말하는지, 카메라가 어떻게 움직이는지 작성하세요. 샷 이미지 설명을 재사용하지 마세요.`)
+      issues.push(`${label} lacks video direction. Describe who acts and speaks, what they do and say, and how the camera moves. Do not reuse the still-image description.`)
     } else {
       const names = (result.subjects || [])
         .filter((s) => (shot.subjectIds || []).includes(s.id) || performance.includes(s.name))
@@ -2340,22 +2343,22 @@ export function storyboardQualityIssues(
       const perfIssue = videoPerformanceIssue(performance, names)
       if (perfIssue) issues.push(`${label} ${perfIssue}`)
     }
-    if (!shot.sceneId) issues.push(`${label}에 연결된 장면이 없습니다.`)
-    if (!shot.cameraMovement) issues.push(`${label}에 카메라 움직임 방식이 없습니다.`)
+    if (!shot.sceneId) issues.push(`${label} has no linked location.`)
+    if (!shot.cameraMovement) issues.push(`${label} has no camera movement.`)
     const continuity = (shot.continuity || '').trim()
     const continuitySteps = (continuity.match(/→/g) || []).length
     if (continuity.length < 28 || continuitySteps < 2) {
-      issues.push(`심각: ${label}의 continuity에 ‘이전 샷 끝 상태 → 현재 샷의 변화 → 다음 샷 끝 상태’가 명시되지 않아 구간 사이의 연속성을 보장할 수 없습니다.`)
+      issues.push(`Critical: ${label} needs continuity specifying the previous shot’s ending → the visible change in this shot → the next shot’s ending.`)
     }
     const emptyPlate =
-      !shot.voiceover.trim() && /空镜|空景|无人/.test(`${shot.title}${shot.visualPrompt}`)
+      !shot.voiceover.trim() && /空镜|空景|无人|빈 장면|인물 없음|사람이 없는|empty (?:shot|frame|scene)|no (?:people|characters)/i.test(`${shot.title}${shot.visualPrompt}`)
     if (people.length && !(shot.subjectIds ?? []).length && !emptyPlate) {
-      issues.push(`심각: ${label}에 캐릭터가 연결되지 않아 샷 이미지에 캐릭터 설정 이미지를 전달할 수 없습니다.`)
+      issues.push(`Critical: ${label} has no linked characters, so the image generator cannot use their character sheets.`)
     }
   })
   const source = (input.content || '').trim()
   if (source.length > 0 && result.shots.every((shot) => !shot.voiceover.trim())) {
-    issues.push('심각: 사용자 원고가 있지만 모든 샷의 내레이션이 비어 있습니다.')
+    issues.push('Critical: The user supplied a script, but all shots have empty narration and dialogue.')
   }
   for (const sub of people) {
     const used = result.shots.some(
@@ -2363,7 +2366,7 @@ export function storyboardQualityIssues(
         (shot.subjectIds ?? []).includes(sub.id) ||
         inferSubjectsFromText(shotCastText(shot as Shot), [sub]).length > 0
     )
-    if (!used) issues.push(`심각: 캐릭터 ‘${sub.name}’의 설정은 있지만 스토리보드의 어느 샷에도 등장하지 않습니다.`)
+    if (!used) issues.push(`Critical: Character “${sub.name}” has a profile but appears in no storyboard shot.`)
   }
   return issues.slice(0, 16)
 }
@@ -2553,7 +2556,7 @@ export function normalizeStoryboard(
     kind: asKind(s?.kind),
     description: String(s?.description || '').trim(),
     role: optStr(s?.role),
-    stateVariants: optStr(s?.stateVariants),
+    stateVariants: /^单一状态$/.test(String(s?.stateVariants ?? '').trim()) ? 'none' : optStr(s?.stateVariants),
     voicePrompt: normalizeVoicePrompt(s?.voicePrompt, asKind(s?.kind)),
     fromReference: Boolean(s?.fromReference)
   }))
@@ -2574,7 +2577,7 @@ export function normalizeStoryboard(
       kind: 'person',
       description: '영상 전체에 같은 주인공이 등장하며 얼굴, 헤어스타일, 의상과 색상을 유지해요.',
       role: '주인공',
-      stateVariants: '单一状态'
+      stateVariants: 'none'
     })
   }
   if (scenes.length === 0) {
@@ -2769,7 +2772,7 @@ function enrichVisualPrompt(
       ctx.sceneLighting ? `Lighting: ${ctx.sceneLighting}` : '',
       ctx.blocking ? ctx.blocking : '',
       ctx.shotSize ? ctx.shotSize : '',
-      ctx.propFocus && ctx.propFocus !== '无' ? `In hand or nearby: ${ctx.propFocus}` : '',
+      ctx.propFocus && !isPlaceholderSpokenLine(ctx.propFocus) ? `In hand or nearby: ${ctx.propFocus}` : '',
       'Show whether the ground, water, or wind is moving and where the light comes from.'
     ]
       .filter(Boolean)
@@ -2842,16 +2845,8 @@ export async function generateStoryboard(
     } catch (e: any) {
       const msg = e?.message ?? String(e)
       log(`✗ 언어 모델 호출에 실패했어요. ${msg}`)
-      if (isAbortError(e) && !isTimeoutAbort(e)) throw e
-      throw new Error(
-        msg.startsWith('脚本') ||
-          msg.startsWith('提炼') ||
-          msg.startsWith('模型超过') ||
-          msg.startsWith('连不上') ||
-          msg.startsWith('粗分镜')
-          ? msg
-          : `대본 생성에 실패했습니다. ${msg}`
-      )
+      if (isAbortError(e) || isTimeoutAbort(e) || /^(?:대본 본문|스토리보드 초안|모든 스토리보드 작업|언어 모델에 연결|(?:캐릭터|장면|소품|Props|Locations)[을를]? (?:추출|JSON)|脚本|提炼|连不上|粗分镜)/i.test(msg)) throw e
+      throw new Error(`대본 생성에 실패했습니다. ${msg}`, { cause: e })
     }
   }
 
@@ -2951,7 +2946,7 @@ function playBibleGaps(md: string): string[] {
     }
     const people = t.split(/##\s*(?:人物|캐릭터|인물|Characters)/i)[1]?.split(/^##\s+/m)[0] || ''
     const charCount = (people.match(/^###\s+/gm) || []).length
-    const looksLikeAd = /口播|带货|产品演示/.test(t)
+    const looksLikeAd = AD_COPY.test(t)
     if (!looksLikeAd && charCount > 0 && charCount < 3) {
       gaps.push('The character list is too thin. Beyond extras, include the lead, the antagonist, and key family or mentors. Profile the deceased father and living antagonist too. Do not reduce the screenplay to the two-person climax.')
     }
@@ -2959,19 +2954,19 @@ function playBibleGaps(md: string): string[] {
   if (!/##\s*(?:环境与场景|환경과 장면|Environment and locations)/i.test(t) && !/##\s*场景\s*$/m.test(t)) {
     gaps.push('Environment and locations: describe spaces without people, the weather, and period details.')
   }
-  const sceneCount = (t.match(/^##\s*(?:场景[一二三四五六七八九十百0-9]|(?:장면|Scene)\s*\d+)/gim) || []).length
+  const sceneCount = [...t.matchAll(NUMBERED_SCENE)].length
   if (sceneCount > 0 && !/场次任务|장면 과제|scene objective/i.test(t)) {
     gaps.push('Give each scene an objective, obstacle, and outcome.')
   }
-  const tableHits = t.match(/\*\*口播\*\*/g)?.length || 0
+  const tableHits = t.match(/\*\*(?:口播|내레이션|Narration)\*\*/gi)?.length || 0
   if (tableHits >= 3) gaps.push('Rewrite narration, visuals, and duration tables as continuous action and dialogue. Do not retain the table.')
-  const looksLikeAd = /口播|带货|产品演示/.test(t)
+  const looksLikeAd = AD_COPY.test(t)
   const quotes = t.match(/「[^」]{2,}」/g)?.length || 0
   const namedLines = t.match(/\*\*[^*：\n]{1,16}：\*\*/g)?.length || 0
   if (!looksLikeAd && sceneCount >= 3 && quotes + namedLines < Math.max(6, sceneCount)) {
     gaps.push('There is too little dialogue for a screen drama. Write speakable exchanges for recognition, calling a name, confrontation, persuasion, or questions and answers. Do not bury the backstory in one adult narrator line while the other scenes remain silent.')
   }
-  if (/成年[^「\n]{0,8}：/.test(t) && quotes < 4) {
+  if (t.split('\n').some((line) => ADULT_NARRATOR.test(line.split(/[：:]/, 1)[0]) && /[：:]/.test(line)) && quotes < 4) {
     gaps.push('Do not substitute narration from an older version of a character for on-screen dialogue. Let the characters in the scene speak for themselves.')
   }
   return gaps
@@ -3319,8 +3314,8 @@ export async function generatePlay(
     } catch (e: any) {
       const msg = e?.message ?? String(e)
       log(`✗ 대본 작성에 실패했습니다. ${msg}`)
-      if (isAbortError(e) && !isTimeoutAbort(e)) throw e
-      throw new Error(msg.startsWith('写剧本') || msg.startsWith('模型超过') ? msg : `대본 작성에 실패했습니다. ${msg}`)
+      if (isAbortError(e) || isTimeoutAbort(e) || /^(?:대본 작성|모델이 대본을|언어 모델에 연결|写剧本)/.test(msg)) throw e
+      throw new Error(`대본 작성에 실패했습니다. ${msg}`, { cause: e })
     }
   }
 

@@ -96,7 +96,7 @@ export function detectIntent(text: string, ctx: IntentContext): AgentIntent {
   }
   if (isNewStoryBrief(t, ctx.project)) return intent('pipeline')
   if (
-    /剧本|短剧|剧集|微剧|故事|写剧|完整剧本|续写|接着写|拆分镜|拆镜|故事板|出分镜|拆剧本|提炼|提取节点|人设|四视图|场景图|底板|故事看板|口播|配音/.test(t)
+    /剧本|短剧|剧集|微剧|故事|写剧|完整剧本|续写|接着写|拆分镜|拆镜|故事板|出分镜|拆剧本|提炼|提取节点|人设|四视图|场景图|底板|故事看板|口播|配音|대본(?:을)?\s*(?:쓰|써|작성)|스토리보드\s*(?:추출|만들|생성)|\b(?:write|rewrite) (?:a |the )?(?:script|screenplay)\b|\bgenerate (?:a |the )?storyboard\b/i.test(t)
   ) {
     // 명확한 워크플로 요청은 현재 캔버스 상태와 관계없이 처리한다.
     return intent('pipeline')

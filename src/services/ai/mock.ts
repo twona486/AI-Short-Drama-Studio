@@ -201,7 +201,7 @@ export function mockStoryboardFromPrompt(userMsg: string) {
           kind: 'person' as const,
           description: '전체 영상에서 주인공의 얼굴, 헤어스타일과 의상을 유지한다.',
           role: '주인공',
-          stateVariants: '单一状态'
+          stateVariants: 'none'
         }
       ],
       scenes: [

@@ -609,7 +609,7 @@ function resolveNodePath(
 
 /** 이미지 한 장이나 짧은 영상처럼 단일 노드로 처리하는 요청 */
 const NODE_REQUEST =
-  /画一?[张幅个]|做一?[个条]|生成一?[张个条]|出一张|图片|图像|视频节点|出图|一张图|一段视频/i
+  /画一?[张幅个]|做一?[个条]|生成一?[张个条]|出一张|图片|图像|视频节点|出图|一张图|一段视频|이미지\s*(?:한\s*장|노드)|영상\s*노드|\b(?:image|video) node\b/i
 
 /** 대본 승인 이후에만 실행할 수 있는 후속 워크플로 작업인지 확인한다. */
 function isDownstreamAction(a: any, p: Project | null | undefined): boolean {
@@ -780,13 +780,13 @@ function freeformHeuristicPlan(
       actions.push({ tool: 'delete_node', nodeId: selectedNodeId })
     }
     // 사용자가 현재 노드에 추가하라고 요청하면 새 노드를 생성해 연결한다.
-    if (!actions.length && /视频/.test(t) && /新建|创建|做一?[个条]|来一?[个条]|加|接|连/.test(t)) {
+    if (!actions.length && /视频|영상|\bvideo\b/i.test(t) && /新建|创建|做一?[个条]|来一?[个条]|加|接|连|만들|추가|생성|\b(?:create|make|add|generate)\b/i.test(t)) {
       const dur = Number(t.match(/(\d{1,2})\s*(?:秒|초|seconds?\b)/i)?.[1] || 8)
       actions.push({ tool: 'create_video_node', text: t, duration: dur, sourceNodeId: selectedNodeId })
     } else if (
       !actions.length &&
-      /图|画/.test(t) &&
-      /新建|创建|画一?[张个]|做一?[张个]|来一?[张个]|加|接|连/.test(t)
+      /图|画|이미지|그림|\bimage\b/i.test(t) &&
+      /新建|创建|画一?[张个]|做一?[张个]|来一?[张个]|加|接|连|만들|추가|생성|그려|\b(?:create|make|add|generate|draw)\b/i.test(t)
     ) {
       actions.push({ tool: 'create_image_node', text: t, sourceNodeId: selectedNodeId })
     }
@@ -1015,7 +1015,7 @@ function alignNewStoryActions(
   const triedWrite = actions.some((a) =>
     ['generate_play', 'continue_play', 'seed_script', 'generate_storyboard'].includes(String(a.tool))
   )
-  const detailed = brief.length >= 36 || /女主|男主|人物|修仙|炼丹|场景|对白|热梗/.test(brief)
+  const detailed = brief.length >= 36 || /女主|男主|人物|修仙|炼丹|场景|对白|热梗|캐릭터|장면|대사|주인공|\b(?:character|scene|dialogue|protagonist)\b/i.test(brief)
   if (!triedWrite && !detailed) return actions
   const out = actions.filter((a) => a.tool !== 'continue_play' && a.tool !== 'extract_cast')
   const seed = out.find((a) => a.tool === 'seed_script')
@@ -1032,13 +1032,13 @@ function sanitizeActions(actions: any[], userText: string): any[] {
   const t = userText
   // 비용이 큰 일괄 작업만 사용자가 해당 작업을 요청했는지 확인한다.
   // 단일 작업은 모델이 최신 캔버스 상태를 기준으로 선택한다.
-  const askedBoard = /拆分镜|拆镜|故事板|出分镜|生成分镜|写剧本|提炼节点|拆剧本|대본\s*나누기|대본을\s*나눠|split (?:the )?script|续写|接着写|再写|分镜|场次/.test(t)
-  const askedSheet = /人设|角色图|四视图|人物图|角色/.test(t)
-  const askedScene = /场景图|底板|出场景|生成场景|场景/.test(t)
-  const askedPanel = /故事看板|看板图|线稿分镜|线稿/.test(t)
-  const askedImage = /配图|出图|关键帧|画面|图片|静帧|作图|图/.test(t)
-  const askedVideo = /视频|图生视频|动态|出片|成片|运镜/.test(t)
-  const askedAudio = /口播|配音|语音|旁白|声音|台词录音/.test(t)
+  const askedBoard = /拆分镜|拆镜|故事板|出分镜|生成分镜|写剧本|提炼节点|拆剧本|대본\s*나누기|대본을\s*나눠|split (?:the )?script|续写|接着写|再写|分镜|场次|스토리보드|샷\s*나누기|대본\s*분할|\bstoryboard\b|shot breakdown/i.test(t)
+  const askedSheet = /人设|角色图|四视图|人物图|角色|캐릭터\s*(?:시트|설정|이미지)|인물\s*설정|4면\s*설정|\bcharacter (?:sheets?|designs?)\b/i.test(t)
+  const askedScene = /场景图|底板|出场景|生成场景|场景|장면\s*(?:이미지|기준|생성)|배경\s*이미지|\b(?:scene images?|location anchors?)\b/i.test(t)
+  const askedPanel = /故事看板|看板图|线稿分镜|线稿|스토리\s*개요판|선화\s*스토리보드|\bstoryboard panels?\b/i.test(t)
+  const askedImage = /配图|出图|关键帧|画面|图片|静帧|作图|图|키프레임|샷\s*이미지|이미지\s*(?:생성|만들)|\b(?:keyframes?|(?:generate|create) (?:all )?images?)\b/i.test(t)
+  const askedVideo = /视频|图生视频|动态|出片|成片|运镜|영상\s*(?:생성|만들|제작)|이미지\s*→\s*영상|\b(?:generate|make|create) (?:all )?(?:the )?videos?\b|image-to-video/i.test(t)
+  const askedAudio = /口播|配音|语音|旁白|声音|台词录音|더빙|내레이션|음성\s*생성|\b(?:dubbing|narration|voiceover|generate audio)\b/i.test(t)
   const shotHit = parseShotIndexes(t).length > 0
   return actions.filter((a) => {
     const tool = String(a?.tool || '')
@@ -1064,7 +1064,7 @@ function dedupeActions(actions: any[]): any[] {
   })
 }
 
-const SCRIPT_REWRITE = /重新写(?:完整)?剧本|重写(?:完整)?剧本|改写剧本|换(?:一个|成).{0,12}(?:故事|剧本)|新故事|新剧本/
+const SCRIPT_REWRITE = /重新写(?:完整)?剧本|重写(?:完整)?剧本|改写剧本|换(?:一个|成).{0,12}(?:故事|剧本)|新故事|新剧本|대본(?:을)?\s*(?:다시\s*(?:쓰|써|작성)|새로\s*(?:쓰|써|작성))|\brewrite (?:the )?(?:script|screenplay)\b/i
 
 /** 가져온 완성 대본은 내용을 유지하며 샷으로 나눈다. */
 function protectImportedScript(actions: any[], userText: string): any[] {
@@ -1073,7 +1073,7 @@ function protectImportedScript(actions: any[], userText: string): any[] {
   const kept = actions.filter(
     (item) => !['generate_play', 'generate_storyboard', 'seed_script'].includes(String(item?.tool || ''))
   )
-  const askedSplit = /拆分镜|拆镜|提炼|分镜|出节点|拆剧本|대본\s*나누기|대본을\s*나눠|split (?:the )?script|拆人物|拆场景/.test(userText)
+  const askedSplit = /拆分镜|拆镜|提炼|分镜|出节点|拆剧本|대본\s*나누기|대본을\s*나눠|split (?:the )?script|拆人物|拆场景|스토리보드|샷\s*나누기|\bstoryboard\b/i.test(userText)
   if (askedSplit && !kept.some((item) => item.tool === 'extract_cast')) {
     kept.unshift({ tool: 'extract_cast' })
   }
@@ -1151,15 +1151,15 @@ function heuristicPlan(userText: string): { say: string; actions: any[] } {
 
   const askedExtract = /提炼节点|提炼人物|提炼场景|拆节点|出节点|重新提取|重新提炼|노드 추출|캐릭터 추출|장면 추출|다시 추출|extract nodes|extract characters|extract scenes|re-extract/i.test(t)
   const askedContinuePlay = /续写|接着写|再写[一两三四\d]*场|加一场|往后写|续一[场段]|写下去|이어\s*(?:쓰기|써)|장면 추가|continue writing|add a scene/i.test(t)
-  const askedPlay = /写剧本|完整剧本|重新写剧本/.test(t) && !askedContinuePlay
-  const askedBoard = /拆分镜|拆镜|故事板|出分镜|生成分镜|拆剧本|대본\s*나누기|대본을\s*나눠|split (?:the )?script/i.test(t)
-  const askedSheet = /人设|角色图|四视图/.test(t)
-  const askedProp = /资产图|道具图|关键道具/.test(t)
-  const askedScene = /场景图|底板|出场景|生成场景/.test(t)
-  const askedPanel = /故事看板|看板图|线稿分镜/.test(t)
-  const askedImage = /配图|出图|关键帧|把图画上|缺的图/.test(t)
-  const askedVideo = /图生视频|生成视频|出视频/.test(t) || /第.+镜.*视频/.test(t)
-  const askedAudio = /口播|配音|语音/.test(t)
+  const askedPlay = /写剧本|完整剧本|重新写剧本|대본(?:을)?\s*(?:다시\s*)?(?:쓰|써|작성을?\s*해|작성)|\b(?:write|rewrite) (?:a |the )?(?:script|screenplay)\b/i.test(t) && !askedContinuePlay
+  const askedBoard = /拆分镜|拆镜|故事板|出分镜|生成分镜|拆剧本|대본\s*나누기|대본을\s*나눠|split (?:the )?script|스토리보드|샷\s*나누기|대본\s*분할|\bstoryboard\b|shot breakdown/i.test(t)
+  const askedSheet = /人设|角色图|四视图|캐릭터\s*(?:시트|설정|이미지)|인물\s*설정|4면\s*설정|\bcharacter (?:sheets?|designs?)\b/i.test(t)
+  const askedProp = /资产图|道具图|关键道具|소품\s*(?:이미지|설정)|\bprop (?:sheets?|images?)\b/i.test(t)
+  const askedScene = /场景图|底板|出场景|生成场景|장면\s*(?:이미지|기준|생성)|배경\s*이미지|\b(?:scene images?|location anchors?)\b/i.test(t)
+  const askedPanel = /故事看板|看板图|线稿分镜|스토리\s*개요판|선화\s*스토리보드|\bstoryboard panels?\b/i.test(t)
+  const askedImage = /配图|出图|关键帧|把图画上|缺的图|키프레임|샷\s*이미지|이미지\s*(?:생성|만들)|\b(?:keyframes?|(?:generate|create) (?:all )?images?)\b/i.test(t)
+  const askedVideo = /图生视频|生成视频|出视频|영상\s*(?:생성|만들|제작)|이미지\s*→\s*영상|\b(?:generate|make|create) (?:all )?(?:the )?videos?\b|image-to-video/i.test(t) || /第.+镜.*视频/.test(t)
+  const askedAudio = /口播|配音|语音|더빙|내레이션|음성\s*생성|\b(?:dubbing|narration|voiceover|generate audio)\b/i.test(t)
   const looksLikeBrief =
     t.length >= 16 &&
     !askedSheet &&

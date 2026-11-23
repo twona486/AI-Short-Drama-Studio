@@ -1,3 +1,4 @@
+import { isPlaceholderSpokenLine } from './dialogue'
 /**
  * 캐릭터 설정 및 장면 기준 이미지 프롬프트
  *
@@ -147,7 +148,7 @@ export function shotBoardPrompt(
   const body = (shot.boardPrompt || shot.visualPrompt || shot.title).trim()
   const size = shot.shotSize ? `Shot size: ${shot.shotSize}.` : ''
   const blocking = shot.blocking ? `Blocking: ${shot.blocking}.` : ''
-  const prop = shot.propFocus && shot.propFocus !== '无' ? `Key prop: ${shot.propFocus}.` : ''
+  const prop = shot.propFocus && !isPlaceholderSpokenLine(shot.propFocus) ? `Key prop: ${shot.propFocus}.` : ''
   const continuity = shot.continuity ? `Continuity: ${shot.continuity}.` : ''
   const performance = shot.videoPrompt?.trim()
     ? `Action and performance: ${shot.videoPrompt.trim()}.`
@@ -245,7 +246,7 @@ export function shotKeyframePrompt(
   const body = (shot.visualPrompt || shot.title).trim()
   const size = shot.shotSize ? `Shot size: ${shot.shotSize}.` : ''
   const blocking = shot.blocking ? `Blocking: ${shot.blocking}.` : ''
-  const prop = shot.propFocus && shot.propFocus !== '无' ? `Key prop: ${shot.propFocus}.` : ''
+  const prop = shot.propFocus && !isPlaceholderSpokenLine(shot.propFocus) ? `Key prop: ${shot.propFocus}.` : ''
   const continuity = shot.continuity ? `Continuity: ${shot.continuity}.` : ''
   const performance = shot.videoPrompt?.trim() ? `Action and performance: ${shot.videoPrompt.trim()}.` : ''
   const voiceMode = shot.audioMode ?? 'h3-dialogue'

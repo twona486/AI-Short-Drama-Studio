@@ -1,3 +1,4 @@
+import { isPlaceholderSpokenLine } from "@/services/ai/dialogue"
 /**
  * 节点上展示的提示词 = 真正发给出图/出视频接口的全文。
  * 框里有字就原样发送，不再背后拼接。
@@ -91,7 +92,7 @@ export function shotDirectorBrief(shot: Shot, project: Project): string {
     shot.continuity ? `Continuity: ${shot.continuity}` : '',
     shot.visualPrompt?.trim() ? `可见画面：${shot.visualPrompt.trim()}` : '',
     performance ? `这一镜怎么演：${performance}` : '',
-    shot.propFocus && shot.propFocus !== '无' ? `道具：${shot.propFocus}` : '',
+    shot.propFocus && !isPlaceholderSpokenLine(shot.propFocus) ? `道具：${shot.propFocus}` : '',
     shot.audioDescription?.trim() ? `现场声：${shot.audioDescription.trim()}` : ''
   ]
   return lines.filter(Boolean).join('\n')
@@ -153,7 +154,7 @@ export function defaultVideoSendPrompt(shot: Shot, project: Project): string {
     shot.blocking ? `Blocking: ${shot.blocking}` : '',
     shot.eyeline ? `Eyelines: ${shot.eyeline}` : '',
     shot.continuity ? `Continuity: ${shot.continuity}` : '',
-    shot.propFocus && shot.propFocus !== '无' ? `Key prop: ${shot.propFocus}` : '',
+    shot.propFocus && !isPlaceholderSpokenLine(shot.propFocus) ? `Key prop: ${shot.propFocus}` : '',
     shot.audioDescription ? `Synchronized sound: ${shot.audioDescription}` : '',
     spoken ? `原词台词：${shot.voiceover}` : 'No dialogue. No lips moving.'
   ]
@@ -272,7 +273,7 @@ export function defaultShotFramePrompts(shot: Shot, project: Project): { start: 
       : '',
     shot.shotSize ? `Framing: ${shot.shotSize}.` : '',
     shot.blocking ? `Blocking: ${shot.blocking}.` : '',
-    shot.propFocus && shot.propFocus !== '无' ? `Key prop: ${shot.propFocus}。` : '',
+    shot.propFocus && !isPlaceholderSpokenLine(shot.propFocus) ? `Key prop: ${shot.propFocus}。` : '',
     `Output the entire frame at aspect ratio ${ar}.`
   ].filter(Boolean)
   const still = 'Output one complete still image. Do not use grids, collages, numbers, text, or dialogue captions. Preserve user-requested Korean on-screen text verbatim.'

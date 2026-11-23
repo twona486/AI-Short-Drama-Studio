@@ -196,15 +196,15 @@ export function isVideoPerformanceThin(text: string): boolean {
 
 export function videoPerformanceIssue(text: string, names?: string[]): string | null {
   const t = (text || '').trim()
-  if (!t) return '缺少视频内容表现'
-  if (isVideoPerformanceTemplate(t)) return '视频内容表现是套话，没有写出每个人站哪、看谁'
-  if (t.length < 120) return '视频内容表现过短，必须写清触发、连续动作、道具结果、运镜落点和同步声音'
-  if (timedBeatCount(t) < 2) return '视频内容表现缺少从0秒到镜头结束的分段时间轴，无法明确每一拍谁在做什么、谁在说什么'
+  if (!t) return 'Video direction is missing.'
+  if (isVideoPerformanceTemplate(t)) return 'Video direction is generic. Specify each character’s position and eyeline.'
+  if (t.length < 120) return 'Video direction is too short. Specify the trigger, continuous actions, resulting prop state, camera endpoint, and synchronized sound.'
+  if (timedBeatCount(t) < 2) return 'Add a timeline from zero to the end of the shot. Identify who acts and who speaks in each beat.'
   if (lacksEnsembleBlocking(t, names)) {
-    return '多人同框却没写谁在近处、谁在后面、各自看谁，会拍成合影看镜头'
+    return 'For multiple characters, specify who is near the camera or in the background and who each person looks at. Avoid posing them for the camera.'
   }
   if (!BODY_RE.test(t) && !FACE_RE.test(t) && !ENV_RE.test(t)) {
-    return '视频内容表现缺少具体动作或反应'
+    return 'Describe concrete actions or reactions.'
   }
   return null
 }
