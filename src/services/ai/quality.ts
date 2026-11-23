@@ -8,10 +8,10 @@ export interface QualityReport {
 }
 
 /**
- * 图片生成后只做文件级校验。
+ * 이미지 생성 후 출력 파일 형식을 검사한다.
  *
- * 人物身份、动作、构图和画风等主观判断交给用户，不再调用视觉模型，
- * 也不会因为 AI 质检意见自动中止流水线或触发重试。
+ * 인물, 동작, 구도 및 스타일은 사용자가 판단한다.
+ * 비전 모델의 평가로 워크플로를 중단하거나 다시 시도하지 않는다.
  */
 export async function reviewImageQuality(
   blob: Blob,
@@ -25,7 +25,7 @@ export async function reviewImageQuality(
   return { passed: true, score: 100, issues: [] }
 }
 
-/** 视频同样只校验输出文件，不再抽帧并交给视觉模型评价。 */
+/** 영상도 출력 파일만 검사한다. */
 export async function reviewVideoQuality(
   blob: Blob,
   _expected: string,
