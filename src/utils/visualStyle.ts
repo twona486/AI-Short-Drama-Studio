@@ -56,14 +56,14 @@ const INFER_ORDER: VisualStyle[] = [
 ]
 
 const TECHNIQUE_HINT: Record<VisualStyle, RegExp> = {
-  'ink-wash': /宣纸|墨色|墨分|焦浓|浓淡|留白|飞白|晕染|笔锋/,
-  watercolor: /晕染|水渍|纸纹|渗化|透明叠色/,
-  'oil-painting': /厚涂|笔触|布面|伦勃朗/,
-  'pixel-art': /像素格|色板|抖动/,
-  '3d-render': /pbr|全局光|octane|blender/i,
-  anime: /赛璐璐|线稿|分阶|眼睛高光/,
-  photorealistic: /毛孔|浅景深|纪实|织物纹理/,
-  cinematic: /胶片|剧照|景深|焦段|光比|颗粒/
+  'ink-wash': /宣纸|墨色|墨分|焦浓|浓淡|留白|飞白|晕染|笔锋|화선지|먹의 농담|xuan|ink tones|flying white/i,
+  watercolor: /晕染|水渍|纸纹|渗化|透明叠色|종이 질감|물 번짐|paper grain|pigment blooms|transparent (?:layers|washes)/i,
+  'oil-painting': /厚涂|笔触|布面|伦勃朗|붓 자국|캔버스 질감|impasto|brushstrokes|chiaroscuro|rembrandt/i,
+  'pixel-art': /像素格|色板|抖动|픽셀 격자|디더링|pixel grid|limited palette|dithering/i,
+  '3d-render': /pbr|全局光|octane|blender|전역 조명|global illumination/i,
+  anime: /赛璐璐|线稿|分阶|眼睛高光|셀 셰이딩|선화|cel shading|line art|eye highlights/i,
+  photorealistic: /毛孔|浅景深|纪实|织物纹理|얕은 피사계 심도|직물 질감|skin pores|shallow depth of field|fabric weave/i,
+  cinematic: /胶片|剧照|景深|焦段|光比|颗粒|필름 그레인|피사계 심도|film grain|depth of field|lens perspective|lighting contrast/i
 }
 
 /** 每种风格必须写进 visualPrompt 的媒介/技法锚点 */
@@ -376,7 +376,6 @@ export function buildStyleBriefForLLM(style: VisualStyle): string {
 
 /** 配图 API 追加的短风格锁（中文，不用英文枚举） */
 export function styleLockSuffix(style: VisualStyle): string {
-  const label = styleLabel(style)
   const g = VISUAL_STYLE_GUIDE[style]
   if (!g) return `Use the ${style} style with high-definition detail.`
   return `Use ${g.medium}. ${g.sampleTail}`
