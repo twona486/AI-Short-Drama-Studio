@@ -1,6 +1,6 @@
 /**
- * 把模型常吐的“差不多是 JSON”修成可 JSON.parse 的文本。
- * 只动结构（逗号、括号、全角标点、截断闭合），不改字段里的中文内容。
+ * 모델이 반환한 불완전한 JSON을 파싱할 수 있게 복구한다.
+ * 쉼표, 괄호, 전각 기호, 잘린 구조만 고친다. 문자열 값은 보존한다.
  */
 
 const WS = /\s/
@@ -40,11 +40,11 @@ export function stripModelWrappers(content: string): string {
 
 export function extractJsonText(content: string): string {
   const s = stripModelWrappers(content)
-  if (!s) throw new Error('LLM 返回内容为空')
+  if (!s) throw new Error('언어 모델이 빈 응답을 반환했어요.')
   const start = s.indexOf('{')
   if (start === -1) {
     throw new Error(
-      `LLM 响应中找不到 JSON 对象（{...}）\n原始内容（前 300 字符）：${content.slice(0, 300)}`
+      `언어 모델 응답에서 JSON 객체를 찾지 못했어요.\n응답의 처음 300자: ${content.slice(0, 300)}`
     )
   }
   let inString = false
@@ -74,10 +74,10 @@ function parseErrorContext(text: string, err: Error): string {
   const pos = Number(m[1])
   const from = Math.max(0, pos - 90)
   const to = Math.min(text.length, pos + 90)
-  return `${err.message}\n出错附近：…${text.slice(from, to)}…`
+  return `${err.message}\n오류 위치 주변: …${text.slice(from, to)}…`
 }
 
-/** 修正常见模型 JSON 小错误；不修改字符串字段内容。 */
+/** 문자열 값을 보존하면서 JSON 문법 오류를 수정한다. */
 export function repairJsonLocally(json: string): string {
   let out = ''
   let inString = false
@@ -243,7 +243,7 @@ function isUsefulStoryboard(value: unknown): boolean {
   )
 }
 
-/** 鲁棒 JSON 解析：原文 → 结构修复 → 补括号 → 从尾部逐段回切。 */
+/** 원문 파싱, 구조 수정, 괄호 보완, 불완전한 뒷부분 제거 순으로 시도한다. */
 export function parseJsonRobust(content: string): any {
   const extracted = extractJsonText(content)
   const repaired = repairJsonLocally(extracted)
@@ -267,6 +267,6 @@ export function parseJsonRobust(content: string): any {
   if (best) return best
 
   throw new Error(
-    `JSON.parse 失败：${firstError ? parseErrorContext(extracted, firstError) : '无法恢复合法 JSON'}；本地修复后仍失败。\n尝试解析的内容（前 300 字符）：${extracted.slice(0, 300)}`
+    `JSON을 읽지 못했어요. ${firstError ? parseErrorContext(extracted, firstError) : '올바른 JSON으로 복구할 수 없어요.'}\n복구를 시도한 내용의 처음 300자: ${extracted.slice(0, 300)}`
   )
 }
