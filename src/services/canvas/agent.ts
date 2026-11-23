@@ -210,8 +210,8 @@ const CN_NUM: Record<string, number> = {
 
 function parseShotIndexes(text: string): number[] {
   const out = new Set<number>()
-  for (const m of text.matchAll(/第\s*(\d+)\s*镜/g)) {
-    const n = Number(m[1])
+  for (const m of text.matchAll(/(?:第\s*(\d+)\s*镜|(\d+)\s*번\s*샷|\bshot\s+(\d+)\b)/gi)) {
+    const n = Number(m[1] || m[2] || m[3])
     if (n >= 1) out.add(n - 1)
   }
   for (const m of text.matchAll(/第\s*([一二两三四五六七八九十]+)\s*镜/g)) {
@@ -371,7 +371,7 @@ export async function runAgentTurn(
       ['storyboard-director', 'shot-video', 'h3-prompt-writing', 'film-chapter-production', 'shot-image'].includes(
         s.id
       )
-    ) || /分镜|拆镜|提示词|导演/.test(baseText)
+    ) || /分镜|拆镜|提示词|导演|스토리보드|샷 나누기|프롬프트|연출|storyboard|shot breakdown|prompt|director/i.test(baseText)
       ? importedDirectorPrefix()
       : ''
 
@@ -762,26 +762,26 @@ function freeformHeuristicPlan(
 
   if (p) {
     // 生成 / 重跑某个节点
-    const runMatch = t.match(/(?:重新生成|生成|重跑|跑一下)\s*(?:节点)?\s*([a-zA-Z]+_\w+)/)
+    const runMatch = t.match(/(?:重新生成|生成|重跑|跑一下|다시 생성|생성|실행|regenerate|generate|run)\s*(?:节点|노드|node)?\s*([a-zA-Z]+_\w+)/i)
     if (runMatch) actions.push({ tool: 'run_node', nodeId: runMatch[1] })
     // 优化选中节点
-    if (!actions.length && selectedNodeId && /优化|扩写|加厚|润色|更|再/.test(t)) {
+    if (!actions.length && selectedNodeId && /优化|扩写|加厚|润色|更|再|최적화|다듬|구체화|refine|expand|polish/i.test(t)) {
       actions.push({ tool: 'optimize_node_prompt', nodeId: selectedNodeId, text: t })
     }
     // 体检 / 整理画布
-    if (!actions.length && /检查|体检|看看有什么问题|哪里不对|齐了没|漏了/.test(t)) {
+    if (!actions.length && /检查|体检|看看有什么问题|哪里不对|齐了没|漏了|검수|누락 확인|quality check|check for issues/i.test(t)) {
       actions.push({ tool: 'check_project' })
     }
-    if (!actions.length && /整理|重排|排布|重新摆放|整理一下画布/.test(t)) {
+    if (!actions.length && /整理|重排|排布|重新摆放|整理一下画布|캔버스 정리|다시 배치|organize the canvas|rearrange/i.test(t)) {
       actions.push({ tool: 'arrange_canvas' })
     }
     // 删掉选中节点
-    if (!actions.length && selectedNodeId && /删|去掉|移除/.test(t)) {
+    if (!actions.length && selectedNodeId && /删|去掉|移除|삭제|제거|\b(?:delete|remove)\b/i.test(t)) {
       actions.push({ tool: 'delete_node', nodeId: selectedNodeId })
     }
     // 新建节点（说「给这个节点加…」时自动挂到选中节点后面并连线）
     if (!actions.length && /视频/.test(t) && /新建|创建|做一?[个条]|来一?[个条]|加|接|连/.test(t)) {
-      const dur = Number(t.match(/(\d{1,2})\s*秒/)?.[1] || 8)
+      const dur = Number(t.match(/(\d{1,2})\s*(?:秒|초|seconds?\b)/i)?.[1] || 8)
       actions.push({ tool: 'create_video_node', text: t, duration: dur, sourceNodeId: selectedNodeId })
     } else if (
       !actions.length &&
@@ -1149,8 +1149,8 @@ function heuristicPlan(userText: string): { say: string; actions: any[] } {
   const namedSubs = (p.subjects ?? []).filter((s) => s.name && t.includes(s.name))
   const namedScns = (p.scenes ?? []).filter((s) => s.name && t.includes(s.name))
 
-  const askedExtract = /提炼节点|提炼人物|提炼场景|拆节点|出节点|重新提取|重新提炼/.test(t)
-  const askedContinuePlay = /续写|接着写|再写[一两三四\d]*场|加一场|往后写|续一[场段]|写下去/.test(t)
+  const askedExtract = /提炼节点|提炼人物|提炼场景|拆节点|出节点|重新提取|重新提炼|노드 추출|캐릭터 추출|장면 추출|다시 추출|extract nodes|extract characters|extract scenes|re-extract/i.test(t)
+  const askedContinuePlay = /续写|接着写|再写[一两三四\d]*场|加一场|往后写|续一[场段]|写下去|이어\s*(?:쓰기|써)|장면 추가|continue writing|add a scene/i.test(t)
   const askedPlay = /写剧本|完整剧本|重新写剧本/.test(t) && !askedContinuePlay
   const askedBoard = /拆分镜|拆镜|故事板|出分镜|生成分镜|拆剧本/.test(t)
   const askedSheet = /人设|角色图|四视图/.test(t)
