@@ -1,11 +1,11 @@
 /**
- * 分镜生成服务
+ * 스토리보드 생성 서비스
  *
- * 输入：文案 + 主题 + 风格 + 镜头时长
- * 输出：StoryboardResult（含导演式策划字段）
+ * 입력은 원고, 주제, 스타일, 샷 길이다.
+ * 출력은 연출 계획 필드를 포함한 StoryboardResult다.
  *
- * 走真实 LLM，以现场短视频编导身份拆能拍的镜头；
- * 失败/未配置则走演示数据
+ * 실제 언어 모델을 호출해 숏폼 영상 감독의 관점에서 촬영 가능한 샷을 나눈다.
+ * 실패하거나 설정이 없으면 데모 데이터를 사용한다.
  */
 
 import { callLLM, getAIMode, type LLMMessage, type LLMContentPart } from './client'
@@ -46,52 +46,52 @@ export interface StoryboardInput {
   content: string
   style: VisualStyle
   shotDuration: number
-  /** 当前所选视频模型允许的单镜最长时长。导演应优先在此范围内完成连续动作。 */
+  /** 선택한 영상 모델의 샷당 최대 길이. 동작이 이 범위 안에서 이어져야 한다. */
   maxShotDuration?: number
   aspectRatio: string
-  /** 文案关键词（若有） */
+  /** 원고 키워드(선택) */
   keywords?: string[]
-  /** 产品/主题参考图（data URL 或公网 URL），最多 5 张，电商带货时以产品为准 */
+  /** 제품 또는 주제 참조 이미지(data URL 또는 공개 URL)는 최대 5장. 상품 소개 영상에서는 제품을 기준으로 삼는다. */
   productImages?: string[]
   /**
-   * extract：content 已是完整剧本，只提炼人物/场景/分镜节点
-   * full：兼容旧的一步到位（尽量少用）
+   * extract는 완성 대본에서 캐릭터, 장면, 스토리보드 노드만 추출한다.
+   * full은 기존 일괄 실행과 호환하기 위한 모드다.
    */
   mode?: 'extract' | 'full'
-  /** write：从草稿写完整剧本；continue：保留已有场次往后加 */
+  /** write는 초안을 전체 대본으로 완성한다. continue는 기존 장면에 새 장면을 덧붙인다. */
   playMode?: 'write' | 'continue'
-  /** 续写方向，例如「再写两场，写父亲回家之后」 */
+  /** 이어 쓰기 방향. 예를 들어 아버지가 귀가한 뒤 장면을 두 개 추가한다. */
   continueHint?: string
-  /** 覆盖设置页当前主 LLM，须是设置里已保存的模型名 */
+  /** 설정에 저장한 모델 이름으로 기본 언어 모델을 재정의한다. */
   model?: string
   signal?: AbortSignal
-  /** 提炼模式分阶段交付；每完成一步立即持久化，后续失败不回滚。 */
+  /** 추출 단계가 끝날 때마다 저장한다. 이후 단계의 실패로 저장된 결과를 되돌리지 않는다. */
   onExtractStage?: (
     stage: 'subjects' | 'scenes' | 'shots',
     partial: StoryboardResult,
     meta?: { partial?: boolean; completed?: number; total?: number }
   ) => void | Promise<void>
-  /** 失败重试时从未完成的阶段继续，避免重复提炼已落库内容。 */
+  /** 재시도 시 완료하지 못한 단계부터 진행하고 이미 저장한 결과를 재사용한다. */
   extractStartAt?: 'subjects' | 'scenes' | 'shots'
-  /** 一次用户操作只完成一个阶段。 */
+  /** 사용자 작업 한 번마다 한 단계를 완료한다. */
   extractStopAfter?: 'subjects' | 'scenes' | 'shots'
   existingSubjects?: Subject[]
   existingScenes?: Scene[]
-  /** 原创电影章节：按场次/蒙太奇拆，不压成短视频口播表。 */
+  /** 오리지널 영화 챕터는 장면과 몽타주를 기준으로 나눈다. */
   workflowMode?: Script['workflowMode']
-  /** 用户导入的成稿：只按原文切镜头，禁止改写对白和情节。 */
+  /** 가져온 완성 대본은 원문에 따라 샷을 나누고 대사와 줄거리를 유지한다. */
   verbatim?: boolean
   /**
-   * 用户要的成片总时长（秒）。这是分镜数量的硬预算：
-   * 剧本和分镜都按它反推规模，避免「要 40 秒却拆出 20 镜」。
+   * 요청한 최종 영상 길이(초)는 스토리보드 샷 수의 상한을 결정한다.
+   * 목표 길이에서 대본과 스토리보드의 규모를 역산한다.
    */
   targetDurationSec?: number
   /**
-   * 断点续跑：按工作包序号给已完成的分镜结果，执行时直接跳过这些小组，不再调模型。
-   * 数组须与 buildShotWorkBatches 对同一份剧本的切分一致（剧本文本没变时天然一致）。
+   * 재개 시 작업 그룹 번호별 완료 결과를 전달하면 해당 그룹의 모델 호출을 건너뛴다.
+   * 배열 순서는 같은 대본을 buildShotWorkBatches로 나눈 결과와 일치해야 한다.
    */
   resumeBatchShots?: Array<Record<string, unknown>[] | undefined>
-  /** 每个小组真实完成（含跳过）时回调，供调用方写断点标记。 */
+  /** 작업 그룹이 완료되거나 기존 결과를 재사용할 때 호출해 재개 지점을 기록한다. */
   onBatchDone?: (index: number, shots: Record<string, unknown>[], model?: string) => void
 }
 
@@ -103,7 +103,7 @@ function shotDurationLimit(input: Pick<StoryboardInput, 'maxShotDuration'>): num
   return Math.max(5, Math.min(30, Math.round(Number(input.maxShotDuration) || 15)))
 }
 
-/** 成片总时长允许比用户要求多 10 秒或少 10 秒。超出这个窗口必须打回。 */
+/** 완성 영상과 목표 길이 사이에 ±10초를 허용한다. 이를 벗어나면 다시 요청한다. */
 export const DURATION_TOLERANCE_SEC = 10
 const MIN_SHOT_SEC = 5
 const DURATION_REPAIR_ROUNDS = 2
@@ -141,7 +141,7 @@ function acceptDuration(seconds: number): number {
   return n >= 10 && n <= 1800 ? n : 0
 }
 
-/** 从一小段里读出秒数：30秒、30s、1分20秒、1.5分钟、三十秒、半分钟。 */
+/** 짧은 길이 표현을 초로 변환한다. 초, 분과 초, 소수 분을 지원한다. */
 function secondsFromPhrase(phrase: string): number {
   const english = phrase.trim().match(/^(\d+(?:\.\d+)?)[\s-]*(minutes?|mins?|m|seconds?|secs?|s)\b(?:\s*(\d+)\s*(?:seconds?|secs?|s)\b)?$/i)
   if (english) {
@@ -203,7 +203,7 @@ function bareDuration(text: string): number {
   return hit ? secondsFromPhrase(hit[1] || hit[0]) : 0
 }
 
-/** 从用户原话里认「约 40 秒 / 40s / 30S / 1 分钟 / 三十秒」这类目标总时长。认不出返回 0。 */
+/** 사용자 요청에서 목표 길이를 찾는다. 인식할 수 없으면 0을 반환한다. */
 export function extractTargetDurationSec(...texts: Array<string | undefined | null>): number {
   for (const text of texts) {
     const raw = String(text || '').trim()
@@ -220,7 +220,7 @@ export function totalShotDuration(shots: Array<{ duration?: number }>): number {
   return shots.reduce((sum, shot) => sum + Math.max(0, Math.round(Number(shot.duration) || 0)), 0)
 }
 
-/** 总时长不在目标 ±10 秒内时返回必须打回的原因；合格返回空字符串。 */
+/** 목표 길이의 ±10초 범위를 벗어나면 다시 요청할 사유를 반환한다. */
 export function durationWindowIssue(totalSec: number, targetSec: number): string {
   const target = Math.round(Number(targetSec) || 0)
   if (target < 10) return ''
@@ -233,8 +233,8 @@ export function durationWindowIssue(totalSec: number, targetSec: number): string
 }
 
 /**
- * 按模型单镜上限把成片时长切成小组。
- * 30 秒、单镜最长 15 秒 → [15, 15]，两个小组各出 15 秒。
+ * 모델의 샷당 최대 길이로 최종 영상 길이를 나눈다.
+ * 목표가 30초이고 샷당 최대 15초면 두 그룹에 15초씩 배정한다.
  */
 export function durationSlices(targetSec: number | undefined, maxShotSec?: number): number[] {
   const target = Math.round(Number(targetSec) || 0)
@@ -257,8 +257,8 @@ export function durationSlices(targetSec: number | undefined, maxShotSec?: numbe
 }
 
 /**
- * 目标总时长 → 分镜小组数。一组对应用模型最长的一镜。
- * 30 秒、最长 15 秒 → 2 组，不是按 5 秒一镜拆成 8 组。
+ * 목표 길이로 스토리보드 그룹 수를 정한다. 그룹 하나는 모델의 최대 길이 샷 하나에 해당한다.
+ * 목표가 30초이고 최대 15초면 그룹을 두 개 만든다.
  */
 export function shotBudgetFromDuration(targetSec: number | undefined, maxShotSec?: number): number {
   return durationSlices(targetSec, maxShotSec).length
@@ -273,33 +273,33 @@ function isLongFormPlay(input: Pick<StoryboardInput, 'workflowMode' | 'content'>
 }
 
 export interface StoryboardShot {
-  /** 简短标题（3-8 字） */
+  /** 짧은 제목(3~8자) */
   title: string
   /**
-   * 详细视觉描述（中文，5-8 句）
-   * 必须含：场景主锚与光线、角色站位朝向、动作、景别运镜、道具焦点、气氛
+   * 영어로 상세한 화면을 5~8문장으로 서술한다.
+   * 장면의 기준물과 조명, 인물 위치와 방향, 동작, 샷 크기와 카메라 움직임, 소품, 분위기를 포함한다.
    */
   visualPrompt: string
-  /** 视频内容表现：谁做什么、说什么、镜头怎么走（中文，禁止复用 visualPrompt） */
+  /** 영어로 인물의 동작과 대사 표기, 카메라 움직임을 서술한다. visualPrompt와 구별한다. */
   videoPrompt?: string
-  /** 音效描述（中文短句） */
+  /** 효과음을 한국어로 간단히 설명한다. */
   audioDescription: string
-  /** 口播文案（中文） */
+  /** 내레이션 또는 대사 원문 */
   voiceover: string
   audioMode?: ShotAudioMode
   speakerHint?: string
   /**
-   * 本镜说话角色的音色描述。从人物节点的 voicePrompt 自动绑定，
-   * 生成视频和后期配音时都会带上，保证同一角色全片一个声线。
+   * 이 샷의 화자 음색을 캐릭터 노드의 voicePrompt에서 연결한다.
+   * 영상 생성과 후반 더빙에 동일한 음색을 전달한다.
    */
   speakerVoice?: string
-  /** 时长（秒，5-10） */
+  /** 샷 길이(초, 5~10) */
   duration: number
-  /** 镜头运动 */
+  /** 카메라 움직임 */
   cameraMovement: Shot['cameraMovement']
-  /** 本镜出场主体 id（对应 subjects[].id） */
+  /** 이 샷에 등장하는 피사체 ID(subjects[].id 참조) */
   subjectIds?: string[]
-  /** 本镜场景 id（对应 scenes[].id） */
+  /** 이 샷의 장면 ID(scenes[].id 참조) */
   sceneId?: string
   purpose?: string
   shotSize?: string
@@ -310,17 +310,17 @@ export interface StoryboardShot {
 }
 
 export interface StoryboardResult {
-  /** 项目级整体氛围（中文，1-2 段） */
+  /** 프로젝트 전체 분위기(한국어 1~2문단) */
   aesthetic?: string
   h3Aesthetic?: string
   styleBrief?: string
   colorPalette?: string
   lightingNote?: string
-  /** 整片锁定的主体（人物/动物），后续先出人设图 */
+  /** 전체 영상에서 외형을 유지할 인물과 동물. 캐릭터 설정 이미지를 먼저 만든다. */
   subjects?: Subject[]
-  /** 剧本里至少出现两次的道具，后续出多角度图 */
+  /** 대본에 두 번 이상 등장하는 소품. 다각도 이미지를 생성한다. */
   props?: StoryProp[]
-  /** 整片锁定的场景底板 */
+  /** 전체 영상에 공통으로 사용할 장면 기준 이미지 */
   scenes?: Scene[]
   shots: StoryboardShot[]
 }
@@ -338,8 +338,8 @@ const log = (msg: string) =>
   console.log('%c[storyboard]', 'color:#7c3aed;font-weight:600', msg)
 
 /**
- * 从主题 + 文案中抽出用户自己写的画风/美学指令（最高优先级）
- * 主题整段一律视为画风圣经；文案开头与含画风词的句子一并保留。
+ * 주제와 원고에서 사용자가 직접 쓴 화면 스타일과 미학 지시를 찾는다. 이 지시가 우선한다.
+ * 주제 전체와 원고의 도입, 화면 스타일이 언급된 문장을 보존한다.
  */
 export function extractUserStyleAuthority(
   topic: string,
@@ -348,7 +348,7 @@ export function extractUserStyleAuthority(
 ): string {
   const parts: string[] = []
   const t = topic.trim()
-  // 主题整段保留：用户常在主题里写清画风/美学
+  // 사용자가 주제에 화면 스타일을 적을 수 있으므로 전체를 보존한다.
   if (t) parts.push(t)
 
   const styleCue =
@@ -359,7 +359,7 @@ export function extractUserStyleAuthority(
     .map((s) => s.trim())
     .filter((s) => s.length >= 4)
 
-  // 文案前 2 行常含画风/设定，优先纳入
+  // 원고 첫 두 줄에 스타일과 설정이 있을 수 있어 우선 추가한다.
   for (const line of contentLines.slice(0, 2)) {
     if (!parts.includes(line)) parts.push(line)
   }
@@ -434,7 +434,7 @@ function resolvePlayModel(input: Pick<StoryboardInput, 'model'>): string | undef
   return model || undefined
 }
 
-/** 本地无法修复时，让主模型只修 JSON 语法，再进入业务质量验收。 */
+/** 로컬에서 복구할 수 없으면 모델로 JSON 문법만 복구한 후 품질을 검수한다. */
 async function parseJsonWithModelRepair(
   content: string,
   input: Pick<StoryboardInput, 'signal' | 'model'>,
@@ -661,7 +661,7 @@ async function repairStoryboardOnce(
   })
 }
 
-/** 验收不通过就打回重提炼，不直接停流水线。 */
+/** 검수를 통과하지 못하면 워크플로를 멈추기 전에 추출을 다시 요청한다. */
 async function ensureStoryboardQuality(
   parsed: StoryboardResult,
   input: StoryboardInput,
@@ -798,12 +798,12 @@ function collapseShotBatches(
 }
 
 /**
- * 先在本地按场次和剧情段落切工作包，避免把整份剧本交给一个模型。
- * 每个工作包只允许产出 1–3 镜；并发数由调用方限制为 3。
+ * 대본 전체를 한 모델에 맡기기 전에 장면과 전개 단락을 기준으로 작업 그룹을 나눈다.
+ * 그룹당 샷은 1~3개이며 호출자가 동시 처리 그룹을 세 개로 제한한다.
  *
- * targetBatches：期望的工作包总数。给了这个值就按成片时长收敛到这么多组，
- * 多了合并、少了拆开，不再按场次数拆出 8、9 个小组。
- * 不传时保持原来的 1100 字 / 4 段口径。
+ * targetBatches가 있으면 최종 영상 길이에 맞춰 해당 그룹 수를 목표로 삼는다.
+ * 장면 수에 따라 지나치게 많은 그룹이 생기지 않도록 필요에 따라 병합하거나 분할한다.
+ * 값이 없으면 기존의 1,100자 및 네 단락 기준을 사용한다.
  */
 function buildShotWorkBatches(play: string, targetBatches?: number): ShotWorkBatch[] {
   const normalized = String(play || '').replace(/\r\n?/g, '\n').trim()
@@ -832,8 +832,8 @@ function buildShotWorkBatches(play: string, targetBatches?: number): ShotWorkBat
 
   let sections = scenes.length ? scenes : [{ title: '전체 줄거리', text: normalized }]
 
-  // 场次比期望包数还多时，先把相邻场次并成一组——工作包数永远不会少于场次数，
-  // 不合并的话长剧本照样拆出十几个小组。
+  // 장면이 목표 그룹 수보다 많으면 인접한 장면을 먼저 병합한다.
+  // 병합하지 않으면 긴 대본의 그룹 수가 목표보다 많아진다.
   const wanted0 = Math.floor(Number(targetBatches) || 0)
   if (wanted0 > 0 && sections.length > wanted0) {
     const per = Math.ceil(sections.length / wanted0)
@@ -848,7 +848,7 @@ function buildShotWorkBatches(play: string, targetBatches?: number): ShotWorkBat
     sections = merged
   }
 
-  // 切分口径：默认 1100 字 / 4 段；给了期望包数就按正文总长摊平，使包数收敛到目标。
+  // 기본 기준은 1,100자 또는 네 단락이다. 목표 그룹 수가 있으면 본문 길이를 균등하게 나눈다.
   let maxChars = SHOT_BATCH_MAX_CHARS
   let maxParagraphs = SHOT_BATCH_MAX_PARAGRAPHS
   const wanted = Math.floor(Number(targetBatches) || 0)
@@ -917,12 +917,12 @@ async function generateShotWorkBatch(
   sceneNames: string[],
   directives: string,
   retry = false,
-  /** 本工作包的镜数配额（全片预算分摊后）；不给则退回 1–3 镜。 */
+  /** 전체 샷 예산에서 이 그룹에 배정한 샷 수. 없으면 1~3개를 적용한다. */
   shotBudget?: number,
-  /** 全片镜数预算，用于向模型交代「这就是总数，不许超」。 */
+  /** 모델이 넘을 수 없는 전체 영상의 샷 한도 */
   totalShotBudget?: number,
   targetDurationSec?: number,
-  /** 本包各镜 duration 相加的上限（秒）。 */
+  /** 이 그룹의 모든 샷 길이 합계 상한(초) */
   durationCap?: number
 ): Promise<{ shots: Record<string, unknown>[]; model?: string }> {
   const limit = Math.max(
@@ -947,7 +947,7 @@ async function generateShotWorkBatch(
           .filter((item: unknown) => item && typeof item === 'object') as Record<string, unknown>[]
       }
     } catch {
-      /* 兼容普通聊天模型返回的自然语言分镜表。 */
+      /* 일반 대화 모델이 반환한 자연어 스토리보드도 처리한다. */
     }
     return parseOutlineText(content)
       .slice(0, limit)
@@ -981,8 +981,8 @@ ${batch.nextHint ? `\n다음 작업 묶음의 시작(끝 상태를 정하는 데
       ],
       model,
       temperature: retry ? 0.1 : 0.35,
-      // 不强制 response_format：部分兼容接口在并发 JSON 约束下会一直推理到超时。
-      // 提示仍优先要 JSON，同时下方解析器接受普通分镜文本。
+      // 일부 호환 API가 동시 JSON 형식 요청에서 시간 초과될 수 있다.
+      // 프롬프트는 JSON을 우선 요청하고 파서는 일반 텍스트도 받는다.
       jsonMode: false,
       maxTokens: 3200,
       signal: input.signal,
@@ -1088,7 +1088,7 @@ function outlineField(block: string, names: string): string {
   return (m?.[1] || '').replace(/\s+/g, ' ').trim()
 }
 
-/** 按「镜头 N：标题（景别）/ 画面 / 时长 / 声音」场记拆条 */
+/** 샷 번호, 제목, 샷 크기, 화면, 길이와 소리 표식을 기준으로 나눈다. */
 function parseOutlineText(content: string): ShotOutline[] {
   const text = String(content || '')
     .replace(/\r\n/g, '\n')
@@ -1278,7 +1278,7 @@ ${play}`
       )
       if (outlines.length) log('⚠ 현장 기록을 JSON으로 읽었어요.')
     } catch {
-      /* 下面统一报空表 */
+      /* 아래에서 빈 스토리보드 오류를 공통 처리한다. */
     }
   }
   if (!outlines.length) {
@@ -1365,7 +1365,7 @@ Expand this shot only.`
   }
 }
 
-/** 真实 LLM 调用 */
+/** 실제 언어 모델 호출 */
 async function realStoryboard(
   input: StoryboardInput,
   onProgress?: (msg: string) => void
@@ -1640,7 +1640,7 @@ ${extractPlayForSceneStage(play)}`
     const sceneNames = extractSceneRows(scenePart.raw)
       .map((item: { name?: unknown }) => String(item?.name || '').trim())
       .filter(Boolean)
-    // 目标总时长 ÷ 模型单镜上限 = 小组数。30 秒、最长 15 秒 → 2 组，每组 15 秒。
+    // 목표 길이를 모델의 샷당 상한으로 나눈다. 목표 30초와 상한 15초면 15초씩 두 그룹이다.
     const targetDurationSec =
       Number(input.targetDurationSec) || extractTargetDurationSec(input.topic, input.content)
     const maxShotSec = shotDurationLimit(input)
@@ -1656,7 +1656,7 @@ ${extractPlayForSceneStage(play)}`
     const directives = extractPlayDirectives(play)
     const batchShots: Array<Record<string, unknown>[] | undefined> = new Array(workBatches.length)
     const batchModels: Array<string | undefined> = new Array(workBatches.length)
-    // 有时长切片时，一组只出一镜，时长就是这一片的秒数。
+    // 길이를 배정한 경우 그룹당 샷 하나를 만들고 해당 그룹의 길이를 사용한다.
     const perBatchBudget = (index: number) => {
       if (slices.length) return 1
       return undefined
@@ -1708,7 +1708,7 @@ ${extractPlayForSceneStage(play)}`
       workBatches,
       SHOT_BATCH_CONCURRENCY,
       async (batch, index) => {
-        // 断点续跑：这个工作包上次已经完成，直接复用结果，不重复消耗 token。
+        // 재시도에서는 이전에 완료한 작업 그룹 결과를 재사용해 토큰을 절약한다.
         const resumed = input.resumeBatchShots?.[index]
         if (resumed?.length) {
           onProgress?.(`↩ ${batch.label}에 저장된 결과를 재사용합니다(샷 ${resumed.length}개).`)
@@ -1780,7 +1780,7 @@ ${extractPlayForSceneStage(play)}`
     }
 
     let rawShots = batchShots.flatMap((rows) => rows || [])
-    // 兜底：模型超发时按预算截断，宁可少一镜也不让成片时长失控。
+    // 모델이 샷 한도를 넘으면 목표 길이를 지키기 위해 초과분을 잘라낸다.
     if (totalShotBudget && rawShots.length > totalShotBudget) {
       onProgress?.(
         `⚠ 모델이 반환한 샷 ${rawShots.length}개가 목표 ${targetDurationSec}초의 한도(${totalShotBudget}개)를 초과해 대본 순서대로 처음 ${totalShotBudget}개를 유지해요.`
@@ -2061,8 +2061,8 @@ function asKind(v: unknown): Subject['kind'] {
 }
 
 /**
- * 人物音色描述归一化。非人物一律清空；
- * 人物漏写时补一条通用兜底，保证「每个会说话的角色都有声线」，不会每镜一个声音。
+ * 캐릭터 음색 설명을 정규화한다. 인물이 아닌 피사체의 음색은 비운다.
+ * 인물의 음색 설명이 없으면 기본 설명을 채워 샷 간 음색을 유지한다.
  */
 function normalizeVoicePrompt(v: unknown, kind: Subject['kind']): string | undefined {
   if (kind !== 'person') return undefined
@@ -2070,7 +2070,7 @@ function normalizeVoicePrompt(v: unknown, kind: Subject['kind']): string | undef
   return text || FALLBACK_VOICE_PROMPT
 }
 
-/** 通用兜底声线：模型漏写 voicePrompt 时用，避免同一角色每镜声音漂移。 */
+/** 모델이 voicePrompt를 빠뜨리면 기본 음색 설명으로 샷 간 음색 차이를 줄인다. */
 export const FALLBACK_VOICE_PROMPT =
   'Natural conversational delivery at a moderate pace with steady breath. Match the emotion to the scene and avoid an announcer cadence.'
 
@@ -2092,7 +2092,7 @@ function voiceoverSpeakerLabels(text: string): string[] {
   return labels
 }
 
-/** 口播里的「名字：台词」标签 → 角色卡。名字对不上再退回包含匹配。 */
+/** 대사에서 이름을 찾아 캐릭터 카드에 연결한다. 정확히 일치하지 않으면 포함 관계를 확인한다. */
 export function matchSpeakerSubject(
   label: string,
   subjects: Array<{ id: string; name: string; voicePrompt?: string }>
@@ -2108,10 +2108,10 @@ export function matchSpeakerSubject(
 }
 
 /**
- * 把人物节点的音色描述绑到分镜上。
- * 每镜按口播里的说话人找到角色，把 Subject.voicePrompt 写进 Shot.speakerVoice，
- * 生成视频和后期配音都读这一份，保证同一角色全片一个声线。
- * 返回成功绑定的镜数。
+ * 캐릭터 노드의 음색을 스토리보드에 연결한다.
+ * 샷의 대사에 등장하는 화자를 찾아 Subject.voicePrompt를 Shot.speakerVoice에 저장한다.
+ * 영상 생성과 후반 더빙에서 같은 음색을 사용한다.
+ * 음색을 연결한 샷 수를 반환한다.
  */
 export function bindShotVoiceHints<
   T extends { voiceover?: string; speakerVoice?: string }
@@ -2123,7 +2123,7 @@ export function bindShotVoiceHints<
   let bound = 0
   for (const shot of shots) {
     const voiceover = String(shot.voiceover || '').trim()
-    // 没有口播的镜头不绑声线：空镜不需要说话人。
+    // 대사가 없는 샷에는 화자의 음색을 지정하지 않는다.
     if (!voiceover) continue
     const labels = voiceoverSpeakerLabels(voiceover)
     const picked: string[] = []
@@ -2154,7 +2154,7 @@ function mergeAdjacentShots(a: StoryboardShot, b: StoryboardShot): StoryboardSho
   }
 }
 
-/** 镜数放不进窗口时合并相邻镜头，再把各镜秒数收进目标 ±10 秒。收不进去返回 null。 */
+/** 샷 수가 길이 제한을 넘으면 인접한 샷을 합치고 ±10초 범위에 맞춘다. 불가능하면 null을 반환한다. */
 function fitShotsToDuration(
   shots: StoryboardShot[],
   targetSec: number,
@@ -2202,7 +2202,7 @@ function fitShotsToDuration(
 }
 
 /**
- * 检测成片总时长。不合格就打回重拆；模型仍交不出合格时长时，强制把各镜秒数收进 ±10 秒。
+ * 최종 영상 길이를 검사하고 범위를 벗어나면 다시 나눈다. 모델로 해결하지 못하면 샷 길이를 직접 조정한다.
  */
 async function ensureShotDuration(
   parsed: StoryboardResult,
@@ -2495,7 +2495,7 @@ function bindCastIntoShots(shots: StoryboardShot[], subjects: Subject[]): Storyb
   })
 }
 
-/** 把 LLM 的 subjects/scenes/shot 绑定规范成稳定 id；按用户主题画风补强过短提示 */
+/** 모델의 캐릭터, 장면, 샷 연결에 안정적인 ID를 부여하고 짧은 프롬프트에 요청한 스타일을 반영한다. */
 export function normalizeStoryboard(
   raw: any,
   opts: {
@@ -2542,7 +2542,7 @@ export function normalizeStoryboard(
         : []
   const rawScenes = extractSceneRows(raw)
 
-  /** 模型偶尔会把「一句话故事 / 对抗引擎 / 身材」这类标签当成人物，这里统一剔掉 */
+  /** 한 문장 이야기, 갈등 구조, 체격처럼 모델이 인물로 잘못 반환하는 항목을 제거한다. */
   const subjectRows = rawSubjects.filter((s: any) => {
     const n = String(s?.name || '').trim()
     return n && !isFieldLabelName(n)
@@ -2653,7 +2653,7 @@ export function normalizeStoryboard(
     }
     const boundScene = pickBoundScene(sceneIds[0], scenes, placeDraft)
 
-    // 只补极短/缺画风词的镜头；不把技法套话和导演表单拼进画面描述
+    // 매우 짧거나 스타일이 빠진 샷만 보완한다. 일반적인 기법 문구와 연출 양식은 화면 설명에 넣지 않는다.
     visualPrompt = enrichVisualPrompt(visualPrompt, {
       style,
       userStyleLock: styleLockFromUser,
@@ -2708,8 +2708,8 @@ export function normalizeStoryboard(
   })
 
   const boundShots = bindCastIntoShots(shots, subjects)
-  // 角色音色绑到分镜：每镜按口播说话人取人物卡的 voicePrompt，
-  // 生成视频与后期配音都读这份，保证同一角色全片一个声线。
+  // 대사의 화자에 해당하는 캐릭터 카드에서 voicePrompt를 가져온다.
+  // 영상 생성과 후반 더빙에 동일한 값을 전달한다.
   bindShotVoiceHints(boundShots, subjects)
 
   const look = lookFromTexts(style, options.topic, options.content, options.keywords)
@@ -2743,7 +2743,7 @@ export function normalizeStoryboard(
   }
 }
 
-/** 画面描述缺画风词时点一下名字；禁止往镜头语言前面堆技法说明书。 */
+/** 화면 설명에 스타일이 없으면 이름을 언급한다. 화면 묘사 앞에 기법 설명을 쌓지 않는다. */
 function enrichVisualPrompt(
   prompt: string,
   ctx: {
@@ -2788,7 +2788,7 @@ function enrichVisualPrompt(
   return body
 }
 
-/** 按当前视频模型上限规划单镜；缺省时按口播字数估算，并避免整片同一秒数。 */
+/** 선택한 영상 모델의 상한을 따른다. 값이 없으면 대사 길이로 추정하고 샷별 길이를 달리한다. */
 function clampShotDuration(
   raw: unknown,
   voiceover: string,
@@ -2871,7 +2871,7 @@ export async function generateStoryboard(
   return { result, source: 'mock' }
 }
 
-/** 把分镜结果转成项目里的 Shot[] */
+/** 스토리보드 결과를 프로젝트의 Shot 배열로 변환한다. */
 export function storyboardToShots(
   result: StoryboardResult,
   prefix: string = 'shot'
@@ -2882,7 +2882,7 @@ export function storyboardToShots(
     title: s.title,
     visualPrompt: s.visualPrompt,
     videoPrompt: s.videoPrompt,
-    // 拆分镜时只初始化一次。之后用户即使全部删除，也绝不自动回填。
+    // 스토리보드 생성 시 한 번만 초기화한다. 사용자가 삭제한 항목은 자동 복원하지 않는다.
     compiledVideoPrompt: s.videoPrompt,
     audioDescription: s.audioDescription ?? '',
     voiceover: cleanShotVoiceover(s.voiceover),
@@ -2903,7 +2903,7 @@ export function storyboardToShots(
   }))
 }
 
-/** 把项目级导演字段应用到 Script */
+/** 프로젝트 전체의 연출 정보를 Script에 반영한다. */
 export function applyAestheticToScript(
   script: Pick<Script, 'aesthetic' | 'h3Aesthetic' | 'styleBrief' | 'colorPalette' | 'lightingNote'>,
   result: StoryboardResult
@@ -3221,8 +3221,8 @@ Additional rules:
 - Keep lines that share one intention in the same scene. Do not force one line per scene or leave an interaction silent.`
 
 /**
- * 目标成片时长 → 剧本规模约束。
- * 这是控制分镜数量的最上游闸门：剧本写多长，后面就拆多少个镜。
+ * 최종 영상의 목표 길이로 대본 규모를 제한한다.
+ * 대본 분량은 이후 스토리보드 샷 수의 기준이 된다.
  */
 function playScaleBrief(targetSec: number | undefined): string {
   const target = Number(targetSec) || 0
@@ -3295,7 +3295,7 @@ ${scaleBrief}`
   return { result, model: resp.model ?? model }
 }
 
-/** 第一步：只生成完整剧本 Markdown，不拆节点 */
+/** 첫 단계에서는 완성 대본 Markdown을 생성한다. 노드 추출은 별도 단계에서 한다. */
 export async function generatePlay(
   input: StoryboardInput,
   onProgress?: (msg: string) => void,
@@ -3328,7 +3328,7 @@ export async function generatePlay(
   return { result: mockPlayFromBrief(resolved), source: 'mock' }
 }
 
-/** 是否已有可提炼的完整剧本 */
+/** 추출할 수 있는 완성 대본이 있는지 확인한다. */
 export function isPlayReady(script: Script | null | undefined): boolean {
   return Boolean(script?.playReady && script.content?.trim())
 }
