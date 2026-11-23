@@ -20,8 +20,8 @@ function shotLine(shot?: Shot): string {
 }
 
 /**
- * 出视频前的内容表现：你亲手写过、且不像套话的原文原样用。
- * 空着、过短、缺少时间轴、或旧套话稿，按本镜剧情重写。
+ * 사용자가 작성한 구체적인 영상 연출 프롬프트를 보존한다.
+ * 비어 있거나 너무 짧거나 구간과 구체적인 묘사가 없으면 샷에 맞춰 다시 쓴다.
  */
 export async function enrichVideoPerformance(opts: {
   shot: Shot
