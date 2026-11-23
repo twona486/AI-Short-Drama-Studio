@@ -12,9 +12,9 @@ const HEAD = 44
 const COL_GAP = 32
 const SCRIPT_W = 460
 const SCRIPT_H = 720
-/** 画面下方名称条高度 */
+/** 이미지 아래 이름 표시줄 높이 */
 const NODE_CHROME = 36
-/** 口播节点是独立卡片，不跟分镜画面同一套比例 */
+/** 내레이션 노드는 별도 카드이며 스토리보드 이미지 비율과 무관하다. */
 export const AUDIO_NODE_H = 128
 
 function aspectValue(ar?: string): number {
@@ -23,12 +23,12 @@ function aspectValue(ar?: string): number {
   return a / b
 }
 
-/** 画布节点高度：画面区跟片比例走，避免竖屏被裁成横条 */
+/** 캔버스 이미지 영역은 영상 비율을 따라 세로 영상이 잘리지 않게 한다. */
 export function pipelineNodeHeight(aspectRatio?: string): number {
   return NODE_CHROME + Math.round(NODE_W / aspectValue(aspectRatio))
 }
 
-/** CSS aspect-ratio，如 16 / 9 */
+/** CSS aspect-ratio 값. 예를 들어 16 / 9다. */
 export function cssAspectRatio(ar?: string): string {
   const [a, b] = String(ar || '16:9').split(':')
   const w = Number(a)
@@ -57,7 +57,7 @@ function persistStatus(
   prevStatus: CanvasNode['status'] | undefined,
   hasAsset: boolean
 ): CanvasNode['status'] {
-  // 进程退出后磁盘上的 running 是脏状态，不能再当「生成中」
+  // 재시작 시 디스크에 남아 있는 running 상태를 활성 생성으로 취급하지 않는다.
   if (!prevStatus || prevStatus === 'running' || prevStatus === 'pending') {
     return hasAsset ? 'success' : 'idle'
   }
@@ -80,7 +80,7 @@ function activeVideoProfile() {
   }
 }
 
-/** 「创作偏好」里选的默认视频模型（内置工作流）；没选则 undefined，节点照旧走接入默认 */
+/** 제작 환경의 기본 영상 모델이다. 선택하지 않으면 노드 연결의 기본값을 사용한다. */
 function defaultVideoModelPref(): VideoGenModel | undefined {
   try {
     return useSettingsStore().config.defaultVideoModel
@@ -97,7 +97,7 @@ function pos(
   return prev.get(id)?.position ?? fallback
 }
 
-/** 分组内节点存的是相对坐标，追加自由节点必须用画布绝对坐标，否则会落到视野外。 */
+/** 그룹 노드는 상대 좌표를 저장한다. 자유 노드를 추가할 때는 절대 좌표를 사용한다. */
 export function absoluteCanvasPosition(
   nodes: CanvasNode[],
   node: Pick<CanvasNode, 'position' | 'parentGroupId'>
@@ -156,7 +156,7 @@ export function nextFreeformPosition(
   return pos
 }
 
-/** 误用分组相对坐标时，节点会堆在画布左上角。拉回샷 영상组右侧。 */
+/** 상대 좌표를 잘못 사용한 노드를 샷 영상 그룹의 오른쪽으로 옮긴다. */
 export function rescueStrandedFreeformNodes(nodes: CanvasNode[]): CanvasNode[] | null {
   const groups = nodes.filter((n) => n.type === 'groupFrame')
   const free = nodes.filter(
@@ -196,18 +196,18 @@ export function rebuildCanvasGraph(project: Project, preservePositions = true): 
   const scenes = project.scenes ?? []
   const shots = project.shots
   const hasPipelineData = subjects.length > 0 || storyProps.length > 0 || scenes.length > 0 || shots.length > 0
-  // 还没进流水线时只铺用户手动加的节点，不铺空的角色/场景/分镜分组
+  // 워크플로 데이터가 없으면 사용자가 추가한 노드만 배치한다.
   const bare = !hasPipelineData
   const hasScriptNode = prevList.some((n) => n.id === 'script' || n.type === 'script')
-  // 既没有流水线数据也没有手动加的节点时，保持空画布（由智能体或右键添加来起头）
+  // 노드와 워크플로 데이터가 없으면 캔버스를 비워 둔다.
   if (!hasPipelineData && !hasScriptNode && !prevList.length) {
     return project.canvas ?? emptyCanvas()
   }
   const hadGroups = prevList.some((n) => n.type === 'groupFrame')
   const shotVideoPrev = prevList.filter((n) => n.type === 'shotVideo')
   const defaultStill = fallbackStillMode()
-  // 走시작·끝 프레임的镜头视频直接吃起始帧/结束帧，不再铺关键帧/看板节点；
-  // 已经画出来的关键帧保留在画布上（不藏用户的图），只是不再要求补。
+  // 시작·끝 프레임 샷에는 키프레임과 개요판 노드를 추가하지 않는다.
+  // 이미 생성한 키프레임은 캔버스에 유지한다.
   const shotsNeedingStills = shots.filter(
     (s) => !shotUsesFrames(s, project) || s.imageAssetId || s.boardAssetId
   )
@@ -229,11 +229,11 @@ export function rebuildCanvasGraph(project: Project, preservePositions = true): 
     prevList
       .filter((n) => n.type === 'shotVideo')
       .every((n) => n.parentGroupId === 'group-videos')
-  // 시작·끝 프레임组只在真的要用시작·끝 프레임出片时出现：项目开了시작·끝 프레임链，或有镜头手动选了시작·끝 프레임。
-  // 它是给视频供图的，所以排在샷 키프레임之后、샷 영상之前。
-  // 口径与「下一步」流水线、智能体判断共用 needsShotFrames，三边必须一致。
+  // 프로젝트나 개별 샷에서 시작·끝 프레임을 사용하면 프레임 그룹을 표시한다.
+  // 프레임 그룹을 샷 키프레임과 샷 영상 그룹 사이에 배치한다.
+  // 워크플로와 에이전트도 needsShotFrames로 동일하게 판단한다.
   const needFrames = shots.length > 0 && needsShotFrames(project)
-  // 首次插入这一组时，后面的分组要整体右移，旧坐标会跟新分组撞在一起，只能重排一次。
+  // 그룹을 처음 삽입할 때 기존 좌표의 겹침을 피하려고 뒤쪽 그룹을 한 번 재배치한다.
   const framesJustAdded = needFrames && !prevList.some((n) => n.id === 'group-frames')
   const layoutReady = bare
     ? shots.length === 0 || (prevList.some((n) => n.id === 'group-videos') && videosHomed)
@@ -339,7 +339,7 @@ export function rebuildCanvasGraph(project: Project, preservePositions = true): 
       return
     }
     node.parentGroupId = groupId
-    // 换组后不能沿用旧组里的相对坐标，否则会落到框外（例如从分镜第 2 列迁到샷 영상）
+    // 그룹을 옮긴 노드에는 새 그룹 기준의 상대 좌표를 사용한다.
     node.position = sameParent ? pos(prev, node.id, node.position) : node.position
     nodes.push(node)
     const g = groups.find((x) => x.id === groupId)
@@ -420,7 +420,7 @@ export function rebuildCanvasGraph(project: Project, preservePositions = true): 
       prevVid?.data.videoStillMode === 'storyboard'
         ? prevVid.data.videoStillMode
         : stillModeForVideoModel(model, activeVideoProfile())
-    // 시작·끝 프레임镜头不铺关键帧节点；但这镜如果已经画过关键帧/看板，保留节点不删图
+    // 시작·끝 프레임 샷에서 기존 키프레임과 개요판은 유지한다.
     const keepExistingStill = Boolean(shot.imageAssetId || shot.boardAssetId)
     const stillType =
       shotUsesFrames(shot, project) && !keepExistingStill ? null : stillTypeForMode(resolvedStill)
@@ -507,7 +507,7 @@ export function rebuildCanvasGraph(project: Project, preservePositions = true): 
         sourceHandle: 'out',
         targetHandle: stillType ? (idx === 0 ? 'char1' : 'char2') : 'in'
       })
-      // 시작·끝 프레임也要拿同一批人物去合成，所以人物节点同时连到帧节点
+      // 캐릭터 노드를 프레임에도 연결해 같은 인물을 합성에 사용한다.
       if (frameId) {
         edges.push({
           id: `e-${src}-${frameId}-${idx}`,
@@ -600,7 +600,7 @@ export function rebuildCanvasGraph(project: Project, preservePositions = true): 
     })
   }
 
-  // 固定流程是模板层；用户追加的自由生图/视频节点属于创作层，重整布局时不能覆盖。
+  // 레이아웃을 정리할 때 사용자가 추가한 자유 이미지나 영상 노드를 유지한다.
   const freeNodes = prevList.filter((node) => node.type === 'imageGen' || node.type === 'videoGen')
   const freeIds = new Set(freeNodes.map((node) => node.id))
   for (const node of freeNodes) {
