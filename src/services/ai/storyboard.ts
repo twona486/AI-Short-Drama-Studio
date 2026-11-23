@@ -143,6 +143,11 @@ function acceptDuration(seconds: number): number {
 
 /** 从一小段里读出秒数：30秒、30s、1分20秒、1.5分钟、三十秒、半分钟。 */
 function secondsFromPhrase(phrase: string): number {
+  const english = phrase.trim().match(/^(\d+(?:\.\d+)?)\s*(minutes?|mins?|m|seconds?|secs?|s)\b(?:\s*(\d+)\s*(?:seconds?|secs?|s)\b)?$/i)
+  if (english) {
+    const scale = /^m/i.test(english[2]) ? 60 : 1
+    return acceptDuration(Number(english[1]) * scale + Number(english[3] || 0))
+  }
   const text = phrase.replace(/\s+/g, '')
   if (!text) return 0
   if (text.includes('半分钟')) return 30
@@ -150,7 +155,7 @@ function secondsFromPhrase(phrase: string): number {
   if (minSec) return acceptDuration(Number(minSec[1]) * 60 + Number(minSec[2]))
   const minutes = text.match(/(\d+(?:\.\d+)?)(?:分钟|분)/)
   if (minutes) return acceptDuration(Number(minutes[1]) * 60)
-  const seconds = text.match(/(\d+)(?:秒|秒钟|초|s)/i)
+  const seconds = text.match(/(\d+)(?:秒钟|秒|초|s\b)/i)
   if (seconds) return acceptDuration(Number(seconds[1]))
   const cnMin = text.match(/([一二两三四五六七八九十]+|半)分钟/)
   if (cnMin) {
@@ -163,11 +168,11 @@ function secondsFromPhrase(phrase: string): number {
 }
 
 const DURATION_PHRASE =
-  '((?:半分钟)|(?:\\d+\\s*(?:分|분)\\s*\\d+\\s*(?:秒|초))|(?:\\d+(?:\\.\\d+)?\\s*(?:分钟|분))|(?:\\d+\\s*(?:秒|秒钟|초|s))|(?:[一二两三四五六七八九十]+\\s*分钟)|(?:[一二两三四五六七八九十]+\\s*秒))'
+  '((?:半分钟)|(?:\\d+\\s*(?:分|분)\\s*\\d+\\s*(?:秒|초))|(?:\\d+(?:\\.\\d+)?\\s*(?:分钟|분))|(?:\\d+\\s*(?:秒钟|秒|초))|(?:\\d+(?:\\.\\d+)?\\s*(?:minutes?|mins?|m)\\b(?:\\s*\\d+\\s*(?:seconds?|secs?|s)\\b)?)|(?:\\d+\\s*(?:seconds?|secs?|s)\\b)|(?:[一二两三四五六七八九十]+\\s*分钟)|(?:[一二两三四五六七八九十]+\\s*秒))'
 
 function labeledDuration(text: string): number {
   const primary = new RegExp(
-    `(?:总时长|成片时长|目标成片|成片|全片|整片|总共|一共|控制在|做成|拍成|建议时长|目标时长|视频时长)\\s*[:：是为]?\\s*(?:约|大概|大约)?\\s*${DURATION_PHRASE}`,
+    `(?:总时长|成片时长|目标成片|成片|全片|整片|总共|一共|控制在|做成|拍成|建议时长|目标时长|视频时长|전체 길이|목표 길이|목표 영상 길이|영상 길이|\\b(?:target|total|video) duration\\b)\\s*[:：是为]?\\s*(?:约|大概|大约|약|about\\b|approximately\\b)?\\s*${DURATION_PHRASE}`,
     'gi'
   )
   let hit: RegExpExecArray | null
@@ -176,7 +181,7 @@ function labeledDuration(text: string): number {
     if (n) return n
   }
   const filmed = text.match(
-    new RegExp(`${DURATION_PHRASE}\\s*(?:左右|以内|정도|이내|짜리)?\\s*(?:的)?\\s*(?:短剧|短片|视频|成片|短电影|숏드라마|단편|영상)`, 'i')
+    new RegExp(`${DURATION_PHRASE}\\s*(?:左右|以内|정도|이내|짜리)?\\s*(?:的)?\\s*(?:短剧|短片|视频|成片|短电影|숏드라마|단편|영상|\\b(?:short film|short drama|video)\\b)`, 'i')
   )
   if (filmed) {
     const n = secondsFromPhrase(filmed[1])
