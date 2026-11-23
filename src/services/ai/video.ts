@@ -341,7 +341,7 @@ export async function autodlRequest(
   if (isDesktop()) {
     const api = desktop()
     if (typeof api.autodlFetch !== 'function') {
-      throw new Error('剧流 Studio를 완전히 종료한 뒤 다시 시작하세요. 데스크톱 앱에 새 AutoDL 연결이 필요합니다.')
+      throw new Error('AI Short Drama Studio를 완전히 종료한 뒤 다시 시작하세요. 데스크톱 앱에 새 AutoDL 연결이 필요합니다.')
     }
     const headers = init.headers || {}
     const res = await api.autodlFetch({
@@ -402,7 +402,7 @@ async function dashscopeRequest(
   if (isDesktop()) {
     const api = desktop()
     if (typeof api.dashscopeFetch !== 'function') {
-      throw new Error('剧流 Studio를 완전히 종료한 뒤 다시 시작하세요. 데스크톱 앱에 새 Bailian 연결이 필요합니다.')
+      throw new Error('AI Short Drama Studio를 완전히 종료한 뒤 다시 시작하세요. 데스크톱 앱에 새 Bailian 연결이 필요합니다.')
     }
     const res = await api.dashscopeFetch({
       url,
