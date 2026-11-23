@@ -59,7 +59,7 @@ export interface AgentEvent {
 
 export type AgentProgress = (ev: AgentEvent) => void
 
-/** 单轮最多执行多少个画布动作。放宽上限，别把用户的整句需求切碎。 */
+/** 한 번의 요청에서 실행할 수 있는 캔버스 작업의 최대 개수 */
 const MAX_ACTIONS_PER_TURN = 12
 
 export interface AgentTurnResult {
@@ -70,11 +70,11 @@ export interface AgentTurnResult {
 export interface AgentRunOptions {
   signal?: AbortSignal
   autonomy?: 'assist' | 'gated' | 'autopilot'
-  /** 已废弃：合并后不再按模式分叉，路线由意图与画布状态决定 */
+  /** 사용 중단 예정. 화면 모드 대신 의도와 캔버스 상태에 따라 처리 경로를 선택한다. */
   mode?: 'drama' | 'freeform'
-  /** 当前在画布上选中的自由生成节点 */
+  /** 현재 캔버스에서 선택한 자유 생성 노드 */
   selectedNodeId?: string
-  /** 用户在对话框附加的本地文件（文本内容已读入） */
+  /** 대화에 첨부한 로컬 파일. 텍스트는 읽어 둔 상태다. */
   attachments?: AgentAttachment[]
 }
 
@@ -238,15 +238,15 @@ export async function runAgentTurn(
 
   const p0 = project.current
 
-  // ── 意图识别：先判断这句话想干什么，再决定走哪条路 ──
-  // 附件 / 消息里的本地文件路径 → 读成材料块。材料只拼给模型看，不参与意图分类。
+  // 사용자 의도를 파악한 뒤 처리 경로를 선택한다.
+  // 첨부 파일과 메시지에 포함된 로컬 경로는 모델에 제공할 자료로만 사용한다.
   const baseText = userText
   const material = await buildMaterialBlock(userText, options.attachments, (label) =>
     onEvent({ kind: 'log', label })
   )
   if (material) userText = `${material}\n\n${userText}`
   const hasPipeline = hasPipelineData(p0)
-  // 意图分类全部由 LLM 完成（正式模式）；演示模式退回 detectIntent 规则兜底
+  // 실제 모드에서는 모델로 의도를 분류한다. 데모 모드에서는 detectIntent를 사용한다.
   const intent = await detectIntentSmart(
     baseText,
     {
@@ -258,18 +258,18 @@ export async function runAgentTurn(
   )
   onEvent({ kind: 'intent', label: intent.label })
 
-  // 闲聊也交给语言模型写回复，不用固定开场白
+  // 일상 대화에도 모델이 응답을 작성한다.
   if (intent.kind === 'chitchat') {
     return answerQuestion(userText, history, p0, onEvent, options)
   }
 
-  // 合并模式：不再按项目模式分叉，而是按「这句话 + 画布当前状态」决定走节点路径还是流水线路径
+  // 요청과 캔버스 상태에 따라 단일 노드 또는 워크플로 경로를 선택한다.
   const nodePath = resolveNodePath(intent, p0, baseText)
-  // 只在「这句话明确是单个节点需求」时才收紧工具集；意图含糊时不硬拦，避免模型想做却被静默过滤掉
+  // 단일 노드 요청이 명확할 때만 사용할 도구를 제한한다.
   const restrictToNodes =
     !hasPipeline && (intent.kind === 'create_asset' || intent.kind === 'prompt_polish')
 
-  // 显式记忆指令：直接写本地记忆，不进任务规划（按用户原话提取内容，意图已由 LLM 判定）
+  // 명시한 기억 요청은 작업 계획 없이 로컬 기억에 기록한다.
   if (intent.kind === 'remember') {
     const req = parseRememberRequest(baseText)
     if (req) {
@@ -295,8 +295,8 @@ export async function runAgentTurn(
       }
     }
   }
-  // 进度查询 / 质检：确定性汇总，不消耗模型调用。
-  // 但带着附件问「状态」时，多半是在问材料本身，交给模型结合材料回答。
+  // 진행 상황과 품질 검수 요청은 모델 호출 없이 요약한다.
+  // 첨부 자료의 상태를 묻는 요청은 모델에 자료와 함께 전달한다.
   if (intent.kind === 'status' && material) {
     return answerQuestion(userText, history, p0, onEvent, options)
   }
@@ -304,11 +304,11 @@ export async function runAgentTurn(
     onEvent({ kind: 'log', label: '캔버스와 프로젝트 상태를 확인하는 중' })
     return { reply: statusNotes(p0), results: [], chips: statusChips(p0) }
   }
-  // 纯问答 / 咨询：不动画布，结合记忆与项目上下文直接回答
+  // 질문은 캔버스를 변경하지 않고 프로젝트 정보와 기억을 참고해 답한다.
   if (intent.kind === 'question') {
     return answerQuestion(userText, history, p0, onEvent, options)
   }
-  // 选中节点的提示词优化：快路径，不等规划
+  // 선택한 노드의 프롬프트는 계획 작성 전에 최적화한다.
   if (intent.kind === 'prompt_polish') {
     const nodeId = options.selectedNodeId || findGenNodeInText(p0, baseText)
     if (nodeId) {
@@ -415,7 +415,7 @@ export async function runAgentTurn(
   } else {
     if (nodePath) {
       const nodePlan = freeformHeuristicPlan(baseText, options.selectedNodeId)
-      // 单节点规则没命中时回退到流水线规则，避免空手而归
+      // 단일 노드 규칙에 맞지 않으면 워크플로 규칙을 사용한다.
       plan = nodePlan.actions.length ? nodePlan : heuristicPlan(baseText)
     } else {
       plan = heuristicPlan(baseText)
@@ -429,7 +429,7 @@ export async function runAgentTurn(
     )
   }
 
-  // 验收门只挡「流水线下游动作」：手动加单个节点、单节点生成、改提示词不受阻
+  // 대본 승인 전에는 워크플로 후속 단계만 제한한다.
   const hitDownstream = plan.actions.some((a) => isDownstreamAction(a, project.current))
   const gated =
     hitDownstream &&
@@ -459,12 +459,12 @@ export async function runAgentTurn(
     return { reply: say, results: [], chips }
   }
 
-  // ── 任务规划：把动作整理成用户可读的计划卡片，执行中同步状态 ──
+  // 작업 계획을 읽을 수 있는 카드로 표시하고 실행 상태를 갱신한다.
   try {
     const agentPlan = buildPlanFromActions(plan.actions.slice(0, MAX_ACTIONS_PER_TURN), intent.label)
     onEvent({ kind: 'plan', label: agentPlan.summary, plan: agentPlan })
   } catch {
-    /* 计划卡片生成失败不阻断执行 */
+    /* 계획 카드를 만들지 못해도 작업을 계속한다. */
   }
   onEvent({ kind: 'log', label: '캔버스 작업을 시작합니다.' })
   const autonomy = options.autonomy ?? getAgentState().autonomy
@@ -579,7 +579,7 @@ export async function runAgentTurn(
 
 const NODE_PATH_RULE = `This is a single-node request. Prefer create_image_node, create_video_node, connect_nodes, update_node, delete_node, arrange_canvas, check_project, optimize_node_prompt, run_node, focus_node, sync_canvas, remember, and forget. Use workflow tools such as generate_play and extract_cast only when the user explicitly asks for a script, character/location/shot extraction, or full production. Default to the selected node if none is named.`
 
-/** 项目里是否已经有流水线产物（剧本 / 人物 / 场景 / 分镜） */
+/** 프로젝트에 대본, 캐릭터, 장면 또는 스토리보드가 있는지 확인한다. */
 function hasPipelineData(p: Project | null | undefined): boolean {
   if (!p) return false
   return Boolean(
@@ -591,9 +591,9 @@ function hasPipelineData(p: Project | null | undefined): boolean {
 }
 
 /**
- * 合并后不再看项目模式，只按「这句话的意图 + 画布现状」决定路线：
- * node = 单个节点操作（建图片/视频节点、改提示词、重跑节点）
- * flow = 流水线推进（写剧本、拆人物场景分镜、批量出图出视频）
+ * 요청의 의도와 현재 캔버스 상태로 처리 경로를 선택한다.
+ * node는 이미지나 영상 노드 생성, 프롬프트 편집, 재실행을 처리한다.
+ * flow는 대본 작성, 노드 추출, 이미지와 영상의 일괄 생성을 처리한다.
  */
 function resolveNodePath(
   intent: { kind: string },
@@ -607,11 +607,11 @@ function resolveNodePath(
   return !hasPipelineData(p)
 }
 
-/** 「画一张…」「做个 8 秒视频」这类只针对单个节点的需求 */
+/** 이미지 한 장이나 짧은 영상처럼 단일 노드로 처리하는 요청 */
 const NODE_REQUEST =
   /画一?[张幅个]|做一?[个条]|生成一?[张个条]|出一张|图片|图像|视频节点|出图|一张图|一段视频/i
 
-/** 这个动作是否属于「流水线下游」——只有它才需要先验收剧本 */
+/** 대본 승인 이후에만 실행할 수 있는 후속 워크플로 작업인지 확인한다. */
 function isDownstreamAction(a: any, p: Project | null | undefined): boolean {
   const tool = String(a?.tool || '')
   if (!tool) return false
@@ -623,7 +623,7 @@ function isDownstreamAction(a: any, p: Project | null | undefined): boolean {
   return /^(generate_|extract_)/.test(tool)
 }
 
-/** 只在「空画布 + 单节点需求」时收紧工具集，其余情况全放开 */
+/** 빈 캔버스에서 단일 노드 작업을 요청할 때만 도구를 제한한다. */
 function gateModeActions(actions: any[], restrictToNodes: boolean): any[] {
   if (!restrictToNodes) return actions
   const allowed = new Set([
@@ -644,7 +644,7 @@ function gateModeActions(actions: any[], restrictToNodes: boolean): any[] {
   return actions.filter((a) => allowed.has(String(a?.tool || '')))
 }
 
-/** 在用户文本里找被点名的自由生成节点 */
+/** 사용자가 이름을 언급한 자유 생성 노드를 찾는다. */
 function findGenNodeInText(p: Project, text: string): string | null {
   const nodes = (p.canvas?.nodes ?? []).filter(
     (n) => n.type === 'imageGen' || n.type === 'videoGen'
@@ -656,7 +656,7 @@ function findGenNodeInText(p: Project, text: string): string | null {
   return null
 }
 
-/** 自由生成节点（图片 / 视频节点）的进度小结；没有这类节点时返回空 */
+/** 이미지나 영상 생성 노드의 진행 상황을 요약한다. */
 function genNodeNotes(p: Project): string {
   const nodes = (p.canvas?.nodes ?? []).filter(
     (n) => n.type === 'imageGen' || n.type === 'videoGen'
@@ -678,7 +678,7 @@ function genNodeNotes(p: Project): string {
   return lines.join('\n')
 }
 
-/** 合并后的进度盘点：流水线进度 + 自由节点进度一起报 */
+/** 워크플로와 자유 생성 노드의 진행 상황을 함께 요약한다. */
 function statusNotes(p: Project): string {
   const parts: string[] = []
   if (hasPipelineData(p)) parts.push(qaNotes(p))
@@ -705,7 +705,7 @@ function statusChips(p: Project | null | undefined): { label: string; text: stri
   return chips.slice(0, 3)
 }
 
-/** 问答 / 咨询：不操作画布，结合记忆和项目状态直接回答 */
+/** 캔버스를 변경하지 않고 기억과 프로젝트 상태를 활용해 답한다. */
 async function answerQuestion(
   userText: string,
   history: AgentMessage[],
@@ -751,7 +751,7 @@ ${memoryText ? `\n${memoryText}` : ''}`
     }
 }
 
-/** 演示模式下自由画布的规则规划 */
+/** 데모 모드에서 규칙으로 자유 캔버스 작업을 계획한다. */
 function freeformHeuristicPlan(
   userText: string,
   selectedNodeId?: string
@@ -761,25 +761,25 @@ function freeformHeuristicPlan(
   const actions: any[] = []
 
   if (p) {
-    // 生成 / 重跑某个节点
+    // 노드를 생성하거나 다시 실행한다.
     const runMatch = t.match(/(?:重新生成|生成|重跑|跑一下|다시 생성|생성|실행|regenerate|generate|run)\s*(?:节点|노드|node)?\s*([a-zA-Z]+_\w+)/i)
     if (runMatch) actions.push({ tool: 'run_node', nodeId: runMatch[1] })
-    // 优化选中节点
+    // 선택한 노드의 프롬프트를 최적화한다.
     if (!actions.length && selectedNodeId && /优化|扩写|加厚|润色|更|再|최적화|다듬|구체화|refine|expand|polish/i.test(t)) {
       actions.push({ tool: 'optimize_node_prompt', nodeId: selectedNodeId, text: t })
     }
-    // 体检 / 整理画布
+    // 캔버스를 검사하거나 정리한다.
     if (!actions.length && /检查|体检|看看有什么问题|哪里不对|齐了没|漏了|검수|누락 확인|quality check|check for issues/i.test(t)) {
       actions.push({ tool: 'check_project' })
     }
     if (!actions.length && /整理|重排|排布|重新摆放|整理一下画布|캔버스 정리|다시 배치|organize the canvas|rearrange/i.test(t)) {
       actions.push({ tool: 'arrange_canvas' })
     }
-    // 删掉选中节点
+    // 선택한 노드를 삭제한다.
     if (!actions.length && selectedNodeId && /删|去掉|移除|삭제|제거|\b(?:delete|remove)\b/i.test(t)) {
       actions.push({ tool: 'delete_node', nodeId: selectedNodeId })
     }
-    // 新建节点（说「给这个节点加…」时自动挂到选中节点后面并连线）
+    // 사용자가 현재 노드에 추가하라고 요청하면 새 노드를 생성해 연결한다.
     if (!actions.length && /视频/.test(t) && /新建|创建|做一?[个条]|来一?[个条]|加|接|连/.test(t)) {
       const dur = Number(t.match(/(\d{1,2})\s*(?:秒|초|seconds?\b)/i)?.[1] || 8)
       actions.push({ tool: 'create_video_node', text: t, duration: dur, sourceNodeId: selectedNodeId })
@@ -1003,7 +1003,7 @@ function wrapUpReply(
   }
 }
 
-/** 演示模式 / 模型跑偏时：砍掉用户没点名的动作 */
+/** 데모 모드나 모델의 실행 범위가 벗어난 경우 요청에 없는 작업을 제거한다. */
 function alignNewStoryActions(
   actions: any[],
   userText: string,
@@ -1030,8 +1030,8 @@ function alignNewStoryActions(
 function sanitizeActions(actions: any[], userText: string): any[] {
   const all = wantAll(userText)
   const t = userText
-  // 只有「批量」动作（会一次性烧掉大量额度）才需要用户的话里有对应意图，
-  // 单个动作放手让模型根据最新画布决定，避免在意料之外被静默丢弃。
+  // 비용이 큰 일괄 작업만 사용자가 해당 작업을 요청했는지 확인한다.
+  // 단일 작업은 모델이 최신 캔버스 상태를 기준으로 선택한다.
   const askedBoard = /拆分镜|拆镜|故事板|出分镜|生成分镜|写剧本|提炼节点|拆剧本|대본\s*나누기|대본을\s*나눠|split (?:the )?script|续写|接着写|再写|分镜|场次/.test(t)
   const askedSheet = /人设|角色图|四视图|人物图|角色/.test(t)
   const askedScene = /场景图|底板|出场景|生成场景|场景/.test(t)
@@ -1066,7 +1066,7 @@ function dedupeActions(actions: any[]): any[] {
 
 const SCRIPT_REWRITE = /重新写(?:完整)?剧本|重写(?:完整)?剧本|改写剧本|换(?:一个|成).{0,12}(?:故事|剧本)|新故事|新剧本/
 
-/** 导入的成稿只允许拆镜，不允许智能体先重写剧本。 */
+/** 가져온 완성 대본은 내용을 유지하며 샷으로 나눈다. */
 function protectImportedScript(actions: any[], userText: string): any[] {
   const origin = useProjectStore().current?.script?.origin
   if (origin !== 'imported' || SCRIPT_REWRITE.test(userText)) return actions
@@ -1099,7 +1099,7 @@ function applyPlayGate(actions: any[], userText: string): any[] {
       else out.unshift({ tool: 'approve_play' })
     }
     if (hasBoard) {
-      /* 全流程：拆完立刻视为通过再往下 */
+      /* 전체 과정 요청이면 샷 추출을 마친 뒤 승인된 것으로 보고 다음 단계로 이동한다. */
     }
     return out
   }
@@ -1128,7 +1128,7 @@ function applyPlayGate(actions: any[], userText: string): any[] {
     const writingPlay = kept.some(
       (a) => a.tool === 'generate_play' || a.tool === 'generate_storyboard' || a.tool === 'continue_play'
     )
-    // 非全流程：写剧本和提炼拆开，同一轮只写剧本
+    // 전체 과정이 아니면 대본 작성과 추출을 따로 실행한다.
     if (writingPlay) {
       return kept.filter((a) => a.tool !== 'extract_cast')
     }
@@ -1171,8 +1171,8 @@ function heuristicPlan(userText: string): { say: string; actions: any[] } {
     !p.script?.playReady
   const playReady = Boolean(p.script?.playReady && p.script.content?.trim())
   const newStory = isNewStoryBrief(t, p)
-  // 首尾帧链模式：出视频前要先给每镜合成「起始帧 + 结束帧」两张图
-  // 判断口径与画布分组、流水线下一步共用 needsShotFrames，避免三边不一致
+  // 시작·끝 프레임 연결 모드에서는 영상을 만들기 전에 샷별 시작과 끝 프레임을 만든다.
+  // 캔버스 그룹과 워크플로가 같은 needsShotFrames 판단을 사용한다.
   const chainFrames = needsShotFrames(p)
 
   if (newStory) {
@@ -1207,7 +1207,7 @@ function heuristicPlan(userText: string): { say: string; actions: any[] } {
       const shot = p.shots[i] ?? p.shots.find((s) => s.index === i)
       if (!shot) continue
       if (askedVideo && !askedImage && !askedPanel) {
-        // 首尾帧链：先用这一镜的人物和场景画出起始帧和结束帧，再拿这两张出视频
+        // 캐릭터와 장면으로 시작과 끝 프레임을 만든 뒤 두 이미지를 영상 생성에 제공한다.
         if (chainFrames && !shot.firstFrameAssetId && !shot.lastFrameAssetId) {
           actions.push({ tool: 'generate_shot_frames', shotId: shot.id })
         }
