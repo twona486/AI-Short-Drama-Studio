@@ -1,24 +1,24 @@
 /**
- * FFmpeg.wasm 包装
+ * FFmpeg.wasm 래퍼
  *
- * 加载策略（按优先级）：
- *   1. 本地 /ffmpeg/*  （完全离线，推荐国内用户）
- *   2. jsDelivr CDN   （比 unpkg 稳）
- *   3. unpkg CDN      （兜底）
+ * 코어를 불러오는 순서
+ *   1. 로컬 코어(오프라인)
+ *   2. jsDelivr CDN
+ *   3. unpkg CDN(대체 경로)
  *
- * 注意：浏览器需要 cross-origin isolation（COOP/COEP headers）
- * 才会启用 SharedArrayBuffer。Vite 配置里已经设置。
+ * 브라우저의 SharedArrayBuffer를 사용하려면 교차 출처 격리가 필요하다.
+ * Vite 설정에 COOP 및 COEP 헤더가 있다.
  *
- * 实现：直接给 ffmpeg.load() 传 URL，不用 toBlobURL。
- * 这样 ffmpeg 内部 worker 会自己去 fetch，比 toBlobURL 链路更短、更稳。
+ * ffmpeg.load()에 URL을 직접 전달한다.
+ * FFmpeg 워커가 URL에서 직접 코어 파일을 가져온다.
  */
 
 import { t } from "@/i18n"
 import { FFmpeg } from '@ffmpeg/ffmpeg'
 import { fetchFile, toBlobURL } from '@ffmpeg/util'
-// 用 Vite ?url import 拿到本地 core 文件的 URL
-// 之前放 public/ 被 Vite 禁止从 source code 引用（"cannot be imported from source code"）
-// 移到 src/assets/ 用 ?url 解决
+// Vite의 ?url 가져오기로 로컬 코어 파일 URL을 구한다.
+// Vite는 소스에서 public 디렉터리의 파일을 가져올 수 없다.
+// src/assets 디렉터리의 파일에 ?url을 사용한다.
 import coreJsUrl from '@ffmpeg/core?url'
 import coreWasmUrl from '@ffmpeg/core/wasm?url'
 
@@ -27,9 +27,9 @@ let _loading: Promise<FFmpeg> | null = null
 
 const CORE_VERSION = '0.12.10'
 
-/** 多个 CDN 源，按顺序尝试
- * 注意：用 ESM 版 ffmpeg-core，因为 @ffmpeg/ffmpeg 0.12.10 强制 module worker
- *       module worker 不支持 importScripts（UMD 用），必须用 ESM 版才能 dynamic import
+/** 여러 CDN을 순서대로 확인한다.
+ * FFmpeg 0.12.10 모듈 워커에는 ESM 코어를 사용한다.
+ *       모듈 워커는 UMD의 importScripts 대신 동적 import를 쓴다.
  */
 const CDN_SOURCES = [
   {
@@ -66,7 +66,7 @@ const CDN_SOURCES = [
   }
 ]
 
-/** 测一个 URL 是否能访问（用 HEAD），返回 ms 耗时或 -1 */
+/** HEAD로 URL에 접근할 수 있는지 확인한다. 밀리초 또는 -1을 반환한다. */
 async function probeUrl(url: string, timeout = 8000): Promise<number> {
   const ctl = new AbortController()
   const timer = setTimeout(() => ctl.abort(), timeout)
@@ -86,7 +86,7 @@ async function probeUrl(url: string, timeout = 8000): Promise<number> {
   }
 }
 
-/** 选最快的源 */
+/** 응답이 가장 빠른 소스를 선택한다. */
 async function pickBestSource(onLog?: (msg: string) => void): Promise<typeof CDN_SOURCES[0] | null> {
   for (const src of CDN_SOURCES) {
     const ms = await probeUrl(src.urls.js)
@@ -100,7 +100,7 @@ async function pickBestSource(onLog?: (msg: string) => void): Promise<typeof CDN
   return null
 }
 
-/** 获取或初始化 FFmpeg（单例） */
+/** FFmpeg 싱글턴을 반환하거나 초기화한다. */
 export async function getFFmpeg(
   onProgress?: (msg: string) => void
 ): Promise<FFmpeg> {
@@ -113,7 +113,7 @@ export async function getFFmpeg(
       onProgress?.(msg)
     }
 
-    // 检查浏览器支持
+    // 브라우저 지원 여부를 확인한다.
     if (typeof SharedArrayBuffer === 'undefined') {
       if (window.desktop?.isDesktop) {
         throw new Error(
@@ -161,7 +161,7 @@ export async function getFFmpeg(
     log(t('ffmpegClient.sourceSelected', { source: src.name }))
 
     try {
-      // 1) 先 HEAD 探活 + 检查 MIME，明确报错
+      // HEAD 응답과 MIME 유형을 먼저 검사해 구체적인 오류를 반환한다.
       log(t('ffmpegClient.checkJs', { url: src.urls.js }))
       const headJs = await fetch(src.urls.js, { method: 'HEAD' })
       log(`  → ${headJs.status} ${headJs.statusText}, type=${headJs.headers.get('content-type')}`)
@@ -188,9 +188,9 @@ export async function getFFmpeg(
         throw new Error(t('ffmpegClient.invalidMime', { mime: wasmMime }))
       }
 
-      // 2) 直接传 URL 给 ffmpeg.load()，不用 toBlobURL
-      //    ffmpeg.wasm 0.12+ 接受 string URL，内部 worker 会自己 fetch
-      //    ESM core + module worker + dynamic import(.default) 这条链路是通的
+      // ffmpeg.load()에 URL을 직접 전달한다.
+      //    FFmpeg.wasm 0.12 이상에서 워커가 URL을 직접 가져온다.
+      //    ESM 코어와 모듈 워커는 동적 import로 연결한다.
       log(t('ffmpegClient.directUrl'))
 
       log(t('ffmpegClient.initializing'))
@@ -212,12 +212,12 @@ export async function getFFmpeg(
   return _loading
 }
 
-/** 是否已加载 */
+/** 코어가 로드됐는지 확인한다. */
 export function isFFmpegReady(): boolean {
   return _ffmpeg !== null
 }
 
-/** 强制重置（用于切换源后重试） */
+/** 소스를 변경한 뒤 다시 시도할 수 있도록 초기화 상태를 제거한다. */
 export function resetFFmpeg() {
   if (_ffmpeg) {
     try {
@@ -228,7 +228,7 @@ export function resetFFmpeg() {
   _loading = null
 }
 
-/** 写文件到 FFmpeg 虚拟 FS */
+/** FFmpeg 가상 파일 시스템에 쓴다. */
 export async function writeFile(
   ffmpeg: FFmpeg,
   name: string,
@@ -246,7 +246,7 @@ export async function writeFile(
   await ffmpeg.writeFile(name, payload)
 }
 
-/** 尽量清掉 MEMFS 里的中间文件，避免二次导出撑爆虚拟磁盘 */
+/** 다시 내보낼 때 메모리가 부족하지 않도록 임시 파일을 가능한 한 정리한다. */
 export async function clearFS(ffmpeg: FFmpeg) {
   try {
     const entries = await ffmpeg.listDir('/')
@@ -263,23 +263,23 @@ export async function clearFS(ffmpeg: FFmpeg) {
   }
 }
 
-/** 从 FFmpeg 虚拟 FS 读文件 */
+/** FFmpeg 가상 파일 시스템에서 읽는다. */
 export async function readFile(ffmpeg: FFmpeg, name: string): Promise<Uint8Array> {
   const data = await ffmpeg.readFile(name)
-  // ffmpeg.readFile 在 web 上返回 Uint8Array，node 上返回 string；统一处理
+  // 브라우저의 Uint8Array와 Node의 문자열 반환값을 동일하게 처리한다.
   if (typeof data === 'string') {
     return new TextEncoder().encode(data)
   }
   return data as Uint8Array
 }
 
-/** 把 Uint8Array 包装成 Blob（带 MIME） */
+/** Uint8Array를 MIME 유형이 있는 Blob으로 변환한다. */
 export function toBlob(data: Uint8Array, mime: string): Blob {
-  // 复制成 ArrayBuffer-backed Uint8Array，避免 SharedArrayBuffer 类型冲突
+  // SharedArrayBuffer 유형 충돌을 피하도록 ArrayBuffer 기반 배열에 복사한다.
   const buf = new ArrayBuffer(data.byteLength)
   new Uint8Array(buf).set(data)
   return new Blob([buf], { type: mime })
 }
 
-/** 公共 fetchFile */
+/** 공용 fetchFile 함수 */
 export { fetchFile }
