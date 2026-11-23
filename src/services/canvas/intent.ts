@@ -1,8 +1,8 @@
 import { t as translate } from "@/i18n"
 /**
- * 意图识别：在任务规划之前先判断用户这句话想干什么。
- * 正式模式（real）下全部交给 LLM 分类，不用任何正则/关键词规则；
- * 只有演示模式（没配语言模型）才退回 detectIntent 这套规则兜底。
+ * 작업을 계획하기 전에 사용자 요청의 의도를 파악한다.
+ * 실제 모드에서는 언어 모델이 의도를 분류한다.
+ * 언어 모델을 설정하지 않은 데모 모드에서는 detectIntent 규칙을 사용한다.
  */
 import type { Project } from '@/types'
 import { callLLM, getAIMode } from '@/services/ai/client'
@@ -28,15 +28,15 @@ export type AgentIntentKind =
 
 export interface AgentIntent {
   kind: AgentIntentKind
-  /** 展示在界面上的短标签 */
+  /** 화면에 표시하는 짧은 라벨 */
   label: string
-  /** 是否需要进入任务规划 / 工具循环 */
+  /** 작업 계획과 도구 실행이 필요한지 나타낸다. */
   needsTools: boolean
   confidence: 'high' | 'low'
 }
 
 export interface IntentContext {
-  /** 项目里是否已有剧本 / 人物 / 场景 / 分镜（不再区分画布模式） */
+  /** 프로젝트에 대본, 캐릭터, 장면 또는 스토리보드가 있는지 나타낸다. */
   hasPipeline: boolean
   project: Project | null
   hasSelectedGenNode: boolean
@@ -65,7 +65,7 @@ function intent(kind: AgentIntentKind, confidence: 'high' | 'low' = 'high'): Age
   return { kind, label: translate(`canvasIntent.${kind}`), needsTools, confidence }
 }
 
-/** 工具类关键词：命中即说明用户想动画布，不是纯问答 */
+/** 캔버스 변경을 요청했는지 판별하는 작업 키워드 */
 const ACTION_HINT =
   /写|续写|改编|拆|提炼|提取|生成|出图|配图|出视频|做|改|换|重跑|重新|创建|新建|加一|补|跑|优化|扩写|加厚|删除|去掉|全流程|确认通过|继续|开始|작성해|생성해|수정해|바꿔|삭제해|계속해|시작해|\b(?:write|generate|edit|change|remove|continue|start)\b/i
 
@@ -73,24 +73,24 @@ export function detectIntent(text: string, ctx: IntentContext): AgentIntent {
   const t = text.trim()
   if (!t) return intent('chitchat')
 
-  // 1. 记忆指令优先
+  // 기억 요청을 먼저 확인한다.
   if (parseRememberRequest(t)) return intent('remember')
   if (parseForgetRequest(t)) return intent('forget')
 
-  // 1.5 指向本地路径的读取 / 查看请求 → 读材料问答，绝不能推进制作。
-  // 「把 X 拆成分镜」这类带明确制作动作的不在此列，交给后面的流水线判断。
+  // 로컬 경로의 자료를 읽어 달라는 요청은 질문으로 처리한다.
+  // 명시적으로 자료를 스토리보드로 만들라는 요청은 아래의 워크플로 규칙을 적용한다.
   if (/[A-Za-z]:[\\/]/.test(t) && /读|打开|看看|看一?下|瞅|瞄|查看|加载|载入/.test(t) && !ACTION_HINT.test(t)) {
     return intent('question')
   }
-  // 任何含本地盘符路径的消息都不是「新故事梗概」，别被长度兜底误判成写剧本
+  // 로컬 드라이브 경로가 있는 요청을 새 이야기 줄거리로 해석하지 않는다.
   if (/[A-Za-z]:[\\/]/.test(t) && !ACTION_HINT.test(t)) return intent('question', 'low')
 
-  // 2. 进度查询 / 质检
+  // 진행 상황 및 품질 검수 요청
   if (/进度|状态|还差|缺什么|缺了|齐了没|检查一遍|质检|验收清单|现在.*(?:情况|进展)|做到哪|진행 상황|완료 상태|뭐가 남|누락 확인|검수|\b(?:progress|status|what(?:'s| is) missing|quality check)\b/.test(t)) {
     return intent('status')
   }
 
-  // 3. 显式流水线指令
+  // 명시적인 워크플로 요청
   if (isFullPipelineRequest(t) || isContinueRequest(t) || isApprovePlayRequest(t)) {
     return intent('pipeline')
   }
@@ -98,11 +98,11 @@ export function detectIntent(text: string, ctx: IntentContext): AgentIntent {
   if (
     /剧本|短剧|剧集|微剧|故事|写剧|完整剧本|续写|接着写|拆分镜|拆镜|故事板|出分镜|拆剧本|提炼|提取节点|人设|四视图|场景图|底板|故事看板|口播|配音/.test(t)
   ) {
-    // 明确的流水线指令：不管画布现在有没有东西，都按流水线走
+    // 명확한 워크플로 요청은 현재 캔버스 상태와 관계없이 처리한다.
     return intent('pipeline')
   }
 
-  // 4. 提示词优化
+  // 프롬프트 최적화
   if (/优化|扩写|加厚|润色|改写|重写|최적화|다듬|구체화|확장|\b(?:polish|refine|expand|rewrite)\b/i.test(t) && /提示词|prompt|画面|运镜|文案|这段|这句|节点|프롬프트|노드|화면|카메라 움직임/i.test(t)) {
     return intent('prompt_polish')
   }
@@ -110,12 +110,12 @@ export function detectIntent(text: string, ctx: IntentContext): AgentIntent {
     return intent('prompt_polish')
   }
 
-  // 5. 新建自由节点
+  // 자유 생성 노드 추가
   if (/新建|创建|加一?个|来一个|帮我做一?[个张条]|새로 만들|새 노드|추가해|\b(?:create|add|make)\b/i.test(t) && /图片|图像|视频|节点|画面|이미지|영상|노드|\b(?:image|video|node)\b/i.test(t)) {
     return intent('create_asset')
   }
 
-  // 6. 修改画布现有内容
+  // 기존 캔버스 내용 수정
   if (/(?:第\s*[\d一二两三四五六七八九十]+\s*镜|\d+\s*번\s*샷|\bshot\s+\d+\b)/i.test(t) && ACTION_HINT.test(t)) {
     return intent('edit_canvas')
   }
@@ -123,7 +123,7 @@ export function detectIntent(text: string, ctx: IntentContext): AgentIntent {
     return intent('edit_canvas')
   }
 
-  // 7. 纯问答：带疑问词且不含动作词
+  // 작업을 요청하지 않는 질문
   const looksQuestion =
     /[吗呢吧？?]$/.test(t) ||
     /^(?:什么是|怎么|为什么|为啥|能不能|可不可以|你会|你认识|介绍一下|解释一下|讲讲|告诉我)/.test(t) ||
@@ -133,13 +133,13 @@ export function detectIntent(text: string, ctx: IntentContext): AgentIntent {
     return intent('question')
   }
 
-  // 8. 兜底：含动作词交给任务规划，否则当闲聊/咨询交给 LLM 自由回答
+  // 작업 키워드가 있으면 계획을 작성한다. 그 외에는 대화나 질문으로 처리한다.
   if (ACTION_HINT.test(t)) return intent('task', 'low')
   if (t.length >= 12) return intent('question', 'low')
   return intent('chitchat')
 }
 
-/** LLM 意图分类的系统提示：只输出 kind，不承担任何任务执行 */
+/** 의도 분류 프롬프트는 kind만 반환한다. 작업은 실행하지 않는다. */
 // 사용자 의도를 분류하고 기존 kind 값만 반환한다.
 const INTENT_LLM_SYSTEM = `You classify the user's intent in the Studio canvas. Return the category only. Do not carry out the task or answer the user.
 
@@ -181,7 +181,7 @@ function parseIntentJson(raw: string): AgentIntentKind | null {
   }
 }
 
-/** 正式模式的意图识别：LLM 分类，不用正则。模型没接通或调用失败时把错误抛回去，不用固定文案顶上。 */
+/** 실제 모드에서는 모델이 의도를 분류하며 설정 또는 호출 오류는 호출자에게 전달한다. */
 async function detectIntentWithLlm(
   text: string,
   ctx: IntentContext,
@@ -213,8 +213,8 @@ async function detectIntentWithLlm(
 }
 
 /**
- * 意图识别入口：正式模式（real）全走 LLM；
- * 演示模式（没配语言模型）退回规则版 detectIntent 兜底。
+ * 실제 모드에서는 모델로 의도를 파악한다.
+ * 언어 모델이 없는 데모 모드에서는 detectIntent 규칙을 사용한다.
  */
 export async function detectIntentSmart(
   text: string,
