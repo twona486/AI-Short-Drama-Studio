@@ -146,7 +146,7 @@ function parseAgentJson(text: string): { say: string; actions: any[]; done: bool
   try {
     const obj = JSON.parse(text.slice(start, end + 1))
     return {
-      say: String(obj.say || '好的'),
+      say: String(obj.say || '확인했습니다.'),
       actions: Array.isArray(obj.actions) ? obj.actions : [],
       done: obj.done === true
     }
@@ -176,21 +176,21 @@ function skillSelectContext(userText: string) {
 
 function qaNotes(p: Project): string {
   const issues: string[] = []
-  if (!p.shots.length) issues.push('还没分镜')
+  if (!p.shots.length) issues.push('스토리보드가 없습니다.')
   const noSheet = (p.subjects ?? []).filter((s) => !s.designSheetAssetId)
-  if (noSheet.length) issues.push(`没人设：${noSheet.map((s) => s.name).join('、')}`)
+  if (noSheet.length) issues.push(`캐릭터 설정 이미지 없음 ${noSheet.map((s) => s.name).join('、')}`)
   const noPlate = (p.scenes ?? []).filter((s) => !s.plateAssetId)
-  if (noPlate.length) issues.push(`没底板：${noPlate.map((s) => s.name).join('、')}`)
+  if (noPlate.length) issues.push(`장면 기준 이미지 없음 ${noPlate.map((s) => s.name).join('、')}`)
   const noBoard = shotsMissingStoryboard(p)
   const noKf = shotsMissingKeyframe(p)
-  if (noBoard.length) issues.push(`${noBoard.length} 镜还没故事看板`)
-  if (noKf.length) issues.push(`${noKf.length} 镜还没关键帧`)
+  if (noBoard.length) issues.push(`${noBoard.length}개 샷에 스토리 개요판이 없습니다.`)
+  if (noKf.length) issues.push(`${noKf.length}개 샷에 키프레임이 없습니다.`)
   const noVid = p.shots.filter((s) => !s.videoAssetId)
-  if (noVid.length) issues.push(`${noVid.length} 镜还没视频`)
+  if (noVid.length) issues.push(`${noVid.length}개 샷에 영상이 없습니다.`)
   const unbound = p.shots.filter((s) => !s.sceneId || !(s.subjectIds && s.subjectIds.length))
-  if (unbound.length) issues.push(`${unbound.length} 镜没绑人物或场景`)
-  if (!issues.length) return '**清单过了一遍**，目前能往下剪。'
-  return `**还有 ${issues.length} 处要补**\n\n${issues.map((s) => `- ${s}`).join('\n')}`
+  if (unbound.length) issues.push(`${unbound.length}개 샷에 캐릭터나 장면이 연결되지 않았습니다.`)
+  if (!issues.length) return '점검을 마쳤습니다. 편집을 계속할 수 있습니다.'
+  return `**보완할 항목 ${issues.length}개**\n\n${issues.map((s) => `- ${s}`).join('\n')}`
 }
 
 const CN_NUM: Record<string, number> = {
@@ -232,7 +232,7 @@ export async function runAgentTurn(
 ): Promise<AgentTurnResult> {
   const project = useProjectStore()
   if (!project.current) {
-    return { reply: '先打开或新建一个项目。', results: [], chips: [] }
+    return { reply: '먼저 프로젝트를 열거나 새로 만드세요.', results: [], chips: [] }
   }
 
   const p0 = project.current
@@ -274,11 +274,11 @@ export async function runAgentTurn(
     if (req) {
       const entry = await rememberMemory(req.content, { kind: req.kind, scope: req.scope })
       if (entry) {
-        onEvent({ kind: 'log', label: `已写入本地记忆（${req.scope === 'global' ? '长期' : '本项目'}）` })
+        onEvent({ kind: 'log', label: `로컬 기억에 저장했습니다(${req.scope === 'global' ? '장기' : '이 프로젝트'}).` })
         return {
-          reply: `记住了：${entry.content}\n${req.scope === 'global' ? '长期有效，之后的所有项目都会带上。' : '只在当前项目里生效。'}`,
+          reply: `기억했습니다. ${entry.content}\n${req.scope === 'global' ? '앞으로 모든 프로젝트에 적용합니다.' : '현재 프로젝트에만 적용합니다.'}`,
           results: [],
-          chips: [{ label: '查看记忆', text: '查看记忆' }]
+          chips: [{ label: '기억 보기', text: '查看记忆' }]
         }
       }
     }
@@ -288,7 +288,7 @@ export async function runAgentTurn(
     if (keyword) {
       const removed = await forgetMemory(keyword)
       return {
-        reply: removed ? `已忘掉：${removed}` : `没有找到和「${keyword}」相关的记忆。`,
+        reply: removed ? `기억을 삭제했습니다. ${removed}` : `‘${keyword}’와 관련된 기억을 찾지 못했습니다.`,
         results: [],
         chips: []
       }
@@ -300,7 +300,7 @@ export async function runAgentTurn(
     return answerQuestion(userText, history, p0, onEvent, options)
   }
   if (intent.kind === 'status') {
-    onEvent({ kind: 'log', label: '正在盘点画布与项目状态' })
+    onEvent({ kind: 'log', label: '캔버스와 프로젝트 상태를 확인하는 중' })
     return { reply: statusNotes(p0), results: [], chips: statusChips(p0) }
   }
   // 纯问答 / 咨询：不动画布，结合记忆与项目上下文直接回答
@@ -312,11 +312,11 @@ export async function runAgentTurn(
     const nodeId = options.selectedNodeId || findGenNodeInText(p0, baseText)
     if (nodeId) {
       const plan0 = {
-        say: '按你说的方向加厚这个节点的提示词，只补画面细节，不动原文格式。',
+        say: '요청한 방향으로 노드 프롬프트의 화면 묘사를 구체화하고 원문 형식을 유지합니다.',
         actions: [{ tool: 'optimize_node_prompt', nodeId, text: userText }]
       }
-      onEvent({ kind: 'plan', label: '计划 1 步：优化节点提示词', plan: buildPlanFromActions(plan0.actions as any, intent.label) })
-      onEvent({ kind: 'log', label: '开始在画布上干活' })
+      onEvent({ kind: 'plan', label: '1단계 계획 — 노드 프롬프트 최적화', plan: buildPlanFromActions(plan0.actions as any, intent.label) })
+      onEvent({ kind: 'log', label: '캔버스 작업을 시작합니다.' })
       const loop0 = await runAgentLoop(plan0.actions, {
         request: userText,
         autonomy: options.autonomy ?? getAgentState().autonomy,
@@ -327,23 +327,23 @@ export async function runAgentTurn(
       if (loop0.stopped) {
         const failed = [...r0].reverse().find((r) => !r.ok)
         return {
-          reply: `提示词优化没成功。${failed ? `\n原因：${failed.detail}` : ''}`,
+          reply: `프롬프트 최적화에 실패했습니다.${failed ? `\n원인 ${failed.detail}` : ''}`,
           results: r0,
-          chips: [{ label: '重试', text: '再优化一次当前节点提示词' }]
+          chips: [{ label: '다시 시도', text: '再优化一次当前节点提示词' }]
         }
       }
       return {
-        reply: r0[0]?.detail || '提示词已加厚，写回节点了。',
+        reply: r0[0]?.detail || '프롬프트를 구체화하고 노드에 저장했습니다.',
         results: r0,
         chips: [
-          { label: '生成这个节点', text: `生成节点 ${nodeId}` },
-          { label: '再厚一点', text: '继续加厚当前节点提示词，画面再具体一点' }
+          { label: '이 노드 생성', text: `生成节点 ${nodeId}` },
+          { label: '더 구체화', text: '继续加厚当前节点提示词，画面再具体一点' }
         ]
       }
     }
     return {
       reply:
-        '先在画布上点选一个图片或视频节点，再告诉我要往哪个方向优化；也可以直接说「新建一个…节点」。',
+        '캔버스에서 이미지나 영상 노드를 선택한 뒤 원하는 최적화 방향을 알려 주세요. ‘새 … 노드를 만들어 줘’라고 요청할 수도 있습니다.',
       results: [],
       chips: statusChips(p0)
     }
@@ -359,7 +359,7 @@ export async function runAgentTurn(
     !isApprovePlayRequest(baseText) &&
     !isNewStoryBrief(baseText, p0)
   ) {
-    onEvent({ kind: 'log', label: '需求不够清楚，先问你几句' })
+    onEvent({ kind: 'log', label: '작업 범위를 확인하는 중' })
     return { reply: clarifyMessage(p0), results: [], chips: clarifyChips(p0) }
   }
 
@@ -379,7 +379,7 @@ export async function runAgentTurn(
   if (isContinueRequest(baseText) && !wantAll(baseText)) {
     plan = continuePlan(p0)
   } else if (getAIMode() === 'real' && !isContinueRequest(baseText)) {
-    onEvent({ kind: 'think', label: '在想怎么做…' })
+    onEvent({ kind: 'think', label: '작업을 계획하는 중…' })
     const memoryText = await memoryContextPrompt()
     const chat = history
       .filter((m) => m.role === 'user' || m.role === 'assistant')
@@ -445,8 +445,8 @@ export async function runAgentTurn(
 
   if (!plan.actions.length) {
     const say = String(plan.say || '').trim()
-    if (!say) throw new Error('模型没有返回可执行的回复')
-    onEvent({ kind: 'log', label: '先等你确认方向' })
+    if (!say) throw new Error('모델이 실행할 수 있는 답변을 반환하지 않았습니다.')
+    onEvent({ kind: 'log', label: '작업 방향 확인을 기다리는 중' })
     if (nodePath) {
       return {
         reply: say,
@@ -465,7 +465,7 @@ export async function runAgentTurn(
   } catch {
     /* 计划卡片生成失败不阻断执行 */
   }
-  onEvent({ kind: 'log', label: '开始在画布上干活' })
+  onEvent({ kind: 'log', label: '캔버스 작업을 시작합니다.' })
   const autonomy = options.autonomy ?? getAgentState().autonomy
   const loop = await runAgentLoop(plan.actions.slice(0, MAX_ACTIONS_PER_TURN), {
     request: userText,
@@ -482,7 +482,7 @@ export async function runAgentTurn(
               },
               {
                 role: 'user',
-                content: `原任务：${userText}\n第 ${attempt} 次恢复。\n失败工具：${error.tool}\n错误：${error.message}\n已完成：${JSON.stringify(completed)}\n剩余：${JSON.stringify(remaining)}\n最新项目：${projectContextPrompt(userText)}`
+                content: `원래 작업 ${userText}\n${attempt}번째 복구 시도입니다.\n실패한 도구 ${error.tool}\n오류 ${error.message}\n완료한 작업 ${JSON.stringify(completed)}\n남은 작업 ${JSON.stringify(remaining)}\n최신 프로젝트 상태 ${projectContextPrompt(userText)}`
               }
             ],
             temperature: 0.1,
@@ -508,7 +508,7 @@ export async function runAgentTurn(
               },
               {
                 role: 'user',
-                content: `原始任务：${userText}\n\n已执行动作：${JSON.stringify(completed)}\n执行结果：${JSON.stringify(observedResults)}\n\n最新画布与项目状态：\n${projectContextPrompt(userText)}`
+                content: `원래 작업 ${userText}\n\n실행한 작업 ${JSON.stringify(completed)}\n실행 결과 ${JSON.stringify(observedResults)}\n\n최신 캔버스와 프로젝트 상태\n${projectContextPrompt(userText)}`
               }
             ],
             temperature: 0.1,
@@ -550,11 +550,11 @@ export async function runAgentTurn(
     const ok = results.filter((result) => result.ok).length
     const failed = [...results].reverse().find((result) => !result.ok)
     return {
-      reply: `已暂停，没有继续污染下游。${ok ? `前面 ${ok} 步已保留。` : ''}\n失败位置：${TOOL_LABEL[failed?.tool || ''] || failed?.tool}\n原因：${failed?.detail || loop.error?.message}`,
+      reply: `후속 작업을 중단했습니다.${ok ? `완료한 ${ok}단계는 보존했습니다.` : ''}\n실패 단계 ${TOOL_LABEL[failed?.tool || ''] || failed?.tool}\n원인 ${failed?.detail || loop.error?.message}`,
       results,
       chips: [
-        { label: '重试失败步骤', text: `重试${TOOL_LABEL[failed?.tool || ''] || '失败步骤'}` },
-        { label: '检查配置', text: '帮我检查当前失败原因' }
+        { label: '실패 단계 다시 시도', text: `重试${TOOL_LABEL[failed?.tool || ''] || '실패 단계'}` },
+        { label: '설정 확인', text: '帮我检查当前失败原因' }
       ]
     }
   }
@@ -562,10 +562,10 @@ export async function runAgentTurn(
   if (nodePath) {
     const fails = results.filter((r) => !r.ok)
     const failLine = fails.length
-      ? `\n失败 ${fails.length} 项：${fails.map((f) => `${TOOL_LABEL[f.tool] || f.tool}：${f.detail}`).join('；')}`
+      ? `\n실패 ${fails.length}건 ${fails.map((f) => `${TOOL_LABEL[f.tool] || f.tool}：${f.detail}`).join('；')}`
       : ''
     return {
-      reply: (loop.finalSay || plan.say || '搞定了，画布已更新。') + failLine,
+      reply: (loop.finalSay || plan.say || '캔버스에 작업 결과를 반영했습니다.') + failLine,
       results,
       chips: statusChips(project.current)
     }
@@ -576,7 +576,7 @@ export async function runAgentTurn(
   return { reply: (loop.finalSay || wrap.reply) + qa, results, chips: wrap.chips }
 }
 
-const NODE_PATH_RULE = `这条需求属于「单个节点」操作。常用的是 create_image_node、create_video_node、connect_nodes、update_node、delete_node、arrange_canvas、check_project、optimize_node_prompt、run_node、focus_node、sync_canvas、remember、forget。除非用户明确要写剧本、拆人物场景分镜或做一整条片子，否则不要动 generate_play、extract_cast 这类流水线工具。用户没点名节点时，优先操作「用户当前选中的节点」。`
+const NODE_PATH_RULE = `이번 요청은 단일 노드 작업입니다. 주로 create_image_node, create_video_node, connect_nodes, update_node, delete_node, arrange_canvas, check_project, optimize_node_prompt, run_node, focus_node, sync_canvas, remember, forget을 사용합니다. 사용자가 대본 작성, 캐릭터·장면·스토리보드 추출, 전체 영상 제작을 명시한 경우에만 generate_play, extract_cast 같은 워크플로 도구를 사용하세요. 사용자가 노드를 지정하지 않으면 현재 선택한 노드를 우선 조작하세요.`
 
 /** 项目里是否已经有流水线产物（剧本 / 人物 / 场景 / 分镜） */
 function hasPipelineData(p: Project | null | undefined): boolean {
@@ -664,11 +664,11 @@ function genNodeNotes(p: Project): string {
   const done = nodes.filter((n) => n.data.outputAssetId).length
   const running = nodes.filter((n) => n.status === 'running' || n.status === 'pending').length
   const failed = nodes.filter((n) => n.status === 'failed' || n.error)
-  const lines = [`**画布节点**：共 ${nodes.length} 个生成节点，${done} 个已有产出`]
-  if (running) lines.push(`- ${running} 个正在生成`)
+  const lines = [`**캔버스 노드** — 생성 노드 ${nodes.length}개 중 ${done}개에 결과가 있습니다.`]
+  if (running) lines.push(`- ${running}개 생성 중`)
   if (failed.length) {
     lines.push(
-      `- ${failed.length} 个失败：${failed
+      `- ${failed.length}개 실패 ${failed
         .slice(0, 3)
         .map((n) => `「${n.data.label || n.id}」${n.error ? `（${n.error.slice(0, 40)}）` : ''}`)
         .join('、')}`
@@ -684,7 +684,7 @@ function statusNotes(p: Project): string {
   const gen = genNodeNotes(p)
   if (gen) parts.push(gen)
   if (!parts.length) {
-    return '**画布还是空的。** 直接在左边说一句话我就开工（例如「写一个修仙短剧，8 个分镜」），也可以在空白处右键手动添加图片 / 视频 / 剧本 / 角色 / 场景 / 分镜节点。'
+    return '**캔버스가 비어 있습니다.** 왼쪽에 ‘선협 판타지 숏드라마를 샷 8개로 써 줘’처럼 요청하세요. 캔버스 빈 곳을 오른쪽 클릭해 이미지, 영상, 대본, 캐릭터, 장면, 스토리보드 노드를 직접 추가할 수도 있습니다.'
   }
   return parts.join('\n\n')
 }
@@ -693,14 +693,14 @@ function statusChips(p: Project | null | undefined): { label: string; text: stri
   const chips: { label: string; text: string }[] = []
   const next = nextPipelineStep(p)
   if (next && (p?.shots.length || p?.script?.content?.trim())) {
-    chips.push({ label: `继续：${next.label}`, text: '继续' })
+    chips.push({ label: `계속 — ${next.label}`, text: '继续' })
   }
   const failed = (p?.canvas?.nodes ?? []).find(
     (n) => (n.type === 'imageGen' || n.type === 'videoGen') && (n.status === 'failed' || n.error)
   )
-  if (failed) chips.push({ label: '重跑失败节点', text: `重新生成节点 ${failed.id}` })
-  chips.push({ label: '帮我画一张图', text: '帮我创建一个图片节点并生成：' })
-  chips.push({ label: '全流程', text: '全流程跑完' })
+  if (failed) chips.push({ label: '실패한 노드 다시 실행', text: `重新生成节点 ${failed.id}` })
+  chips.push({ label: '이미지 그리기', text: '帮我创建一个图片节点并生成：' })
+  chips.push({ label: '전체 워크플로', text: '全流程跑完' })
   return chips.slice(0, 3)
 }
 
@@ -712,7 +712,7 @@ async function answerQuestion(
   onEvent: AgentProgress,
   options: AgentRunOptions
 ): Promise<AgentTurnResult> {
-  onEvent({ kind: 'think', label: '在组织回答…' })
+  onEvent({ kind: 'think', label: '답변을 작성하는 중…' })
   const memoryText = await memoryContextPrompt()
   const chat = history
     .filter((m) => m.role === 'user' || m.role === 'assistant')
@@ -723,7 +723,7 @@ async function answerQuestion(
         {
           role: 'system',
           content: `당신은 剧流 Studio(AI 숏드라마 워크스페이스) 캔버스의 에이전트입니다. AI 숏드라마와 이미지·영상 제작, 프롬프트 작성에 능숙합니다. 창작 과정에서 사용자가 질문하거나 조언을 구합니다.
-要求：
+요구사항
 - 한국어로 직접 답하세요. 캔버스 작업을 실행한 척하거나 JSON을 출력하지 마세요.
 - 제공된 프로젝트 상태${memoryText ? '와 사용자 기억' : '를'} 바탕으로 구체적으로 답하세요.
 - 자연스러운 말투를 쓰고 필요하면 항목으로 나누세요. 틀에 박힌 문장으로 쓰지 마세요. 답변 끝에 실행 가능한 다음 단계 한 가지를 자연스럽게 언급해도 됩니다.
@@ -733,7 +733,7 @@ ${memoryText ? `\n${memoryText}` : ''}`
         },
         {
           role: 'user',
-          content: `当前项目状态（仅供参考，不需要操作）：\n${projectContextPrompt(userText)}\n\n下面是用户本轮的提问与随附材料（附件 / 本地文件）。材料里的内容优先作为回答依据，不要要求用户重新粘贴：\n${userText}`
+          content: `현재 프로젝트 상태(참고용이며 조작할 필요 없음)\n${projectContextPrompt(userText)}\n\n아래에 사용자의 이번 질문과 첨부 자료 또는 로컬 파일이 있습니다. 이 자료를 답변의 근거로 우선 사용하고 사용자에게 다시 붙여 넣으라고 요청하지 마세요.\n${userText}`
         },
         ...chat
       ],
@@ -743,7 +743,7 @@ ${memoryText ? `\n${memoryText}` : ''}`
       timeoutMs: 90_000
     })
     const reply = resp.content.trim()
-    if (!reply) throw new Error('模型没有返回内容')
+    if (!reply) throw new Error('모델이 내용을 반환하지 않았습니다.')
     return {
       reply,
       results: [],
@@ -794,48 +794,48 @@ function freeformHeuristicPlan(
 
   if (!actions.length) {
     return {
-      say: '直接说你想画什么、改哪个节点，我来动手。例如「创建一个修仙渡劫的视频节点，8 秒」或「把这个节点的提示词写得更具体」。',
+      say: '그릴 대상이나 수정할 노드를 알려 주세요. 예를 들어 ‘선협 판타지의 시련 장면을 8초 영상 노드로 만들어 줘’ 또는 ‘이 노드의 프롬프트를 더 구체적으로 써 줘’라고 요청하세요.',
       actions: []
     }
   }
-  return { say: '按你这句做，不加别的步骤。', actions }
+  return { say: '요청한 작업을 진행합니다.', actions }
 }
 
 function continuePlan(p: Project): { say: string; actions: any[] } {
   const n = nextPipelineStep(p)
   if (!n) {
-    return { say: '目前没有下一步了。要改某一镜，直接点画布节点重新生成。', actions: [] }
+    return { say: '남은 단계가 없습니다. 특정 샷을 바꾸려면 캔버스에서 해당 노드를 선택해 다시 생성하세요.', actions: [] }
   }
   if (n.id === 'review') {
     const fake = { ...p, playApproved: true }
     const after = nextPipelineStep(fake)
     return {
-      say: after ? `剧本算你看过了，接着做「${after.label}」。` : '剧本已确认。',
+      say: after ? `대본을 승인하고 ‘${after.label}’ 단계로 진행합니다.` : '대본을 승인했습니다.',
       actions: [{ tool: 'approve_play' }, ...(after?.tools ?? [])]
     }
   }
-  return { say: `继续做「${n.label}」。`, actions: n.tools }
+  return { say: `‘${n.label}’ 단계를 진행합니다.`, actions: n.tools }
 }
 
 function clarifyChips(p: Project | null | undefined): { label: string; text: string }[] {
   if (!p?.script?.content?.trim()) {
     return [
-      { label: '先拆剧本', text: '按我刚说的拆剧本' },
-      { label: '全流程', text: '全流程跑完' }
+      { label: '먼저 대본 나누기', text: '按我刚说的拆剧本' },
+      { label: '전체 워크플로', text: '全流程跑完' }
     ]
   }
   if (!p.shots.length) {
     return [
-      { label: '拆剧本', text: '拆剧本' },
-      { label: '全流程', text: '全流程跑完' }
+      { label: '대본 나누기', text: '拆剧本' },
+      { label: '전체 워크플로', text: '全流程跑完' }
     ]
   }
   if (needsPlayReview(p)) return reviewChips()
   const n = nextPipelineStep(p)
   if (n) {
     return [
-      { label: `继续：${n.label}`, text: '继续' },
-      { label: '全流程', text: '全流程跑完' }
+      { label: `계속 — ${n.label}`, text: '继续' },
+      { label: '전체 워크플로', text: '全流程跑完' }
     ]
   }
   return []
@@ -843,18 +843,18 @@ function clarifyChips(p: Project | null | undefined): { label: string; text: str
 
 function reviewChips() {
   return [
-    { label: '确认通过', text: '确认通过' },
-    { label: '继续往下', text: '继续' },
-    { label: '全流程', text: '全流程跑完' }
+    { label: '승인', text: '确认通过' },
+    { label: '계속 진행', text: '继续' },
+    { label: '전체 워크플로', text: '全流程跑完' }
   ]
 }
 
 function nextChips(next: PipelineStep | null): { label: string; text: string }[] {
   if (!next) return []
   return [
-    { label: `继续：${next.label}`, text: '继续' },
-    { label: '先看看', text: '先看看' },
-    { label: '全流程', text: '全流程跑完' }
+    { label: `계속 — ${next.label}`, text: '继续' },
+    { label: '먼저 확인', text: '先看看' },
+    { label: '전체 워크플로', text: '全流程跑完' }
   ]
 }
 
@@ -866,7 +866,7 @@ function wrapUpReply(
   const p = useProjectStore().current
   const fail = results.filter((r) => !r.ok)
   const failLine = fail.length
-    ? `\n\n**失败 ${fail.length} 项**\n${fail
+    ? `\n\n**실패 ${fail.length}건**\n${fail
         .map((f) => `- ${TOOL_LABEL[f.tool] || f.tool}：${f.detail}`)
         .join('\n')}`
     : ''
@@ -887,8 +887,8 @@ function wrapUpReply(
   if (all) {
     const next = nextPipelineStep(p)
     return {
-      reply: `**全流程跑完了。**${failLine || '\n\n画布上的节点都已更新。'}${
-        next ? `\n\n还缺「${next.label}」，回「继续」我再补。` : ''
+      reply: `**전체 워크플로 실행을 마쳤습니다.**${failLine || '\n\n캔버스의 노드를 모두 갱신했습니다.'}${
+        next ? `\n\n‘${next.label}’ 단계가 남았습니다. ‘계속’이라고 하면 진행합니다.` : ''
       }`,
       chips: nextChips(next)
     }
@@ -897,37 +897,37 @@ function wrapUpReply(
     const hasShots = Boolean(p?.shots.length)
     return {
       reply: hasShots
-        ? `**已顺着当前剧后续写**，原场次保留。\n\n- 新场还没进画布节点\n- 到「分镜关键帧」分组点重新提取，或回「重新提取分镜」${failLine}`
-        : `**已顺着当前剧后续写**，原场次保留。\n\n- 看完可再改字\n- 回「继续」先拆人物（不会同时拆场景和分镜）${failLine}`,
+        ? `**기존 장면을 보존하고 대본을 이어 썼습니다.**\n\n- 새 장면의 캔버스 노드가 아직 없습니다.\n- ‘스토리보드 키프레임’ 그룹에서 ‘다시 추출’을 누르거나 ‘스토리보드를 다시 추출해 줘’라고 요청하세요.${failLine}`
+        : `**기존 장면을 보존하고 대본을 이어 썼습니다.**\n\n- 검토하고 문구를 수정할 수 있습니다.\n- ‘계속’이라고 하면 먼저 캐릭터를 추출합니다. 장면과 스토리보드는 각각 다음 단계에서 추출합니다.${failLine}`,
       chips: hasShots
         ? [
-            { label: '重新提取分镜', text: '重新提取分镜' },
-            { label: '再续写', text: '续写剧本' },
-            { label: '先看看', text: '先看看' }
+            { label: '스토리보드 다시 추출', text: '重新提取分镜' },
+            { label: '더 이어 쓰기', text: '续写剧本' },
+            { label: '먼저 확인', text: '先看看' }
           ]
         : [
-            { label: '先拆人物', text: '继续' },
-            { label: '再续写', text: '续写剧本' },
-            { label: '先看看', text: '先看看' }
+            { label: '먼저 캐릭터 추출', text: '继续' },
+            { label: '더 이어 쓰기', text: '续写剧本' },
+            { label: '먼저 확인', text: '先看看' }
           ]
     }
   }
   if (didPlay && !(p?.shots.length)) {
     return {
-      reply: `**完整剧本已经写到画布左侧**（还没拆节点）。
+      reply: `**캔버스 왼쪽에 전체 대본을 작성했습니다.** 노드 추출은 아직 시작하지 않았습니다.
 
-先确认三件事：
+세 가지를 먼저 확인하세요.
 
-- 背景对不对
-- 人物对不对
-- 环境对不对
+- 이야기 배경
+- 캐릭터
+- 환경
 
-确认后回「继续」只拆人物；场景和分镜要再各走一步。说「全流程」会自动跑完。${failLine}`,
+확인 후 ‘계속’이라고 하면 캐릭터를 추출합니다. 장면과 스토리보드는 각각 다음 단계에서 추출합니다. ‘전체 워크플로’를 요청하면 모든 단계를 실행합니다.${failLine}`,
       chips: [
-        { label: '先拆人物', text: '继续' },
-        { label: '续写', text: '续写剧本' },
-        { label: '先看看', text: '先看看' },
-        { label: '全流程', text: '全流程跑完' }
+        { label: '먼저 캐릭터 추출', text: '继续' },
+        { label: '이어 쓰기', text: '续写剧本' },
+        { label: '먼저 확인', text: '先看看' },
+        { label: '전체 워크플로', text: '全流程跑完' }
       ]
     }
   }
@@ -937,68 +937,68 @@ function wrapUpReply(
     const sceneCount = p?.scenes?.length ?? 0
     if (!n && !sceneCount) {
       return {
-        reply: `**第 1 步完成**：已提炼并保存 ${subjectCount} 个角色。没有同时运行场景和分镜。
+        reply: `**1단계 완료** — 캐릭터 ${subjectCount}개를 추출하고 저장했습니다. 장면과 스토리보드는 다음 단계에서 추출합니다.
 
-- 确认人物没问题后，回「继续」再单独提炼场景${failLine}`,
+- 캐릭터를 확인한 뒤 ‘계속’이라고 하면 장면을 추출합니다.${failLine}`,
         chips: [
-          { label: '继续提炼场景', text: '继续' },
-          { label: '先检查人物', text: '先看看人物' }
+          { label: '장면 추출 계속', text: '继续' },
+          { label: '먼저 캐릭터 확인', text: '先看看人物' }
         ]
       }
     }
     if (!n) {
       return {
-        reply: `**第 2 步完成**：已保留 ${subjectCount} 个角色，并保存 ${sceneCount} 个场景。
+        reply: `**2단계 완료** — 캐릭터 ${subjectCount}개를 보존하고 장면 ${sceneCount}개를 저장했습니다.
 
-- 确认场景没问题后，回「继续」再单独拆分镜${failLine}`,
+- 장면을 확인한 뒤 ‘계속’이라고 하면 스토리보드를 추출합니다.${failLine}`,
         chips: [
-          { label: '继续拆分镜', text: '继续' },
-          { label: '先检查场景', text: '先看看场景' }
+          { label: '스토리보드 추출 계속', text: '继续' },
+          { label: '먼저 장면 확인', text: '先看看场景' }
         ]
       }
     }
     return {
-      reply: `**第 3 步完成**：已拆出 ${n} 个分镜，并与现有角色和场景绑定。
+      reply: `**3단계 완료** — 스토리보드 샷 ${n}개를 추출해 기존 캐릭터와 장면을 연결했습니다.
 
-- 先去画布看一遍
-- 看完回「继续」做人设和场景；说「全流程」会自动跑完${failLine}`,
+- 캔버스에서 결과를 확인하세요.
+- 확인 뒤 ‘계속’이라고 하면 캐릭터 설정과 장면 이미지를 생성합니다. ‘전체 워크플로’를 요청하면 모든 단계를 실행합니다.${failLine}`,
       chips: reviewChips()
     }
   }
   if (didApprove && !didCast && !didImg) {
     const next = nextPipelineStep(p)
     return {
-      reply: continueQuestion(next, '剧本已确认。\n') + failLine,
+      reply: continueQuestion(next, '대본을 승인했습니다.\n') + failLine,
       chips: nextChips(next)
     }
   }
   if (didCast && !didImg) {
     const next = nextPipelineStep(p)
     return {
-      reply: continueQuestion(next, '人设和场景已经出在画布上了。\n') + failLine,
+      reply: continueQuestion(next, '캔버스에 캐릭터 설정 이미지와 장면 이미지를 생성했습니다.\n') + failLine,
       chips: nextChips(next)
     }
   }
   if (didImg && !didVid) {
     const next = nextPipelineStep(p)
     return {
-      reply: continueQuestion(next, '故事看板已经铺到画布上了。\n') + failLine,
+      reply: continueQuestion(next, '캔버스에 스토리 개요판을 배치했습니다.\n') + failLine,
       chips: nextChips(next)
     }
   }
   if (didVid && !didAud) {
     const next = nextPipelineStep(p)
     return {
-      reply: continueQuestion(next, '分镜视频已经生成。\n') + failLine,
+      reply: continueQuestion(next, '스토리보드 샷 영상을 생성했습니다.\n') + failLine,
       chips: nextChips(next)
     }
   }
   if (didAud) {
-    return { reply: `口播好了。可以点「合成视频」节点，结果会显示在视频预览里。${failLine}`, chips: [] }
+    return { reply: `내레이션을 생성했습니다. ‘영상 합성’ 노드를 누르면 영상 미리보기에 결과가 표시됩니다.${failLine}`, chips: [] }
   }
   const next = nextPipelineStep(p)
   return {
-    reply: (fallbackSay || '这一步做完了。') + failLine + (next ? `\n${continueQuestion(next, '')}` : ''),
+    reply: (fallbackSay || '이 단계를 완료했습니다.') + failLine + (next ? `\n${continueQuestion(next, '')}` : ''),
     chips: nextChips(next)
   }
 }
@@ -1264,21 +1264,21 @@ function heuristicPlan(userText: string): { say: string; actions: any[] } {
       }
     }
     return {
-      say: '你想让我做哪一步？可以说：写剧本、续写、提炼节点、确认通过、出人设、第1镜配图。说「全流程」才会整条跑。',
+      say: '어떤 단계를 진행할까요? 대본 작성, 이어 쓰기, 노드 추출, 검수 승인, 캐릭터 설정 이미지 또는 1번 샷 이미지를 요청할 수 있습니다. 전체 제작을 진행하려면 ‘전체 워크플로’를 요청하세요.',
       actions: []
     }
   }
   if (newStory && !all) {
-    return { say: '按你这轮说的新故事重写剧本，不再沿用旧稿。', actions }
+    return { say: '이번에 알려 준 새 이야기로 대본을 작성합니다.', actions }
   }
   if (askedExtract && !all) {
-    return { say: '按完整剧本提炼人物、场景、分镜节点。', actions }
+    return { say: '전체 대본의 캐릭터, 장면, 스토리보드 노드를 추출합니다.', actions }
   }
   if (askedContinuePlay && !all) {
-    return { say: '顺着当前剧本往后加场，已有场次和台词不动。', actions }
+    return { say: '기존 대본의 장면과 대사를 보존하고 이후 장면을 덧붙입니다.', actions }
   }
   if ((askedPlay || askedBoard || looksLikeBrief) && !all) {
-    return { say: '先写完整剧本，还不拆节点。写完看左侧，回「继续」再提炼。', actions }
+    return { say: '먼저 전체 대본을 작성합니다. 왼쪽에서 확인한 뒤 ‘계속’이라고 하면 노드 추출을 진행합니다.', actions }
   }
-  return { say: '按你这句做，不加别的步骤。', actions }
+  return { say: '요청한 작업을 진행합니다.', actions }
 }
