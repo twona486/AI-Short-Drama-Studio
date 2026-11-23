@@ -196,7 +196,7 @@ function shotVideoAudio(shotId: string, profileId?: string) {
   return docGenerateAudio(profileId || node?.data.videoProfileId, node?.data.generateAudio)
 }
 
-/** 剧本正文指纹：断点标记只在同一段剧本上复用，文本一变就作废。 */
+/** 대본이 바뀌면 이전에 저장한 재개 지점을 무효화한다. */
 function scriptPlayKey(content: string): string {
   const text = String(content || '')
   let hash = 5381
@@ -673,7 +673,7 @@ function refreshShot(shotId: string): Shot {
   return shot
 }
 
-/** 本镜出场人物 + 所在场景的参考图，用来合成首尾帧。看板模式再带上故事看板。 */
+/** 캐릭터와 장면의 참조 이미지를 시작·끝 프레임에 사용한다. 개요판 모드에서는 개요판도 제공한다. */
 async function collectFrameRefBlobs(
   shot: Shot,
   project: Project,
@@ -681,8 +681,8 @@ async function collectFrameRefBlobs(
 ): Promise<{ blobs: Blob[]; labels: string[] }> {
   const assets = useAssetsStore()
   const library = useLibraryStore()
-  // 帧图要的是「这一格画面长什么样」，所以用完整参考包（四视图 + 道具 + 场景底板），
-  // 不用四宫格关键帧 —— 那是网格版式，拿来当首尾帧会把宫格画进去。
+  // 프레임을 만들 때는 캐릭터 4면 설정 이미지, 소품, 장면 기준 이미지를 모두 참고한다.
+  // 4분할 키프레임은 격자가 프레임에 들어갈 수 있어 사용하지 않는다.
   const bundle = collectShotRefIds(shot, project)
   const blobs: Blob[] = []
   const labels: string[] = []
@@ -698,7 +698,7 @@ async function collectFrameRefBlobs(
   return { blobs, labels }
 }
 
-/** 画一张帧图并落到资源库 */
+/** 프레임을 생성해 리소스 라이브러리에 저장한다. */
 async function renderShotFrame(
   shot: Shot,
   which: 'start' | 'end',
@@ -718,7 +718,7 @@ async function renderShotFrame(
   onProgress?.(`이 샷의 ${word}을 생성하는 중(캐릭터·장면 참조 이미지 ${blobs.length}장)…`)
   const fail = (e: any) => {
     const reason = friendlyAiError(e) || e?.message || translate('canvasRunner.unknownCause')
-    // 把失败定位到「第几镜的哪一张帧」，否则节点上只显示一句笼统的失败
+    // 실패한 샷 번호와 프레임을 오류에 포함한다.
     return new Error(translate('canvasRunner.frameFailed', { number: shot.index + 1, frame: word, reason: reason }))
   }
   let result
@@ -758,9 +758,9 @@ async function renderShotFrame(
 }
 
 /**
- * 首尾帧：用本镜的人物 + 场景，专门合成「开始这一帧」和「结束这一帧」。
- * 结束帧把刚画好的起始帧也当参考图，保证同一镜内脸、服装、机位、光线一致；
- * 起始帧则把上一镜的结束帧带上，让镜与镜之间接着走。
+ * 샷의 캐릭터와 장면으로 시작·끝 프레임을 각각 생성한다.
+ * 끝 프레임에는 시작 프레임을 참고해 외모, 의상, 카메라 위치와 조명을 유지한다.
+ * 시작 프레임에는 이전 샷의 끝 프레임을 제공해 연속성을 유지한다.
  */
 export async function generateShotFramePair(
   shot: Shot,
@@ -776,9 +776,9 @@ export async function generateShotFramePair(
     project.updateShot(shot.id, { subjectIds: rebound })
     shot = refreshShot(shot.id)
   }
-  // 补依赖只为了让帧图更准，不是画帧的前提：哪一张没补上都只记一笔，照常画帧。
-  // 以前这里一失败整对帧就没了，界面上表现为「点了生成、什么都没出来」。
-  // 首尾帧镜头不补故事看板——视频吃的就是这两张帧，看板在这条链路里是多余的。
+  // 참조 이미지를 보완하지 못해도 프레임 생성을 계속한다.
+  // 참조 이미지 오류로 두 프레임의 생성이 모두 중단되는 일을 방지한다.
+  // 시작·끝 프레임을 쓰는 샷에는 별도의 스토리 개요판을 생성하지 않는다.
   try {
     if (videoRequiresStoryboard(project.current) && !shotUsesFrames(shot, project.current) && !shot.boardAssetId) {
       await generateShotBoard(shot, onProgress, signal)
@@ -803,7 +803,7 @@ export async function generateShotFramePair(
   }
   const { blobs, labels } = await collectFrameRefBlobs(shot, project.current, onProgress)
 
-  // 起始帧：带上上一镜的结束帧，衔接从上一镜的画面接着走
+  // 이전 샷의 끝 프레임에서 현재 샷의 시작 프레임으로 연결한다.
   const ordered = [...project.current.shots].sort((a, b) => a.index - b.index)
   const pos = ordered.findIndex((item) => item.id === shot.id)
   const prevShot = pos > 0 ? ordered[pos - 1] : undefined
@@ -822,7 +822,7 @@ export async function generateShotFramePair(
   shot = refreshShot(shot.id)
   await project.save()
 
-  // 结束帧：把刚画好的起始帧放进去，锁住同一镜的人物、机位和光线
+  // 시작 프레임을 참고해 끝 프레임의 인물, 카메라와 조명을 유지한다.
   const startBlob = await assets.getBlob(startAsset.id)
   const endBlobs = startBlob ? [...blobs, startBlob] : [...blobs]
   const endLabels = [
@@ -839,7 +839,7 @@ export async function generateShotFramePair(
   return { first: startAsset, last: endAsset }
 }
 
-/** 只重画一张帧（起始帧或结束帧） */
+/** 시작 또는 끝 프레임 하나만 다시 생성한다. */
 export async function regenerateShotFrame(
   shot: Shot,
   which: 'start' | 'end',
@@ -901,7 +901,7 @@ async function ensureShotVideoRefs(shot: Shot, onProgress?: (msg: string) => voi
     }
   }
   shot = refreshShot(shot.id)
-  // 走首尾帧的镜头视频直接吃起始帧/结束帧，出片前不再补关键帧/看板
+  // 시작·끝 프레임을 쓰는 영상은 해당 두 이미지로 생성한다.
   const stillMode = stillModeForShot(shot, project.current)
   if (!shotUsesFrames(shot, project.current) && stillMode === 'storyboard' && !shot.boardAssetId) {
     onProgress?.('이 샷의 스토리 개요판을 먼저 생성하는 중…')
@@ -914,8 +914,8 @@ async function ensureShotVideoRefs(shot: Shot, onProgress?: (msg: string) => voi
 }
 
 /**
- * 智能口播单镜重做：只允许项目上传的人物图作为唯一视觉参考。
- * 不能走电影分镜的“人设图 + 场景图 + 故事看板”收集器，否则会丢掉原人物并随机造人。
+ * 스마트 내레이션 샷은 프로젝트에 업로드한 인물 이미지만 참조한다.
+ * 영화 스토리보드 참조를 함께 넣으면 원래 인물의 외형이 달라질 수 있다.
  */
 async function regenerateDigitalHumanShot(
   shot: Shot,
@@ -1045,7 +1045,7 @@ async function loadRefImageBlob(id: ID, label: string): Promise<Blob> {
   return blob
 }
 
-/** 软读取参考图：图丢了/读不出来就当没有，不抛错。用于「有就用、没有就降级」的场景。 */
+/** 선택 참조 이미지를 읽지 못하면 오류 없이 이미지를 생략한다. */
 async function tryLoadRefImageBlob(id: ID): Promise<Blob | undefined> {
   const assets = useAssetsStore()
   const library = useLibraryStore()
@@ -1065,7 +1065,7 @@ function canvasVideoNodeForShot(shot: Shot) {
 function canvasVideoModelForShot(shot: Shot): VideoGenModel {
   const nodeModel = canvasVideoNodeForShot(shot)?.data.videoModel
   if (nodeModel) return normalizeVideoGenModel(nodeModel)
-  // 节点没单独选过时，跟「创作偏好」里选的默认视频模型走
+  // 노드에서 모델을 따로 고르지 않았으면 기본 영상 모델을 쓴다.
   const preferred = useSettingsStore().config.defaultVideoModel
   if (preferred) return normalizeVideoGenModel(preferred)
   return normalizeVideoGenModel(undefined)
@@ -1099,15 +1099,15 @@ function shotUsesFl2va(shot: Shot, videoModel: VideoGenModel): boolean {
 }
 
 /**
- * 项目级「首尾帧链」是否开启。
- * 这个模式下第 N 镜的首帧来自第 N-1 镜视频的末帧，所以镜头之间必须串行：
- * 并发提交时上一镜还没出片，首帧只能落回本镜配图，连续性直接断掉。
+ * 프로젝트에서 시작·끝 프레임 연결 모드를 켰는지 확인한다.
+ * 다음 샷의 시작 프레임에 이전 영상의 끝 프레임을 쓰므로 순차 실행한다.
+ * 동시에 생성하면 이전 샷이 준비되지 않아 현재 샷의 참조 이미지로 대체된다.
  */
 export function isFl2vaChainActive(project?: { settings?: { h3ShotChainMode?: 'auto' | 'fl2va' } } | null): boolean {
   return (project?.settings?.h3ShotChainMode || 'auto') === 'fl2va'
 }
 
-/** 首尾帧链：本镜出片成功后，把末帧固化成下一镜的首帧（不覆盖用户手动指定的首帧）。 */
+/** 현재 영상이 생성되면 끝 프레임을 다음 샷의 시작 프레임으로 저장한다. 수동 선택은 유지한다. */
 async function chainLastFrameToNextShot(
   shot: Shot,
   videoAssetId: ID,
@@ -1120,7 +1120,7 @@ async function chainLastFrameToNextShot(
   const ordered = [...p.shots].sort((a, b) => a.index - b.index)
   const next = ordered.find((s) => s.index === shot.index + 1)
   if (!next) return
-  // 用户自己挑过的首帧不动；上一次自动固化的末帧已经过期（本镜重跑过），要换掉
+  // 수동 시작 프레임은 유지한다. 현재 샷을 다시 만들면 이전 자동 프레임을 교체한다.
   const existing = next.firstFrameAssetId
   if (existing) {
     const meta = assets.getMeta(existing)
@@ -1142,12 +1142,12 @@ async function chainLastFrameToNextShot(
     await project.save()
     onProgress?.(`${shot.index + 1}번 샷의 끝 프레임을 ${next.index + 1}번 샷의 시작 프레임으로 설정했습니다.`)
   } catch (e: any) {
-    // 抽帧失败不影响本镜结果，下一镜仍会实时从上一镜视频里截
+    // 프레임 추출 실패는 현재 영상에 영향을 주지 않는다. 다음 샷에서 이전 영상을 다시 읽을 수 있다.
     onProgress?.(`끝 프레임을 저장하지 못했습니다. 다음 샷 영상을 생성할 때 추출합니다. ${e?.message || e}`)
   }
 }
 
-/** 把画布节点按镜号排序，保证首尾帧链从第一镜开始依次推进 */
+/** 프레임 연결을 위해 캔버스 노드를 샷 번호순으로 정렬한다. */
 function sortNodeIdsByShotIndex(p: Project, ids: string[]): string[] {
   const indexByShot = new Map(p.shots.map((s) => [s.id, s.index]))
   const rank = (id: string) => {
@@ -1159,7 +1159,7 @@ function sortNodeIdsByShotIndex(p: Project, ids: string[]): string[] {
   return [...ids].sort((a, b) => rank(a) - rank(b))
 }
 
-/** 这张图还被别处用着吗？决定「重截尾帧」时旧图能不能顺手清掉。 */
+/** 끝 프레임을 다시 추출할 때 기존 이미지가 다른 곳에서 쓰이는지 확인한다. */
 function assetStillInUse(p: Project, assetId: ID): boolean {
   for (const n of p.canvas?.nodes ?? []) {
     if (n.data.outputAssetId === assetId) return true
@@ -1180,9 +1180,9 @@ function assetStillInUse(p: Project, assetId: ID): boolean {
 }
 
 /**
- * 截取视频最后一帧，在视频节点旁边落一个图片节点。
- * 这张图可以当下一段的首帧、当参考图继续生图，也可以单独下载再加工。
- * 同一个视频重复截取时只刷新那一个节点，不会堆出一串重复节点。
+ * 영상의 끝 프레임을 추출해 영상 노드 옆에 이미지 노드를 배치한다.
+ * 다음 영상의 시작 프레임이나 참조 이미지로 쓰거나 따로 다운로드할 수 있다.
+ * 같은 영상에서 다시 추출하면 기존 이미지 노드만 갱신한다.
  */
 export async function grabVideoLastFrameNode(
   nodeId: string,
@@ -1220,8 +1220,8 @@ export async function grabVideoLastFrameNode(
       await assets.remove(old).catch(() => undefined)
     }
   } else {
-    // 落在自由创作区最右侧，纵向跟这个视频对齐——一眼看出是哪一镜截出来的，
-    // 又不会压到右边的口播/合成分组上。
+    // 자유 작업 영역 오른쪽에서 원본 영상과 같은 높이에 배치한다.
+    // 오른쪽의 내레이션 및 합성 그룹과 겹치지 않게 한다.
     const abs = absoluteCanvasPosition(p.canvas.nodes, node)
     const groups = p.canvas.nodes.filter((n) => n.type === 'groupFrame')
     const right = groups.length
@@ -1300,18 +1300,18 @@ export async function generateShotVideo(shot: Shot, onProgress?: (msg: string) =
     videoModel !== 'wan-prime' &&
     (project.current.settings.h3ShotChainMode || 'auto') === 'fl2va'
   const perShotFl2va = shotUsesFl2va(shot, videoModel)
-  // 链模式凑不齐首尾帧时降级出片，但首帧（上一镜末帧）仍然要带进常规流程，
-  // 否则「首尾帧链」一降级就断成互不相干的镜头。
+  // 프레임 연결에 필요한 두 장이 없으면 일반 영상 생성에 확보한 시작 프레임을 전달한다.
+  // 일반 경로에서도 이전 샷과 현재 샷의 연결을 유지한다.
   let chainFirstBlob: Blob | undefined
   if (perShotFl2va || chainFl2va) {
     const ordered = [...project.current.shots].sort((a, b) => a.index - b.index)
-    // 按真实位置找前后镜与首尾，别拿 index 硬算：删过镜头后 index 可能不连续。
+    // 샷 삭제로 번호가 연속적이지 않을 수 있어 배열 위치로 앞뒤 샷을 찾는다.
     const pos = ordered.findIndex((item) => item.id === shot.id)
     const prevShot = pos > 0 ? ordered[pos - 1] : undefined
     const nextShot = pos >= 0 && pos + 1 < ordered.length ? ordered[pos + 1] : undefined
     const isFirstShot = pos === 0
-    // 首帧优先级：手动选的首帧 > 上一镜视频末帧（链模式，保证镜头连续） > 本镜配图
-    // 读图一律用软读取：图丢了只当没有这张图，不能让「资源缺失」变成整条链路的阻断。
+    // 시작 프레임은 수동 선택, 이전 영상의 끝 프레임, 현재 샷 이미지 순으로 고른다.
+    // 참조 파일을 읽지 못하면 해당 이미지만 생략한다.
     let firstBlob: Blob | undefined
     if (shot.firstFrameAssetId) {
       firstBlob = await tryLoadRefImageBlob(shot.firstFrameAssetId)
@@ -1330,9 +1330,9 @@ export async function generateShotVideo(shot: Shot, onProgress?: (msg: string) =
       firstBlob = await tryLoadRefImageBlob(shot.imageAssetId)
     }
     if (!firstBlob) {
-      // 手动模式是用户在这一镜上明说的意图，缺首帧必须拦住并说清怎么解决。
-      // 项目级「首尾帧链」只是出片增强：缺帧就安静退回常规出片，
-      // 绝不能因为没有首帧就把整个项目锁成「一个视频都出不了」。
+      // 현재 샷에 수동으로 프레임 모드를 지정했으면 필수 시작 프레임이 없을 때 안내한다.
+      // 프로젝트 전체의 프레임 연결 설정에서는 프레임이 부족하면 일반 방식으로 생성한다.
+      // 프레임 누락으로 전체 프로젝트의 영상 생성이 막히지 않게 한다.
       if (perShotFl2va) {
         throw new Error(
           '이 샷에 시작·끝 프레임 모드를 직접 켰지만 시작 프레임이 없습니다. 노드에서 시작 프레임을 선택하거나 생성 모드를 ‘참조 이미지’로 바꾸세요.'
@@ -1344,13 +1344,13 @@ export async function generateShotVideo(shot: Shot, onProgress?: (msg: string) =
           : '이전 샷 영상과 현재 샷 이미지가 모두 없어 시작 프레임을 가져올 수 없습니다. 일반 방식으로 영상을 생성합니다.'
       )
     }
-    // 尾帧优先级：手动选的尾帧 > 下一镜配图（链模式，给下一镜留衔接落点）
+    // 끝 프레임은 수동 선택을 우선하고 프레임 연결 모드에서는 다음 샷 이미지도 쓸 수 있다.
     let lastBlob: Blob | undefined
     if (shot.lastFrameAssetId) {
       lastBlob = await tryLoadRefImageBlob(shot.lastFrameAssetId)
     }
     if (!lastBlob && chainFl2va) {
-      // 下一镜的配图、或下一镜已经被链固化过的首帧，都能当作本镜尾帧的落点
+      // 다음 샷 이미지나 이미 연결한 다음 샷의 시작 프레임을 끝 프레임으로 쓸 수 있다.
       const tailId = nextShot?.imageAssetId || nextShot?.firstFrameAssetId
       if (tailId) lastBlob = await tryLoadRefImageBlob(tailId)
     }
@@ -1426,7 +1426,7 @@ export async function generateShotVideo(shot: Shot, onProgress?: (msg: string) =
       if (chainFl2va) await chainLastFrameToNextShot(shot, asset.id, onProgress)
       return asset
     }
-    // 链模式这里没走成首尾帧：把已经拿到的首帧留给常规流程，别让衔接断掉
+    // 프레임 연결에 실패해도 확보한 시작 프레임을 일반 생성에 전달한다.
     if (chainFl2va && firstBlob) chainFirstBlob = firstBlob
   }
   shot = await ensureShotVideoRefs(shot, onProgress, signal)
@@ -1435,7 +1435,7 @@ export async function generateShotVideo(shot: Shot, onProgress?: (msg: string) =
   const allEntries = collectShotVideoEntries(shot, project.current)
   let packed = packVideoRefEntries(allEntries)
   if (chainFirstBlob) {
-    // 把上一镜末帧固化成一张参考图并排在最前，常规出片也从它起手
+    // 이전 영상의 끝 프레임을 저장해 일반 생성에서도 첫 번째 참조 이미지로 사용한다.
     try {
       const chained = await assets.add(chainFirstBlob, 'image', 'ai-generated', {
         filename: `shot${shot.index + 1}_chainstart_${Date.now().toString(36)}`,
@@ -1453,7 +1453,7 @@ export async function generateShotVideo(shot: Shot, onProgress?: (msg: string) =
       ]
       onProgress?.('이전 샷의 끝 프레임을 첫 번째 참조 이미지로 사용해 연속성을 유지합니다.')
     } catch {
-      // 固化失败就算了，常规流程照常出片
+      // 끝 프레임 저장에 실패해도 일반 생성은 계속한다.
     }
   }
   if (stillMode === 'keyframe' && !packed.some((entry) => entry.kind === 'keyframe') && shot.imageAssetId) {
@@ -1588,7 +1588,7 @@ export async function generateShotVideo(shot: Shot, onProgress?: (msg: string) =
   return asset
 }
 
-/** 按本镜场记和章节剧本，用导演口吻重写视频内容表现。 */
+/** 현재 샷의 현장 기록과 챕터 대본을 바탕으로 영상 연출을 다시 작성한다. */
 export async function rewriteShotPerformance(shot: Shot, signal?: AbortSignal): Promise<string> {
   const project = useProjectStore()
   if (!project.current) throw new Error('열려 있는 프로젝트가 없습니다.')
@@ -1611,7 +1611,7 @@ export async function rewriteShotPerformance(shot: Shot, signal?: AbortSignal): 
   return optimizeShotVideoPrompt({ ...shot, videoPrompt: performance }, signal)
 }
 
-/** 优化提示词只交原文，只要模型返回的正文。 */
+/** 프롬프트 최적화에 원문을 보내고 응답에서 본문만 사용한다. */
 async function rewritePromptText(input: {
   source: string
   pictures?: string
@@ -1644,7 +1644,7 @@ When references are supplied, identify the character in each numbered image at t
   return text
 }
 
-/** 把节点上现有的提示词交给语言模型，直接拿回正文。 */
+/** 노드에 저장된 프롬프트를 모델로 보내고 본문을 반환한다. */
 export async function optimizeShotVideoPrompt(shot: Shot, signal?: AbortSignal): Promise<string> {
   const project = useProjectStore()
   if (!project.current) throw new Error('열려 있는 프로젝트가 없습니다.')
@@ -1666,8 +1666,8 @@ export async function optimizeShotVideoPrompt(shot: Shot, signal?: AbortSignal):
 }
 
 /**
- * 本镜说话角色的音色描述。人物卡上的 voicePrompt 优先（用户改了音色立刻生效），
- * 卡上没有时退回拆分镜时绑定的 shot.speakerVoice。生成视频一定带上它。
+ * 이 샷의 화자 음색은 캐릭터 카드에 저장한 최신 voicePrompt를 우선한다.
+ * 카드에 설명이 없으면 shot.speakerVoice를 사용해 영상 생성에 전달한다.
  */
 function resolveShotSpeakerVoice(shot: Shot, p: Project): string | undefined {
   const fromCard = speakerSubject(shot, p)?.voicePrompt?.trim()
@@ -1675,7 +1675,7 @@ function resolveShotSpeakerVoice(shot: Shot, p: Project): string | undefined {
   return shot.speakerVoice?.trim() || undefined
 }
 
-/** 口播「名字：台词」里的说话人 → 匹配角色卡（有语音设置的角色） */
+/** 내레이션의 화자 이름을 음성 설정이 있는 캐릭터 카드와 연결한다. */
 function speakerSubject(shot: Shot, p: Project): Subject | undefined {
   const speaker = (shot.voiceover || '').match(/^([^：:\n]{1,12})[：:]/)?.[1]?.trim()
   if (!speaker) return undefined
@@ -1700,7 +1700,7 @@ export async function generateShotAudio(shot: Shot, onProgress?: (msg: string) =
   const speaker = speakerSubject(shot, p)
   let blob: Blob
   if (speaker?.voiceRefAssetId || speaker?.clonedVoiceId) {
-    // 角色卡带了参考音频：走声音复刻（百炼 Qwen3-TTS-VC），首次自动复刻并回填音色 ID
+    // 참조 오디오가 있으면 Bailian Qwen3-TTS-VC로 처음 한 번 음성을 복제하고 음색 ID를 저장한다.
     let voiceId = speaker.clonedVoiceId
     let voiceModel = speaker.clonedVoiceModel || 'qwen3-tts-vc-2026-01-22'
     if (!voiceId) {
@@ -1749,8 +1749,8 @@ export async function generateShotAudio(shot: Shot, onProgress?: (msg: string) =
 }
 
 /**
- * 把刚写好的剧本存成一份本地 Markdown，并登记进资源库的「剧本」。
- * 归档失败不能影响生成流程，所以这里只提示不抛错。
+ * 작성한 대본을 로컬 Markdown으로 저장하고 리소스 라이브러리에 등록한다.
+ * 보관에 실패하면 알림만 표시하고 생성 흐름을 유지한다.
  */
 export async function archivePlayToScriptLibrary(
   project: Project,
@@ -1786,7 +1786,7 @@ export async function runGeneratePlay(
   if (continueMode && !isPlayReady(project.current?.script)) {
     throw new Error('전체 대본을 먼저 작성한 뒤 이어 쓰세요.')
   }
-  // brief 只是本次生成输入。模型失败前绝不能先把已有完整剧本覆盖成一句聊天消息。
+  // brief는 이번 요청의 입력이다. 생성이 성공하기 전에는 기존 대본을 새 요청으로 덮어쓰지 않는다.
   const requestTopic =
     brief && !continueMode
       ? topicFromBrief(brief) || project.current?.script?.topic || project.current?.name || ''
@@ -1854,7 +1854,7 @@ export async function runGeneratePlay(
     project.setSubjects([])
     project.setScenes([])
   }
-  // 存住时长预算：后面拆分镜要用它算镜数，不能只靠当时那一句话。
+  // 이후 스토리보드 샷 수를 계산하려고 목표 영상 길이를 저장한다.
   const playTargetSec = resolveTargetDurationSec(project.current.script, requestTopic, requestContent)
   project.setScript({
     ...project.current.script,
@@ -1896,7 +1896,7 @@ export async function runGeneratePlay(
   return run
 }
 
-/** 最近几句用户原话，最新的在前。分镜时长以这里的「30秒 / 30S」为准。 */
+/** 최신 사용자 메시지부터 확인해 요청한 영상 길이를 찾는다. */
 function recentUserDurationTexts(): string[] {
   const messages = useProjectStore().current?.agentState?.messages || []
   return messages
@@ -1907,8 +1907,8 @@ function recentUserDurationTexts(): string[] {
 }
 
 /**
- * 成片目标时长。用户刚说的时长优先，其次是项目里已经记下的值，再从剧本里认。
- * 它是剧本规模和分镜数量的硬预算，拿不到就返回 undefined 让流程按内容自然走。
+ * 최신 요청, 프로젝트에 저장한 목표, 대본에서 찾은 길이 순으로 적용한다.
+ * 길이는 대본과 샷 수의 상한을 정한다. 찾지 못하면 undefined로 반환한다.
  */
 function resolveTargetDurationSec(
   script: { targetDurationSec?: number; topic?: string; content?: string } | undefined,
@@ -1967,7 +1967,7 @@ function mergePropAssets(next: StoryProp[], prev: StoryProp[]): StoryProp[] {
 function mergeSubjectAssets(next: Subject[], prev: Subject[]): Subject[] {
   return mergeByName(next, prev, 'sub', (fresh, old) => ({
     ...fresh,
-    // 模型这次没真给音色（拿到的是兜底句）时，保留用户之前手填的那条，别覆盖掉。
+    // 모델이 기본 음색만 반환하면 사용자가 이전에 입력한 음색을 유지한다.
     voicePrompt:
       fresh.voicePrompt && fresh.voicePrompt !== FALLBACK_VOICE_PROMPT
         ? fresh.voicePrompt
@@ -2018,7 +2018,7 @@ function mergeShotAssets(next: Shot[], prev: Shot[]): Shot[] {
   })
 }
 
-/** 第二步：从完整剧本提炼人物 / 场景 / 分镜。可指定只重提其中一组，已生成的图和视频按名字/镜号保留。 */
+/** 완성 대본에서 캐릭터, 장면과 스토리보드를 추출한다. 일부만 다시 추출해도 기존 생성물은 이름이나 샷 번호로 유지한다. */
 export async function runExtractStoryboard(
   onProgress?: (msg: string) => void,
   signal?: AbortSignal,
@@ -2056,7 +2056,7 @@ export async function runExtractStoryboard(
   }
   const look = lookFromScript(project.current.script)
   const keepApproved = Boolean(stage && isPlayApproved(project.current))
-  // 断点续跑：同一份剧本重跑拆分镜时，复用上次已完成的小组结果，不重复消费 token。
+  // 같은 대본에서 다시 실행할 때 완료한 작업 그룹의 결과를 재사용한다.
   const playKey = scriptPlayKey(project.current.script.content || '')
   const savedBatches = project.current.script.shotBatches
   const resumeBatches: Array<Record<string, unknown>[] | undefined> | undefined =
@@ -2105,7 +2105,7 @@ export async function runExtractStoryboard(
       if (project.current.pipelineMode === 'remake') {
         for (const shot of stageShots) shot.audioMode = shot.voiceover?.trim() ? 'tts' : 'none'
       }
-      // 用项目里真实的人物卡再绑一次音色：只重提分镜时，模型侧拿不到完整人物表。
+      // 스토리보드만 다시 추출하면 전체 캐릭터 정보가 없어 프로젝트 카드의 음색을 다시 연결한다.
       const voiceBound = bindShotVoiceHints(stageShots, project.current.subjects ?? [])
       if (voiceBound) {
         onProgress?.(`✓ 샷 ${voiceBound}개의 화자 음색을 캐릭터 카드에 연결했습니다.`)
@@ -2175,7 +2175,7 @@ export async function runExtractStoryboard(
     project.setScript({
       ...project.current.script,
       playReady: true,
-      // 全部小组都已落库，断点标记完成使命，清掉避免旧标记污染下次改稿。
+      // 모든 그룹을 저장했으면 다음 수정에 영향을 주지 않도록 재개 지점을 삭제한다.
       shotBatches: undefined,
       ...(durationSec ? { targetDurationSec: durationSec } : {}),
       ...(look.matched ? { style: look.matched } : {}),
@@ -2215,7 +2215,7 @@ function groupChildNodeIds(groupId: string): string[] {
   return nodes.filter((n) => n.parentGroupId === groupId && GROUP_GEN_TYPES.has(n.type)).map((n) => n.id)
 }
 
-/** 分组标题栏「一键生成」：并行跑这一组下面的全部出图节点。 */
+/** 그룹의 한 번에 생성 작업으로 해당 그룹의 모든 생성 노드를 실행한다. */
 export async function runGenerateGroup(
   groupId: string,
   onProgress?: RunProgress,
@@ -2234,7 +2234,7 @@ export async function runGenerateGroup(
   const project = useProjectStore()
   const p = project.current
   if (!p?.canvas) throw new Error('캔버스가 비어 있습니다.')
-  // 人物和场景资产可以在分镜失败前先生成；验收只拦截镜头/视频下游。
+  // 대본 승인 확인은 샷과 영상에만 적용한다. 캐릭터와 장면 에셋은 먼저 생성할 수 있다.
   if (
     (groupId === 'group-shots' || groupId === 'group-frames' || groupId === 'group-videos') &&
     !isPlayApproved(p)
@@ -2262,14 +2262,14 @@ export async function runGenerateGroup(
               : translate('canvasRunner.shotKeyframe')
     const activity = trackActivity(groupId, translate('canvasRunner.batchGenerate', { name: noun }), source, (msg) => onProgress?.(groupId, msg))
     try {
-      // 点「分镜视频」一键生成时，首尾帧模式先把帧补齐：视频吃的就是这两张图，
-      // 不补就变成跳过首尾帧列直接出片。
+      // 시작·끝 프레임 모드의 일괄 영상 생성은 누락된 프레임을 먼저 생성한다.
+      // 이 단계를 건너뛰면 영상 생성에 두 프레임이 전달되지 않는다.
       if (groupId === 'group-videos') {
         await ensureShotFrames((msg) => onProgress?.(groupId, msg), signal)
       }
-      // 必须串行的两种情况：
-      // 1) 视频首尾帧链：下一镜首帧取自上一镜末帧；
-      // 2) 画首尾帧：这一镜的起始帧要参考上一镜的结束帧，并发会把衔接丢掉。
+      // 다음 두 작업은 순차 실행한다.
+      // 1. 프레임 연결 영상 생성에서는 다음 샷이 이전 영상의 끝 프레임을 사용한다.
+      // 2. 시작·끝 프레임 생성에서는 현재 시작 프레임에 이전 끝 프레임을 참고한다.
       const chain =
         groupId === 'group-frames' || (groupId === 'group-videos' && isFl2vaChainActive(p))
       const ordered = chain ? sortNodeIdsByShotIndex(p, pending) : pending
@@ -2293,7 +2293,7 @@ export async function runGenerateGroup(
   })
 }
 
-/** 分组标题栏「重新提取」：只重提这一组，不清空其它组。 */
+/** 다시 추출은 선택한 그룹만 갱신하고 나머지 그룹을 유지한다. */
 export async function runExtractGroup(
   groupId: string,
   onProgress?: RunProgress,
@@ -2328,7 +2328,7 @@ export async function runExtractGroup(
   })
 }
 
-/** 剧本节点动作：默认只写剧本，提炼必须显式传入 extract */
+/** 대본 노드는 기본으로 대본만 쓴다. 노드를 추출하려면 extract를 지정한다. */
 export async function runScriptNode(
   kind: 'play' | 'extract' | 'continue' = 'play',
   onProgress?: RunProgress,
@@ -2368,12 +2368,12 @@ export async function runScriptNode(
   })
 }
 
-/** @deprecated 兼容旧名：始终只走第一步写剧本，避免一步拆出全部节点 */
+/** @deprecated 이전 이름과 호환하기 위해 대본 작성만 실행한다. */
 export async function runStoryboard(onProgress?: (msg: string) => void, signal?: AbortSignal) {
   return runGeneratePlay(onProgress, signal)
 }
 
-/** 视频复刻：存参考视频 + 产品图 → 分析镜头 → 写剧本并提炼节点 */
+/** 영상 재현은 참조 영상과 제품 이미지를 저장하고 샷을 분석해 대본과 노드를 만든다. */
 export async function runVideoRemake(
   input: {
     videoFile: File | Blob
@@ -2474,7 +2474,7 @@ export async function runVideoRemake(
   }
 }
 
-/** 用项目里已保存的参考视频和产品图重新分析 */
+/** 프로젝트에 저장된 참조 영상과 제품 이미지로 다시 분석한다. */
 export async function rerunVideoRemake(
   onProgress?: (msg: string) => void,
   signal?: AbortSignal
@@ -2597,7 +2597,7 @@ export async function generateFreeformVideo(
       : blobs.map((_, i) => ({ kind: 'extra' as const, name: `reference ${i + 1}` }))
   )
   onProgress?.(`영상을 생성하는 중(참조 이미지 ${blobs.length}장)…`)
-  // 自由图生视频节点以输入框为唯一真源。生成按钮不得优化、清洗或回写提示词。
+  // 자유 이미지→영상 노드는 입력란의 프롬프트를 수정 없이 사용한다.
   const sendPrompt = prompt
   const result = await generateVideo(
     {
@@ -2802,8 +2802,8 @@ export async function generateMissingImages(onProgress?: (msg: string) => void, 
 }
 
 /**
- * 首尾帧模式下出片前的补帧：视频吃的就是这两张帧，缺了必须先按镜号画出来，
- * 否则整列首尾帧会被跳过，这个模式等于白开。画不成的镜头只记一笔、照常出片，绝不拦流程。
+ * 시작·끝 프레임 모드에서는 영상 생성 전에 누락된 프레임을 샷 순서대로 만든다.
+ * 일부 프레임을 생성하지 못하면 실패를 기록하고 영상 생성을 계속한다.
  */
 export async function ensureShotFrames(
   onProgress?: (msg: string) => void,
@@ -2811,7 +2811,7 @@ export async function ensureShotFrames(
 ): Promise<number> {
   const p = useProjectStore().current
   if (!p || !needsShotFrames(p)) return 0
-  // 只给真正走首尾帧的镜头补帧，混合模式下普通镜头不浪费出图额度
+  // 혼합 모드에서는 시작·끝 프레임 입력이 필요한 샷만 보완한다.
   const missing = [...(p.shots ?? [])]
     .filter((s) => shotUsesFrames(s, p) && (!s.firstFrameAssetId || !s.lastFrameAssetId))
     .sort((a, b) => a.index - b.index)
@@ -2837,7 +2837,7 @@ export async function generateMissingVideos(onProgress?: (msg: string) => void, 
   const ids = p.shots
     .filter((s) => !s.videoAssetId)
     .map((s) => `shotVideo:${s.id}`)
-  // 首尾帧链：下一镜首帧取自上一镜末帧，并发会把衔接丢掉，必须按镜号串行。
+  // 다음 샷의 시작 프레임은 이전 끝 프레임을 쓰므로 샷 순서대로 실행한다.
   const chain = isFl2vaChainActive(p)
   const ordered = chain ? sortNodeIdsByShotIndex(p, ids) : ids
   await mapPool(ordered, chain ? 1 : VIDEO_GEN_CONCURRENCY, (id) =>
