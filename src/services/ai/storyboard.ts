@@ -1265,7 +1265,7 @@ ${play}`
   if (!outlines.length) {
     throw new Error('스토리보드 초안이 비어 있습니다. 캐릭터와 장면은 저장됐습니다. 스토리보드 추출을 다시 시도할 수 있습니다.')
   }
-  onProgress?.(`✓ 已拿到 ${outlines.length} 个镜头场记，正在写入画布…`)
+  onProgress?.(`✓ 샷 현장 기록 ${outlines.length}개를 받아 캔버스에 저장하는 중…`)
   return { outlines, model: response.model }
 }
 
@@ -1370,7 +1370,7 @@ async function realStoryboard(
 
   if (input.productImages?.length) {
     log(`→ 调用视觉工具分析 ${input.productImages.length} 张参考图`)
-    onProgress?.(`先识别 ${input.productImages.length} 张参考图；看完再按人物 → 场景 → 分镜分步提炼…`)
+    onProgress?.(`참조 이미지 ${input.productImages.length}장을 먼저 분석한 뒤 캐릭터 → 장면 → 스토리보드 순으로 추출하는 중…`)
     const visualContent: LLMContentPart[] = [
       ...input.productImages.slice(0, 5).map((url) => ({
         type: 'image_url' as const,
@@ -1451,7 +1451,7 @@ async function realStoryboard(
         try {
           raw = parseJsonRobust(response.content)
         } catch {
-          onProgress?.(`${label}未收到 JSON，正在补要一次…`)
+          onProgress?.(`${label}의 JSON을 받지 못해 다시 요청하는 중…`)
           const salvage = await ask(
             '이전 응답에는 사고 과정만 있고 JSON이 없었습니다. 이번에는 설명 없이 JSON 객체만 출력하세요.'
           )
@@ -1459,26 +1459,26 @@ async function realStoryboard(
           if (validate && !validate(raw)) {
             throw new Error(`${label} JSON에 필수 데이터 배열이 없습니다.`)
           }
-          onProgress?.(`✓ ${label}提炼完成`)
+          onProgress?.(`✓ ${label} 추출 완료`)
           return { raw, model: salvage.model }
         }
         if (validate && !validate(raw)) {
-          onProgress?.(`${label} JSON 结构不完整，正在自动修复一次…`)
+          onProgress?.(`${label} JSON 구조가 불완전해 자동 복구하는 중…`)
           const repaired = await ask(
             repairInstruction || `이전 응답의 JSON 구조가 잘못됐습니다. 시스템 요구사항에 따라 완전한 ${label} JSON을 다시 출력하세요.`
           )
           raw = parseJsonRobust(repaired.content)
           if (!validate(raw)) throw new Error(`${label} JSON을 복구했지만 필수 데이터 배열이 여전히 없습니다.`)
-          onProgress?.(`✓ ${label}提炼完成`)
+          onProgress?.(`✓ ${label} 추출 완료`)
           return { raw, model: repaired.model }
         }
-        onProgress?.(`✓ ${label}提炼完成`)
+        onProgress?.(`✓ ${label} 추출 완료`)
         return { raw, model: response.model }
       } catch (error) {
         if (isAbortError(error) && !isTimeoutAbort(error)) throw error
         const message = (error as Error).message
         log(`⚠ ${label}提炼失败：${message}`)
-        throw new Error(`提炼${label}失败；已保留此前完成的节点，可直接重试本阶段：${message}`)
+        throw new Error(`${label} 추출에 실패했습니다. 이미 완료된 노드는 저장됐습니다. 이 단계만 다시 시도할 수 있습니다. ${message}`)
       }
     }
 
@@ -1530,14 +1530,14 @@ JSON만 출력하세요. {"aesthetic":"영상 전체 분위기","h3Aesthetic":"E
     }
 
     if (stageOrder[startAt] <= stageOrder.subjects) {
-      onProgress?.('第 1/3 步：提炼人物，并找出反复出现的道具…')
+      onProgress?.('1/3단계 — 캐릭터와 반복 등장하는 소품을 추출하는 중…')
       const playPeople = extractSubjectsFromPlay(play)
       if (playPeople.length) {
         log(`✓ 从剧本文字抽出 ${playPeople.length} 个角色，不走模型`)
-        onProgress?.(`剧本里已有人物设定，直接落下 ${playPeople.length} 个角色`)
+        onProgress?.(`대본에 캐릭터 설정이 있어 캐릭터 ${playPeople.length}개를 바로 저장했습니다.`)
         subjectPart = { raw: { subjects: playPeople }, model: parallelModel }
       } else {
-        subjectPart = await runPart('人物', subjectSystem, 4000, PLAY_LLM_TIMEOUT_MS)
+        subjectPart = await runPart('캐릭터', subjectSystem, 4000, PLAY_LLM_TIMEOUT_MS)
       }
       const rows = Array.isArray(subjectPart.raw?.subjects) ? subjectPart.raw.subjects : playPeople
       if (!rows.length) throw new Error('캐릭터 추출에 실패했습니다. 대본에 캐릭터 섹션이나 대사의 화자 이름이 없고 모델도 명단을 반환하지 않았습니다.')
@@ -1553,22 +1553,22 @@ JSON만 출력하세요. {"aesthetic":"영상 전체 분위기","h3Aesthetic":"E
           : `✓ 已保存 ${normalized.subjects?.length || 0} 个角色`
       )
       if (stopAfter === 'subjects') {
-        onProgress?.('人物阶段完成。下一步由你确认后再提炼场景。')
+        onProgress?.('캐릭터 추출을 마쳤습니다. 확인 후 장면을 추출합니다.')
         return {
           result: { subjects: normalized.subjects, props, scenes: [], shots: [] },
           model: subjectPart.model || parallelModel
         }
       }
     } else {
-      onProgress?.(`✓ 已有 ${input.existingSubjects?.length || 0} 个角色，从已保存结果继续`)
+      onProgress?.(`✓ 저장된 캐릭터 ${input.existingSubjects?.length || 0}개에서 이어서 작업합니다.`)
     }
 
     if (stageOrder[startAt] <= stageOrder.scenes) {
-      onProgress?.('第 2/3 步：只提炼场景锚点…')
+      onProgress?.('2/3단계 — 장면의 기준 정보를 추출하는 중…')
       const playScenes = extractLocationsFromPlay(play)
       if (playScenes.length) {
         log(`✓ 从剧本文字抽出 ${playScenes.length} 个地点，不走模型`)
-        onProgress?.(`剧本里已有地点，直接落下 ${playScenes.length} 个场景`)
+        onProgress?.(`대본에 장소가 있어 장면 ${playScenes.length}개를 바로 저장했습니다.`)
         scenePart = { raw: { scenes: playScenes }, model: parallelModel }
       } else {
         const sceneUser = `主题：${input.topic || '（未填）'}
@@ -1599,19 +1599,19 @@ ${extractPlayForSceneStage(play)}`
         { style: input.style, topic: input.topic, content: input.content, keywords: input.keywords, maxShotDuration: input.maxShotDuration }
       )
       await input.onExtractStage?.('scenes', { ...normalized, shots: [] })
-      onProgress?.(`✓ 已保存 ${normalized.scenes?.length || 0} 个场景`)
+      onProgress?.(`✓ 장면 ${normalized.scenes?.length || 0}개를 저장했습니다.`)
       if (stopAfter === 'scenes') {
-        onProgress?.('场景阶段完成。下一步由你确认后再拆分镜。')
+        onProgress?.('장면 추출을 마쳤습니다. 확인 후 스토리보드를 추출합니다.')
         return {
           result: { ...normalized, shots: [] },
           model: scenePart.model || subjectPart.model || parallelModel
         }
       }
     } else {
-      onProgress?.(`✓ 已有 ${input.existingScenes?.length || 0} 个场景，从已保存结果继续`)
+      onProgress?.(`✓ 저장된 장면 ${input.existingScenes?.length || 0}개에서 이어서 작업합니다.`)
     }
 
-    onProgress?.('第 3/3 步：按场次拆成小组并发写分镜…')
+    onProgress?.('3/3단계 — 장면을 작업 묶음으로 나누고 스토리보드를 병렬 작성하는 중…')
     const subjectNames = (Array.isArray(subjectPart.raw?.subjects) ? subjectPart.raw.subjects : [])
       .map((item: { name?: unknown }) => String(item?.name || '').trim())
       .filter(Boolean)
@@ -1668,7 +1668,7 @@ ${extractPlayForSceneStage(play)}`
       if (persistedPrefix > 0 && index < persistedPrefix) {
         const partial = normalizedFromFinishedBatches(true)
         const completedSnapshot = completed
-        onProgress?.(`✓ 小组 ${completed}/${workBatches.length} 完成，按剧本顺序累计 ${partial.shots.length} 镜，正在写入画布…`)
+        onProgress?.(`✓ 작업 묶음 ${completed}/${workBatches.length}개 완료. 누적 샷 ${partial.shots.length}개를 대본 순서대로 캔버스에 저장하는 중…`)
         persistQueue = persistQueue.then(() =>
           input.onExtractStage?.('shots', partial, {
             partial: true,
@@ -1678,7 +1678,7 @@ ${extractPlayForSceneStage(play)}`
         )
         await persistQueue
       } else {
-        onProgress?.(`✓ 小组 ${completed}/${workBatches.length} 完成；等待前一段后按镜号写入`)
+        onProgress?.(`✓ 작업 묶음 ${completed}/${workBatches.length}개 완료. 앞 구간을 기다린 뒤 샷 번호 순서로 저장합니다.`)
       }
     }
 
@@ -1689,7 +1689,7 @@ ${extractPlayForSceneStage(play)}`
         // 断点续跑：这个工作包上次已经完成，直接复用结果，不重复消耗 token。
         const resumed = input.resumeBatchShots?.[index]
         if (resumed?.length) {
-          onProgress?.(`↩ ${batch.label} 已有断点结果，直接续用（${resumed.length} 镜）`)
+          onProgress?.(`↩ ${batch.label}에 저장된 결과를 재사용합니다(샷 ${resumed.length}개).`)
           await landFinishedBatch(index, { shots: resumed })
           return
         }
@@ -1715,7 +1715,7 @@ ${extractPlayForSceneStage(play)}`
             label: batch.label,
             error: (error as Error).message.split('\n')[0]
           })
-          onProgress?.(`⚠ ${batch.label} 并发首轮未完成；其他小组继续`)
+          onProgress?.(`⚠ ${batch.label}의 첫 병렬 작업을 완료하지 못했습니다. 다른 작업 묶음은 계속합니다.`)
         }
       },
       input.signal
@@ -1725,7 +1725,7 @@ ${extractPlayForSceneStage(play)}`
     if (failed.length) {
       const retryRows = [...failed].sort((a, b) => a.index - b.index)
       failed.length = 0
-      onProgress?.(`有 ${retryRows.length} 个小组未完成，已自动降为单路逐个重试，避免接口并发限流…`)
+      onProgress?.(`완료되지 않은 작업 묶음 ${retryRows.length}개를 API 동시 요청 제한에 맞춰 하나씩 다시 시도하는 중…`)
       for (const item of retryRows) {
         throwIfAborted(input.signal)
         const batch = workBatches[item.index]
@@ -1751,7 +1751,7 @@ ${extractPlayForSceneStage(play)}`
             label: item.label,
             error: (error as Error).message.split('\n')[0]
           })
-          onProgress?.(`⚠ ${item.label} 单路重试仍失败；继续处理下一包`)
+          onProgress?.(`⚠ ${item.label}을 개별로 다시 시도했지만 실패했습니다. 다음 묶음을 처리합니다.`)
         }
       }
       await persistQueue
@@ -1811,7 +1811,7 @@ ${extractPlayForSceneStage(play)}`
         `${failed.length}/${workBatches.length}개 스토리보드 작업 묶음이 실패했습니다. 나머지 ${rawShots.length}개 샷은 저장됐습니다. 실패한 구간 ${failed.map((item) => item.label).join('、')}`
       )
     }
-    onProgress?.(`✓ ${workBatches.length} 个小组全部完成，共拆出 ${rawShots.length} 镜`)
+    onProgress?.(`✓ 작업 묶음 ${workBatches.length}개를 완료해 샷 ${rawShots.length}개를 추출했습니다.`)
     const merged = {
       ...scenePart.raw,
       subjects: subjectRows,
@@ -1833,9 +1833,9 @@ ${extractPlayForSceneStage(play)}`
     const warnings = storyboardQualityIssues(parsed, input)
     if (warnings.length) {
       log(`⚠ 并行提炼完成，保留可编辑稿并提示 ${warnings.length} 项：${warnings.join('；')}`)
-      onProgress?.(`分阶段提炼完成；有 ${warnings.length} 项可在画布继续调整`)
+      onProgress?.(`단계별 추출을 완료했습니다. 캔버스에서 ${warnings.length}개 항목을 더 조정할 수 있습니다.`)
     } else {
-      onProgress?.('人物、场景、分镜均已完成并绑定…')
+      onProgress?.('캐릭터, 장면, 스토리보드를 추출하고 연결했습니다.')
     }
     await input.onExtractStage?.('shots', parsed, {
       partial: false,
@@ -2216,7 +2216,7 @@ async function ensureShotDuration(
     )
   }
   const fittedTotal = totalShotDuration(fitted)
-  onProgress?.(`时长检测仍不合格，已按 ${target} 秒强制收回各镜时长，现为 ${fittedTotal} 秒`)
+  onProgress?.(`길이 검사를 통과하지 않아 목표 ${target}초에 맞춰 샷 길이를 조정했습니다. 현재 ${fittedTotal}초입니다.`)
   return { ...current, shots: fitted }
 }
 
@@ -2831,7 +2831,7 @@ export async function generateStoryboard(
     }
   }
 
-  onProgress?.('🎭 演示模式（未配置 VITE_AI_REAL_MODE=true）')
+  onProgress?.('🎭 데모 모드(VITE_AI_REAL_MODE=true 설정 필요)')
   const result = normalizeStoryboard(
     mockStoryboardFromPrompt(
       `style: ${resolved.style} duration: ${resolved.shotDuration} """${resolved.content}"""`
