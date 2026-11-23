@@ -20,9 +20,9 @@ Use prompt optimization to write the official format for the node mode. Generate
 
 ```text
 Speaker lock (these labels are the pictures):
-(S1) is 「阿凯」 / <Picture 1>. Lock face, hair, body, age and outfit. Identity reference only, not the first frame.
-(S2) is 「大斌」 / <Picture 2>. Lock face, hair, body, age and outfit. Identity reference only, not the first frame.
-<Picture 3> is the location 「出租屋」. Lock space, materials, weather and light. One unified place.
+(S1) is 「민준」 / <Picture 1>. Lock face, hair, body, age and outfit. Identity reference only, not the first frame.
+(S2) is 「도윤」 / <Picture 2>. Lock face, hair, body, age and outfit. Identity reference only, not the first frame.
+<Picture 3> is the location 「임대 아파트」. Lock space, materials, weather and light. One unified place.
 Only one (S#) speaks at a time, and each person says their own line once. Everyone else keeps their lips completely closed. No overlap, no chorus, no second person repeating the same line.
 ```
 
@@ -34,9 +34,9 @@ In `subject_definitions`, use `<Subject N> is 「name」 (S#) in <Picture N>`. P
 
 ```text
 subject_definitions:
-<Subject 1> is 「阿凯」 (S1) in <Picture 1>. Lock face, hair, body, age and outfit. Identity reference only, not the first frame.
-<Subject 2> is 「大斌」 (S2) in <Picture 2>. Lock face, hair, body, age and outfit. Identity reference only, not the first frame.
-<Subject 3> is 「出租屋」 in <Picture 3>, the location for [Shot 1].
+<Subject 1> is 「민준」 (S1) in <Picture 1>. Lock face, hair, body, age and outfit. Identity reference only, not the first frame.
+<Subject 2> is 「도윤」 (S2) in <Picture 2>. Lock face, hair, body, age and outfit. Identity reference only, not the first frame.
+<Subject 3> is 「임대 아파트」 in <Picture 3>, the location for [Shot 1].
 
 summary:
 [reference generation] The target video is one continuous [Shot 1] of <Subject 1> and <Subject 2> in <Subject 3>. Character sheets lock identity only.
@@ -47,19 +47,19 @@ retention_analysis:
 <Subject 3> (appears in [Shot 1]): fully_preserved - space, materials, weather and light from <Picture 3>.
 
 detailed_description:
-[Shot 1] Grounded contemporary comedy, photorealistic live-action, 9:16. Afternoon light through the living-room window. (S1) 「阿凯」 squats at the left sofa, digging through cushions. (S2) 「大斌」 sprawls on the right sofa with a bag of chips. Neither looks into the lens.
+[Shot 1] Grounded contemporary comedy, photorealistic live-action, 9:16. Afternoon light through the living-room window. (S1) 「민준」 squats at the left sofa, digging through cushions. (S2) 「도윤」 sprawls on the right sofa with a bag of chips. Neither looks into the lens.
 
 [00:00.000–00:01.200]
 Wide view from the doorway. Both mouths stay closed. Chip crunch and cushion rustle only.
 
 [00:01.200–00:05.600]
 Cut to (S1) alone. (S2) is off screen.
-(S1) says: <d>[Chinese] 我那条黑领带呢！上周刚买的！你见着没有啊！</d>
+(S1) says: <d>[Korean] 내 검은 넥타이 어디 갔지? 지난주에 산 건데! 너 못 봤어?</d>
 Only (S1) speaks in this shot. (S2) keeps their lips completely closed and makes no voice.
 
 [Shot 2] At 00:05.600
 Cut to (S2) alone. He swallows before he talks.
-(S2) says: <d>[Chinese] 你自己扔的地方问我？反正我零食罐里没藏领带。</d>
+(S2) says: <d>[Korean] 네가 둔 걸 왜 나한테 물어봐? 내 과자통에 숨긴 건 아니야.</d>
 Only (S2) speaks in this shot. (S1) keeps their lips completely closed and makes no voice.
 The chip bag is visibly emptier than at the start. The action develops continuously and finishes naturally within 8 seconds.
 
@@ -73,9 +73,9 @@ N/A
 ## Dialogue
 
 - Each line is spoken once by its assigned (S#) in its own time range.
-- Use original words and the correct language tag. For Chinese use `(S1) says: <d>[Chinese] 原词</d>`; for Korean use `(S1) says: <d>[Korean] 대사 원문</d>`. Immediately say that the other people keep their lips closed.
+- Use original words and the correct language tag. For Chinese use `(S1) says: <d>[Chinese] verbatim line</d>`; for Korean use `(S1) says: <d>[Korean] 대사 원문</d>`. Immediately say that the other people keep their lips closed.
 - Keep production notes, duration, style, and cast details outside dialogue tags.
-- When there is no dialogue, write `No dialogue. No lips moving.`. Do not put a placeholder such as 「无」 or ‘없음’ inside `<d>`.
+- When there is no dialogue, write `No dialogue. No lips moving.`. Do not put a placeholder such as “none” or ‘없음’ inside `<d>`.
 
 ## Writing guidance
 
