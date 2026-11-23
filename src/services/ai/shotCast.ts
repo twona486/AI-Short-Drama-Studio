@@ -12,7 +12,7 @@ function fallbackLock(style: VideoPromptStyle): string {
 }
 
 /**
- * 用视觉模型认本镜配图里谁是谁，产出中文身份锁（给 H3 视频内容表现开头）。
+ * 비전 모델로 샷 이미지에서 인물을 찾아 H3 프롬프트 앞에 쓸 인물 매핑을 만든다.
  */
 export async function h3IdentityLockFromFrame(opts: {
   imageBlob: Blob
