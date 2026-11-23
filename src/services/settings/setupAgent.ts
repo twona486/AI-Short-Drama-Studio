@@ -1,5 +1,5 @@
 /**
- * 设置页接入助手：依赖已配置的 LLM，帮用户写入视觉 / 生图 / 配音 / 视频。
+ * 설정 도우미는 언어 모델을 사용해 비전, 이미지, 더빙 및 영상 연결을 구성한다.
  */
 
 import { callLLM } from '@/services/ai/client'
@@ -244,7 +244,7 @@ async function runAction(action: Record<string, unknown>): Promise<{ ok: boolean
       apiKey: ep.apiKey,
       adapter: ep.adapter
     })
-    // 带上目录前缀，set_workflow_template 用这个 path 才能取到文件
+    // set_workflow_template이 파일을 읽을 수 있도록 경로에 디렉터리 접두사를 추가한다.
     const names = res.workflows
       .slice(0, 30)
       .map((w) => `- ${w.name} (${w.root ? `${w.root}/${w.path}` : w.path})`)
@@ -281,7 +281,7 @@ async function runAction(action: Record<string, unknown>): Promise<{ ok: boolean
       template = fetched.template
     }
     if (!template) {
-      // 尝试从用户最近消息不够，要求字段
+      // 최근 사용자 메시지에서 찾지 못한 필드를 요청한다.
       return { ok: false, detail: 'workflowTemplate JSON 또는 list_comfy_workflows의 path를 제공하세요.', kind }
     }
     const parsed = parseComfyWorkflowJson(template)
@@ -296,7 +296,7 @@ async function runAction(action: Record<string, unknown>): Promise<{ ok: boolean
     }
     if (kind === 'image') settings.patchImage({ adapter })
     else settings.patchVideo({ adapter })
-    // 让助手读完节点图，确认提示词 / 参考图该注入到哪个节点，再把映射一起存下来
+    // 도우미가 프롬프트와 참조 입력 위치를 파악하도록 하고 매핑을 함께 저장한다.
     try {
       const { map, error } = await analyzeWorkflowWithLlm(payload)
       const checked = validateInputMap(payload, map)
@@ -536,14 +536,14 @@ function looksLikePlaceholderKey(key: string) {
 
 function extractComfyWorkflowTemplate(text: string): string {
   const trimmed = text.trim()
-  // 整段就是 JSON
+  // 응답 전체가 JSON인 경우
   if (trimmed.startsWith('{') && trimmed.includes('class_type')) {
     try {
       const obj = JSON.parse(trimmed)
       return JSON.stringify(obj, null, 2)
     } catch { /* fall through */ }
   }
-  // 从 markdown/代码块里抠
+  // Markdown 코드 블록에서 JSON을 추출한다.
   const fence = text.match(/```(?:json)?\s*([\s\S]*?)```/i)
   if (fence?.[1] && /class_type|"prompt"\s*:/.test(fence[1])) {
     try {
@@ -551,7 +551,7 @@ function extractComfyWorkflowTemplate(text: string): string {
       return JSON.stringify(obj, null, 2)
     } catch { /* ignore */ }
   }
-  // 贪婪找最外层大括号
+  // 가장 바깥의 중괄호를 찾는다.
   const start = text.indexOf('{')
   const end = text.lastIndexOf('}')
   if (start >= 0 && end > start && /class_type/.test(text.slice(start, end + 1))) {
@@ -743,7 +743,7 @@ export async function runSetupAgentTurn(
     content: m.content
   }))
 
-  // 快捷：只说 Comfy 地址 → 直接加生图+视频
+  // ComfyUI 주소만 제공하면 이미지와 영상 연결을 바로 추가한다.
   const comfyMention = extractComfyMention(userText)
   const comfyTplEarly = extractComfyWorkflowTemplate(userText)
   if (comfyMention && !comfyTplEarly && userText.length < 400) {
@@ -812,7 +812,7 @@ export async function runSetupAgentTurn(
     }
   }
   if (comfyTpl) {
-    // 若已有 Comfy 接入且模型没给出 actions，直接写入当前生图/视频
+    // 기존 ComfyUI 연결이 있고 모델이 actions를 생략하면 현재 프로필을 갱신한다.
     if (!parsed.actions.length) {
       parsed.actions.push({
         tool: 'set_workflow_template',
