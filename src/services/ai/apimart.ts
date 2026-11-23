@@ -75,7 +75,7 @@ function bearer(apiKey: string): string {
     .trim()
     .replace(/^['"]|['"]$/g, '')
   key = key.replace(/^bearer\s+/i, '').trim()
-  if (!key) throw new Error('APIMart 需要填写 API Key')
+  if (!key) throw new Error('APIMart API 키를 입력하세요.')
   return `Bearer ${key}`
 }
 
@@ -222,7 +222,7 @@ async function downloadMedia(
   }
   if (!resp.ok) {
     const detail = (await resp.text()).replace(/\s+/g, ' ').trim().slice(0, 180)
-    throw new Error(detail ? `结果下载失败 HTTP ${resp.status} ${detail}` : `结果下载失败 HTTP ${resp.status}`)
+    throw new Error(detail ? `결과 다운로드에 실패했습니다. HTTP ${resp.status} ${detail}` : `결과 다운로드에 실패했습니다. HTTP ${resp.status}`)
   }
   const blob = await resp.blob()
   const mimeType = blob.type || (url.includes('.mp4') ? 'video/mp4' : 'image/png')
@@ -256,7 +256,7 @@ async function pollTask(opts: {
     }
     if (status === 'completed' || status === 'succeeded' || status === 'success') {
       const media = resultUrls(json, opts.kind)[0]
-      if (!media) throw new Error('任务已完成，但没有返回图片或视频地址')
+      if (!media) throw new Error('작업이 완료됐지만 이미지나 영상 주소가 반환되지 않았습니다.')
       opts.onProgress?.('正在下载结果...')
       return downloadMedia(media, opts.authorization, opts.signal)
     }
@@ -264,7 +264,7 @@ async function pollTask(opts: {
     opts.onProgress?.(`生成中 ${label}`)
     await new Promise((resolve) => setTimeout(resolve, 3000))
   }
-  throw new Error('等待生成结果超时')
+  throw new Error('생성 결과를 기다리는 시간이 초과됐습니다.')
 }
 
 async function postJson(root: string, path: string, authorization: string, body: Record<string, unknown>, signal?: AbortSignal) {
@@ -284,7 +284,7 @@ async function postJson(root: string, path: string, authorization: string, body:
 
 function dataUriToBlob(uri: string): { blob: Blob; mimeType: string } {
   const match = uri.match(/^data:([^;,]+)?(;base64)?,(.*)$/s)
-  if (!match) throw new Error('图片数据无法解析')
+  if (!match) throw new Error('이미지 데이터를 해석할 수 없습니다.')
   const mimeType = match[1] || 'image/png'
   const payload = match[3] || ''
   if (match[2]) {
@@ -375,7 +375,7 @@ async function uploadReferenceImage(
 ): Promise<string> {
   const file = dataUriToBlob(await referenceDataUrl(blob))
   const bytes = new Uint8Array(await file.blob.arrayBuffer())
-  if (bytes.byteLength > 20 * 1024 * 1024) throw new Error('参考图超过 20MB，无法上传')
+  if (bytes.byteLength > 20 * 1024 * 1024) throw new Error('참조 이미지가 20MB를 초과해 업로드할 수 없습니다.')
   const part = multipartFile(bytes, 'reference.jpg', file.mimeType || 'image/jpeg')
   const resp = await providerHttp(`${root}/v1/uploads/images`, {
     method: 'POST',
@@ -387,7 +387,7 @@ async function uploadReferenceImage(
   })
   const json = await readJson(resp)
   const url = String(json?.url || json?.data?.url || '').trim()
-  if (!/^https?:\/\//i.test(url)) throw new Error('上传参考图没有返回可用地址')
+  if (!/^https?:\/\//i.test(url)) throw new Error('참조 이미지 업로드 응답에 사용할 수 있는 주소가 없습니다.')
   return url
 }
 
@@ -455,7 +455,7 @@ async function imageFromSubmit(
   const ready = await mediaFromJson(json, 'image', authorization, signal)
   if (ready) return ready
   const taskId = taskIdOf(json)
-  if (!taskId) throw new Error('提交成功但没有返回 task_id')
+  if (!taskId) throw new Error('작업을 제출했지만 task_id를 반환하지 않았습니다.')
   onProgress?.('已提交，正在查询...')
   return pollTask({ root, taskId, authorization, kind: 'image', signal, onProgress })
 }
@@ -484,7 +484,7 @@ async function postImageEdits(opts: {
     opts.onProgress?.(`准备参考图 ${i + 1}/${opts.images.length}...`)
     const file = dataUriToBlob(await referenceDataUrl(opts.images[i]))
     const bytes = new Uint8Array(await file.blob.arrayBuffer())
-    if (bytes.byteLength > 20 * 1024 * 1024) throw new Error('参考图超过 20MB，无法提交')
+    if (bytes.byteLength > 20 * 1024 * 1024) throw new Error('참조 이미지가 20MB를 초과해 제출할 수 없습니다.')
     parts.push({
       name: 'image',
       filename: `reference-${i + 1}.jpg`,
@@ -615,7 +615,7 @@ export async function apimartGenerateVideo(opts: {
     opts.onProgress?.('提交视频任务...')
     const submitted = await postJson(root, '/v1/videos/generations', authorization, body, opts.signal)
     taskId = taskIdOf(submitted)
-    if (!taskId) throw new Error('提交成功但没有返回 task_id')
+    if (!taskId) throw new Error('작업을 제출했지만 task_id를 반환하지 않았습니다.')
     await opts.onTaskSubmitted?.(taskId)
   }
   opts.onProgress?.('已提交，正在查询...')
