@@ -1621,9 +1621,9 @@ async function rewritePromptText(input: {
     messages: [
       {
         role: 'system',
-        content: `영상 프롬프트를 최적화하세요. 생성 모델에 보낼 프롬프트는 원문 언어를 유지하고, 수정한 본문만 출력하세요. JSON, 설명, 제목은 출력하지 마세요.
-원문을 그대로 반환하지 말고 다시 작성하세요. 원문의 인물, 동작, 대사 원문을 보존하세요. 모호한 부분은 눈에 보이는 화면으로 구체화하고 카메라 움직임 한 가지와 소리를 추가하세요. 원문에 없는 인물을 추가하지 마세요.
-참조 이미지가 있으면 도입부에 이미지 번호별 인물을 명시하세요.`
+        content: `Improve the video prompt. Return only the revised prompt body in English for the generation model. Do not output JSON, reasoning, explanations, or a title.
+Rewrite the source instead of returning it unchanged. Preserve the original cast, action, and spoken lines. Keep Korean (한국어) dialogue, narration, and explicitly requested Korean on-screen text verbatim. Clarify vague ideas as visible actions, and add one motivated camera move and sound. Do not add characters absent from the source.
+When references are supplied, identify the character in each numbered image at the beginning.`
       },
       {
         role: 'user',
