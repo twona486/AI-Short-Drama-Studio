@@ -143,7 +143,7 @@ function acceptDuration(seconds: number): number {
 
 /** 从一小段里读出秒数：30秒、30s、1分20秒、1.5分钟、三十秒、半分钟。 */
 function secondsFromPhrase(phrase: string): number {
-  const english = phrase.trim().match(/^(\d+(?:\.\d+)?)\s*(minutes?|mins?|m|seconds?|secs?|s)\b(?:\s*(\d+)\s*(?:seconds?|secs?|s)\b)?$/i)
+  const english = phrase.trim().match(/^(\d+(?:\.\d+)?)[\s-]*(minutes?|mins?|m|seconds?|secs?|s)\b(?:\s*(\d+)\s*(?:seconds?|secs?|s)\b)?$/i)
   if (english) {
     const scale = /^m/i.test(english[2]) ? 60 : 1
     return acceptDuration(Number(english[1]) * scale + Number(english[3] || 0))
@@ -168,7 +168,7 @@ function secondsFromPhrase(phrase: string): number {
 }
 
 const DURATION_PHRASE =
-  '((?:半分钟)|(?:\\d+\\s*(?:分|분)\\s*\\d+\\s*(?:秒|초))|(?:\\d+(?:\\.\\d+)?\\s*(?:分钟|분))|(?:\\d+\\s*(?:秒钟|秒|초))|(?:\\d+(?:\\.\\d+)?\\s*(?:minutes?|mins?|m)\\b(?:\\s*\\d+\\s*(?:seconds?|secs?|s)\\b)?)|(?:\\d+\\s*(?:seconds?|secs?|s)\\b)|(?:[一二两三四五六七八九十]+\\s*分钟)|(?:[一二两三四五六七八九十]+\\s*秒))'
+  '((?:半分钟)|(?:\\d+\\s*(?:分|분)\\s*\\d+\\s*(?:秒|초))|(?:\\d+(?:\\.\\d+)?\\s*(?:分钟|분))|(?:\\d+\\s*(?:秒钟|秒|초))|(?:\\d+(?:\\.\\d+)?[\\s-]*(?:minutes?|mins?|m)\\b(?:\\s*\\d+\\s*(?:seconds?|secs?|s)\\b)?)|(?:\\d+[\\s-]*(?:seconds?|secs?|s)\\b)|(?:[一二两三四五六七八九十]+\\s*分钟)|(?:[一二两三四五六七八九十]+\\s*秒))'
 
 function labeledDuration(text: string): number {
   const primary = new RegExp(
