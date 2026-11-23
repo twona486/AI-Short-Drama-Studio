@@ -455,7 +455,7 @@ async function parseJsonWithModelRepair(
         messages: [
           {
             role: 'system',
-            content: `JSON 문법을 복구하세요. 쉼표, 따옴표, 이스케이프 문자, 괄호와 잘린 컨테이너 구조만 고치세요. 기존 필드 이름과 값, 배열 순서와 원문을 그대로 유지하세요. 문장을 다듬거나 번역하거나 요약하거나 새로운 사실을 추가하지 마세요. 끝이 잘렸다면 완성된 배열 요소만 남기고 JSON을 닫으세요. 유효한 JSON 객체 하나만 출력하세요.`
+            content: `Repair JSON syntax only: commas, quotes, escapes, brackets, and truncated containers. Preserve existing keys, values, array order, and wording. Do not polish, translate, summarize, or add facts. If the end is truncated, keep complete array items only and close the containers. Return one valid JSON object.`
           },
           { role: 'user', content: jsonCandidate }
         ],
@@ -485,24 +485,26 @@ async function parseJsonWithModelRepair(
 
 const QUALITY_REPAIR_ROUNDS = 3
 
+// 이야기 범위·인과·샷 간 연속성 검수 규칙.
 const NARRATIVE_CONTINUITY_RULES = `
-【이야기 연속성 필수 규칙】
-1. 사용자 요청에서 이번 영상이나 회차의 시작, 끝, 길이, 반드시 보여 줄 사건을 먼저 정하세요. 경계는 사용자가 지정한 회차나 구간입니다. 완전한 단편이나 각색을 원하면 갈등 구조와 핵심 인물을 모두 포함하세요. 사용자가 특정 구간만 명시한 경우에만 일부를 다루세요. 완결감을 만들려고 다음 회차를 쓰거나, 정해진 끝 이후의 결과를 미리 밝히거나, 무관한 세계관을 덧붙이거나, 임의로 다음 회차로 넘어가지 마세요.
-2. 이변이 시작되는 순간, 시간과 공간을 넘어가는 도중, 도착 직후, 낯선 사람을 발견하는 때 등 사용자가 지정한 지점에서 끝낼 수 있습니다. 열린 결말과 긴장감은 연속성 오류가 아닙니다. 현재 상태를 분명히 보여 주고 이후 설명은 덧붙이지 마세요.
-3. 범위 안의 모든 샷이나 장면은 이전 부분에서 눈에 보이는 결과를 받아 시작하고, 다음 부분에 명확하게 보이는 상태를 남기세요. 인물이 어떻게 도착했고 어떻게 알게 됐으며 갑자기 설명하는 이유가 무엇인지 관객의 추측에 맡기지 마세요.
-4. 장소, 시대, 정체성, 관계, 목표 또는 신체 상태에 큰 변화가 있으면 이번 영상의 끝까지만 인과관계를 보여 주세요. 계기의 징후 → 변화 과정 → 충격의 결과 → 즉각 반응 → 관찰과 확인 → 첫 접촉 순의 장면을 사용할 수 있습니다. 요청과 길이에 맞게 필요한 장면을 고르세요. 인과관계 도중에 멈출 수 있지만 실제로 보여 준 두 장면 사이의 전환을 건너뛰지 마세요.
-5. 시공간 이동, 사고, 변신, 비밀 발견, 재회, 배신, 전투 발발 등이 이번 회차의 핵심이면 중요도에 맞게 화면과 시간을 배정하세요. 사용자가 배경으로만 쓰거나 명시적으로 생략하라고 하면 따르세요.
-6. 설명 대사에는 현재 줄거리에서 계기가 있어야 합니다. 사용자가 설명이나 회고 또는 이미 형성된 관계에서 시작하라고 명시했으면 그 형식을 따르고 이전 이야기는 덧붙이지 마세요.
-7. 인접 부분마다 인물의 위치, 자세, 방향, 손에 든 물건, 부상, 감정, 알고 있는 정보, 환경의 시간대를 확인하세요. 다음 시작은 이전 끝의 상태를 이어야 합니다. 시공간을 건너뛸 때는 사용자가 허용하는 눈에 보이는 전환을 사용하세요.
-8. 이번 회차에서 보여 줘야 할 핵심 과정을 내레이션으로 대신하거나 과정을 연결하려고 사용자가 요구하지 않은 사실을 만들어 내지 마세요.`
+Narrative continuity requirements:
+1. Begin by determining the requested opening, ending, duration, and events for this video or episode. Follow the user's episode or excerpt boundary. For a complete short film or adaptation, include the full central conflict and key characters. Excerpt only when asked. Do not continue another episode, reveal a consequence beyond the stopping point, or expand unrelated worldbuilding.
+2. End at any point the user specifies, including the onset of a change, during a transition, on arrival, on seeing a stranger, or another suspense point. An open ending does not constitute a gap. Establish the current state without explaining the next events.
+3. Within the boundary, start each scene or shot from the visible result of the preceding beat. Leave a clear visible state for the next beat. Show how someone arrived, became acquainted, or was prompted to explain rather than asking viewers to infer those facts.
+4. For major changes in place, era, identity, relationships, goals, or physical state, cover only the causal chain within this video's ending. Select necessary beats from warning signs → change → impact → immediate reaction → observation or verification → first contact. You may stop partway, but show a visible transition between beats that you do depict.
+5. Give central time travel, accidents, transformations, discoveries, reunions, betrayals, or fight outbreaks screen time proportional to their importance. Follow the user's explicit direction to treat something as background or skip it.
+6. Give explanatory lines a trigger in the current story. If the user asks to begin with explanation, recap, or an established relationship, follow that format without adding backstory.
+7. Check every adjacent pair for position, pose, orientation, handheld objects, injury, emotion, knowledge, and environmental time. The next opening must connect to the previous ending. Use a visible transition for changes in time or location when the user permits it.
+8. Do not replace important visible processes with narration or invent facts to bridge gaps.`
 
+// 화자와 화면 속 인물의 배치·시선·반응 규칙.
 const SPEAKER_STAGING_RULES = `
-【화면 속 대사와 인물 배치】
-1. 말하는 입 모양을 알아볼 수 있어야 합니다. 화자는 카메라를 정면으로 보거나 화면 중앙에 서지 않아도 됩니다. 뒤나 옆에 있거나 무릎을 꿇고 있어도 됩니다.
-2. 화면에 있는 모든 인물을 blocking / eyeline / videoPrompt에 넣으세요. 앞뒤 위치, 몸 방향, 보는 사람이나 물건을 쓰세요. 위치를 쓰지 않으면 생성 모델이 단체 사진처럼 인물들을 카메라 쪽으로 배치할 수 있습니다.
-3. 앞쪽 인물이 화자가 아니면 카메라를 옆이나 등으로 향하고, 뒤돌아보거나 고개를 돌려 화자나 화자가 가리킨 것을 보게 하세요. 카메라를 정면으로 보지 않게 하세요.
-4. 같은 공간에서 주고받는 대사는 한 샷에 유지할 수 있습니다. videoPrompt는 0초부터 샷의 끝까지 실제 이야기의 박자에 맞춰 2–5개 구간으로 나누세요. 각 구간에서 한 명의 화자와 다른 인물들의 반응을 명시하세요. 같은 화자의 짧은 연속 대사 2–4개는 한 구간에 유지할 수 있습니다.
-5. voiceover의 ‘캐릭터 이름：대사’ 형식을 유지하세요. videoPrompt에 화자의 동작만 쓰고 ‘카메라를 보지 마세요’ 한 줄로 다른 인물을 처리하지 마세요. 각 구간마다 현장에 있는 모든 인물의 위치, 시선, 말 없이 보이는 반응을 써야 합니다.`
+On-screen dialogue and blocking:
+1. Make the speaker's lips legible. They can stand to the side or in the background, or kneel; they need not face the lens or stand at the center.
+2. Include every visible person's foreground or background position, body orientation, and eyeline in blocking / eyeline / videoPrompt. Missing blocking can make the generator pose the cast toward the lens.
+3. A foreground listener should face sideways or away and look toward the speaker or what the speaker points to. Do not have the listener look into the camera.
+4. A dialogue exchange in one space can stay in one shot. Split videoPrompt from time zero to the end into 2–5 real beats, identifying the only speaker and the other characters' reactions in each beat. A sequence of 2–4 short lines from one speaker can stay together.
+5. Use the “character name: line” format in voiceover. In every videoPrompt beat, describe everyone's position, eyeline, and nonverbal reaction rather than adding a generic “do not look at the camera.” Preserve spoken lines verbatim.`
 
 async function auditStoryboardNarrative(
   parsed: StoryboardResult,
@@ -525,8 +527,8 @@ async function auditStoryboardNarrative(
       messages: [
         {
           role: 'system',
-          content: `영상의 연속성을 검수하세요. 일반 관객이 ‘왜 갑자기 이 장면이 나오지?’라고 느낄 실질적인 단절만 찾으세요. 표현이나 미학적 세부사항은 검수 대상에서 제외하세요.${NARRATIVE_CONTINUITY_RULES}
-원래 요청에서 영상의 이야기 범위를 먼저 정한 뒤 범위 안의 인접 샷을 둘씩 확인하세요. 첫 회차, 일부 장면, 예고편, 여운을 남기는 결말만 요청했다면 이후 이야기가 이어지지 않는 것을 문제로 판단하지 마세요. 이미 보여 준 인접 장면 사이의 비약만 확인하세요. JSON만 출력하세요. {"issues":["1→2번 샷의 마지막과 시작이 이어지지 않습니다. 이번 회차 안에서 보완할 장면은 …입니다."]}. 실질적인 문제가 없으면 {"issues":[]}를 출력하세요. 최대 6개로 제한하며 각 항목은 구체적인 인접 샷이나 범위 안에서 빠진 전환을 지목해야 합니다.`
+          content: `Audit film continuity. Report only real breaks that would make an ordinary viewer wonder how the story reached this point. Ignore wording and aesthetic details.${NARRATIVE_CONTINUITY_RULES}
+Determine the narrative boundary from the original request, then check adjacent shots inside it. For a first episode, excerpt, trailer, or suspense ending, omitting subsequent events is not a fault. Check only jumps between adjacent beats that are already shown. Write the QA comments in Korean (한국어). Return JSON only: {"issues":["1→2번 샷 사이에 …가 빠졌습니다."]}. Return {"issues":[]} when there are no substantial issues. Give at most six items, each naming the adjacent shots or missing transition within the boundary.`
         },
         {
           role: 'user',
@@ -3087,7 +3089,7 @@ async function ensurePlayNarrativeContinuity(
       messages: [
         {
           role: 'system',
-          content: `영상 대본의 연속성을 검수하세요.${NARRATIVE_CONTINUITY_RULES}\n사용자가 이번에 요청한 이야기 범위를 먼저 정하세요. 그 안에서 줄거리가 갑작스럽게 바뀌는 실질적인 문제만 검토하세요. 긴장을 남기는 결말, 다음 회차의 이야기, 의도적인 여백을 누락으로 판단하지 말고 스타일이나 표현은 그대로 두세요. JSON만 출력하세요. {"issues":["구체적인 문제와 요청 범위 안에서 보완할 전환 장면"]}. 문제가 없으면 {"issues":[]}를 출력하세요. 최대 6개입니다.`
+          content: `Audit the script's narrative continuity.${NARRATIVE_CONTINUITY_RULES}\nFirst determine where the user asks this installment to end. Check only substantial gaps that make the plot jump within that boundary. Do not flag a suspense ending, omitted later episode, or deliberate silence, or edit style and phrasing. Write QA comments in Korean (한국어). Return only {"issues":["specific issue and the transition to add within the boundary"]}, at most six. If there are none, return {"issues":[]}.`
         },
         {
           role: 'user',
@@ -3113,7 +3115,7 @@ async function ensurePlayNarrativeContinuity(
       messages: [
         {
           role: 'system',
-          content: `영상 대본을 작성하는 시나리오 작가입니다. 지적된 이야기의 단절만 수정하고 사용자가 제공한 사실, 인물 관계, 주요 대사, 그림체와 기존에 잘 구성된 장면을 보존하세요.${NARRATIVE_CONTINUITY_RULES}\n단절 근처에 장면을 추가하거나 나누거나 재배치해 핵심 사건에 화면과 시간을 충분히 배정할 수 있습니다. 중요한 과정을 내레이션 한 문장으로 넘기지 마세요. 「故事背景 / 人物 / 环境与场景 / 拍摄原则」을 보존하거나 완성하고 본문과 대사는 한국어로 쓰세요. 내레이션, 화면, 길이가 들어간 네 칸 표로 바꾸지 마세요. JSON만 출력하세요. {"playMarkdown":"..."}.`
+          content: `You are a screenwriter. Repair only the identified narrative discontinuities. Preserve user facts, character relationships, important dialogue, visual style, and scenes that already work.${NARRATIVE_CONTINUITY_RULES}\nAdd, split, or reorder nearby scenes as needed to give central events enough visible action and runtime. Do not skip an important process with a single narration line. Keep or complete the story background, characters, environments, and filming principles. Write the script and new dialogue in Korean (한국어), keeping existing important lines verbatim. Do not use a four-cell narration, image, and duration table. Return JSON only: {"playMarkdown":"..."}.`
         },
         {
           role: 'user',
