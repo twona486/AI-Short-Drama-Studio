@@ -250,11 +250,15 @@ async function produceSelectedChapters() {
   const prev = project.current.script
   const selected = selectedReadyChapters.value
   const assembled = selected
-    .map((chapter, index) => `## 第 ${index + 1} 章｜${chapter.title}\n\n${chapter.content.trim()}`)
+    .map((chapter, index) =>
+      `## ${translate('script.chapterHeading', { number: index + 1, title: chapter.title })}\n\n${chapter.content.trim()}`
+    )
     .join('\n\n---\n\n')
   project.setScript({
     id: prev?.id ?? 's_' + Date.now().toString(36),
-    topic: selected.length === 1 ? selected[0].title : `${project.current.name}（${selected.length} 章）`,
+    topic: selected.length === 1
+      ? selected[0].title
+      : translate('script.selectedChapterTitle', { project: project.current.name, count: selected.length }),
     content: assembled,
     keywords: prev?.keywords ?? [],
     style: style.value,

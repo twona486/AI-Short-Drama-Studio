@@ -134,7 +134,9 @@ async function sendText(text: string) {
       id: `a-${Date.now()}`,
       type: 'msg',
       role: 'assistant',
-      content: cancelled ? '已停止。' : '失败：' + friendlyAiError(e)
+      content: cancelled
+        ? translate('setupAgent.turnStopped')
+        : translate('agentChat.turnFailed', { error: friendlyAiError(e) })
     })
   } finally {
     busy.value = false

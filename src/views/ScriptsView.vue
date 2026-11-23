@@ -297,7 +297,7 @@ async function submitGenerate() {
   try {
     const run = await generatePlay(
       {
-        topic: topic || '未命名剧本',
+        topic: topic || translate('scripts.untitledName'),
         content: brief,
         style: genStyle.value,
         shotDuration: 5,

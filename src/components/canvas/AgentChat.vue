@@ -7,7 +7,7 @@ import { friendlyAiError, isAbortError, isTimeoutAbort } from '@/services/ai/abo
 import { appendAgentMessage, getAgentState, setAgentAutonomy } from '@/services/canvas/taskStore'
 import { estimateRequestText } from '@/services/canvas/toolRegistry'
 import { onCanvasActivity, type CanvasActivity } from '@/services/canvas/canvasBridge'
-import { nextPipelineStep } from '@/services/canvas/pipeline'
+import { nextExtractStage, nextPipelineStep } from '@/services/canvas/pipeline'
 import { useProjectStore, useSettingsStore, useToastStore } from '@/stores'
 import { desktop, isDesktop } from '@/services/desktop'
 import { autodlVideoProfileId } from '@/services/ai/runtime'
@@ -467,18 +467,32 @@ async function finishCanvasRun(ev: CanvasActivity) {
     })
   }
   const next = nextPipelineStep(project.current)
+  const extractLabels = {
+    subjects: 'nodeInspector.stepSubjects',
+    scenes: 'nodeInspector.stepScenes',
+    shots: 'nodeInspector.stepShots'
+  }
+  const stage = next?.id === 'board' ? nextExtractStage(project.current) : null
+  const nextLabel = () => next ? translate(stage ? extractLabels[stage] : `agentChat.steps.${next.id}`) : ''
   const content =
     ev.kind === 'error'
-      ? `画布上的「${ev.label}」失败了。\n原因：${ev.message || '未知错误'}\n可以改提示词后在右侧重试，或让我来处理。`
-      : `画布上的「${ev.label}」已完成。${ev.message ? `\n${ev.message}` : ''}\n${
-          next ? `下一步是「${next.label}」。回「继续」只做这一步。` : '需要继续就直接说下一步。'
-        }`
+      ? translate('agentChat.canvasRunFailed', {
+          label: ev.label,
+          error: ev.message || translate('agentChat.unknownError')
+        })
+      : [
+          translate('agentChat.canvasRunCompleted', { label: ev.label }),
+          ev.message,
+          next
+            ? translate('agentChat.canvasRunNext', { label: nextLabel() })
+            : translate('agentChat.canvasRunFollowUp')
+        ].filter(Boolean).join('\n')
   feed.value.push({ id: `a-${Date.now()}`, type: 'msg', role: 'assistant', content })
   await appendAgentMessage('assistant', content)
   if (!busy.value) {
     chips.value = next
       ? [
-          { get label() { return translate('agentChat.continue', { p0: next.label }) }, text: '继续' },
+          { get label() { return translate('agentChat.continue', { p0: nextLabel() }) }, text: translate('agentChat.continueCommand') },
           { get label() { return translate('agentChat.quickPeek') }, text: '先看看' }
         ]
       : []
@@ -535,8 +549,8 @@ async function sendText(text: string) {
     attachments.value = attachOptions
     const cancelled = turnController.signal.aborted || (isAbortError(e) && !isTimeoutAbort(e))
     const content = cancelled
-      ? '已停止。已完成的产物会保留，未开始的步骤不会继续。'
-      : '失败：' + friendlyAiError(e)
+      ? translate('agentChat.turnStopped')
+      : translate('agentChat.turnFailed', { error: friendlyAiError(e) })
     feed.value.push({ id: `a-${Date.now()}`, type: 'msg', role: 'assistant', content })
     await appendAgentMessage('assistant', content)
   } finally {

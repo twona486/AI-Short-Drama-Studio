@@ -117,7 +117,7 @@ async function submitGenerate(ev: Event) {
   project.setScript({
     ...base,
     id: base?.id ?? `s_${Date.now().toString(36)}`,
-    topic: topic || base?.topic || p.name || '剧本',
+    topic: topic || base?.topic || p.name || translate('common.scripts'),
     content: brief,
     keywords: base?.keywords ?? [],
     style: base?.style ?? 'cinematic',
