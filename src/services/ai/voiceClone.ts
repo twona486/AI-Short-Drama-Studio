@@ -1,4 +1,4 @@
-/** Qwen3-TTS 声音复刻与非实时合成。复用设置页中的百炼 TTS 地址和 API Key。 */
+/** Bailian TTS 주소와 API 키를 사용한 Qwen3-TTS 음성 복제 및 비실시간 합성 */
 import { t as translate } from '@/i18n'
 import { getTtsConfig } from './runtime'
 import { normalizeForSpeech } from './tts'
