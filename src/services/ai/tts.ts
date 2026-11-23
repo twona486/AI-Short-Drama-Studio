@@ -123,6 +123,7 @@ export function normalizeForSpeech(text: string): string {
 }
 
 export function detectSpeechLanguage(text: string): 'Chinese' | 'English' | 'Auto' {
+  if (/[가-힣]/.test(text)) return 'Auto'
   const cjk = (text.match(/[\u4e00-\u9fff]/g) || []).length
   const latin = (text.match(/[A-Za-z]/g) || []).length
   if (cjk > 0 && latin > 0) return 'Auto'
@@ -343,7 +344,8 @@ function mockSpeechWav(text: string): Blob {
 }
 
 export async function generateSpeech(input: TTSInput): Promise<TTSOutput> {
-  const text = normalizeForSpeech(clipText(spokenTextOnly(input.text || '')))
+  const spoken = clipText(spokenTextOnly(input.text || ''))
+  const text = /[가-힣]/.test(spoken) ? spoken : normalizeForSpeech(spoken)
   if (!text) throw new Error('내레이션 원고가 없어 더빙할 수 없습니다.')
 
   const cfg = ttsConfig()
