@@ -68,5 +68,5 @@ jobs:
           $files = @(Get-ChildItem -Path release -Recurse -Filter *Setup*.exe | ForEach-Object { $_.FullName })
           gh release create $tag @files `
             --repo '${{ github.repository }}' `
-            --title "드라마 플로우 Studio $tag" `
+            --title "Drama Flow Studio $tag" `
             --generate-notes

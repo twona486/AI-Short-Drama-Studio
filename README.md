@@ -1,8 +1,8 @@
-# 드라마 플로우 Studio
+# Drama Flow Studio
 
 [원본 저장소](https://github.com/JerrIsTheBesta/AI-Short-Drama-Studio)의 한국어 포크입니다.
 
-![드라마 플로우 Studio — AI 숏드라마 원클릭 생성](docs/images/github-hero-2026.png)
+![Drama Flow Studio — AI 숏드라마 원클릭 생성](docs/images/github-hero-2026.png)
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-22c55e.svg)](LICENSE)
 [![Vue 3](https://img.shields.io/badge/Vue-3-42b883.svg)](https://vuejs.org/)
@@ -14,7 +14,7 @@
 
 ## 하나의 캔버스에서 전체 제작
 
-![드라마 플로우 Studio 통합 캔버스에서 에이전트와 제작 노드를 함께 보는 화면](docs/images/studio-workflow-overview.png)
+![Drama Flow Studio 통합 캔버스에서 에이전트와 제작 노드를 함께 보는 화면](docs/images/studio-workflow-overview.png)
 
 새 프로젝트를 만들면 통합 캔버스가 열려요.
 
