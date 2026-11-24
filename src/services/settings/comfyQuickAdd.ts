@@ -1,6 +1,6 @@
 /**
- * 自建 ComfyUI 一键接入：只填 baseUrl，写入生图 / 视频 profile（comfyui-prompt）。
- * 真正出图/出视频仍需用户在适配器里粘贴 workflowTemplate。
+ * baseUrl만으로 자체 호스팅 ComfyUI 이미지 및 영상 연결을 추가한다.
+ * 실제 생성에는 어댑터에서 workflowTemplate을 등록해야 한다.
  */
 
 import {
@@ -14,11 +14,11 @@ export type ComfyQuickKind = 'image' | 'video'
 export interface ComfyQuickAddInput {
   baseUrl: string
   apiKey?: string
-  /** 默认同时加生图 + 视频 */
+  /** 기본적으로 이미지 생성과 영상 생성 연결을 함께 추가한다. */
   kinds?: ComfyQuickKind[]
-  /** 添加后设为当前选中，默认 true */
+  /** 추가한 연결을 선택 상태로 만든다. 기본값은 true다. */
   select?: boolean
-  /** 可选连通探测 */
+  /** 선택적으로 연결을 확인한다. */
   test?: boolean
 }
 
@@ -36,7 +36,7 @@ export function normalizeComfyBaseUrl(raw: string): string {
   if (!u) return ''
   if (!/^https?:\/\//i.test(u)) u = `http://${u}`
   u = u.replace(/\/+$/, '')
-  // 去掉误粘的 Comfy 路径
+  // 잘못 붙여 넣은 ComfyUI 경로를 제거한다.
   u = u
     .replace(/\/prompt$/i, '')
     .replace(/\/system_stats$/i, '')
@@ -78,13 +78,13 @@ function hostLabel(baseUrl: string): string {
   }
 }
 
-/** 写入本机设置：生图 / 视频 ComfyUI profile */
+/** 로컬 설정에 이미지 및 영상 ComfyUI 연결을 저장한다. */
 export async function addComfyUiProfiles(input: ComfyQuickAddInput): Promise<ComfyQuickAddResult> {
   const settings = useSettingsStore()
   const baseUrl = normalizeComfyBaseUrl(input.baseUrl)
   const notes: string[] = []
   if (!baseUrl) {
-    return { ok: false, baseUrl: '', notes: ['请填写 ComfyUI 地址，例如 http://127.0.0.1:8188'] }
+    return { ok: false, baseUrl: '', notes: ['ComfyUI 주소를 입력하세요. 예를 들어 http://127.0.0.1:8188을 사용할 수 있습니다.'] }
   }
 
   const kinds = input.kinds?.length ? input.kinds : (['image', 'video'] as ComfyQuickKind[])
@@ -98,7 +98,7 @@ export async function addComfyUiProfiles(input: ComfyQuickAddInput): Promise<Com
   if (kinds.includes('image')) {
     const name = uniqueProfileName(
       settings.config.images.map((p) => p.name),
-      `ComfyUI 生图 (${label})`
+      `ComfyUI 이미지 생성 (${label})`
     )
     imageId = settings.addImage({
       name,
@@ -110,13 +110,13 @@ export async function addComfyUiProfiles(input: ComfyQuickAddInput): Promise<Com
       adapter
     })
     if (select) settings.selectImage(imageId)
-    notes.push(`已添加生图接入「${name}」`)
+    notes.push(`이미지 생성 연결 ‘${name}’을 추가했습니다.`)
   }
 
   if (kinds.includes('video')) {
     const name = uniqueProfileName(
       settings.config.videos.map((p) => p.name),
-      `ComfyUI 视频 (${label})`
+      `ComfyUI 영상 (${label})`
     )
     videoId = settings.addVideo({
       name,
@@ -129,11 +129,11 @@ export async function addComfyUiProfiles(input: ComfyQuickAddInput): Promise<Com
       adapter
     })
     if (select) settings.selectVideo(videoId)
-    notes.push(`已添加视频接入「${name}」`)
+    notes.push(`영상 연결 ‘${name}’을 추가했습니다.`)
   }
 
   notes.push(
-    '出图/出视频前请在「适配器 → workflowTemplate」粘贴 Comfy「Save (API Format)」导出的 JSON，然后让助手分析出输入映射（提示词 / 参考图写到哪个节点）。'
+    '이미지나 영상 생성 전에 ‘어댑터 → workflowTemplate’에 ComfyUI Save (API Format)으로 내보낸 JSON을 붙여 넣으세요. 도우미로 프롬프트와 참조 이미지의 입력 노드를 분석하세요.'
   )
 
   let test: ComfyQuickAddResult['test']
@@ -149,7 +149,7 @@ export async function addComfyUiProfiles(input: ComfyQuickAddInput): Promise<Com
     }
     const result = await testEndpointConnection(probeKind, ep)
     test = result
-    notes.push(result.ok ? `连通测试通过：${result.detail}` : `连通测试失败：${result.detail}`)
+    notes.push(result.ok ? `연결 테스트 통과 ${result.detail}` : `연결 테스트 실패 ${result.detail}`)
   }
 
   return {
@@ -162,7 +162,7 @@ export async function addComfyUiProfiles(input: ComfyQuickAddInput): Promise<Com
   }
 }
 
-/** 从用户一句话里抽 Comfy 地址 */
+/** 사용자 요청에서 ComfyUI 주소를 추출한다. */
 export function extractComfyMention(text: string): { baseUrl: string; apiKey: string } | null {
   const t = String(text || '')
   const urlMatch =
@@ -178,9 +178,9 @@ export function extractComfyMention(text: string): { baseUrl: string; apiKey: st
     /comfy\s*ui|comfyui|自建\s*comfy|本地\s*comfy|我的\s*comfy|图生视频.*本机|本机.*出图/i.test(t) ||
     (/在\s*.+/.test(t) && /8188|localhost|127\.0\.0\.1/i.test(t))
   const bareShort = t.trim().length < 160 && /^(https?:\/\/)?[\w.:\[\]\/]+$/i.test(t.trim())
-  // 明确提到 Comfy，或地址像本机/8188，或用户只丢了一个短地址
+  // ComfyUI를 언급했거나 로컬 및 8188 주소 또는 짧은 단독 주소인 경우를 고려한다.
   if (!mentionsComfy && !looksLikeComfyUrl(baseUrl) && !bareShort) return null
-  // 短地址但完全不像本地/Comfy（例如官方 https://api.openai.com）则跳过
+  // 짧더라도 로컬이나 ComfyUI 주소가 아닌 경우 건너뛴다.
   if (!mentionsComfy && !looksLikeComfyUrl(baseUrl) && bareShort) {
     try {
       const host = new URL(baseUrl).hostname.toLowerCase()

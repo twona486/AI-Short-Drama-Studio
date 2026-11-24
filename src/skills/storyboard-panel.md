@@ -1,27 +1,27 @@
 ---
 name: storyboard-panel
-description: 先画故事看板线稿锁构图，再融合成片配图。用户说看板、线稿、分镜图、控制画面时用。
-triggers: 故事看板,看板图,线稿,分镜图,构图
+description: Draw a storyboard panel as line art to lock the composition before generating the final shot image.
+triggers: 故事看板,看板图,线稿,分镜图,构图,스토리 개요판,개요판 이미지,선화,스토리보드 이미지,구도,storyboard panel,line art,composition
 ---
 
-# 故事看板图
+# Storyboard panel image
 
-在配图之前先画一张六格黑白故事看板，用来锁定同一镜头的起始状态、动作过程、反应和结束状态。这是控制画面与视频动作的中间稿，不是成片。
+Before generating the shot image, use one six-panel black-and-white storyboard to establish the starting state, movement, reaction, and ending within the same shot. It is an intermediate reference for composition and video action.
 
-## 顺序
+## Order
 
-1. 四视图、场景锚点图先齐。
-2. 缺看板：`generate_shot_board` / `generate_all_boards`。
-3. 再 `generate_shot_image`。配图必须跟着看板构图走，不要另起机位。
+1. Gather the four-view character sheets and location anchor image.
+2. Use `generate_shot_board` or `generate_all_boards` for missing panels.
+3. Use `generate_shot_image`. Match its camera position and composition to the panel.
 
-## 看板要什么
+## Panel composition
 
-- 固定为 3×2 六格线稿，不上色，不加字幕、编号、气泡或说明文字。
-- 六格是同一个连续镜头的六个时间采样：建立、准备、开始、核心动作、反应、结束。
-- 能看清谁站哪、看哪、手里拿什么、道具如何变化、场景主锚在哪。
-- 人物、服装、道具、光源、屏幕方向和空间关系跨格保持一致。
-- 参考四视图锁人物，参考场景锚点图锁地点。
+- Use fixed 3×2 line art. Do not add colors, subtitles, numbers, speech bubbles, or captions.
+- Sample six points in one continuous shot: establish, prepare, begin, main action, reaction, and end.
+- Make blocking, eyelines, objects in hand, prop changes, and the main location anchor legible.
+- Preserve faces, clothes, props, light source, screen direction, and spatial relations across panels.
+- Use the character sheets for people and the anchor image for location. Write the generation prompt in English.
 
-## 配图怎么用看板
+## Use in later generation
 
-看板必须看着角色设计图和场景图来画。出视频把本镜看板连同人设、场景一起送给模型，最多 9 张。画外音镜头六格里所有人闭嘴，被叫到的人只做听见和反应。成片要上色、要像四视图那张脸；视频只沿用六格的动作顺序，不得生成分格、线稿或拼贴画面。
+Use character and location images to draw the panel. Include the current panel alongside the character and location references when generating video, with at most nine reference images. In off-screen narration shots, all visible mouths stay closed across the six panels. A person who is called only listens and reacts. Color the final image and match the character sheet faces. Video follows only the action sequence and must omit grids, line art, and collage. Write notes to the user in Korean (한국어).

@@ -1,4 +1,4 @@
-/** 智能体和画布之间的轻量桥：聚焦节点、拉近镜头、同步生成进度。 */
+/** 에이전트와 캔버스 사이에 노드 포커스, 확대 및 생성 진행 상태를 전달한다. */
 
 type RevealFn = (nodeId?: string) => void
 type InspectFn = (nodeId: string) => void

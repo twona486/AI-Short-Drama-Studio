@@ -1,11 +1,11 @@
 /**
- * 分镜生成服务
+ * 스토리보드 생성 서비스
  *
- * 输入：文案 + 主题 + 风格 + 镜头时长
- * 输出：StoryboardResult（含导演式策划字段）
+ * 입력은 원고, 주제, 스타일, 샷 길이다.
+ * 출력은 연출 계획 필드를 포함한 StoryboardResult다.
  *
- * 走真实 LLM，以现场短视频编导身份拆能拍的镜头；
- * 失败/未配置则走演示数据
+ * 실제 언어 모델을 호출해 숏폼 영상 감독의 관점에서 촬영 가능한 샷을 나눈다.
+ * 실패하거나 설정이 없으면 데모 데이터를 사용한다.
  */
 
 import { callLLM, getAIMode, type LLMMessage, type LLMContentPart } from './client'
@@ -28,7 +28,7 @@ import { extractJsonText, parseJsonRobust } from '@/utils/jsonRepair'
 import { boundSubjectIds, inferSubjectsFromText, shotCastText, subjectMatchKeys } from '@/utils/consistency'
 import { sceneConflictsWithShot, shotMentionsScene } from '@/utils/shotPlace'
 import { isPlaceholderSpokenLine } from './dialogue'
-import { mergeContinuedPlay } from '@/utils/playContinue'
+import { mergeContinuedPlay, playSceneHeadings } from '@/utils/playContinue'
 import {
   extractPlayDirectives,
   extractSceneSlice,
@@ -46,52 +46,52 @@ export interface StoryboardInput {
   content: string
   style: VisualStyle
   shotDuration: number
-  /** 当前所选视频模型允许的单镜最长时长。导演应优先在此范围内完成连续动作。 */
+  /** 선택한 영상 모델의 샷당 최대 길이. 동작이 이 범위 안에서 이어져야 한다. */
   maxShotDuration?: number
   aspectRatio: string
-  /** 文案关键词（若有） */
+  /** 원고 키워드(선택) */
   keywords?: string[]
-  /** 产品/主题参考图（data URL 或公网 URL），最多 5 张，电商带货时以产品为准 */
+  /** 제품 또는 주제 참조 이미지(data URL 또는 공개 URL)는 최대 5장. 상품 소개 영상에서는 제품을 기준으로 삼는다. */
   productImages?: string[]
   /**
-   * extract：content 已是完整剧本，只提炼人物/场景/分镜节点
-   * full：兼容旧的一步到位（尽量少用）
+   * extract는 완성 대본에서 캐릭터, 장면, 스토리보드 노드만 추출한다.
+   * full은 기존 일괄 실행과 호환하기 위한 모드다.
    */
   mode?: 'extract' | 'full'
-  /** write：从草稿写完整剧本；continue：保留已有场次往后加 */
+  /** write는 초안을 전체 대본으로 완성한다. continue는 기존 장면에 새 장면을 덧붙인다. */
   playMode?: 'write' | 'continue'
-  /** 续写方向，例如「再写两场，写父亲回家之后」 */
+  /** 이어 쓰기 방향. 예를 들어 아버지가 귀가한 뒤 장면을 두 개 추가한다. */
   continueHint?: string
-  /** 覆盖设置页当前主 LLM，须是设置里已保存的模型名 */
+  /** 설정에 저장한 모델 이름으로 기본 언어 모델을 재정의한다. */
   model?: string
   signal?: AbortSignal
-  /** 提炼模式分阶段交付；每完成一步立即持久化，后续失败不回滚。 */
+  /** 추출 단계가 끝날 때마다 저장한다. 이후 단계의 실패로 저장된 결과를 되돌리지 않는다. */
   onExtractStage?: (
     stage: 'subjects' | 'scenes' | 'shots',
     partial: StoryboardResult,
     meta?: { partial?: boolean; completed?: number; total?: number }
   ) => void | Promise<void>
-  /** 失败重试时从未完成的阶段继续，避免重复提炼已落库内容。 */
+  /** 재시도 시 완료하지 못한 단계부터 진행하고 이미 저장한 결과를 재사용한다. */
   extractStartAt?: 'subjects' | 'scenes' | 'shots'
-  /** 一次用户操作只完成一个阶段。 */
+  /** 사용자 작업 한 번마다 한 단계를 완료한다. */
   extractStopAfter?: 'subjects' | 'scenes' | 'shots'
   existingSubjects?: Subject[]
   existingScenes?: Scene[]
-  /** 原创电影章节：按场次/蒙太奇拆，不压成短视频口播表。 */
+  /** 오리지널 영화 챕터는 장면과 몽타주를 기준으로 나눈다. */
   workflowMode?: Script['workflowMode']
-  /** 用户导入的成稿：只按原文切镜头，禁止改写对白和情节。 */
+  /** 가져온 완성 대본은 원문에 따라 샷을 나누고 대사와 줄거리를 유지한다. */
   verbatim?: boolean
   /**
-   * 用户要的成片总时长（秒）。这是分镜数量的硬预算：
-   * 剧本和分镜都按它反推规模，避免「要 40 秒却拆出 20 镜」。
+   * 요청한 최종 영상 길이(초)는 스토리보드 샷 수의 상한을 결정한다.
+   * 목표 길이에서 대본과 스토리보드의 규모를 역산한다.
    */
   targetDurationSec?: number
   /**
-   * 断点续跑：按工作包序号给已完成的分镜结果，执行时直接跳过这些小组，不再调模型。
-   * 数组须与 buildShotWorkBatches 对同一份剧本的切分一致（剧本文本没变时天然一致）。
+   * 재개 시 작업 그룹 번호별 완료 결과를 전달하면 해당 그룹의 모델 호출을 건너뛴다.
+   * 배열 순서는 같은 대본을 buildShotWorkBatches로 나눈 결과와 일치해야 한다.
    */
   resumeBatchShots?: Array<Record<string, unknown>[] | undefined>
-  /** 每个小组真实完成（含跳过）时回调，供调用方写断点标记。 */
+  /** 작업 그룹이 완료되거나 기존 결과를 재사용할 때 호출해 재개 지점을 기록한다. */
   onBatchDone?: (index: number, shots: Record<string, unknown>[], model?: string) => void
 }
 
@@ -103,7 +103,7 @@ function shotDurationLimit(input: Pick<StoryboardInput, 'maxShotDuration'>): num
   return Math.max(5, Math.min(30, Math.round(Number(input.maxShotDuration) || 15)))
 }
 
-/** 成片总时长允许比用户要求多 10 秒或少 10 秒。超出这个窗口必须打回。 */
+/** 완성 영상과 목표 길이 사이에 ±10초를 허용한다. 이를 벗어나면 다시 요청한다. */
 export const DURATION_TOLERANCE_SEC = 10
 const MIN_SHOT_SEC = 5
 const DURATION_REPAIR_ROUNDS = 2
@@ -141,16 +141,21 @@ function acceptDuration(seconds: number): number {
   return n >= 10 && n <= 1800 ? n : 0
 }
 
-/** 从一小段里读出秒数：30秒、30s、1分20秒、1.5分钟、三十秒、半分钟。 */
+/** 짧은 길이 표현을 초로 변환한다. 초, 분과 초, 소수 분을 지원한다. */
 function secondsFromPhrase(phrase: string): number {
+  const english = phrase.trim().match(/^(\d+(?:\.\d+)?)[\s-]*(minutes?|mins?|m|seconds?|secs?|s)\b(?:\s*(\d+)\s*(?:seconds?|secs?|s)\b)?$/i)
+  if (english) {
+    const scale = /^m/i.test(english[2]) ? 60 : 1
+    return acceptDuration(Number(english[1]) * scale + Number(english[3] || 0))
+  }
   const text = phrase.replace(/\s+/g, '')
   if (!text) return 0
   if (text.includes('半分钟')) return 30
-  const minSec = text.match(/(\d+)分(\d+)秒/)
+  const minSec = text.match(/(\d+)(?:分|분)(\d+)(?:秒|초)/)
   if (minSec) return acceptDuration(Number(minSec[1]) * 60 + Number(minSec[2]))
-  const minutes = text.match(/(\d+(?:\.\d+)?)分钟/)
+  const minutes = text.match(/(\d+(?:\.\d+)?)(?:分钟|분)/)
   if (minutes) return acceptDuration(Number(minutes[1]) * 60)
-  const seconds = text.match(/(\d+)(?:秒|秒钟|s)/i)
+  const seconds = text.match(/(\d+)(?:秒钟|秒|초|s\b)/i)
   if (seconds) return acceptDuration(Number(seconds[1]))
   const cnMin = text.match(/([一二两三四五六七八九十]+|半)分钟/)
   if (cnMin) {
@@ -163,11 +168,11 @@ function secondsFromPhrase(phrase: string): number {
 }
 
 const DURATION_PHRASE =
-  '((?:半分钟)|(?:\\d+\\s*分\\s*\\d+\\s*秒)|(?:\\d+(?:\\.\\d+)?\\s*分钟)|(?:\\d+\\s*(?:秒|秒钟|s))|(?:[一二两三四五六七八九十]+\\s*分钟)|(?:[一二两三四五六七八九十]+\\s*秒))'
+  '((?:半分钟)|(?:\\d+\\s*(?:分|분)\\s*\\d+\\s*(?:秒|초))|(?:\\d+(?:\\.\\d+)?\\s*(?:分钟|분))|(?:\\d+\\s*(?:秒钟|秒|초))|(?:\\d+(?:\\.\\d+)?[\\s-]*(?:minutes?|mins?|m)\\b(?:\\s*\\d+\\s*(?:seconds?|secs?|s)\\b)?)|(?:\\d+[\\s-]*(?:seconds?|secs?|s)\\b)|(?:[一二两三四五六七八九十]+\\s*分钟)|(?:[一二两三四五六七八九十]+\\s*秒))'
 
 function labeledDuration(text: string): number {
   const primary = new RegExp(
-    `(?:总时长|成片时长|目标成片|成片|全片|整片|总共|一共|控制在|做成|拍成|建议时长|目标时长|视频时长)\\s*[:：是为]?\\s*(?:约|大概|大约)?\\s*${DURATION_PHRASE}`,
+    `(?:总时长|成片时长|目标成片|成片|全片|整片|总共|一共|控制在|做成|拍成|建议时长|目标时长|视频时长|전체 길이|목표 길이|목표 영상 길이|영상 길이|\\b(?:target|total|video) duration\\b)\\s*[:：是为]?\\s*(?:约|大概|大约|약|about\\b|approximately\\b)?\\s*${DURATION_PHRASE}`,
     'gi'
   )
   let hit: RegExpExecArray | null
@@ -176,10 +181,10 @@ function labeledDuration(text: string): number {
     if (n) return n
   }
   const filmed = text.match(
-    new RegExp(`(\\d+)\\s*(?:秒|秒钟|s)\\s*(?:左右|以内)?\\s*(?:的)?\\s*(?:短剧|短片|视频|成片|短电影)`, 'i')
+    new RegExp(`${DURATION_PHRASE}\\s*(?:左右|以内|정도|이내|짜리)?\\s*(?:的)?\\s*(?:短剧|短片|视频|成片|短电影|숏드라마|단편|영상|\\b(?:short film|short drama|video)\\b)`, 'i')
   )
   if (filmed) {
-    const n = acceptDuration(Number(filmed[1]))
+    const n = secondsFromPhrase(filmed[1])
     if (n) return n
   }
   const secondary = new RegExp(`时长\\s*[:：]?\\s*(?:约|大概|大约)?\\s*${DURATION_PHRASE}`, 'gi')
@@ -198,7 +203,7 @@ function bareDuration(text: string): number {
   return hit ? secondsFromPhrase(hit[1] || hit[0]) : 0
 }
 
-/** 从用户原话里认「约 40 秒 / 40s / 30S / 1 分钟 / 三十秒」这类目标总时长。认不出返回 0。 */
+/** 사용자 요청에서 목표 길이를 찾는다. 인식할 수 없으면 0을 반환한다. */
 export function extractTargetDurationSec(...texts: Array<string | undefined | null>): number {
   for (const text of texts) {
     const raw = String(text || '').trim()
@@ -215,7 +220,7 @@ export function totalShotDuration(shots: Array<{ duration?: number }>): number {
   return shots.reduce((sum, shot) => sum + Math.max(0, Math.round(Number(shot.duration) || 0)), 0)
 }
 
-/** 总时长不在目标 ±10 秒内时返回必须打回的原因；合格返回空字符串。 */
+/** 목표 길이의 ±10초 범위를 벗어나면 다시 요청할 사유를 반환한다. */
 export function durationWindowIssue(totalSec: number, targetSec: number): string {
   const target = Math.round(Number(targetSec) || 0)
   if (target < 10) return ''
@@ -223,13 +228,12 @@ export function durationWindowIssue(totalSec: number, targetSec: number): string
   if (Math.abs(total - target) <= DURATION_TOLERANCE_SEC) return ''
   const lo = target - DURATION_TOLERANCE_SEC
   const hi = target + DURATION_TOLERANCE_SEC
-  const delta = total - target
-  return `严重：成片总时长 ${total} 秒，不在用户要求的 ${target} 秒允许区间 ${lo}–${hi} 秒（只能多 ${DURATION_TOLERANCE_SEC} 秒或少 ${DURATION_TOLERANCE_SEC} 秒）。当前${delta > 0 ? '超了' : '少了'} ${Math.abs(delta)} 秒。必须重排镜头，让全部 duration 相加落进这个区间：超了就合并相邻、同地点、同组人物的镜头并缩短；短了就加长已有镜头。不能删掉关键剧情来凑秒数。`
+  return `Critical: The video runs ${total} seconds, outside the ${lo}–${hi}-second window for the ${target}-second target. Merge adjacent shots with the same cast and location if too long, or extend existing shots if too short. Retain all key story events.`
 }
 
 /**
- * 按模型单镜上限把成片时长切成小组。
- * 30 秒、单镜最长 15 秒 → [15, 15]，两个小组各出 15 秒。
+ * 모델의 샷당 최대 길이로 최종 영상 길이를 나눈다.
+ * 목표가 30초이고 샷당 최대 15초면 두 그룹에 15초씩 배정한다.
  */
 export function durationSlices(targetSec: number | undefined, maxShotSec?: number): number[] {
   const target = Math.round(Number(targetSec) || 0)
@@ -252,49 +256,53 @@ export function durationSlices(targetSec: number | undefined, maxShotSec?: numbe
 }
 
 /**
- * 目标总时长 → 分镜小组数。一组对应用模型最长的一镜。
- * 30 秒、最长 15 秒 → 2 组，不是按 5 秒一镜拆成 8 组。
+ * 목표 길이로 스토리보드 그룹 수를 정한다. 그룹 하나는 모델의 최대 길이 샷 하나에 해당한다.
+ * 목표가 30초이고 최대 15초면 그룹을 두 개 만든다.
  */
 export function shotBudgetFromDuration(targetSec: number | undefined, maxShotSec?: number): number {
   return durationSlices(targetSec, maxShotSec).length
 }
 
+const AD_COPY = /口播|带货|产品演示|내레이션|라이브\s*커머스|제품\s*시연|\b(?:narration|product demo|shoppable video|live commerce)\b/i
+const ADULT_NARRATOR = /成年|성인|어른이\s*된|\badult\b/i
+const NUMBERED_SCENE = /^##[ \t]+(?:场景[ \t]*[一二三四五六七八九十百0-9]|(?:장면|Scene)[ \t]+\d+)/gim
+
 function isLongFormPlay(input: Pick<StoryboardInput, 'workflowMode' | 'content'>, play = ''): boolean {
   const text = play || input.content || ''
   if (input.workflowMode === 'film-chapter') return true
-  if (/建议时长[：:\s]*\d+\s*[—\-～~]?\s*\d*\s*分钟/.test(text)) return true
-  const scenes = [...text.matchAll(/^##\s+场景[一二三四五六七八九十百0-9]/gm)]
+  if (/(?:建议时长|권장\s*길이|recommended\s*(?:duration|length))[：:\s]*\d+\s*(?:[—–\-～~]\s*\d+\s*)?(?:分钟|분|minutes?\b)/i.test(text)) return true
+  const scenes = [...text.matchAll(NUMBERED_SCENE)]
   return scenes.length >= 5
 }
 
 export interface StoryboardShot {
-  /** 简短标题（3-8 字） */
+  /** 짧은 제목(3~8자) */
   title: string
   /**
-   * 详细视觉描述（中文，5-8 句）
-   * 必须含：场景主锚与光线、角色站位朝向、动作、景别运镜、道具焦点、气氛
+   * 영어로 상세한 화면을 5~8문장으로 서술한다.
+   * 장면의 기준물과 조명, 인물 위치와 방향, 동작, 샷 크기와 카메라 움직임, 소품, 분위기를 포함한다.
    */
   visualPrompt: string
-  /** 视频内容表现：谁做什么、说什么、镜头怎么走（中文，禁止复用 visualPrompt） */
+  /** 영어로 인물의 동작과 대사 표기, 카메라 움직임을 서술한다. visualPrompt와 구별한다. */
   videoPrompt?: string
-  /** 音效描述（中文短句） */
+  /** 효과음을 한국어로 간단히 설명한다. */
   audioDescription: string
-  /** 口播文案（中文） */
+  /** 내레이션 또는 대사 원문 */
   voiceover: string
   audioMode?: ShotAudioMode
   speakerHint?: string
   /**
-   * 本镜说话角色的音色描述。从人物节点的 voicePrompt 自动绑定，
-   * 生成视频和后期配音时都会带上，保证同一角色全片一个声线。
+   * 이 샷의 화자 음색을 캐릭터 노드의 voicePrompt에서 연결한다.
+   * 영상 생성과 후반 더빙에 동일한 음색을 전달한다.
    */
   speakerVoice?: string
-  /** 时长（秒，5-10） */
+  /** 샷 길이(초, 5~10) */
   duration: number
-  /** 镜头运动 */
+  /** 카메라 움직임 */
   cameraMovement: Shot['cameraMovement']
-  /** 本镜出场主体 id（对应 subjects[].id） */
+  /** 이 샷에 등장하는 피사체 ID(subjects[].id 참조) */
   subjectIds?: string[]
-  /** 本镜场景 id（对应 scenes[].id） */
+  /** 이 샷의 장면 ID(scenes[].id 참조) */
   sceneId?: string
   purpose?: string
   shotSize?: string
@@ -305,17 +313,17 @@ export interface StoryboardShot {
 }
 
 export interface StoryboardResult {
-  /** 项目级整体氛围（中文，1-2 段） */
+  /** 프로젝트 전체 분위기(한국어 1~2문단) */
   aesthetic?: string
   h3Aesthetic?: string
   styleBrief?: string
   colorPalette?: string
   lightingNote?: string
-  /** 整片锁定的主体（人物/动物），后续先出人设图 */
+  /** 전체 영상에서 외형을 유지할 인물과 동물. 캐릭터 설정 이미지를 먼저 만든다. */
   subjects?: Subject[]
-  /** 剧本里至少出现两次的道具，后续出多角度图 */
+  /** 대본에 두 번 이상 등장하는 소품. 다각도 이미지를 생성한다. */
   props?: StoryProp[]
-  /** 整片锁定的场景底板 */
+  /** 전체 영상에 공통으로 사용할 장면 기준 이미지 */
   scenes?: Scene[]
   shots: StoryboardShot[]
 }
@@ -333,8 +341,8 @@ const log = (msg: string) =>
   console.log('%c[storyboard]', 'color:#7c3aed;font-weight:600', msg)
 
 /**
- * 从主题 + 文案中抽出用户自己写的画风/美学指令（最高优先级）
- * 主题整段一律视为画风圣经；文案开头与含画风词的句子一并保留。
+ * 주제와 원고에서 사용자가 직접 쓴 화면 스타일과 미학 지시를 찾는다. 이 지시가 우선한다.
+ * 주제 전체와 원고의 도입, 화면 스타일이 언급된 문장을 보존한다.
  */
 export function extractUserStyleAuthority(
   topic: string,
@@ -343,7 +351,7 @@ export function extractUserStyleAuthority(
 ): string {
   const parts: string[] = []
   const t = topic.trim()
-  // 主题整段保留：用户常在主题里写清画风/美学
+  // 사용자가 주제에 화면 스타일을 적을 수 있으므로 전체를 보존한다.
   if (t) parts.push(t)
 
   const styleCue =
@@ -354,7 +362,7 @@ export function extractUserStyleAuthority(
     .map((s) => s.trim())
     .filter((s) => s.length >= 4)
 
-  // 文案前 2 行常含画风/设定，优先纳入
+  // 원고 첫 두 줄에 스타일과 설정이 있을 수 있어 우선 추가한다.
   for (const line of contentLines.slice(0, 2)) {
     if (!parts.includes(line)) parts.push(line)
   }
@@ -368,7 +376,7 @@ export function extractUserStyleAuthority(
   }
 
   const kws = (keywords ?? []).map((k) => k.trim()).filter(Boolean)
-  if (kws.length) parts.push(`关键词：${kws.join('、')}`)
+  if (kws.length) parts.push(`Keywords: ${kws.join('、')}`)
 
   return parts.join('\n')
 }
@@ -380,41 +388,41 @@ function buildStylePriorityBlock(input: StoryboardInput): string {
   const mediumPhrase = extractUserMediumPhrase(input.topic, input.content, ...(input.keywords ?? []))
 
   if (mediumPhrase) {
-    return `【画风听用户的 · 硬性】
-用户点名了画风。画风写进画面实物里，不要单独开一段技法说明书。
+    return `[Use the user's specified style]
+The user supplied a visual style. Show it through visible objects instead of a separate technical paragraph.
 
-用户点名的画风原词（文中点一次即可）：「${mediumPhrase}」
+User-supplied style wording (mention it once): 「${mediumPhrase}」
 
-用户主题/画风原文：
+Original topic and style
 """
 ${userAuth}
 """
 
-每一镜 visualPrompt 必须是镜头语言：
-1. 写画面里能看见的一切：地面/建筑/水/植物/天空/道具，近到远。
-2. 写动态：水波、风、衣摆、烟尘；不动也要写明静止。
-3. 写光从哪来、影子落在哪。
-4. 人：衣服、手脚、朝向、手里的具体物件、这一秒在做什么。
-5. 「${mediumPhrase}」在文中自然出现一次；技法只写在实物上。禁止开头「${mediumPhrase}。」然后空讲站位，禁止结尾抄画风套话。
+Write every visualPrompt as filmable shot description in English.
+1. Describe visible ground, buildings, water, plants, sky, and props from near to far.
+2. Show movement in water, wind, fabric, smoke, and dust. Explicitly describe stillness when appropriate.
+3. State where light comes from and where the shadows fall.
+4. Specify the person's clothes, hands and feet, orientation, objects in hand, and present action.
+5. Mention ${mediumPhrase} naturally once and attach techniques to visible objects. Do not start with just ${mediumPhrase} and a blocking list or end with generic style boilerplate.
 ${
   look.matched
-    ? `6. 该媒介画在实物上时注意：${VISUAL_STYLE_GUIDE[look.matched].mustInclude}。${VISUAL_STYLE_GUIDE[look.matched].avoid}`
-    : `6. 按「${mediumPhrase}」这个媒介本身的材料与质感来写实物，不要套页面下拉风格。`
+    ? `6. Follow these requirements when depicting physical objects in this medium: ${VISUAL_STYLE_GUIDE[look.matched].mustInclude}。${VISUAL_STYLE_GUIDE[look.matched].avoid}`
+    : `6. Describe objects with the materials and texture of ${mediumPhrase}. Do not impose the dropdown's style.`
 }`
   }
 
   if (userAuth) {
-    return `【画风听用户的】
-用户主题原文（保留味道，但主题没点名具体媒介）：
+    return `[Follow the user's look]
+Original topic: preserve its mood; no medium was specified.
 """
 ${userAuth}
 """
 
-画面媒介以下拉风格为准（当前：${styleLabel(input.style)} / ${input.style}）：
+Use the dropdown medium (current selection: ${VISUAL_STYLE_GUIDE[input.style].medium} / ${input.style}):
 ${fallback}`
   }
 
-  return `【画风指令】主题未写画风时，以下拉风格为准：
+  return `[Visual style] Use the dropdown style when the premise does not specify one.
 ${fallback}`
 }
 
@@ -429,7 +437,7 @@ function resolvePlayModel(input: Pick<StoryboardInput, 'model'>): string | undef
   return model || undefined
 }
 
-/** 本地无法修复时，让主模型只修 JSON 语法，再进入业务质量验收。 */
+/** 로컬에서 복구할 수 없으면 모델로 JSON 문법만 복구한 후 품질을 검수한다. */
 async function parseJsonWithModelRepair(
   content: string,
   input: Pick<StoryboardInput, 'signal' | 'model'>,
@@ -438,7 +446,7 @@ async function parseJsonWithModelRepair(
   try {
     return robustParseJson(content)
   } catch (parseError) {
-    log(`⚠ ${label} JSON 语法异常，调用结构修复：${(parseError as Error).message.split('\n')[0]}`)
+    log(`⚠ ${label} JSON 문법에 오류가 있어 구조를 복구하고 있어요. ${(parseError as Error).message.split('\n')[0]}`)
     const jsonCandidate = (() => {
       try {
         return extractJsonText(content)
@@ -447,7 +455,7 @@ async function parseJsonWithModelRepair(
       }
     })()
     if (!jsonCandidate) {
-      throw new Error(`${label} JSON 自动修复失败：没有可修复的内容\n首次错误：${(parseError as Error).message}`)
+      throw new Error(`${label} JSON 자동 복구에 실패했습니다. 복구할 내용이 없습니다.\n첫 오류 ${(parseError as Error).message}`)
     }
     let repairedContent = ''
     try {
@@ -455,7 +463,7 @@ async function parseJsonWithModelRepair(
         messages: [
           {
             role: 'system',
-            content: `你是 JSON 语法修复器。只修复逗号、引号、转义符、括号和被截断的容器结构；保留已有字段名、字段值、数组顺序和中文原文，不润色、不翻译、不总结、不新增事实。若末尾截断，只保留已经完整的数组元素并闭合 JSON。只输出一个合法 JSON 对象。`
+            content: `Repair JSON syntax only: commas, quotes, escapes, brackets, and truncated containers. Preserve existing keys, values, array order, and wording. Do not polish, translate, summarize, or add facts. If the end is truncated, keep complete array items only and close the containers. Return one valid JSON object.`
           },
           { role: 'user', content: jsonCandidate }
         ],
@@ -468,41 +476,43 @@ async function parseJsonWithModelRepair(
       })
       repairedContent = repaired.content || ''
     } catch (llmError) {
-      log(`⚠ ${label} 模型修复调用失败：${(llmError as Error).message}`)
+      log(`⚠ ${label} 구조 복구 요청에 실패했어요. ${(llmError as Error).message}`)
     }
     if (repairedContent.trim()) {
       try {
         return robustParseJson(repairedContent)
       } catch (repairError) {
-        log(`⚠ ${label} 模型修复结果仍无法解析：${(repairError as Error).message.split('\n')[0]}`)
+        log(`⚠ ${label} 복구한 응답을 해석하지 못했어요. ${(repairError as Error).message.split('\n')[0]}`)
       }
     }
     throw new Error(
-      `${label} JSON 自动修复失败：${(parseError as Error).message}`
+      `${label} JSON 자동 복구에 실패했습니다. ${(parseError as Error).message}`
     )
   }
 }
 
 const QUALITY_REPAIR_ROUNDS = 3
 
+// 이야기 범위·인과·샷 간 연속성 검수 규칙.
 const NARRATIVE_CONTINUITY_RULES = `
-【叙事连续性硬规则】
-1. 先从用户要求中锁定“本次视频/本集”的起点、终点、时长和明确要展示的事件。边界指用户指定的集或段，不是把完整故事砍成高潮切片。用户要完整短片或完整改编时，必须写全对抗引擎与关键人物；只有用户明确只要某一段时才允许切片。禁止为了显得完整而续写下一集、提前揭晓用户要求停住的后果、补讲无关世界观或替用户推进到下一集。
-2. 允许在用户指定的任何节点结束，包括异变刚启动、穿越途中、刚落地、看到陌生人或其他悬念点。开放式结尾和悬念不是断层；结尾只需把当前状态落稳，不得擅自接着解释。
-3. 在本次边界内，每个镜头/场次必须由上一段的可见结果触发，并给下一段留下明确的可见状态；禁止只靠观众脑补人物怎么到场、怎么认识、为什么突然开始解释。
-4. 地点、时代、身份、关系、目标或身体状态发生重大变化时，只展开到本次视频终点为止的因果链。可用的拍点包括：触发征兆 → 变化过程 → 冲击结果 → 即时反应 → 观察确认 → 首次接触。根据用户要求与时长选取必要拍点，可以停在链条中间，但不能在实际展示的两个拍点之间无过渡跳跃。
-5. 穿越、事故、变身、发现秘密、重逢、背叛、战斗爆发等若是本集核心卖点，应获得与本集重要性相称的画面和时长；若用户只把它作为背景或明确要求略过，则服从用户，不强行扩写。
-6. 解释性台词要有当前剧情中的触发条件；但用户明确要求从讲解、复盘或既定关系开场时，服从该形式，不擅自补前情。
-7. 相邻段落逐对核对人物位置、姿势、朝向、手中物、伤势、情绪、已知信息和环境时间。后一段开头必须接住前一段末态；若跳时空，必须用用户允许的可见转场完成。
-8. 不用旁白代替本集本应看见的关键过程，也不为了补过程虚构用户未要求的新事实。`
+Narrative continuity requirements:
+1. Begin by determining the requested opening, ending, duration, and events for this video or episode. Follow the user's episode or excerpt boundary. For a complete short film or adaptation, include the full central conflict and key characters. Excerpt only when asked. Do not continue another episode, reveal a consequence beyond the stopping point, or expand unrelated worldbuilding.
+2. End at any point the user specifies, including the onset of a change, during a transition, on arrival, on seeing a stranger, or another suspense point. An open ending does not constitute a gap. Establish the current state without explaining the next events.
+3. Within the boundary, start each scene or shot from the visible result of the preceding beat. Leave a clear visible state for the next beat. Show how someone arrived, became acquainted, or was prompted to explain rather than asking viewers to infer those facts.
+4. For major changes in place, era, identity, relationships, goals, or physical state, cover only the causal chain within this video's ending. Select necessary beats from warning signs → change → impact → immediate reaction → observation or verification → first contact. You may stop partway, but show a visible transition between beats that you do depict.
+5. Give central time travel, accidents, transformations, discoveries, reunions, betrayals, or fight outbreaks screen time proportional to their importance. Follow the user's explicit direction to treat something as background or skip it.
+6. Give explanatory lines a trigger in the current story. If the user asks to begin with explanation, recap, or an established relationship, follow that format without adding backstory.
+7. Check every adjacent pair for position, pose, orientation, handheld objects, injury, emotion, knowledge, and environmental time. The next opening must connect to the previous ending. Use a visible transition for changes in time or location when the user permits it.
+8. Do not replace important visible processes with narration or invent facts to bridge gaps.`
 
+// 화자와 화면 속 인물의 배치·시선·반응 규칙.
 const SPEAKER_STAGING_RULES = `
-【出镜对白与站位】
-1. 开口的人嘴要可读，但不等于他必须正面朝向镜头、站在画面正中。说话者可以在后面、侧面、跪着。
-2. 画面里每一个人都要写进 blocking / eyeline / videoPrompt：在近处还是后面、身体朝哪、眼睛看谁或看什么。没写占位的人会被生成模型摆成合影看镜头。
-3. 前面的人如果不是说话者，必须侧对或背对镜头，回头/侧头看说话者或他指的东西，禁止正面看镜头。
-4. 同一空间的对白往来可以留在一镜。videoPrompt 必须从0秒到本镜结束按实际剧情拍点分成2–5段，逐段写清当前唯一说话者和其他人的反应；同一说话者连续2–4个短句也可以保留在同一段。
-5. voiceover 保留“人物名：台词”。videoPrompt 禁止只写说话者动作、再用一句「不要看镜头」带过其他人。每段必须写全所有在场人物的占位、视线和非语言反应。`
+On-screen dialogue and blocking:
+1. Make the speaker's lips legible. They can stand to the side or in the background, or kneel; they need not face the lens or stand at the center.
+2. Include every visible person's foreground or background position, body orientation, and eyeline in blocking / eyeline / videoPrompt. Missing blocking can make the generator pose the cast toward the lens.
+3. A foreground listener should face sideways or away and look toward the speaker or what the speaker points to. Do not have the listener look into the camera.
+4. A dialogue exchange in one space can stay in one shot. Split videoPrompt from time zero to the end into 2–5 real beats, identifying the only speaker and the other characters' reactions in each beat. A sequence of 2–4 short lines from one speaker can stay together.
+5. Use the “character name: line” format in voiceover. In every videoPrompt beat, describe everyone's position, eyeline, and nonverbal reaction rather than adding a generic “do not look at the camera.” Preserve spoken lines verbatim.`
 
 async function auditStoryboardNarrative(
   parsed: StoryboardResult,
@@ -525,12 +535,12 @@ async function auditStoryboardNarrative(
       messages: [
         {
           role: 'system',
-          content: `你是影视连续性编审，只找会让普通观众觉得“怎么突然就到这里了”的实质断层，不挑措辞和审美细节。${NARRATIVE_CONTINUITY_RULES}
-先依据用户原始要求判断本次视频的叙事边界，再逐对检查边界内的镜头。用户只要求第一集、片段、预告或悬念结尾时，不得把“没有继续讲后续”判为问题；只检查已经展示的相邻拍点之间是否跳步。只输出 JSON：{"issues":["第 1→2 镜：上一镜末态……，下一镜却……；在本集边界内应补……"]}。没有实质问题就输出 {"issues":[]}。最多 6 条，每条必须指出具体相邻镜头或边界内缺失的过渡。`
+          content: `Audit film continuity. Report only real breaks that would make an ordinary viewer wonder how the story reached this point. Ignore wording and aesthetic details.${NARRATIVE_CONTINUITY_RULES}
+Determine the narrative boundary from the original request, then check adjacent shots inside it. For a first episode, excerpt, trailer, or suspense ending, omitting subsequent events is not a fault. Check only jumps between adjacent beats that are already shown. Write the QA comments in Korean (한국어). Return JSON only: {"issues":["1→2번 샷 사이에 …가 빠졌습니다."]}. Return {"issues":[]} when there are no substantial issues. Give at most six items, each naming the adjacent shots or missing transition within the boundary.`
         },
         {
           role: 'user',
-          content: `用户原始要求：\n${input.topic}\n${input.content}\n\n待审分镜：\n${JSON.stringify(compact)}`
+          content: `Original user request\n${input.topic}\n${input.content}\n\nStoryboard to check\n${JSON.stringify(compact)}`
         }
       ],
       model,
@@ -546,7 +556,7 @@ async function auditStoryboardNarrative(
       .filter(Boolean)
       .slice(0, 6)
   } catch (error) {
-    log(`⚠ 叙事连续性审查不可用，保留结构质检结果：${(error as Error).message}`)
+    log(`⚠ 이야기 연결을 검수하지 못했어요. 구조 검사 결과를 유지해요. ${(error as Error).message}`)
     return []
   }
 }
@@ -561,19 +571,19 @@ async function ensureNarrativeContinuity(
   for (let round = 0; round < 2; round++) {
     const issues = await auditStoryboardNarrative(current, input, model)
     if (!issues.length) return current
-    onProgress?.(`发现叙事断层，正在局部重排相关镜头（${round + 1}/2）…`)
-    log(`⚠ 叙事连续性未通过 ${round + 1}/2：${issues.join('；')}`)
+    onProgress?.(`이야기가 끊기는 부분을 찾아 관련 샷을 재배치하는 중（${round + 1}/2）…`)
+    log(`⚠ 이야기 연결 검수를 통과하지 못했어요. ${round + 1}/2：${issues.join('；')}`)
     current = await repairStoryboardOnce(
       current,
       input,
       model,
-      issues.map((issue) => `严重：叙事断层：${issue}`)
+      issues.map((issue) => `심각: 이야기 연속성 단절 ${issue}`)
     )
     current = await ensureStoryboardQuality(current, input, model, onProgress)
   }
   const remaining = await auditStoryboardNarrative(current, input, model)
   if (remaining.length) {
-    throw new Error(`叙事连续性验收未通过（已自动局部重写 2 次）：${remaining.join('；')}`)
+    throw new Error(`샷을 두 차례 자동으로 부분 수정했지만 이야기 연속성 검수를 통과하지 못했습니다. ${remaining.join('；')}`)
   }
   return current
 }
@@ -590,23 +600,23 @@ async function polishStoryboardOnce(
   onProgress?: (msg: string) => void
 ): Promise<StoryboardResult> {
   const structural = storyboardQualityIssues(parsed, input)
-  onProgress?.('快速检查镜头承接与说话者归属…')
+  onProgress?.('샷 연결과 대사별 화자를 확인하는 중…')
   const narrative = await auditStoryboardNarrative(parsed, input, model)
-  const issues = [...structural, ...narrative.map((issue) => `叙事承接：${issue}`)].slice(0, 16)
+  const issues = [...structural, ...narrative.map((issue) => `Narrative continuity: ${issue}`)].slice(0, 16)
   if (!issues.length) return parsed
 
-  onProgress?.('发现可改进处，合并修订一次后立即交稿…')
+  onProgress?.('개선할 항목을 모아 한 번 수정한 뒤 초안을 제공하는 중…')
   try {
     const repaired = await repairStoryboardOnce(parsed, input, model, issues)
     const remaining = storyboardQualityIssues(repaired, input)
     if (remaining.length) {
-      log(`⚠ 修订后仍有非阻断问题，交付可编辑稿：${remaining.join('；')}`)
-      onProgress?.(`已生成可编辑分镜；仍有 ${remaining.length} 项建议可在画布继续调整`)
+      log(`⚠ 수정본에 처리할 문제가 있어요. 현재 편집 가능한 초안을 사용해요. ${remaining.join('；')}`)
+      onProgress?.(`편집 가능한 스토리보드를 생성했습니다. 캔버스에서 ${remaining.length}개 항목을 더 조정할 수 있습니다.`)
     }
     return repaired.shots.length ? repaired : parsed
   } catch (error) {
-    log(`⚠ 合并修订失败，交付首稿：${(error as Error).message}`)
-    onProgress?.('自动修订未完成，已保留并交付可编辑首稿')
+    log(`⚠ 수정 사항을 합치지 못해 초안을 사용해요. ${(error as Error).message}`)
+    onProgress?.('자동 수정을 완료하지 못해 편집 가능한 첫 초안을 보존했습니다.')
     return parsed
   }
 }
@@ -619,23 +629,23 @@ async function repairStoryboardOnce(
 ): Promise<StoryboardResult> {
   const extractHint =
     input.mode === 'extract'
-      ? '输入已是完整剧本，只修提炼结果：不要改口播原意，不要另起故事。人物章每一个 ### 都必须建档——若只是对已有角色的称呼（如哥哥），把这个词写进该人物的 name/role/description；若人物表里确实有这个角色，必须单独建档。已故角色用遗物、画像或闪回入镜即可；活人对手必须有对峙或可见压力镜。每个已建档人物必须出现在至少一镜（本人、遗物、画像或可见压力）：subjectIds 挂上，visualPrompt / videoPrompt 写名字。禁止因为「这集没站在镜头正中」就把父亲、哥哥、对手从人物表删掉。禁止只做人物卡、分镜里却换成路人或「一个男人」。'
-      : '每个出场人物都在 subjects 单独建档，不能合并成一个“主角”。'
+      ? 'The input is a complete screenplay. Correct only the extraction. Do not change the meaning of narration or invent a new story. Record every ### entry in the Characters section. Include forms of address such as “older brother” in the existing character’s name, role, or description. Create separate records for characters listed separately. Show deceased characters through belongings, portraits, or flashbacks. Give each living antagonist a shot showing confrontation or visible pressure. Feature every recorded character in at least one shot in person, through belongings, in a portrait, or by showing the pressure they exert. Link the character through subjectIds and use their name in visualPrompt and videoPrompt. Do not omit the father, older brother, or counterpart just because they do not occupy the center of the frame. Make a character card for each and do not turn them into a passerby or “some man” in the storyboard.'
+      : 'Create an individual subjects record for every character. Do not compress them into a single “protagonist.”'
   const repairTargetSec =
     Number(input.targetDurationSec) || extractTargetDurationSec(input.topic, input.content)
   const repairShotCap = shotBudgetFromDuration(repairTargetSec, input.maxShotDuration)
   const durationBlock = repairTargetSec
-    ? `\n【成片时长硬约束】用户要的是 ${repairTargetSec} 秒成片，允许 ${repairTargetSec - DURATION_TOLERANCE_SEC}–${repairTargetSec + DURATION_TOLERANCE_SEC} 秒，多 1 秒或少 1 秒超出这个窗口都不合格。全片镜头数不得超过 ${repairShotCap} 个。超了就把相邻、同地点、同组人物的镜头合并成长镜头（靠运镜与画内调度表达，不靠切镜），而不是删掉关键剧情；每镜 duration 在 ${MIN_SHOT_SEC}–${shotDurationLimit(input)} 秒内，全部镜头 duration 相加必须落在允许窗口里。`
+    ? `\n[Required final duration] The user requests ${repairTargetSec} seconds. Accept only ${repairTargetSec - DURATION_TOLERANCE_SEC}–${repairTargetSec + DURATION_TOLERANCE_SEC} seconds. Do not exceed ${repairShotCap} shots. If needed, combine adjacent shots in the same location with the same cast and use camera movement and blocking rather than cuts. Keep key events. Each duration must be ${MIN_SHOT_SEC}–${shotDurationLimit(input)} seconds, with a total in the requested range.`
     : ''
   const repair = await callLLM({
     messages: [
       {
         role: 'system',
-          content: `${importedDirectorPrefix()}你是短视频总编审。上一稿验收未通过，现在把 JSON 打回来重新提炼，必须消掉下列问题后再交稿。${durationBlock}不新增用户没说的产品、人物、数字或事实；只补用户本次内容边界内已经出现或明确蕴含的事件过程，禁止续写边界之外的后果。\n${extractHint}\n${NARRATIVE_CONTINUITY_RULES}\n${SPEAKER_STAGING_RULES}\n如果问题指出重大事件被压扁或相邻镜头断层，可以拆分、插入或重排断层附近的镜头，补足本集边界内的可见过程与反应；只局部修相关段落，其他合格镜头保持原意。若用户指定停在悬念点，就停在那里，不得为了闭环继续讲下一步。每个新增镜头也必须写全 continuity，格式为“承接上一镜的明确末态 → 本镜可见变化 → 留给下一镜的明确末态”。\n每镜 title 使用不同的 3-8 字内容标题，禁止统一写“镜头”。把用户原文按语义段落分配进 voiceover，默认 audioMode=h3-dialogue；只有原文明说旁白时才用 h3-voiceover。不要机械地一镜只放一句：同一人物、同一表达意图的连续 2-4 个短句优先合在一个 7-10 秒镜头里，短促反应或转场才保留一句；总字数仍不得超过 duration*4。voiceover 保留“人物名：台词”便于识别说话人，真正送入 H3 时会自动去掉人物名前缀。\n说话镜头先判断动作、空间关系、环境信息和情绪节奏，再选景别。表情是叙事重点且不需交代环境时可以收近；需要保留递物、争执、问答、人物距离、环境压力或集体反应时，应使用合适的中景、双人或多人同框。特写只是可选倾向，禁止把每个说话镜头机械切成特写；但要写清谁在说、其他人如何反应，不能所有人同时张嘴。\nvisualPrompt 用中文描述可见静帧（场景、人物衣着、光源），这是给配图用的。\n${videoPerformanceSpec(getVideoPromptStyle())}\n禁止把 visualPrompt 翻译成英文，禁止两段写成一样。h3Aesthetic 用英文写全片材质、灯光、色彩和摄影质感。不得堆标签。\n只输出完整合法 JSON。`
+          content: `${importedDirectorPrefix()}You are the supervising editor for the short film. The previous JSON failed review. Re-extract it and fix all listed issues before returning it.${durationBlock} Do not add products, characters, numbers, or facts the user did not mention. Restore only processes already shown or clearly implied within this request. Do not write consequences beyond its boundary.\n${extractHint}\n${NARRATIVE_CONTINUITY_RULES}\n${SPEAKER_STAGING_RULES}\nWhen a major event has been compressed away or adjacent shots do not connect, split, insert, or reorder shots near the gap to show the missing process and reactions within the episode. Keep unrelated shots and the user's suspenseful stopping point. Each added shot needs continuity in the form of a specific preceding ending → visible change → specific state for the next shot.\nUse a distinct 3–8-character title per shot, never a generic "Shot". Divide original text by meaning across voiceover. Default to h3-dialogue and use h3-voiceover only for explicit narration. Keep 2–4 consecutive short lines of one intent together in a 7–10-second shot where possible. Reserve a single line for short reactions or transitions. Do not exceed duration*4 characters. Use "Character name: line" for speaker identification; H3 removes the prefix.\nChoose framing based on action, spatial relations, setting, and emotion. Use close framing when the expression matters and the environment can be omitted. Use medium or group framing for handoffs, arguments, questions and answers, interpersonal distance, environmental pressure, or group reactions. Do not make every speaker a close-up; identify the one speaker and others' reactions.\nWrite user-facing titles, descriptions, and newly authored dialogue in Korean (한국어). Write visualPrompt, videoPrompt, and h3Aesthetic in English for generation. Preserve supplied lines and explicitly requested Korean on-screen text. Make visualPrompt a visible still frame with setting, clothing, and light, and keep it distinct from videoPrompt. h3Aesthetic covers material, lighting, color, and cinematography, without tag lists.\n${videoPerformanceSpec(getVideoPromptStyle())}\nReturn one complete, valid JSON object.`
       },
       {
         role: 'user',
-        content: `用户原文 / 剧本：\n${input.content}\n\n主题：${input.topic || '（未填）'}\n\n验收未通过（必须全部修掉）：\n- ${issues.join('\n- ')}\n\n待修 JSON：\n${JSON.stringify(parsed)}`
+        content: `User source or script\n${input.content}\n\nTopic: ${input.topic || '(unspecified)'}\n\nIssues to fix (all required)\n- ${issues.join('\n- ')}\n\nJSON to repair\n${JSON.stringify(parsed)}`
       }
     ],
     model,
@@ -645,7 +655,7 @@ async function repairStoryboardOnce(
     signal: input.signal,
     timeoutMs: 75_000
   })
-  return normalizeStoryboard(await parseJsonWithModelRepair(repair.content, input, '质量修订稿'), {
+  return normalizeStoryboard(await parseJsonWithModelRepair(repair.content, input, '품질 검수 수정본'), {
     style: input.style,
     topic: input.topic,
     content: input.content,
@@ -654,7 +664,7 @@ async function repairStoryboardOnce(
   })
 }
 
-/** 验收不通过就打回重提炼，不直接停流水线。 */
+/** 검수를 통과하지 못하면 워크플로를 멈추기 전에 추출을 다시 요청한다. */
 async function ensureStoryboardQuality(
   parsed: StoryboardResult,
   input: StoryboardInput,
@@ -665,19 +675,19 @@ async function ensureStoryboardQuality(
   for (let round = 0; round <= QUALITY_REPAIR_ROUNDS; round++) {
     const issues = storyboardQualityIssues(current, input)
     if (!issues.length) return current
-    const severe = issues.filter((issue) => issue.startsWith('严重'))
+    const severe = issues.filter((issue) => /^(?:Critical:|심각:)/.test(issue))
     if (round > 0 && !severe.length) {
-      log(`⚠ 仍有非阻断问题，继续使用：${issues.join('；')}`)
+      log(`⚠ 검토할 문제가 있어요. 현재 초안을 사용해요. ${issues.join('；')}`)
       return current
     }
     if (round === QUALITY_REPAIR_ROUNDS) {
       throw new Error(
-        `脚本质量验收未通过（已打回重提炼 ${QUALITY_REPAIR_ROUNDS} 次）：${issues.join('；')}`
+        `${QUALITY_REPAIR_ROUNDS}차례 재추출했지만 대본 품질 검수를 통과하지 못했습니다. ${issues.join('；')}`
       )
     }
     const n = round + 1
-    log(`⚠ 质量未通过，打回重提炼 ${n}/${QUALITY_REPAIR_ROUNDS}：${issues.join('；')}`)
-    onProgress?.(`验收未通过，打回重新提炼（${n}/${QUALITY_REPAIR_ROUNDS}）…`)
+    log(`⚠ 품질 검수를 통과하지 못해 다시 추출해요. ${n}/${QUALITY_REPAIR_ROUNDS}：${issues.join('；')}`)
+    onProgress?.(`검수를 통과하지 못해 다시 추출하는 중（${n}/${QUALITY_REPAIR_ROUNDS}）…`)
     current = await repairStoryboardOnce(current, input, model, issues)
   }
   return current
@@ -759,7 +769,7 @@ function collapseShotBatches(
     for (let i = 0; i < out.length; i += per) {
       const chunk = out.slice(i, i + per)
       merged.push({
-        label: chunk.length > 1 ? `${chunk[0].label} 起` : chunk[0].label,
+        label: chunk.length > 1 ? `${chunk[0].label} 이후` : chunk[0].label,
         excerpt: chunk.map((item) => item.excerpt).join('\n\n')
       })
     }
@@ -783,20 +793,20 @@ function collapseShotBatches(
     out.splice(
       index,
       1,
-      { label: `${item.label} · 前段`, excerpt: left },
-      { label: `${item.label} · 后段`, excerpt: right }
+      { label: `${item.label} · 앞부분`, excerpt: left },
+      { label: `${item.label} · 뒷부분`, excerpt: right }
     )
   }
   return out
 }
 
 /**
- * 先在本地按场次和剧情段落切工作包，避免把整份剧本交给一个模型。
- * 每个工作包只允许产出 1–3 镜；并发数由调用方限制为 3。
+ * 대본 전체를 한 모델에 맡기기 전에 장면과 전개 단락을 기준으로 작업 그룹을 나눈다.
+ * 그룹당 샷은 1~3개이며 호출자가 동시 처리 그룹을 세 개로 제한한다.
  *
- * targetBatches：期望的工作包总数。给了这个值就按成片时长收敛到这么多组，
- * 多了合并、少了拆开，不再按场次数拆出 8、9 个小组。
- * 不传时保持原来的 1100 字 / 4 段口径。
+ * targetBatches가 있으면 최종 영상 길이에 맞춰 해당 그룹 수를 목표로 삼는다.
+ * 장면 수에 따라 지나치게 많은 그룹이 생기지 않도록 필요에 따라 병합하거나 분할한다.
+ * 값이 없으면 기존의 1,100자 및 네 단락 기준을 사용한다.
  */
 function buildShotWorkBatches(play: string, targetBatches?: number): ShotWorkBatch[] {
   const normalized = String(play || '').replace(/\r\n?/g, '\n').trim()
@@ -809,7 +819,7 @@ function buildShotWorkBatches(play: string, targetBatches?: number): ShotWorkBat
     bodyStart: (match.index || 0) + match[0].length
   }))
   const sceneHeading = (title: string) =>
-    /^(?:场景\s*[一二三四五六七八九十百0-9]|第[^\n]{1,12}场(?:\b|[：:]?)|scene\b)/i.test(title)
+    /^(?:场景\s*[一二三四五六七八九十百0-9]|장면\s*\d+|第[^\n]{1,12}场(?:\b|[：:]?)|scene\b)/i.test(title)
   const scenes = headings
     .map((heading, index) => ({
       ...heading,
@@ -823,10 +833,10 @@ function buildShotWorkBatches(play: string, targetBatches?: number): ShotWorkBat
       text: normalized.slice(heading.bodyStart, heading.end).trim()
     }))
 
-  let sections = scenes.length ? scenes : [{ title: '完整剧情', text: normalized }]
+  let sections = scenes.length ? scenes : [{ title: '전체 줄거리', text: normalized }]
 
-  // 场次比期望包数还多时，先把相邻场次并成一组——工作包数永远不会少于场次数，
-  // 不合并的话长剧本照样拆出十几个小组。
+  // 장면이 목표 그룹 수보다 많으면 인접한 장면을 먼저 병합한다.
+  // 병합하지 않으면 긴 대본의 그룹 수가 목표보다 많아진다.
   const wanted0 = Math.floor(Number(targetBatches) || 0)
   if (wanted0 > 0 && sections.length > wanted0) {
     const per = Math.ceil(sections.length / wanted0)
@@ -834,14 +844,14 @@ function buildShotWorkBatches(play: string, targetBatches?: number): ShotWorkBat
     for (let i = 0; i < sections.length; i += per) {
       const chunk = sections.slice(i, i + per)
       merged.push({
-        title: chunk.length > 1 ? `${chunk[0].title} 等 ${chunk.length} 场` : chunk[0].title,
+        title: chunk.length > 1 ? `${chunk[0].title} 외 ${chunk.length - 1}개 장면` : chunk[0].title,
         text: chunk.map((s) => s.text).join('\n\n')
       })
     }
     sections = merged
   }
 
-  // 切分口径：默认 1100 字 / 4 段；给了期望包数就按正文总长摊平，使包数收敛到目标。
+  // 기본 기준은 1,100자 또는 네 단락이다. 목표 그룹 수가 있으면 본문 길이를 균등하게 나눈다.
   let maxChars = SHOT_BATCH_MAX_CHARS
   let maxParagraphs = SHOT_BATCH_MAX_PARAGRAPHS
   const wanted = Math.floor(Number(targetBatches) || 0)
@@ -869,7 +879,7 @@ function buildShotWorkBatches(play: string, targetBatches?: number): ShotWorkBat
     const flush = () => {
       if (!current.trim()) return
       drafts.push({
-        label: paragraphs.length > 1 ? `${section.title} · 第${part++}段` : section.title,
+        label: paragraphs.length > 1 ? `${section.title} · ${part++}부` : section.title,
         excerpt: `## ${section.title}\n\n${current.trim()}`
       })
       current = ''
@@ -899,7 +909,7 @@ function buildShotWorkBatches(play: string, targetBatches?: number): ShotWorkBat
 
 function verbatimSplitRule(verbatim?: boolean): string {
   if (!verbatim) return ''
-  return `【导入剧本 · 只拆不改】这是用户导入的成稿，拆分镜时禁止改写正文。不润色、不补情节、不换说法、不增删对白，也不要把对白改成旁白或把旁白改成对白。voiceover 必须逐字抄原文对白。visualPrompt 和 videoPrompt 只拍摄原文已经写明的人物、动作和场景，禁止添加原文没有的事件、道具、反应或结局。镜头顺序跟原文一致。\n`
+  return `[Imported script: break down without rewriting] This is the user's complete script. Do not polish, rephrase, extend, or alter lines. Do not turn dialogue into narration or narration into dialogue. Copy the original spoken words verbatim into voiceover. Use only specified people, actions, and locations in visualPrompt and videoPrompt. Do not add events, props, reactions, or outcomes. Preserve shot order from the script.\n`
 }
 
 async function generateShotWorkBatch(
@@ -910,12 +920,12 @@ async function generateShotWorkBatch(
   sceneNames: string[],
   directives: string,
   retry = false,
-  /** 本工作包的镜数配额（全片预算分摊后）；不给则退回 1–3 镜。 */
+  /** 전체 샷 예산에서 이 그룹에 배정한 샷 수. 없으면 1~3개를 적용한다. */
   shotBudget?: number,
-  /** 全片镜数预算，用于向模型交代「这就是总数，不许超」。 */
+  /** 모델이 넘을 수 없는 전체 영상의 샷 한도 */
   totalShotBudget?: number,
   targetDurationSec?: number,
-  /** 本包各镜 duration 相加的上限（秒）。 */
+  /** 이 그룹의 모든 샷 길이 합계 상한(초) */
   durationCap?: number
 ): Promise<{ shots: Record<string, unknown>[]; model?: string }> {
   const limit = Math.max(
@@ -924,7 +934,7 @@ async function generateShotWorkBatch(
   )
   const budgetLine =
     totalShotBudget && totalShotBudget > 0
-      ? `\n【镜数与时长硬上限】全片成片目标 ${targetDurationSec || '?'} 秒，允许上下浮动 ${DURATION_TOLERANCE_SEC} 秒。全片只批 ${totalShotBudget} 个小组；本工作包只出 ${limit} 镜，duration 合计必须是 ${durationCap || targetDurationSec || '?'} 秒。把本段动作与对白收进这 ${limit} 个镜头，靠运镜和画内调度表达，不要再拆小组。`
+      ? `\n[Shot and duration limits] Target ${targetDurationSec || '?'} seconds with tolerance ±${DURATION_TOLERANCE_SEC} seconds. The full film has ${totalShotBudget} work groups. This group contains exactly ${limit} shots and must add to ${durationCap || targetDurationSec || '?'} seconds. Fit action and dialogue into those shots using movement and blocking. Do not split the group further.`
       : ''
   const parseBatch = (content: string): Record<string, unknown>[] => {
     try {
@@ -940,7 +950,7 @@ async function generateShotWorkBatch(
           .filter((item: unknown) => item && typeof item === 'object') as Record<string, unknown>[]
       }
     } catch {
-      /* 兼容普通聊天模型返回的自然语言分镜表。 */
+      /* 일반 대화 모델이 반환한 자연어 스토리보드도 처리한다. */
     }
     return parseOutlineText(content)
       .slice(0, limit)
@@ -951,31 +961,31 @@ async function generateShotWorkBatch(
       messages: [
         {
           role: 'system',
-          content: `${importedDirectorPrefix()}${verbatimSplitRule(input.verbatim)}你是电影分镜导演小组。你只负责眼前这一小段剧本，不处理整部剧本。把本段拆成 1–${limit} 个真正能拍的连续镜头，绝对不得超过 ${limit} 个。${budgetLine}
+          content: `${importedDirectorPrefix()}${verbatimSplitRule(input.verbatim)}You are the film storyboard team for this excerpt only. Break it into 1–${limit} consecutive filmable shots. Never exceed ${limit} shots.${budgetLine}
 
-画面必须有生命：明确起幅里人物和关键物处于什么状态，什么事件触发动作，人物怎样连续行动和反应，摄影机为什么移动、最后落在哪里。不要用“固定镜头、轻微自然晃动、保持表情、让画面呼吸”这类模板填空；只有剧情确实需要静止时才用 static。运镜必须服务于空间揭示、人物关系或情绪变化。
-忠实覆盖本段所有可见动作与对白，不另编故事。对白逐字放进 voiceover，格式“人物名：原台词”；只有剧本明确写旁白/画外音才使用 h3-voiceover，否则出镜说话使用 h3-dialogue。没有对白才写空字符串和 none。
-visualPrompt 是最有代表性的关键帧静态画面；videoPrompt 是具体、连续、可执行的动态图生视频时间轴，从0秒到本镜结束按实际拍点分2–5段。每段写清谁行动、谁说话、其他人如何占位和反应、表情变化以及一个有动机的运镜，并让环境中的风、雨、烟、衣摆、光影或道具有合理反馈。不要复述 visualPrompt，不要机械等分时间。
-每镜要写清景别和人物空间关系。人物看场景内的人或物，不看镜头。
-优先输出 JSON：{"shots":[{"title":"3-8字","purpose":"戏剧作用","shotSize":"景别变化","visualPrompt":"电影关键帧画面","videoPrompt":"220-650字、从0秒覆盖到结束的2-5段电影化时间轴","duration":6,"audioDescription":"同步现场声","voiceover":"人物名：原台词或空字符串","audioMode":"h3-dialogue|h3-voiceover|none","cameraMovement":"push|pull|pan|tilt|static|orbit","subjectNames":["人物短名"],"sceneName":"已有地点短名"}]}。shots 数组只能有 1–${limit} 项。若不能输出 JSON，也可按“镜头 N / 画面 / 内容 / 时长 / 声音 / 口播”返回；系统可以解析。${retry ? '上一轮没有可解析镜头；这次直接交付，不要写思考过程。' : ''}`
+Make the image live. Establish the physical states of people and key objects, the event that triggers action, the continuous action and reaction, and why and where the camera moves. Do not fill with generic static-camera, slight wobble, held-expression, or frame-breathing instructions. Use static only if stillness serves the story. Motivate movement by a spatial reveal, changing relationship, or emotional turn.
+Cover every visible action and line of dialogue in the excerpt without inventing plot. Put original words verbatim in voiceover as "Character name: original line." Use h3-voiceover only for explicitly off-screen speech, h3-dialogue for visible speaking, and none with an empty string only when there is no dialogue.
+visualPrompt describes the representative still keyframe. videoPrompt is an actionable image-to-video timeline from zero to the end, split into 2–5 actual beats. State actor and speaker, other people's blocking and reactions, facial changes, and a motivated camera move. Give a visible response to wind, rain, smoke, clothes, light, or props where relevant. Do not repeat visualPrompt or divide into equal slots.
+Give each shot a framing and the spatial relations. Eyelines stay in the scene. Write titles, shot descriptions for the user, and sound notes in Korean (한국어). Write visualPrompt and videoPrompt in English for generation, preserving original dialogue and requested Korean on-screen text.
+Prefer JSON: {"shots":[{"title":"3–8 character title","purpose":"Dramatic function","shotSize":"Framing change","visualPrompt":"Representative still frame","videoPrompt":"English cinematic timeline in 2–5 beats from zero to the end","duration":6,"audioDescription":"Synchronized scene sound","voiceover":"Character name: original lines or empty","audioMode":"h3-dialogue|h3-voiceover|none","cameraMovement":"push|pull|pan|tilt|static|orbit","subjectNames":["Short character name"],"sceneName":"Existing location name"}]}. Include only 1–${limit} entries in shots. If JSON is unavailable, use "Shot N: title" followed by "Image:", "Action:", "Duration:", "Sound:", and optional "Dialogue:". ${retry ? 'The previous response did not contain parseable shots. Return the result now without reasoning.' : ''}`
         },
         {
           role: 'user',
-          content: `工作包：${batch.label}
-已有人物：${subjectNames.join('、') || '（按原文识别）'}
-已有地点：${sceneNames.join('、') || '（按原文识别）'}
-当前视频模型单镜最长 ${shotDurationLimit(input)} 秒。${durationCap ? `本工作包的成片时长就是 ${durationCap} 秒，只出 ${limit} 镜，duration 写成 ${durationCap}。` : `每镜 duration 在 ${MIN_SHOT_SEC}–${shotDurationLimit(input)} 秒。`}同一地点、同一人物、同一连续行动能在上限内拍完时，优先合成一个完整长镜头。${budgetLine}
-${directives ? `\n全片约束（只用于保真）：\n${directives}\n` : ''}
-${batch.previousHint ? `上一工作包末尾（只用于承接，不要重复拍）：\n${batch.previousHint}\n` : ''}
-本工作包剧本原文：
+          content: `작업 묶음 ${batch.label}
+기존 캐릭터 ${subjectNames.join('、') || '（원문에서 식별）'}
+기존 장소 ${sceneNames.join('、') || '（원문에서 식별）'}
+현재 영상 모델의 샷당 최대 길이는 ${shotDurationLimit(input)}초입니다. ${durationCap ? `이 작업 묶음의 결과 길이는 ${durationCap}초입니다. 샷 ${limit}개만 생성하고 duration은 ${durationCap}으로 쓰세요.` : `샷마다 duration을 ${MIN_SHOT_SEC}–${shotDurationLimit(input)}초로 지정하세요.`} 같은 장소와 캐릭터의 연속 행동을 제한 시간 안에 촬영할 수 있으면 하나의 완전한 롱테이크로 구성하세요.${budgetLine}
+${directives ? `\n전체 영상 제약(원문 보존에만 사용)\n${directives}\n` : ''}
+${batch.previousHint ? `이전 작업 묶음의 끝(연결에만 사용하고 다시 촬영하지 않음)\n${batch.previousHint}\n` : ''}
+현재 작업 묶음의 대본 원문
 ${batch.excerpt}
-${batch.nextHint ? `\n下一工作包开头（只用于留下末态，不要提前拍）：\n${batch.nextHint}` : ''}`
+${batch.nextHint ? `\n다음 작업 묶음의 시작(끝 상태를 정하는 데만 사용하고 미리 촬영하지 않음)\n${batch.nextHint}` : ''}`
         }
       ],
       model,
       temperature: retry ? 0.1 : 0.35,
-      // 不强制 response_format：部分兼容接口在并发 JSON 约束下会一直推理到超时。
-      // 提示仍优先要 JSON，同时下方解析器接受普通分镜文本。
+      // 일부 호환 API가 동시 JSON 형식 요청에서 시간 초과될 수 있다.
+      // 프롬프트는 JSON을 우선 요청하고 파서는 일반 텍스트도 받는다.
       jsonMode: false,
       maxTokens: 3200,
       signal: input.signal,
@@ -997,11 +1007,11 @@ ${batch.nextHint ? `\n下一工作包开头（只用于留下末态，不要提�
         sceneName: String(item.sceneName || inferredScene || '').trim() || undefined
       }
     })
-    if (!shots.length) throw new Error('模型回复中没有可解析的分镜')
+    if (!shots.length) throw new Error('모델 응답에 해석할 수 있는 스토리보드가 없습니다.')
     return { shots, model: response.model }
   } catch (error) {
     if (isAbortError(error) && !isTimeoutAbort(error)) throw error
-    log(`⚠ 分镜工作包 ${batch.index + 1}${retry ? '单路重试' : '并发首轮'}失败：${(error as Error).message.split('\n')[0]}`)
+    log(`⚠ 스토리보드 작업 그룹 ${batch.index + 1}${retry ? ' 단독 재시도' : ' 첫 동시 실행'} 실패. ${(error as Error).message.split('\n')[0]}`)
     throw error
   }
 }
@@ -1020,7 +1030,7 @@ function asShotOutlineList(raw: unknown): ShotOutline[] {
         : undefined
       const voiceover = String(s?.voiceover ?? '').trim()
       return {
-        title: String(s?.title || `镜头${i + 1}`).trim() || `镜头${i + 1}`,
+        title: String(s?.title || `샷 ${i + 1}`).trim() || `샷 ${i + 1}`,
         shotSize: String(s?.shotSize || '').trim() || undefined,
         visualPrompt: String(s?.visualPrompt || s?.picture || '').trim(),
         videoPrompt: String(s?.videoPrompt || s?.action || '').trim() || undefined,
@@ -1055,48 +1065,60 @@ function inferOutlineAudioMode(voiceover: string, requested?: string): ShotAudio
   ) {
     return requested
   }
-  if (/旁白|画外音/.test(vo) || /^(成年|旁白)/.test(vo)) return 'h3-voiceover'
+  if (/旁白|画外音/.test(vo) || /^(?:成年|내레이션|화면 밖 음성|narrator|voiceover)/i.test(vo)) return 'h3-voiceover'
   return 'h3-dialogue'
 }
 
+const OUTLINE_SHOT = /(?:镜头|샷|Shot)\s*\d+\s*[：:]/i
+const OUTLINE_FIELDS = {
+  size: '景别|샷 크기|Shot size',
+  image: '画面|화면|Image|Visual',
+  action: '内容表现|内容|동작|내용|Action',
+  omit: '不拍|촬영 제외|Omit',
+  duration: '时长|길이|Duration',
+  sound: '声音|音效|소리|효과음|Sound|Audio',
+  speech: '口播|对白|台词|내레이션|대사|Narration|Dialogue'
+} as const
+
 function outlineField(block: string, names: string): string {
+  const labels = Object.values(OUTLINE_FIELDS).join('|')
   const m = block.match(
     new RegExp(
-      `(?:${names})[：:]\\s*([^\\n]+(?:\\n(?!(?:画面|内容|内容表现|不拍|时长|声音|音效|口播|对白|台词|镜头)\\s*\\d*\\s*[：:])[^\\n]+)*)`,
+      `(?:^|\\n)[ \\t]*(?:${names})[ \\t]*[：:][ \\t]*([^\\n]+(?:\\n(?![ \\t]*(?:(?:${labels})[ \\t]*[：:]|${OUTLINE_SHOT.source}))[^\\n]+)*)`,
       'i'
     )
   )
   return (m?.[1] || '').replace(/\s+/g, ' ').trim()
 }
 
-/** 按「镜头 N：标题（景别）/ 画面 / 时长 / 声音」场记拆条 */
+/** 샷 번호, 제목, 샷 크기, 화면, 길이와 소리 표식을 기준으로 나눈다. */
 function parseOutlineText(content: string): ShotOutline[] {
   const text = String(content || '')
     .replace(/\r\n/g, '\n')
     .replace(/```[\w]*\n?|\n?```/g, '')
     .trim()
   const blocks = text
-    .split(/\n(?=镜头\s*\d+\s*[：:])/)
+    .split(new RegExp(`\\n(?=[ \\t]*${OUTLINE_SHOT.source})`, 'i'))
     .map((b) => b.trim())
-    .filter((b) => /^镜头\s*\d+\s*[：:]/.test(b))
+    .filter((b) => b.search(OUTLINE_SHOT) === 0)
   return blocks
     .map((block, i) => {
-      const head = block.match(/^镜头\s*\d+\s*[：:]\s*([^\n]+)/)
-      let title = (head?.[1] || `镜头${i + 1}`).trim()
-      let shotSize = outlineField(block, '景别')
+      const head = block.match(new RegExp(`^${OUTLINE_SHOT.source}\\s*([^\\n]+)`, 'i'))
+      let title = (head?.[1] || `샷 ${i + 1}`).trim()
+      let shotSize = outlineField(block, OUTLINE_FIELDS.size)
       const paren = title.match(/[（(]([^）)]+)[）)]\s*$/)
       if (paren) {
         if (!shotSize) shotSize = paren[1].trim()
         title = title.slice(0, paren.index).trim() || title
       }
-      const visualPrompt = outlineField(block, '画面')
-      const videoPrompt = outlineField(block, '内容|内容表现')
-      const omitNote = outlineField(block, '不拍')
-      const audioDescription = outlineField(block, '声音|音效')
-      const voiceover = outlineField(block, '口播|对白|台词')
-      const duration = Number(block.match(/时长[：:]\s*(\d+(?:\.\d+)?)/)?.[1])
+      const visualPrompt = outlineField(block, OUTLINE_FIELDS.image)
+      const videoPrompt = outlineField(block, OUTLINE_FIELDS.action)
+      const omitNote = outlineField(block, OUTLINE_FIELDS.omit)
+      const audioDescription = outlineField(block, OUTLINE_FIELDS.sound)
+      const voiceover = outlineField(block, OUTLINE_FIELDS.speech)
+      const duration = Number(outlineField(block, OUTLINE_FIELDS.duration).match(/^\d+(?:\.\d+)?/)?.[0])
       return {
-        title: title.trim() || `镜头${i + 1}`,
+        title: title.trim() || `샷 ${i + 1}`,
         shotSize: shotSize || undefined,
         visualPrompt: visualPrompt || videoPrompt,
         videoPrompt: videoPrompt || undefined,
@@ -1128,14 +1150,14 @@ function attachCastToOutline(
 function formatOutlineNote(outline: ShotOutline, index: number): string {
   const size = outline.shotSize ? `（${outline.shotSize}）` : ''
   const lines = [
-    `镜头 ${index + 1}：${outline.title}${size}`,
-    `画面：${outline.visualPrompt}`,
-    `时长：${outline.duration || 6} 秒`,
-    `声音：${outline.audioDescription || '现场环境声'}`
+    `Shot ${index + 1}：${outline.title}${size}`,
+    `Visual: ${outline.visualPrompt}`,
+    `Duration: ${outline.duration || 6} seconds`,
+    `Sound: ${outline.audioDescription || 'Ambient sound on location'}`
   ]
-  if (outline.videoPrompt) lines.push(`内容：${outline.videoPrompt}`)
-  if (outline.omitNote) lines.push(`不拍：${outline.omitNote}`)
-  if (outline.voiceover) lines.push(`口播：${outline.voiceover}`)
+  if (outline.videoPrompt) lines.push(`Action: ${outline.videoPrompt}`)
+  if (outline.omitNote) lines.push(`Omit: ${outline.omitNote}`)
+  if (outline.voiceover) lines.push(`Dialogue: ${outline.voiceover}`)
   return lines.join('\n')
 }
 
@@ -1190,55 +1212,55 @@ async function extractShotOutline(
   const directives = extractPlayDirectives(play)
   onProgress?.(
     film
-      ? '按剧本拍点出分镜场记（动作、对白、不拍清单）…'
-      : '先把剧本交给模型出分镜场记（只要画面、时长、声音）…'
+      ? '대본에 맞춰 스토리보드의 동작, 대사, 촬영 제외 항목을 정리하고 있어요…'
+      : '대본을 바탕으로 스토리보드의 화면, 길이, 소리를 먼저 정리하고 있어요…'
   )
-  const shortSystem = `${importedDirectorPrefix()}你是分镜导演。只写一份能拍的场记，像聊天里列镜头那样短、快。
-按剧本顺序拆镜。同一空间的对白往来可以留在一镜；同一人连续短句可留在一镜。
-每镜写：标题（括号里写景别或运镜）、画面（2–4 句看见的动作）、内容（这一镜演什么）、时长、声音。
-有对白时必须加一行「口播：人物名：原词」，剧本里的对白原词一条都不能丢。没有对白的纯空镜/赶路镜才不写口播。
-禁止把故事背景改写成「成年某某」旁白。
-禁止 JSON、禁止思考过程、禁止 continuity / blocking / 美学设定。
-严格按下述格式，镜头之间空一行：
+  // 일반·영화 제작 스토리보드의 출력 필드와 대사 보존 규칙.
+  const shortSystem = `${importedDirectorPrefix()}You are a storyboard director. Write concise production notes that describe shots a team can film.
+Split the script in story order. Consecutive dialogue in one space may remain in one shot, as may a series of short lines from the same person.
+For each shot, write its title (shot size or camera movement in parentheses), image (2–4 sentences of visible action), action (what happens in the shot), duration, and sound.
+If the shot contains dialogue, add a line in the form "Dialogue: Character name: Original line". Preserve every line from the script verbatim. Omit Dialogue only for shots without speech, such as empty establishing shots or travel shots.
+Do not turn the story background into narration by an older version of a character. Do not output JSON, reasoning, continuity, blocking, or aesthetic sections.
+Follow the format below exactly, with a blank line between shots. Write shot titles, shot sizes, sound notes, and user-facing descriptions in Korean (한국어). Write the Image and Action fields in English for the generation models. Preserve dialogue in its original language.
 
-镜头 1：夜奔（远景→中景）
-画面：村口浅滩，夜晚十一点，水面横着一条银白光带。牛郎挑着竹筐从草丛中冲出，两个孩子颠簸抓筐边。
-内容：牛郎从草丛冲出，孩子们抓着筐边颠簸，一只凉鞋陷进泥里。人看路和孩子，不要看镜头。
-时长：6 秒
-声音：踩草声、急促呼吸、水流声、泼水声`
+Shot 1: 한밤중의 질주 (원경→중경)
+Image: At 11 p.m., a silvery band of light crosses the shallows by the village entrance. Niulang rushes out of the brush carrying a bamboo basket on a shoulder pole. Two children jolt and grip the rim.
+Action: Niulang bursts from the brush. As the children grip the bouncing rim, one sandal sinks into the mud. He watches the path and his children and keeps his gaze off the camera.
+Duration: 6 seconds
+Sound: 풀을 밟는 소리, 가쁜 숨, 물이 흐르고 튀는 소리`
 
-  const filmSystem = `${importedDirectorPrefix()}你是电影分镜导演。输入是完整章节剧本，不是短视频口播表。按剧本顺序拆能拍的镜头，忠实覆盖每一场和每一条蒙太奇，不要另编情节。
+  const filmSystem = `${importedDirectorPrefix()}You are a film storyboard director. The input is a complete chapter script. Break it into filmable shots in script order. Cover every scene and montage beat without inventing plot.
 
-拆镜原则：
-- 一场戏里按戏剧拍点拆：进入、看见、犹豫、开口、反应、离开。不要把整场压成一镜，也不要一句对白拆成三镜空表情。
-- 蒙太奇：把同一意图的 3–6 个连续画面收进一镜 8–10 秒（例如光从门缝移到右侧、苹果核发黑、雨水滴成水洼），写成看得见的连续动作，禁止写「时间流逝」「几天过去」。
-- 对白：同一空间的对白往来可以留在一镜；同一人连续短句可留在一镜。剧本里的 **人物名：**「台词」必须原词进入对应镜头口播，禁止漏句，禁止改成「成年某某」旁白复述前情。
-- 成年旁白 / 画外音仅当剧本标明画外音时才写成「口播：旁白：原词」，画面里的人闭嘴；出镜人物说话用本人名。
-- 剧本写了不拍什么（伤口特写、神像、宗教仪式、把流浪汉拍成怪物），每镜加一行「不拍：…」。
-- 人物看向场景里的人或物，禁止全员看镜头。善意是普通人做的小事，不要写成救世主登场。
-- 年代、天气、衣服干湿、步态跟剧本走。
-- 预计镜数：${longForm ? '25–60 镜，按场次和蒙太奇覆盖整章' : '按本片时长，大约 6–14 镜'}。不要压掉关键拍点，也不要一句对白拆成三镜空表情。
+Shot breakdown rules:
+- Split each scene by its dramatic beats: entering, noticing, hesitating, speaking, reacting, and leaving. Do not compress the entire scene into one shot or stretch one line into three shots of blank expressions.
+- Combine 3–6 consecutive images with the same purpose into one 8–10-second montage shot. Describe tangible progression, such as light moving right from a door crack, an apple core darkening, or raindrops gathering into a puddle. Avoid vague statements such as "time passes" or "several days pass."
+- A dialogue exchange in a single space and a continuous run of short lines from a single speaker can each stay in one shot. Copy each script line verbatim into the relevant Dialogue field. Do not omit lines or use narration by the character's older self to recap backstory.
+- Use "Dialogue: Narrator: Original line" only when the script identifies a line as off-screen narration. On-screen people keep their lips closed. For on-screen dialogue, name the actual speaker.
+- Add an Omit line to each applicable shot when the script excludes imagery such as wound close-ups, religious icons, rituals, or framing a homeless person as monstrous.
+- Have people look at someone or something in the scene. Do not pose the whole cast toward the lens. Show kindness as an ordinary person doing a small thing; avoid a savior entrance.
+- Follow the script's period, weather, wet or dry clothing, and gait.
+- Expected size: ${longForm ? '25–60 shots covering the entire chapter, including all scenes and montages' : 'about 6–14 shots, depending on the running time'}. Do not omit important beats or split one line into three shots of blank expressions.
 
-严格按下述格式，镜头之间空一行。禁止 JSON、禁止思考过程：
+Follow the format below exactly. Put one blank line between shots. Do not output JSON or reasoning. Write shot titles, shot sizes, sound notes, and user-facing descriptions in Korean (한국어). Write Image, Action, and Omit in English for the generation models. Preserve script dialogue verbatim.
 
-镜头 1：墙角睡着（中近景）
-画面：废弃仓房墙角，阿峰靠开裂墙壁坐地，手里苹果核，羽绒服脏湿。门缝透进灰白天光。
-内容：阿峰呼吸渐渐平稳，眼睛慢慢闭上。看向地面或虚空，不要看镜头。机位几乎不动。
-不拍：伤口特写、神像
-时长：8 秒
-声音：屋外雨、远处车、他的呼吸
-口播：阿峰：先吃完。核留下来。`
+Shot 1: 모퉁이에서 잠들다 (중근경)
+Image: At the corner of an abandoned warehouse, Afeng sits against a cracked wall holding an apple core. His down jacket is wet and dirty. Pale gray daylight enters through a gap in the door.
+Action: Afeng's breathing steadies and his eyes close gradually. He looks at the floor or into the distance, away from the camera. The camera barely moves.
+Omit: Close-ups of wounds and religious icons
+Duration: 8 seconds
+Sound: 바깥의 빗소리, 멀리서 들리는 자동차 소리, 그의 숨소리
+Dialogue: 아펑: 먼저 다 먹자. 심은 남겨 두고.`
 
   const response = await callLLM({
     messages: [
       { role: 'system', content: film ? filmSystem : shortSystem },
       {
         role: 'user',
-        content: `已有人物：${subjectNames.join('、') || '（无）'}
-已有地点：${sceneNames.join('、') || '（无）'}
-单镜时长：当前模型最长 ${shotDurationLimit(input)} 秒；${film ? `按场次动作在 5–${shotDurationLimit(input)} 秒内规划` : `参考 ${input.shotDuration}，可在 3–${shotDurationLimit(input)} 秒内规划`}。连续动作能在一个镜头完成就不要拆成多个短镜头
+        content: `Existing characters: ${subjectNames.join(', ') || '(none)'}
+Existing locations: ${sceneNames.join(', ') || '(none)'}
+Shot duration. The current model allows up to ${shotDurationLimit(input)} seconds. ${film ? `Plan by scene action within 5–${shotDurationLimit(input)} seconds` : `Use ${input.shotDuration} seconds as a reference within 3–${shotDurationLimit(input)} seconds`}。Keep uninterrupted action in one shot when it fits.
 
-${directives ? `本章必须遵守：\n${directives}\n` : ''}完整剧本：
+${directives ? `Chapter requirements:\n${directives}\n` : ''}전체 대본
 ${play}`
       }
     ],
@@ -1257,15 +1279,15 @@ ${play}`
       outlines = asShotOutlineList(parseJsonRobust(response.content)).map((item) =>
         attachCastToOutline(item, subjectNames, sceneNames)
       )
-      if (outlines.length) log('⚠ 场记不是文本格式，已从 JSON 兜底识别')
+      if (outlines.length) log('⚠ 현장 기록을 JSON으로 읽었어요.')
     } catch {
-      /* 下面统一报空表 */
+      /* 아래에서 빈 스토리보드 오류를 공통 처리한다. */
     }
   }
   if (!outlines.length) {
-    throw new Error('粗分镜表是空的。人物和场景已保留，可直接重试拆分镜')
+    throw new Error('스토리보드 초안이 비어 있습니다. 캐릭터와 장면은 저장됐습니다. 스토리보드 추출을 다시 시도할 수 있습니다.')
   }
-  onProgress?.(`✓ 已拿到 ${outlines.length} 个镜头场记，正在写入画布…`)
+  onProgress?.(`✓ 샷 현장 기록 ${outlines.length}개를 받아 캔버스에 저장하는 중…`)
   return { outlines, model: response.model }
 }
 
@@ -1286,25 +1308,26 @@ async function expandOneShot(
       messages: [
         {
           role: 'system',
-          content: `${importedDirectorPrefix()}你是分镜节点填写员。只把下面这一条场记扩成画布字段，不改故事、不改时长、不改画面原意。
-口播必须用场记里的原词；场记写了对白而你输出空字符串视为不合格。同一空间的对白往来可以留在一镜。只有场记标明画外音/旁白时才用 audioMode=h3-voiceover。
-必须写 videoPrompt：从0秒到本镜结束按实际剧情拍点分2–5段。每段先写当前行动者、具体动作和表情，再写说话者与原词，并交代其他出场人物站在近处还是后面、身体朝哪、眼睛看谁、如何非语言反应；最后写这一段的合理运镜和落点。说话者可以在后面，前面的人侧对或回头看他。禁止合影看镜头，禁止只在结尾加「不要看镜头」。
-${film ? '本镜必须能在剧本原文里找到对应拍点。蒙太奇要写成看得见的连续动作。剧本写了不拍的，写进 videoPrompt 末尾一句。善意是普通人做的小事。' : ''}
-只输出一个 JSON 对象：{"title":"3-8字","purpose":"钩子/说明/反应/揭示/转场/收口","shotSize":"景别","blocking":"每个人：近处或后面、身体朝向、相对谁站","eyeline":"每个人看谁或看什么，禁止看镜头","continuity":"上一镜末态 → 本镜变化 → 下一镜初态","propFocus":"道具或无","visualPrompt":"中文静帧画面","videoPrompt":"中文220-650字可执行时间轴：从0秒覆盖到结束，分2-5段写当前行动者、动作表情、说话人与原词、其他人物占位反应、运镜落点、同步声音","audioDescription":"现场声音","voiceover":"人物名：台词，无则空","audioMode":"h3-dialogue|h3-voiceover|tts|none","speakerHint":"声线与情绪","duration":6,"cameraMovement":"push|pull|pan|tilt|static|orbit","subjectNames":["短名"],"sceneName":"地点原名"}`
+          content: `${importedDirectorPrefix()}You fill storyboard nodes. Expand only the production note supplied below, leaving the story, duration, and intended image intact.
+Use the note's original spoken words in voiceover. An empty string is invalid when the note contains dialogue. A conversation within one space may remain in one shot. Use audioMode=h3-voiceover only for off-screen speech or explicitly marked narration.
+videoPrompt is required. Divide the shot from zero through the end into 2–5 story beats. In each beat identify the acting person, concrete motion, expression, speaker and original words, the foreground or background placement and orientation of other people, their eyelines and nonverbal reactions, the motivated camera move, and its final position. A speaker can be behind others. Foreground listeners should turn sideways or look back. Avoid posing as a group portrait or only saying that nobody looks at the camera.
+${film ? 'Find the corresponding beat in the original script. Treat montage as visible continuous action. Put script exclusions in the final sentence of videoPrompt. Show kindness through ordinary small actions.' : ''}
+Write titles and user-facing descriptions in Korean (한국어). Preserve existing category values and the cast and place names. Write visualPrompt and videoPrompt in English for the generation models. Keep dialogue, narration, and explicitly requested Korean on-screen text verbatim.
+Return one JSON object only. {"title":"3–8 character title","purpose":"钩子/说明/反应/揭示/转场/收口","shotSize":"Framing","blocking":"Each person's foreground or background position, orientation, and relation to others","eyeline":"What or whom each person looks at; keep eyes off the lens","continuity":"Previous shot ending → Current visible change → Next shot opening","propFocus":"Prop or none","visualPrompt":"English still frame description","videoPrompt":"Filmable timeline in English, split into 2–5 beats from the opening to the end. Include action, expression, speaker and verbatim lines, positions and reactions, camera movement and endpoint, and synchronized sound","audioDescription":"Actual scene sound","voiceover":"Character name: original line, or empty","audioMode":"h3-dialogue|h3-voiceover|tts|none","speakerHint":"Voice and emotion","duration":6,"cameraMovement":"push|pull|pan|tilt|static|orbit","subjectNames":["Short name"],"sceneName":"Original place name"}`
         },
         {
           role: 'user',
-          content: `已有人物：${subjectNames.join('、') || '（无）'}
-已有地点：${sceneNames.join('、') || '（无）'}
-${prev ? `上一镜：${formatOutlineNote(prev, index - 1)}` : '上一镜：无（本镜是开场）'}
+          content: `Existing characters: ${subjectNames.join(', ') || '(none)'}
+Existing locations: ${sceneNames.join(', ') || '(none)'}
+${prev ? `Previous shot: ${formatOutlineNote(prev, index - 1)}` : 'Previous shot: none (opening)'}
 
-本镜场记：
+Current shot notes
 ${formatOutlineNote(outline, index)}
 
-${next ? `下一镜：${formatOutlineNote(next, index + 1)}` : '下一镜：无（本镜是收尾）'}
-${extras?.directives ? `\n本章约束：\n${extras.directives}` : ''}
-${extras?.sceneSlice ? `\n本场剧本原文：\n${extras.sceneSlice}` : ''}
-只扩这一镜。`
+${next ? `Next shot: ${formatOutlineNote(next, index + 1)}` : 'Next shot: none (ending)'}
+${extras?.directives ? `\nChapter constraints:\n${extras.directives}` : ''}
+${extras?.sceneSlice ? `\nOriginal scene text:\n${extras.sceneSlice}` : ''}
+Expand this shot only.`
         }
       ],
       model,
@@ -1326,7 +1349,7 @@ ${extras?.sceneSlice ? `\n本场剧本原文：\n${extras.sceneSlice}` : ''}
     const videoPrompt = String(shot.videoPrompt || outline.videoPrompt || '').trim()
     const omit = outline.omitNote
     const withOmit =
-      omit && videoPrompt && !videoPrompt.includes(omit) ? `${videoPrompt}不拍：${omit}。` : videoPrompt
+      omit && videoPrompt && !videoPrompt.includes(omit) ? `${videoPrompt} Omit: ${omit}.` : videoPrompt
     return {
       ...outlineToRawShot(outline),
       ...shot,
@@ -1340,12 +1363,12 @@ ${extras?.sceneSlice ? `\n本场剧本原文：\n${extras.sceneSlice}` : ''}
     }
   } catch (error) {
     if (isAbortError(error) && !isTimeoutAbort(error)) throw error
-    log(`⚠ 第${index + 1}镜扩节点失败，先用粗分镜落库：${(error as Error).message.split('\n')[0]}`)
+    log(`⚠ 샷 ${index + 1}의 노드를 확장하지 못해 스토리보드 초안을 저장해요. ${(error as Error).message.split('\n')[0]}`)
     return outlineToRawShot(outline)
   }
 }
 
-/** 真实 LLM 调用 */
+/** 실제 언어 모델 호출 */
 async function realStoryboard(
   input: StoryboardInput,
   onProgress?: (msg: string) => void
@@ -1356,20 +1379,20 @@ async function realStoryboard(
   let productNote =
     input.productImages && input.productImages.length > 0
       ? `
-【参考图（已附带 ${input.productImages.length} 张）】
-先看图再写分镜：
-- 图里有人/动物/吉祥物，列为 subjects，外貌按图里真实样子写，fromReference=true，别另造一张脸
-- 图里是产品，列为 kind=other，按真实产品写
-- 后面每一镜的人都要和 subjects 同一套衣服、发型、年龄
-- 产品/主角每镜都要让人看清`
+[${input.productImages.length} reference images attached]
+Inspect the images before writing the storyboard.
+- Record visible people, animals, or mascots as subjects. Match their actual appearance and set fromReference=true. Do not invent faces.
+- For products, use kind=other and match the actual item.
+- Keep clothing, hairstyle, and age from subjects consistent in all later shots.
+- Keep the product or protagonist legible in each shot.`
       : `
-【没有参考图】
-先从文案里列出所有会在画面中出现的人/动物（subjects）和地点（scenes）。每个有名字、有台词或有动作的人都必须单独列一个 subject，不能把配角合并成一个“主角”。
-同一人全片同一套外貌：名字、年龄、发型、衣服、配饰不要变着写。`
+[No reference images]
+List all on-screen people and animals under subjects and locations under scenes. Use a separate subject for every named or speaking person or anyone who acts. Do not merge supporting characters into a single protagonist.
+Preserve names, ages, hairstyles, clothes, and accessories throughout the film.`
 
   if (input.productImages?.length) {
-    log(`→ 调用视觉工具分析 ${input.productImages.length} 张参考图`)
-    onProgress?.(`先识别 ${input.productImages.length} 张参考图；看完再按人物 → 场景 → 分镜分步提炼…`)
+    log(`→ 비전 도구로 참조 이미지 ${input.productImages.length}장을 분석해요.`)
+    onProgress?.(`참조 이미지 ${input.productImages.length}장을 먼저 분석한 뒤 캐릭터 → 장면 → 스토리보드 순으로 추출하는 중…`)
     const visualContent: LLMContentPart[] = [
       ...input.productImages.slice(0, 5).map((url) => ({
         type: 'image_url' as const,
@@ -1377,12 +1400,12 @@ async function realStoryboard(
       })),
       {
         type: 'text',
-        text: `你只负责看图，不负责写剧本。逐张识别并用简体中文给出：
-1. 人物/动物/吉祥物的数量、年龄段、脸型、发型、服装、配饰；
-2. 产品的品类、外观、颜色、可见文字（看不清就写“不可辨认”，严禁猜测）；
-3. 场景、构图与光线；
-4. 跨镜头必须保持不变的视觉锚点。
-只陈述画面里可见的事实，不补品牌、参数、价格、功效或人物关系。`
+        text: `Analyze the reference images only. Do not write the script. Write visible findings for each image in Korean (한국어):
+1. Count people, animals, and mascots, and describe age ranges, face shapes, hairstyles, clothing, and accessories.
+2. Report product type, appearance, colors, and legible text. If unclear, mark it unreadable without guessing.
+3. Describe location, composition, and lighting.
+4. Identify visual anchors to preserve across shots.
+Report visible facts only. Do not infer brands, specifications, prices, efficacy, or relationships.`
       }
     ]
     const visual = await callLLM({
@@ -1393,13 +1416,13 @@ async function realStoryboard(
       signal: input.signal,
       timeoutMs: 60_000
     })
-    productNote += `\n\n【视觉工具识别结果（只作事实依据）】\n${visual.content.slice(0, 8_000)}`
+    productNote += `\n\n[Reference image findings: use only as factual evidence]\n${visual.content.slice(0, 8_000)}`
   }
 
   const stylePriority = buildStylePriorityBlock(input)
   const look = lookFromTexts(input.style, input.topic, input.content, input.keywords)
-  const styleCn = styleLabel(look.style)
   const styleGuide = VISUAL_STYLE_GUIDE[look.style]
+  const presetMedium = styleGuide.medium
   const mediumPhrase = extractUserMediumPhrase(
     input.topic,
     input.content,
@@ -1413,12 +1436,12 @@ async function realStoryboard(
     const { model: configuredModel } = getLlmConfig()
     const parallelModel = resolvePlayModel(input) || configuredModel
     const play = input.content?.trim() || ''
-    const common = `主题：${input.topic || '（未填）'}\n比例：${input.aspectRatio}\n单镜时长参考：${input.shotDuration} 秒\n\n完整剧本：\n${play}`
+    const common = `Topic: ${input.topic || '(unspecified)'}\nAspect ratio: ${input.aspectRatio}\nSuggested shot duration: ${input.shotDuration} seconds\n\nFull screenplay\n${play}`
     const startAt = input.extractStartAt || 'subjects'
     const stopAfter = input.extractStopAfter || startAt
     const stageOrder = { subjects: 0, scenes: 1, shots: 2 } as const
     onProgress?.(
-      `按步骤提炼：先人物，再场景，再分镜。本轮只做${startAt === 'subjects' ? '人物' : startAt === 'scenes' ? '场景' : '分镜'}。`
+      `Extract in order: characters, locations, then shots. This step handles only ${startAt === 'subjects' ? 'characters' : startAt === 'scenes' ? 'locations' : 'shots'}。`
     )
 
     const runPart = async (
@@ -1434,7 +1457,7 @@ async function realStoryboard(
       const ask = async (extraUser?: string) =>
         callLLM({
           messages: [
-            { role: 'system', content: `${system}\n禁止输出思考过程或自然语言。第一个字符必须是 {，最后一个字符必须是 }。` },
+            { role: 'system', content: `${system}\nDo not output reasoning or natural-language preamble. The first character must be { and the last character must be }.` },
             { role: 'user', content: extraUser ? `${baseUser}\n\n${extraUser}` : baseUser }
           ],
           model: parallelModel,
@@ -1450,48 +1473,52 @@ async function realStoryboard(
         try {
           raw = parseJsonRobust(response.content)
         } catch {
-          onProgress?.(`${label}未收到 JSON，正在补要一次…`)
+          onProgress?.(`${label}의 JSON을 받지 못해 다시 요청하는 중…`)
           const salvage = await ask(
-            '上一轮只写了思考、没有 JSON。现在立刻只输出 JSON 对象，不要任何解释。'
+            'The prior answer contained reasoning but no JSON. Return one JSON object with no explanation.'
           )
           raw = parseJsonRobust(salvage.content)
           if (validate && !validate(raw)) {
-            throw new Error(`${label} JSON 缺少必需的数据数组`)
+            throw new Error(`${label} JSON에 필수 데이터 배열이 없습니다.`)
           }
-          onProgress?.(`✓ ${label}提炼完成`)
+          onProgress?.(`✓ ${label} 추출 완료`)
           return { raw, model: salvage.model }
         }
         if (validate && !validate(raw)) {
-          onProgress?.(`${label} JSON 结构不完整，正在自动修复一次…`)
+          onProgress?.(`${label} JSON 구조가 불완전해 자동 복구하는 중…`)
           const repaired = await ask(
-            repairInstruction || `上一轮 JSON 结构错误。请严格按系统要求重新输出完整的 ${label} JSON。`
+            repairInstruction || `The prior JSON had the wrong structure. Return complete ${label} JSON matching the system instructions.`
           )
           raw = parseJsonRobust(repaired.content)
-          if (!validate(raw)) throw new Error(`${label} JSON 修复后仍缺少必需的数据数组`)
-          onProgress?.(`✓ ${label}提炼完成`)
+          if (!validate(raw)) throw new Error(`${label} JSON을 복구했지만 필수 데이터 배열이 여전히 없습니다.`)
+          onProgress?.(`✓ ${label} 추출 완료`)
           return { raw, model: repaired.model }
         }
-        onProgress?.(`✓ ${label}提炼完成`)
+        onProgress?.(`✓ ${label} 추출 완료`)
         return { raw, model: response.model }
       } catch (error) {
         if (isAbortError(error) && !isTimeoutAbort(error)) throw error
         const message = (error as Error).message
-        log(`⚠ ${label}提炼失败：${message}`)
-        throw new Error(`提炼${label}失败；已保留此前完成的节点，可直接重试本阶段：${message}`)
+        log(`⚠ ${label} 추출에 실패했어요. ${message}`)
+        throw new Error(`${label} 추출에 실패했습니다. 이미 완료된 노드는 저장됐습니다. 이 단계만 다시 시도할 수 있습니다. ${message}`)
       }
     }
 
-    const subjectSystem = `你是人物设定提炼子智能体。只从完整剧本「## 人物」提炼每一个独立小节，以及会实际入镜、入遗物/画像、或形成可见压力的人物、动物、产品或关键主体，不写场景，不拆分镜，不提炼资产图或道具清单。已故父亲、未到场的对手只要人物章有 ### 就必须建档，不要因为本集没站在镜头正中而删掉。忠实保留剧本称呼；有名字又有身份称呼时，name 用最常在对白和场记里出现的短名，role 写全身份和别称，便于另一智能体用名字或身份绑定。人物外貌必须具体到年龄、脸型、发型、体型、服装、鞋、配饰和稳定辨识点，不允许只写“主角”。description 只锁身份外貌，不要写他所在的地点或天气：后续角色设计图一律画在无缝纯白背景的四视图上。stateVariants 写清本章内会变的东西：衣服干湿、污渍、饥饿、跛行、手里的食物；没有变化就写单一状态。${productNote}
-voicePrompt 是这个角色开口说话时的音色与表达，必须自动写、不许空着：kind 为 person 的角色都要写，按「年龄性别 + 音色质地（沙哑/清亮/温吞/鼻音重等）+ 语速与力度 + 情绪基调 + 身份口音或口头习惯」写成一句中文，25–60 字，能直接当配音导演给演员的指令。同一个角色全片只写一条，不要每场换声线；动物和产品（kind 为 animal/other）写空字符串。\n只输出 JSON：{"subjects":[{"name":"短名","kind":"person|animal|other","description":"具体外貌锁定，不含场景","role":"身份、剧情作用和别称","stateVariants":"本集内状态变化，没有写单一状态","voicePrompt":"说话时的音色与表达，非人物写空","fromReference":false}]}。输出前自行检查：人物章每一个 ### 都单独建档；有台词、有动作或被镜头看见的人不能并成路人；每个 person 角色都有 voicePrompt。`
+    // 캐릭터 프로필은 한국어, 생성 모델용 음색 지시는 영어로 요청한다.
+    const subjectSystem = `You extract character records. Use every independent subsection under "## 캐릭터" (or legacy "## 人物") and any people, animals, products, or key subjects that appear, are seen through a keepsake or portrait, or exert visible pressure. Do not extract locations, shots, asset images, or prop lists. Include deceased parents and absent opponents when their ### records exist. Preserve names from the script. If someone has both a name and a role, put the most-used short name in name and the full identity and aliases in role for matching. Describe age, face shape, hair, build, wardrobe, shoes, accessories, and stable visual features. Do not only label someone the protagonist. Keep description focused on identity and appearance, with no place or weather. Character sheets will use four views on seamless white. In stateVariants, identify wardrobe wetness, stains, hunger, limping, or held food that changes; use "none" when nothing changes. Write user-facing character descriptions and roles in Korean (한국어).
+${productNote}
+Write one voicePrompt in English for every person, covering age and gender, timbre (raspy, bright, slow, nasal, or similar), speed and intensity, emotional tone, and an appropriate accent or speaking habit. Use one consistent voice in the entire film. For animal and other, use an empty string.
+Output JSON only: {"subjects":[{"name":"Short name","kind":"person|animal|other","description":"Specific physical identity, excluding location","role":"Identity, dramatic function, and aliases","stateVariants":"Changes in this episode, or none","voicePrompt":"English vocal qualities and delivery, empty for non-person subjects","fromReference":false}]}. Before returning, verify a record for every ###, separate people who speak, act, or are seen, and a voicePrompt for every person.`
 
-    const sceneSystem = `你是场景与视觉设定提炼子智能体。只提炼本集会拍到的**地点**，不写人物，不拆分镜。
-地点来源优先：剧本「## 环境与场景」下的地点；其次场记行「内景｜地点｜天气」或「外景｜地点｜」。同一地点只建一条，不要按「场景一、场景二」每场复制一条。
-scene.name 用地点短名（如旧仓房、公益饭堂院子），不要用「场景一」。
-每个地点写无人时的空间：地面、建筑、天气、光、年代物件。
+    // 촬영 장소만 추출하고 장면 설명과 생성용 스타일의 언어를 지정한다.
+    const sceneSystem = `You extract locations and visual settings. Include only places actually filmed in this episode. Do not write characters or shots.
+Prefer locations under "## 환경과 장면" or legacy "## 环境与场景", then scene lines such as "실내｜장소｜날씨" or "内景｜地点｜天气". Deduplicate places; do not create a new record for every scene.
+Use a short existing location name, such as the old warehouse or charity kitchen yard. Do not use a generic scene number.
+Describe an unoccupied space, including the ground, building, weather, light, and period objects. Write user-facing descriptions in Korean (한국어), and write h3Aesthetic in English for the video model.
 ${productNote}
 ${stylePriority}
-只输出 JSON：{"aesthetic":"全片中文氛围","h3Aesthetic":"English production aesthetic with concrete lighting, material, color and camera qualities","styleBrief":"本集冲突和视觉抓点","colorPalette":"可见颜色","lightingNote":"时辰与光源","scenes":[{"name":"地点短名","description":"无人时的空间、地面、建筑、天气、动态和光线，至少80字","mainAnchor":"主视觉实物","anchors":"全景；主锚；地面站位区；光源或次锚","lighting":"时辰和光源"}]}
-顶层必须是对象，scenes 必须是非空数组。不要套 data/result，不要把 scenes 写成对象。`
+Return JSON only: {"aesthetic":"Overall tone of the film","h3Aesthetic":"English production aesthetic with concrete lighting, material, color and camera qualities","styleBrief":"Conflict and visual hook for this episode","colorPalette":"Visible colors","lightingNote":"Time and light source","scenes":[{"name":"Short location name","description":"At least 80 characters about the unoccupied space, ground, architecture, weather, movement, and lighting","mainAnchor":"Primary visual anchor","anchors":"Wide view; main anchor; ground and blocking area; light source or secondary anchor","lighting":"Time and light source"}]}
+Return a top-level object with a nonempty scenes array. Do not nest inside data or result or write scenes as an object.`
 
 
     const pullRecurringProps = async (script: string, subjects: Subject[]): Promise<StoryProp[]> => {
@@ -1500,8 +1527,8 @@ ${stylePriority}
       if (!rows.length && getAIMode() !== 'mock') {
         try {
           const part = await runPart(
-            '道具',
-            '你只提炼成片里会反复入镜的同一件道具。不要人物，不要地点，不要把衣服、鞋、发型当道具。只有被寻找、交接、反复特写的独立物件才算，例如黑领带、零食罐、同一把钥匙。name 用剧本短名，2到8个字。description 只写形状、材质、颜色、新旧和辨识点，不写房间。只输出 JSON：{"props":[{"name":"黑领带","description":"窄版黑色丝绸领带，尖端有细金属夹"}]}。没有就输出 {"props":[]}。',
+            'Props',
+            '영상에 반복해서 등장하는 동일한 소품만 추출하세요. 인물, 장소, 옷, 신발과 헤어스타일은 제외하세요. 검은 넥타이, 간식 통, 같은 열쇠처럼 찾거나 건네거나 여러 번 클로즈업하는 독립된 물건만 포함하세요. name에는 대본에서 사용하는 2–8자의 짧은 이름을 쓰세요. description에는 모양, 재질, 색, 닳은 상태와 식별 특징만 쓰고 방은 묘사하지 마세요. JSON만 출력하세요. {"props":[{"name":"검은 넥타이","description":"폭이 좁은 검은 실크 넥타이. 끝에 가는 금속 클립이 달려 있음"}]}. 소품이 없으면 {"props":[]}를 출력하세요.',
             1800,
             PLAY_LLM_TIMEOUT_MS,
             (raw) => Array.isArray(raw?.props)
@@ -1528,17 +1555,17 @@ ${stylePriority}
     }
 
     if (stageOrder[startAt] <= stageOrder.subjects) {
-      onProgress?.('第 1/3 步：提炼人物，并找出反复出现的道具…')
+      onProgress?.('1/3단계 — 캐릭터와 반복 등장하는 소품을 추출하는 중…')
       const playPeople = extractSubjectsFromPlay(play)
       if (playPeople.length) {
-        log(`✓ 从剧本文字抽出 ${playPeople.length} 个角色，不走模型`)
-        onProgress?.(`剧本里已有人物设定，直接落下 ${playPeople.length} 个角色`)
+        log(`✓ 대본에서 캐릭터 ${playPeople.length}명을 바로 추출했어요.`)
+        onProgress?.(`대본에 캐릭터 설정이 있어 캐릭터 ${playPeople.length}개를 바로 저장했습니다.`)
         subjectPart = { raw: { subjects: playPeople }, model: parallelModel }
       } else {
-        subjectPart = await runPart('人物', subjectSystem, 4000, PLAY_LLM_TIMEOUT_MS)
+        subjectPart = await runPart('캐릭터', subjectSystem, 4000, PLAY_LLM_TIMEOUT_MS)
       }
       const rows = Array.isArray(subjectPart.raw?.subjects) ? subjectPart.raw.subjects : playPeople
-      if (!rows.length) throw new Error('提炼人物失败：剧本里没有人物节或对白名，模型也没给出名单')
+      if (!rows.length) throw new Error('캐릭터 추출에 실패했습니다. 대본에 캐릭터 섹션이나 대사의 화자 이름이 없고 모델도 명단을 반환하지 않았습니다.')
       const normalized = normalizeStoryboard(
         { subjects: rows, scenes: [], shots: [] },
         { style: input.style, topic: input.topic, content: input.content, keywords: input.keywords, maxShotDuration: input.maxShotDuration }
@@ -1547,41 +1574,41 @@ ${stylePriority}
       await input.onExtractStage?.('subjects', { subjects: normalized.subjects, props, scenes: [], shots: [] })
       onProgress?.(
         props.length
-          ? `✓ 已保存 ${normalized.subjects?.length || 0} 个角色，${props.length} 个反复出现的道具`
-          : `✓ 已保存 ${normalized.subjects?.length || 0} 个角色`
+          ? `✓ 캐릭터 ${normalized.subjects?.length || 0}명과 반복 등장 소품 ${props.length}개를 저장했어요.`
+          : `✓ 캐릭터 ${normalized.subjects?.length || 0}명을 저장했어요.`
       )
       if (stopAfter === 'subjects') {
-        onProgress?.('人物阶段完成。下一步由你确认后再提炼场景。')
+        onProgress?.('캐릭터 추출을 마쳤습니다. 확인 후 장면을 추출합니다.')
         return {
           result: { subjects: normalized.subjects, props, scenes: [], shots: [] },
           model: subjectPart.model || parallelModel
         }
       }
     } else {
-      onProgress?.(`✓ 已有 ${input.existingSubjects?.length || 0} 个角色，从已保存结果继续`)
+      onProgress?.(`✓ 저장된 캐릭터 ${input.existingSubjects?.length || 0}개에서 이어서 작업합니다.`)
     }
 
     if (stageOrder[startAt] <= stageOrder.scenes) {
-      onProgress?.('第 2/3 步：只提炼场景锚点…')
+      onProgress?.('2/3단계 — 장면의 기준 정보를 추출하는 중…')
       const playScenes = extractLocationsFromPlay(play)
       if (playScenes.length) {
-        log(`✓ 从剧本文字抽出 ${playScenes.length} 个地点，不走模型`)
-        onProgress?.(`剧本里已有地点，直接落下 ${playScenes.length} 个场景`)
+        log(`✓ 대본에서 장소 ${playScenes.length}곳을 바로 추출했어요.`)
+        onProgress?.(`대본에 장소가 있어 장면 ${playScenes.length}개를 바로 저장했습니다.`)
         scenePart = { raw: { scenes: playScenes }, model: parallelModel }
       } else {
-        const sceneUser = `主题：${input.topic || '（未填）'}
-比例：${input.aspectRatio}
+        const sceneUser = `Topic: ${input.topic || '(unspecified)'}
+Aspect ratio: ${input.aspectRatio}
 
-只从下面的地点与场次提炼场景，不要另造地点。同一地点只建一条。
+Extract locations only from the supplied locations and scene excerpts. Do not invent places. Record each place once.
 ${extractPlayForSceneStage(play)}`
         try {
           scenePart = await runPart(
-            '场景',
+            'Locations',
             sceneSystem,
             8000,
             PLAY_LLM_TIMEOUT_MS,
             (raw) => extractSceneRows(raw).length > 0,
-            '上一轮虽然是 JSON，但 scenes 数组缺失或放错了层级。立刻只输出一个对象，顶层必须有非空 scenes 数组。不要套 data、result，不要写思考。',
+            'The prior response omitted or misplaced scenes. Return one object with a nonempty top-level scenes array. Do not wrap it in data or result, and do not include reasoning.',
             sceneUser
           )
         } catch (error) {
@@ -1591,48 +1618,48 @@ ${extractPlayForSceneStage(play)}`
       }
       let rows = extractSceneRows(scenePart.raw)
       if (!rows.length && playScenes.length) rows = playScenes
-      if (!rows.length) throw new Error('提炼场景失败：剧本里没有「环境与场景」或「内景｜地点」，模型也没给出地点。人物节点已经保留。')
+      if (!rows.length) throw new Error('장면을 추출하지 못했어요. 대본에 ‘환경과 장면’이나 ‘실내｜장소’가 없고 모델 응답에도 장소가 없어요. 캐릭터 노드는 저장했어요.')
       const normalized = normalizeStoryboard(
         { ...scenePart.raw, subjects: subjectPart.raw.subjects || [], scenes: rows, shots: [] },
         { style: input.style, topic: input.topic, content: input.content, keywords: input.keywords, maxShotDuration: input.maxShotDuration }
       )
       await input.onExtractStage?.('scenes', { ...normalized, shots: [] })
-      onProgress?.(`✓ 已保存 ${normalized.scenes?.length || 0} 个场景`)
+      onProgress?.(`✓ 장면 ${normalized.scenes?.length || 0}개를 저장했습니다.`)
       if (stopAfter === 'scenes') {
-        onProgress?.('场景阶段完成。下一步由你确认后再拆分镜。')
+        onProgress?.('장면 추출을 마쳤습니다. 확인 후 스토리보드를 추출합니다.')
         return {
           result: { ...normalized, shots: [] },
           model: scenePart.model || subjectPart.model || parallelModel
         }
       }
     } else {
-      onProgress?.(`✓ 已有 ${input.existingScenes?.length || 0} 个场景，从已保存结果继续`)
+      onProgress?.(`✓ 저장된 장면 ${input.existingScenes?.length || 0}개에서 이어서 작업합니다.`)
     }
 
-    onProgress?.('第 3/3 步：按场次拆成小组并发写分镜…')
+    onProgress?.('3/3단계 — 장면을 작업 묶음으로 나누고 스토리보드를 병렬 작성하는 중…')
     const subjectNames = (Array.isArray(subjectPart.raw?.subjects) ? subjectPart.raw.subjects : [])
       .map((item: { name?: unknown }) => String(item?.name || '').trim())
       .filter(Boolean)
     const sceneNames = extractSceneRows(scenePart.raw)
       .map((item: { name?: unknown }) => String(item?.name || '').trim())
       .filter(Boolean)
-    // 目标总时长 ÷ 模型单镜上限 = 小组数。30 秒、最长 15 秒 → 2 组，每组 15 秒。
+    // 목표 길이를 모델의 샷당 상한으로 나눈다. 목표 30초와 상한 15초면 15초씩 두 그룹이다.
     const targetDurationSec =
       Number(input.targetDurationSec) || extractTargetDurationSec(input.topic, input.content)
     const maxShotSec = shotDurationLimit(input)
     const slices = durationSlices(targetDurationSec, maxShotSec)
     const totalShotBudget = slices.length
     const workBatches = buildShotWorkBatches(play, totalShotBudget || undefined)
-    if (!workBatches.length) throw new Error('剧本正文为空，无法拆分镜')
+    if (!workBatches.length) throw new Error('대본 본문이 비어 있어 샷을 나눌 수 없습니다.')
     onProgress?.(
       slices.length
-        ? `目标成片 ${targetDurationSec} 秒，单镜最长 ${maxShotSec} 秒 → ${workBatches.length} 个小组（${slices.join(' + ')} 秒）`
-        : `已拆成 ${workBatches.length} 个剧情工作包；每包最多 ${SHOTS_PER_BATCH} 镜，同时运行 ${Math.min(SHOT_BATCH_CONCURRENCY, workBatches.length)} 个小组…`
+        ? `목표 길이 ${targetDurationSec}초, 샷당 최대 ${maxShotSec}초 → 작업 그룹 ${workBatches.length}개(${slices.join(' + ')}초)`
+        : `${workBatches.length}개 그룹으로 나눴어요. 그룹당 최대 ${SHOTS_PER_BATCH}개 샷을 배정해 ${Math.min(SHOT_BATCH_CONCURRENCY, workBatches.length)}개 그룹을 동시에 처리해요…`
     )
     const directives = extractPlayDirectives(play)
     const batchShots: Array<Record<string, unknown>[] | undefined> = new Array(workBatches.length)
     const batchModels: Array<string | undefined> = new Array(workBatches.length)
-    // 有时长切片时，一组只出一镜，时长就是这一片的秒数。
+    // 길이를 배정한 경우 그룹당 샷 하나를 만들고 해당 그룹의 길이를 사용한다.
     const perBatchBudget = (index: number) => {
       if (slices.length) return 1
       return undefined
@@ -1666,7 +1693,7 @@ ${extractPlayForSceneStage(play)}`
       if (persistedPrefix > 0 && index < persistedPrefix) {
         const partial = normalizedFromFinishedBatches(true)
         const completedSnapshot = completed
-        onProgress?.(`✓ 小组 ${completed}/${workBatches.length} 完成，按剧本顺序累计 ${partial.shots.length} 镜，正在写入画布…`)
+        onProgress?.(`✓ 작업 묶음 ${completed}/${workBatches.length}개 완료. 누적 샷 ${partial.shots.length}개를 대본 순서대로 캔버스에 저장하는 중…`)
         persistQueue = persistQueue.then(() =>
           input.onExtractStage?.('shots', partial, {
             partial: true,
@@ -1676,7 +1703,7 @@ ${extractPlayForSceneStage(play)}`
         )
         await persistQueue
       } else {
-        onProgress?.(`✓ 小组 ${completed}/${workBatches.length} 完成；等待前一段后按镜号写入`)
+        onProgress?.(`✓ 작업 묶음 ${completed}/${workBatches.length}개 완료. 앞 구간을 기다린 뒤 샷 번호 순서로 저장합니다.`)
       }
     }
 
@@ -1684,10 +1711,10 @@ ${extractPlayForSceneStage(play)}`
       workBatches,
       SHOT_BATCH_CONCURRENCY,
       async (batch, index) => {
-        // 断点续跑：这个工作包上次已经完成，直接复用结果，不重复消耗 token。
+        // 재시도에서는 이전에 완료한 작업 그룹 결과를 재사용해 토큰을 절약한다.
         const resumed = input.resumeBatchShots?.[index]
         if (resumed?.length) {
-          onProgress?.(`↩ ${batch.label} 已有断点结果，直接续用（${resumed.length} 镜）`)
+          onProgress?.(`↩ ${batch.label}에 저장된 결과를 재사용합니다(샷 ${resumed.length}개).`)
           await landFinishedBatch(index, { shots: resumed })
           return
         }
@@ -1713,7 +1740,7 @@ ${extractPlayForSceneStage(play)}`
             label: batch.label,
             error: (error as Error).message.split('\n')[0]
           })
-          onProgress?.(`⚠ ${batch.label} 并发首轮未完成；其他小组继续`)
+          onProgress?.(`⚠ ${batch.label}의 첫 병렬 작업을 완료하지 못했습니다. 다른 작업 묶음은 계속합니다.`)
         }
       },
       input.signal
@@ -1723,7 +1750,7 @@ ${extractPlayForSceneStage(play)}`
     if (failed.length) {
       const retryRows = [...failed].sort((a, b) => a.index - b.index)
       failed.length = 0
-      onProgress?.(`有 ${retryRows.length} 个小组未完成，已自动降为单路逐个重试，避免接口并发限流…`)
+      onProgress?.(`완료되지 않은 작업 묶음 ${retryRows.length}개를 API 동시 요청 제한에 맞춰 하나씩 다시 시도하는 중…`)
       for (const item of retryRows) {
         throwIfAborted(input.signal)
         const batch = workBatches[item.index]
@@ -1749,22 +1776,22 @@ ${extractPlayForSceneStage(play)}`
             label: item.label,
             error: (error as Error).message.split('\n')[0]
           })
-          onProgress?.(`⚠ ${item.label} 单路重试仍失败；继续处理下一包`)
+          onProgress?.(`⚠ ${item.label}을 개별로 다시 시도했지만 실패했습니다. 다음 묶음을 처리합니다.`)
         }
       }
       await persistQueue
     }
 
     let rawShots = batchShots.flatMap((rows) => rows || [])
-    // 兜底：模型超发时按预算截断，宁可少一镜也不让成片时长失控。
+    // 모델이 샷 한도를 넘으면 목표 길이를 지키기 위해 초과분을 잘라낸다.
     if (totalShotBudget && rawShots.length > totalShotBudget) {
       onProgress?.(
-        `⚠ 模型给出 ${rawShots.length} 镜，超出 ${targetDurationSec} 秒的 ${totalShotBudget} 镜预算，按剧本顺序保留前 ${totalShotBudget} 镜`
+        `⚠ 모델이 반환한 샷 ${rawShots.length}개가 목표 ${targetDurationSec}초의 한도(${totalShotBudget}개)를 초과해 대본 순서대로 처음 ${totalShotBudget}개를 유지해요.`
       )
       rawShots = rawShots.slice(0, totalShotBudget)
     }
     if (!rawShots.length) {
-      throw new Error(`所有分镜小组均失败。人物和场景已保留；请重试拆分镜。${failed[0]?.error ? `首个错误：${failed[0].error}` : ''}`)
+      throw new Error(`모든 스토리보드 작업 묶음이 실패했습니다. 캐릭터와 장면은 저장됐습니다. 스토리보드 추출을 다시 시도하세요.${failed[0]?.error ? `첫 번째 오류 ${failed[0].error}` : ''}`)
     }
     if (!subjectRows.length) {
       const names = new Set<string>()
@@ -1779,9 +1806,9 @@ ${extractPlayForSceneStage(play)}`
         ...[...names].slice(0, 8).map((name) => ({
           name,
           kind: 'person',
-          description: `${name}，外貌与服装细节待在画布补充`,
-          role: '由分镜对白和动作识别出的出场人物',
-          stateVariants: '单一状态'
+          description: `${name}의 외모와 의상 세부 정보는 캔버스에서 추가할 수 있어요.`,
+          role: '스토리보드의 대사와 동작에서 확인한 등장인물',
+          stateVariants: 'none'
         }))
       )
     }
@@ -1790,10 +1817,10 @@ ${extractPlayForSceneStage(play)}`
       sceneRows.push(
         ...names.slice(0, 8).map((name) => ({
           name,
-          description: `${name}，空间结构、地面材质、主锚与光线细节待在画布补充`,
-          mainAnchor: '场景中心视觉焦点',
-          anchors: '全景；主锚；地面站位区；光源',
-          lighting: '与本场剧情匹配的主光源'
+          description: `${name}의 공간 구조, 지면 재질, 주요 기준물과 조명은 캔버스에서 추가할 수 있어요.`,
+          mainAnchor: '장면 중심의 주요 기준물',
+          anchors: '전경, 주요 기준물, 인물 위치, 광원',
+          lighting: '이 장면의 전개에 맞는 주 광원'
         }))
       )
     }
@@ -1806,10 +1833,10 @@ ${extractPlayForSceneStage(play)}`
         total: workBatches.length
       })
       throw new Error(
-        `${failed.length}/${workBatches.length} 个分镜小组失败；其余 ${rawShots.length} 镜已经保存。失败段：${failed.map((item) => item.label).join('、')}`
+        `${failed.length}/${workBatches.length}개 스토리보드 작업 묶음이 실패했습니다. 나머지 ${rawShots.length}개 샷은 저장됐습니다. 실패한 구간 ${failed.map((item) => item.label).join('、')}`
       )
     }
-    onProgress?.(`✓ ${workBatches.length} 个小组全部完成，共拆出 ${rawShots.length} 镜`)
+    onProgress?.(`✓ 작업 묶음 ${workBatches.length}개를 완료해 샷 ${rawShots.length}개를 추출했습니다.`)
     const merged = {
       ...scenePart.raw,
       subjects: subjectRows,
@@ -1830,10 +1857,10 @@ ${extractPlayForSceneStage(play)}`
     )
     const warnings = storyboardQualityIssues(parsed, input)
     if (warnings.length) {
-      log(`⚠ 并行提炼完成，保留可编辑稿并提示 ${warnings.length} 项：${warnings.join('；')}`)
-      onProgress?.(`分阶段提炼完成；有 ${warnings.length} 项可在画布继续调整`)
+      log(`⚠ 동시 추출을 마쳤어요. 편집 가능한 초안을 유지했고 확인할 항목은 ${warnings.length}개예요. ${warnings.join('；')}`)
+      onProgress?.(`단계별 추출을 완료했습니다. 캔버스에서 ${warnings.length}개 항목을 더 조정할 수 있습니다.`)
     } else {
-      onProgress?.('人物、场景、分镜均已完成并绑定…')
+      onProgress?.('캐릭터, 장면, 스토리보드를 추출하고 연결했습니다.')
     }
     await input.onExtractStage?.('shots', parsed, {
       partial: false,
@@ -1848,57 +1875,57 @@ ${extractPlayForSceneStage(play)}`
     Number(input.targetDurationSec) || extractTargetDurationSec(input.topic, input.content)
   const budgetShots = shotBudgetFromDuration(budgetSec, input.maxShotDuration)
   const budgetLine = budgetShots
-    ? `\n【镜数与时长硬上限】用户要的是 ${budgetSec} 秒成片，单镜最长 ${shotDurationLimit(input)} 秒，所以只批 ${budgetShots} 个镜头。允许 ${budgetSec - DURATION_TOLERANCE_SEC}–${budgetSec + DURATION_TOLERANCE_SEC} 秒。全部镜头 duration 相加必须落在这个窗口。`
+    ? `\n[Shot and duration limits] The requested final duration is ${budgetSec} seconds, with a ${shotDurationLimit(input)}-second maximum per shot and ${budgetShots} shots total. Total duration must be within ${budgetSec - DURATION_TOLERANCE_SEC}–${budgetSec + DURATION_TOLERANCE_SEC} seconds.`
     : ''
 
   const userText = extractMode
-    ? `${verbatimSplitRule(input.verbatim)}下面是已经写好的完整剧本。请**忠实提炼**成画布节点 JSON（subjects / scenes / shots），不要重写故事、不要另起炉灶。${budgetLine}
+    ? `${verbatimSplitRule(input.verbatim)}The following script is complete. Extract the canvas node JSON (subjects / scenes / shots) faithfully. Do not rewrite or invent a new story.${budgetLine}
 
-完整剧本：
+전체 대본
 """
-${input.content?.trim() || '（空）'}
+${input.content?.trim() || '(empty)'}
 """
 
-主题：${input.topic || '（未填）'}
-${input.keywords?.length ? `关键词：${input.keywords.join('、')}` : ''}
-视频比例：${input.aspectRatio}
-时长参考：大约每镜 ${input.shotDuration} 秒（跟剧本里的场次走，别强行统一）
+Topic: ${input.topic || '(unspecified)'}
+${input.keywords?.length ? `Keywords: ${input.keywords.join('、')}` : ''}
+Aspect ratio: ${input.aspectRatio}
+Suggested duration: about ${input.shotDuration} seconds per shot. Follow the screenplay beats and vary shot lengths naturally.
 
 ${stylePriority}
 ${productNote}
 
-要求：人物/场景/分场与剧本一一对应；剧本对白原词必须进入对应镜头 voiceover（写成「人物名：台词」），禁止改成成年旁白，禁止清空成默片；同一人物同一意图的连续 2-4 个短句尽量合在一镜，不要机械拆成“一镜一句”；visualPrompt 按剧本「画面」写成静帧可画描述；videoPrompt 从0秒到镜头结束按剧情拍点分2–5段，逐段写谁从什么状态开始、看见什么、做什么、谁说原词、其他人怎样占位和反应、情绪怎样变化、镜头怎样运动并落下。不要机械等分，不要套「禁止呆脸空眼」这种话。说话时是否收近服从画面感、动作、空间关系与情绪节奏：需要强调表情时可用近景/特写，需要保留关系或环境时继续用中景、双人或多人同框；不要把每个说话镜头机械切成特写。禁止抄 visualPrompt。直接输出 JSON。`
-    : `按编剧手册把这段文案拆成能拍的分镜。口播要能念，画面用中文白话写给摄像，别写英文提示词沙拉。${budgetLine}
+Match every character, location, and scene to the script. Copy original dialogue into voiceover as “Character name: line.” Do not replace lines with older-character narration or silence. Keep 2–4 consecutive short lines by one character with the same intent in a shot when possible. Write the visible still in English as visualPrompt. Write videoPrompt in English from zero through the ending in 2–5 actual beats. For each beat describe the starting state, perception, action, speaker and original words, others’ blocking and reactions, emotional changes, and camera motion and endpoint. Avoid equal divisions and generic expressions. Frame speaking from action, spacing, and emotion: use close framing for an important expression and medium or group framing for relationships and surroundings. Do not repeat visualPrompt. Write titles and user-facing descriptions in Korean (한국어). Return JSON directly.`
+    : `Use the screenwriting guide to break the brief into filmable shots. Write speakable narration in Korean (한국어). Write model-facing imagery in clear natural English, without disconnected prompt keywords.${budgetLine}
 
-事实保真：不得新增原文没有的价格、参数、功效、人物关系、品牌承诺或剧情结论。原文含数字、专有名词时必须原样保留。信息不够就用画面承接，不要编事实填空。
+Preserve the source facts. Do not add prices, specifications, efficacy, relationships, brand promises, or plot outcomes absent from the source. Keep numbers and proper nouns verbatim. Use visible action to bridge missing detail instead of inventing facts.
 
-文案主题：
+원고 주제
 """
-${input.topic || '（未填）'}
+${input.topic || '(not provided)'}
 """
 
-文案内容：
+원고 내용
 """
-${input.content?.trim() || '（没写正文。有参考图就按图编口播和镜头。）'}
+${input.content?.trim() || '（본문 없음. 참조 이미지가 있다면 이미지에 맞춰 내레이션과 샷을 작성）'}
 """
-${input.keywords?.length ? `关键词：${input.keywords.join('、')}` : ''}
+${input.keywords?.length ? `Keywords: ${input.keywords.join('、')}` : ''}
 
-视频比例：${input.aspectRatio}
-时长参考：大约每镜 ${input.shotDuration} 秒（只是节奏，别所有镜头同一秒数）
+Aspect ratio: ${input.aspectRatio}
+Suggested pacing: about ${input.shotDuration} seconds per shot. Vary shot lengths.
 
 ${stylePriority}
 ${productNote}
 
-顺序：先锁人物和地点，再拆镜头。每镜 visualPrompt 用镜头语言写静帧里能看见的东西；videoPrompt 写这一镜演什么，不要写成配图词。
+Establish characters and locations before shot breakdown. Write visualPrompt as a visible still and videoPrompt as the performance for the current shot. Do not repeat the still prompt in the video prompt.
 ${
   hasUserStyle
-    ? `画风「${mediumPhrase}」在画面描述里点一次，写进桥、水、衣这些实物上。禁止第一句只写画风、结尾再抄一段技法套话。禁止只写「两人相对拱手」这种站位摘要。`
-    : `主题没提画风时，画面里带上「${styleCn}」，同样要写清环境实物与动态。`
+    ? `Mention “${mediumPhrase}” once and express it through tangible details such as the bridge, water, and clothing. Avoid a style-only opening, a generic technique paragraph at the end, or a blocking-only summary such as “two people clasp their hands in greeting.”`
+    : `If the topic gives no style, apply “${presetMedium}” and describe tangible surroundings and motion.`
 }
-直接输出 JSON，不要解释。`
+Return JSON only without explanation.`
 
   const extractSystemExtra = extractMode
-    ? `\n【本轮任务】输入已是完整剧本。只做提炼与落库字段补全，禁止改口播原意，禁止合并剧本里已分开的人物。每个 subject 必须在至少一镜的 subjectIds 和 visualPrompt 里出场点名，不能只建档不入镜。`
+    ? `\n【이번 작업】입력은 완성된 대본입니다. 추출하고 저장에 필요한 필드만 보완하세요. 내레이션 원문의 의미를 바꾸거나 대본에서 구분한 인물을 합치지 마세요. 각 subject는 적어도 한 샷의 subjectIds에 연결하고 visualPrompt에서 이름을 언급해 화면에 등장시키세요.`
     : ''
 
   const messages: LLMMessage[] = [
@@ -1914,54 +1941,54 @@ ${productNote}
 ${stylePriority}
 ${extractSystemExtra}
 
-【字段语言】h3Aesthetic 用英文。visualPrompt 用中文写静帧可画内容。videoPrompt 用中文写这一镜的视频内容表现。
+Output languages: write titles and user-facing descriptions in Korean (한국어). Write h3Aesthetic, visualPrompt, and videoPrompt in English for the generation models. Keep title text requested in Korean and original dialogue verbatim.
 ${videoPerformanceSpec(getVideoPromptStyle())}
 
-【输出 JSON】
+【출력 JSON】
 {
-  "aesthetic": "<一两句人话，说出全片味道，用用户主题里的词>",
+  "aesthetic": "<One or two natural sentences in Korean about the overall tone, using the user's wording>",
   "h3Aesthetic": "<English production aesthetic, concrete lighting/material/camera qualities>",
-  "styleBrief": "<这片图啥、冲突在哪、凭什么不划走>",
-  "colorPalette": "<几处能看见的颜色，别写色板编号>",
-  "lightingNote": "<几点钟、灯从哪来>",
+  "styleBrief": "<Purpose, central conflict, and why a viewer keeps watching>",
+  "colorPalette": "<Visible colors in the scene, without palette numbers>",
+  "lightingNote": "<Time of day and source of light>",
   "subjects": [
     {
       "id": "sub_1",
-      "name": "街上能喊出来的短名",
+      "name": "Short, speakable character name",
       "kind": "person|animal|other",
-      "description": "<外貌锁定，写成能去夜市买同款：年龄、发型、衣服、鞋、疤或习惯动作；不要写地点天气，角色设计图是纯白背景四视图>",
-      "role": "<这人在片里干什么>",
-      "stateVariants": "<会不会换衣服；不会就写单一状态>",
-      "voicePrompt": "<这人开口说话时的音色与表达：年龄性别、音色质地、语速力度、情绪基调、口音或口头习惯；25-60 字中文，能当配音导演指令；animal/other 写空字符串>",
-      "props": "<身上穿戴和随身物：包、证件、平板、鞋、帽子等，没有写无>",
+      "description": "<Identity details concrete enough to match at a market: age, hairstyle, clothes, shoes, scars, or habitual movements. Exclude place and weather. The character sheet has four views on white>",
+      "role": "<Role in the film>",
+      "stateVariants": "<Wardrobe changes, or none if unchanged>",
+      "voicePrompt": "<One English sentence of about 15–35 words for dubbing direction, covering age and gender, timbre, pace and intensity, emotional tone, accent or speech habits. Empty for animal or other>",
+      "props": "<Items worn or carried, such as bag, ID, tablet, shoes, or hat. Use none if no items are present>",
       "fromReference": false
     }
   ],
   "scenes": [
     {
       "id": "scn_1",
-      "name": "地点短名",
-      "description": "<人还没进来时这个地方：地面、水、植物、建筑、风是否在动、光从哪来，80字以上>",
-      "mainAnchor": "<摄像能对着的实在东西>",
-      "anchors": "<四宫格锚点，分号分隔：全景；主锚；地面站位；光源或次锚>",
-      "lighting": "<时辰和光源>"
+      "name": "Short place name",
+      "description": "<At least 80 characters on ground, water, vegetation, buildings, wind, and light before people enter>",
+      "mainAnchor": "<Physical anchor visible to the camera>",
+      "anchors": "<Four anchors separated by semicolons: wide view, main anchor, ground or blocking area, light source or secondary anchor>",
+      "lighting": "<Time and light source>"
     }
   ],
   "shots": [
     {
-      "title": "场记板上能写的 3-8 字",
+      "title": "3–8 character title suitable for a slate",
       "purpose": "钩子/说明/反应/揭示/收口",
-      "shotSize": "<远近 + 为什么>",
-      "blocking": "<每个人：近处还是后面、踩在什么上、身体朝哪。说话者可以在后。禁止正面排排站>",
-      "eyeline": "<每个人看谁或看什么；前面的人回头/侧头看说话者或他指的东西，禁止看镜头>",
-      "continuity": "<承接上一镜的具体末态（首镜写开场初态） → 本镜发生的可见变化 → 留给下一镜的具体末态；写清位置、姿势、朝向、手中物、情绪和已知信息>",
-      "propFocus": "<这镜要看清的物件及它现在的状态，没有写无>",
-      "visualPrompt": "<镜头语言：近到远写清画面里所有实物；水/风/衣摆动或不动；光从哪来；人穿什么、踩哪、手拿什么。这是静帧配图词。画风词点一次。禁止画风套话段，禁止只写站位>",
+      "shotSize": "<Framing and reason for it>",
+      "blocking": "<Foreground and background position, what each person stands on, and body orientation. The speaker may be behind others. Avoid frontal lineups>",
+      "eyeline": "<Eyeline per person. Foreground people look back or sideways toward the speaker or indicated object, away from the camera>",
+      "continuity": "<Previous concrete ending or opening state for the first shot → current visible change → specific state for the next shot. State position, pose, orientation, held items, emotion, and knowledge>",
+      "propFocus": "<Prop to show clearly and its current state, or none>",
+      "visualPrompt": "<Write a visible English still-frame prompt. Specify objects from near to far, movement or stillness in water, wind, and clothing, light source, wardrobe, ground, and objects in hand. Mention the medium once. Avoid generic style paragraphs or blocking alone>",
       "videoPrompt": "${videoPromptJsonHint(getVideoPromptStyle())}",
-      "audioDescription": "<现场能听到的，逗号分隔>",
-      "voiceover": "<人物名：这一镜连续要说的 1-4 个短句；优先 2-4 句，没有就空字符串>",
+      "audioDescription": "<Audible scene sounds, separated by commas>",
+      "voiceover": "<Character name: 1–4 consecutive short original lines. Prefer 2–4, or leave empty if silent>",
       "audioMode": "h3-dialogue|h3-voiceover|tts|none",
-      "speakerHint": "<说话人声音特征 / 情绪 / 表达方式；没有口播则空字符串>",
+      "speakerHint": "<Voice quality, emotion, delivery, or empty if silent>",
       "duration": <5-${shotDurationLimit(input)}>,
       "cameraMovement": "push|pull|pan|tilt|static|orbit",
       "subjectIds": ["sub_1"],
@@ -1970,12 +1997,14 @@ ${videoPerformanceSpec(getVideoPromptStyle())}
   ]
 }
 
-画风：用户原词写进画面实物，不要单独成段。主题完全没提才用下拉「${styleCn}」。
-visualPrompt 若只有站位没有环境实物、或开头结尾是画风套话，视为不合格。
-videoPrompt 若没从0秒覆盖到镜头结束、没按拍点写清每段谁在做什么和谁在说什么，或只是机械等分后填套话，视为不合格。
-${hasUserStyle && !look.matched ? '这是自定义画风，不要套页面下拉风格。' : `${styleGuide.avoid}。`}
-默认每镜使用 H3 出镜对白：把原文按语义段落分配到 voiceover，并设置 audioMode=h3-dialogue。不要机械地一镜一句；当前模型单镜最长 ${shotDurationLimit(input)} 秒，同一地点、同一人物、同一表达意图或连续动作能在上限内完成时，优先合成一个 7-${shotDurationLimit(input)} 秒的完整镜头，禁止为了凑固定时长拆成两个 5 秒镜头。只有视觉焦点、时空、轴线或戏剧任务真正改变时才切镜。短促反应或转场才只说一句，口播总量约每秒 4 个字。voiceover 写“人物名：台词”，speakerHint 同时写说话人和声线。说话镜头的景别服从画面感、动作、空间关系和情绪节奏：表情是重点且不需交代环境时可以收近；需要看清递物、争执、问答、人物距离、环境压力或集体反应时，保留中景、双人或多人同框。禁止按“只要说话就特写”的模板拆镜，但要写清当前谁说话、其余人如何反应，避免所有人同时张嘴。只有原文明说是旁白/画外音时才用 h3-voiceover，明确要求后期配音时才用 tts，明确无口播的空镜才用 none。人物章每一个 ### 都必须在 subjects 中单独建档；已故角色至少一镜出现遗物、画像或闪回，活人对手至少一镜出现对峙或可见压力。每镜 title 必须是不同的 3-8 字内容标题，禁止统一写“镜头”。逐对核对 continuity，后一镜开头必须接住前一镜结尾；重大状态变化按上面的叙事连续性硬规则展开，禁止从结果直接跳到讲解。
-只输出合法 JSON。`
+Visual style: express the user's wording through physical objects, without a separate style paragraph. Only use the dropdown value when the topic does not specify a style: "${presetMedium}".
+Reject visualPrompt if it only lists positions, omits physical surroundings, or opens or ends with generic style language.
+Reject videoPrompt if it omits any duration from zero to the end, lacks actions and speakers at actual beats, or fills equal time slots with generic language.
+${hasUserStyle && !look.matched ? 'Use the custom visual style in place of the preset selected on the page.' : `${styleGuide.avoid}`}
+Use H3 on-screen dialogue by default. Divide the original words into meaningful paragraphs for voiceover and set audioMode=h3-dialogue. Avoid one line per shot. The current model accepts at most ${shotDurationLimit(input)} seconds per shot. For a shared place, person, intention, or continuous action, prefer one complete 7–${shotDurationLimit(input)}-second shot when it fits. Do not force two 5-second shots to fill a template. Cut only when focus, time, place, axis, or dramatic purpose changes. Reserve a single line for brief reactions or transitions and allow about four characters per second. Use "Character name: dialogue" in voiceover and specify the speaker and vocal quality in speakerHint.
+Follow action, spacing, and emotion when choosing framing. Use close framing when the expression matters and no surroundings are needed; use medium, two-person, or group framing for handoffs, arguments, exchanges, distance, environmental pressure, or group reactions. Do not force close-ups; name who speaks and others' reactions so mouths do not open together.
+Use h3-voiceover only for explicit off-screen narration, tts for requested dubbing in postproduction, and none for a silent empty shot. Create a separate subject for each ### under characters. If a form of address such as “older brother” refers to an existing character, record it in name, role, or description. Include every character in at least one shot, link them through subjectIds, and name them in visualPrompt and videoPrompt. Keep the father, older brother, and antagonist even if they never occupy the center of the frame. Create a character card for each and do not replace them in shots with a passerby or “a man.” Show a deceased character's keepsake, portrait, or flashback in at least one shot, and a living opponent's confrontation or visible pressure in at least one shot. Give every shot its own specific 3–8-character Korean title. Verify adjacent continuity and apply the narrative rules to major changes instead of jumping from a result to explanatory speech.
+Return valid JSON only.`
     },
     {
       role: 'user',
@@ -1986,7 +2015,7 @@ ${hasUserStyle && !look.matched ? '这是自定义画风，不要套页面下拉
   const { baseUrl, model: cfgModel } = getLlmConfig()
   const model = resolvePlayModel(input) || cfgModel
   log(
-    `→ 调用主 LLM: ${baseUrl}/chat/completions (model: ${model})`
+    `→ 기본 언어 모델 호출 ${baseUrl}/chat/completions (model: ${model})`
   )
 
   const resp = await callLLM({
@@ -1999,12 +2028,12 @@ ${hasUserStyle && !look.matched ? '这是自定义画风，不要套页面下拉
     timeoutMs: PLAY_LLM_TIMEOUT_MS
   })
 
-  log(`← 收到响应 (${resp.content.length} 字符)`)
+  log(`← 응답 수신(${resp.content.length}자)`)
   if (resp.content.includes('<think>') || resp.content.includes('<reasoning>')) {
-    log('⚠ 响应包含思考标签，使用鲁棒解析剥除')
+    log('⚠ 응답에 포함된 추론 태그를 제거하고 해석해요.')
   }
 
-  let parsed = normalizeStoryboard(await parseJsonWithModelRepair(resp.content, input, '脚本首稿'), {
+  let parsed = normalizeStoryboard(await parseJsonWithModelRepair(resp.content, input, '대본 초안'), {
     style: input.style,
     topic: input.topic,
     content: input.content,
@@ -2014,7 +2043,7 @@ ${hasUserStyle && !look.matched ? '这是自定义画风，不要套页面下拉
 
   if (!parsed?.shots || !Array.isArray(parsed.shots)) {
     throw new Error(
-      `LLM 响应结构不对，没有 shots 数组：${JSON.stringify(parsed).slice(0, 200)}`
+      `LLM 응답 구조에 shots 배열이 없습니다. ${JSON.stringify(parsed).slice(0, 200)}`
     )
   }
 
@@ -2022,11 +2051,11 @@ ${hasUserStyle && !look.matched ? '这是自定义画风，不要套页面下拉
   parsed = await ensureShotDuration(parsed, input, model, onProgress)
 
   log(
-    `✓ 解析成功，${parsed.subjects?.length ?? 0} 个主体 / ${parsed.scenes?.length ?? 0} 个场景 / ${parsed.shots.length} 个分镜`
+    `✓ 캐릭터 ${parsed.subjects?.length ?? 0}명, 장면 ${parsed.scenes?.length ?? 0}개, 스토리보드 샷 ${parsed.shots.length}개를 읽었어요.`
   )
   const durSummary = parsed.shots.map((s) => s.duration).join('+')
   const totalDur = parsed.shots.reduce((sum, s) => sum + s.duration, 0)
-  log(`⏱ 镜头秒数：${durSummary} = ${totalDur}s`)
+  log(`⏱ 샷별 길이 ${durSummary} = ${totalDur}s`)
   return { result: parsed, model: resp.model ?? model }
 }
 
@@ -2035,8 +2064,8 @@ function asKind(v: unknown): Subject['kind'] {
 }
 
 /**
- * 人物音色描述归一化。非人物一律清空；
- * 人物漏写时补一条通用兜底，保证「每个会说话的角色都有声线」，不会每镜一个声音。
+ * 캐릭터 음색 설명을 정규화한다. 인물이 아닌 피사체의 음색은 비운다.
+ * 인물의 음색 설명이 없으면 기본 설명을 채워 샷 간 음색을 유지한다.
  */
 function normalizeVoicePrompt(v: unknown, kind: Subject['kind']): string | undefined {
   if (kind !== 'person') return undefined
@@ -2044,9 +2073,9 @@ function normalizeVoicePrompt(v: unknown, kind: Subject['kind']): string | undef
   return text || FALLBACK_VOICE_PROMPT
 }
 
-/** 通用兜底声线：模型漏写 voicePrompt 时用，避免同一角色每镜声音漂移。 */
+/** 모델이 voicePrompt를 빠뜨리면 기본 음색 설명으로 샷 간 음색 차이를 줄인다. */
 export const FALLBACK_VOICE_PROMPT =
-  '自然口语的中文对白声线，语速中等、气息平稳，情绪贴合本场剧情，不要播音腔'
+  'Natural conversational delivery at a moderate pace with steady breath. Match the emotion to the scene and avoid an announcer cadence.'
 
 function spokenSentenceCount(text: string): number {
   const body = (text || '').replace(/^[^：:\n]{1,12}[：:]\s*/, '').trim()
@@ -2066,7 +2095,7 @@ function voiceoverSpeakerLabels(text: string): string[] {
   return labels
 }
 
-/** 口播里的「名字：台词」标签 → 角色卡。名字对不上再退回包含匹配。 */
+/** 대사에서 이름을 찾아 캐릭터 카드에 연결한다. 정확히 일치하지 않으면 포함 관계를 확인한다. */
 export function matchSpeakerSubject(
   label: string,
   subjects: Array<{ id: string; name: string; voicePrompt?: string }>
@@ -2082,10 +2111,10 @@ export function matchSpeakerSubject(
 }
 
 /**
- * 把人物节点的音色描述绑到分镜上。
- * 每镜按口播里的说话人找到角色，把 Subject.voicePrompt 写进 Shot.speakerVoice，
- * 生成视频和后期配音都读这一份，保证同一角色全片一个声线。
- * 返回成功绑定的镜数。
+ * 캐릭터 노드의 음색을 스토리보드에 연결한다.
+ * 샷의 대사에 등장하는 화자를 찾아 Subject.voicePrompt를 Shot.speakerVoice에 저장한다.
+ * 영상 생성과 후반 더빙에서 같은 음색을 사용한다.
+ * 음색을 연결한 샷 수를 반환한다.
  */
 export function bindShotVoiceHints<
   T extends { voiceover?: string; speakerVoice?: string }
@@ -2097,7 +2126,7 @@ export function bindShotVoiceHints<
   let bound = 0
   for (const shot of shots) {
     const voiceover = String(shot.voiceover || '').trim()
-    // 没有口播的镜头不绑声线：空镜不需要说话人。
+    // 대사가 없는 샷에는 화자의 음색을 지정하지 않는다.
     if (!voiceover) continue
     const labels = voiceoverSpeakerLabels(voiceover)
     const picked: string[] = []
@@ -2128,7 +2157,7 @@ function mergeAdjacentShots(a: StoryboardShot, b: StoryboardShot): StoryboardSho
   }
 }
 
-/** 镜数放不进窗口时合并相邻镜头，再把各镜秒数收进目标 ±10 秒。收不进去返回 null。 */
+/** 샷 수가 길이 제한을 넘으면 인접한 샷을 합치고 ±10초 범위에 맞춘다. 불가능하면 null을 반환한다. */
 function fitShotsToDuration(
   shots: StoryboardShot[],
   targetSec: number,
@@ -2176,7 +2205,7 @@ function fitShotsToDuration(
 }
 
 /**
- * 检测成片总时长。不合格就打回重拆；模型仍交不出合格时长时，强制把各镜秒数收进 ±10 秒。
+ * 최종 영상 길이를 검사하고 범위를 벗어나면 다시 나눈다. 모델로 해결하지 못하면 샷 길이를 직접 조정한다.
  */
 async function ensureShotDuration(
   parsed: StoryboardResult,
@@ -2192,17 +2221,17 @@ async function ensureShotDuration(
     const total = totalShotDuration(current.shots)
     const issue = durationWindowIssue(total, target)
     if (!issue) {
-      if (round > 0) onProgress?.(`时长检测通过：总时长 ${total} 秒，在 ${target} 秒的 ±${DURATION_TOLERANCE_SEC} 秒内`)
+      if (round > 0) onProgress?.(`전체 ${total}초가 목표 ${target}초의 허용 오차 ±${DURATION_TOLERANCE_SEC}초 안에 들어요.`)
       return current
     }
     if (round === DURATION_REPAIR_ROUNDS) break
     onProgress?.(
-      `时长检测未通过：现在 ${total} 秒，用户要 ${target} 秒（允许 ${target - DURATION_TOLERANCE_SEC}–${target + DURATION_TOLERANCE_SEC} 秒）。打回按时长重拆（${round + 1}/${DURATION_REPAIR_ROUNDS}）…`
+      `현재 ${total}초가 목표 ${target}초의 허용 범위(${target - DURATION_TOLERANCE_SEC}–${target + DURATION_TOLERANCE_SEC}초)를 벗어나 다시 샷을 나누고 있어요(${round + 1}/${DURATION_REPAIR_ROUNDS})…`
     )
     try {
       current = await repairStoryboardOnce(current, { ...input, targetDurationSec: target }, model, [issue])
     } catch (error) {
-      log(`⚠ 时长打回失败，改为强制收秒：${(error as Error).message}`)
+      log(`⚠ 길이 보정 요청에 실패해 샷 길이를 직접 조정해요. ${(error as Error).message}`)
       break
     }
   }
@@ -2210,11 +2239,11 @@ async function ensureShotDuration(
   if (!fitted) {
     const total = totalShotDuration(current.shots)
     throw new Error(
-      `时长检测未通过：总时长 ${total} 秒，用户要求 ${target} 秒，只允许上下浮动 ${DURATION_TOLERANCE_SEC} 秒。已打回重拆 ${DURATION_REPAIR_ROUNDS} 次，仍收不进这个区间。`
+      `샷을 ${DURATION_REPAIR_ROUNDS}번 다시 나눴지만 전체 ${total}초가 목표 ${target}초의 허용 오차 ±${DURATION_TOLERANCE_SEC}초를 벗어나요.`
     )
   }
   const fittedTotal = totalShotDuration(fitted)
-  onProgress?.(`时长检测仍不合格，已按 ${target} 秒强制收回各镜时长，现为 ${fittedTotal} 秒`)
+  onProgress?.(`길이 검사를 통과하지 않아 목표 ${target}초에 맞춰 샷 길이를 조정했습니다. 현재 ${fittedTotal}초입니다.`)
   return { ...current, shots: fitted }
 }
 
@@ -2223,20 +2252,20 @@ export function storyboardQualityIssues(
   input: Pick<StoryboardInput, 'content' | 'topic' | 'targetDurationSec' | 'maxShotDuration'>
 ): string[] {
   const issues: string[] = []
-  if (!result.shots.length) issues.push('严重：没有生成任何分镜')
+  if (!result.shots.length) issues.push('Critical: No storyboard shots were generated.')
   const targetSec = Number(input.targetDurationSec) || extractTargetDurationSec(input.topic, input.content)
   const shotCap = shotBudgetFromDuration(targetSec, input.maxShotDuration) || 12
   if (result.shots.length > shotCap) {
     issues.push(
-      `${targetSec ? '严重：' : ''}分镜 ${result.shots.length} 个，超出${targetSec ? `「${targetSec} 秒」对应的 ${shotCap}` : shotCap}镜预算，短视频节奏失控`
+      `${targetSec ? 'Critical: ' : ''}The storyboard has ${result.shots.length} shots, exceeding the limit of ${shotCap}${targetSec ? ` for ${targetSec} seconds` : ''}. Reduce the shot count for short-form pacing.`
     )
   }
   if (
     result.subjects?.length === 1 &&
-    result.subjects[0]?.name === '主角' &&
+    /^(?:主角|주인공|protagonist)$/i.test(result.subjects[0]?.name || '') &&
     (input.content || '').trim()
   ) {
-    issues.push('严重：没有从用户原文中提取完整人物，只生成了兜底“主角”')
+    issues.push('Critical: The extraction returned only a generic protagonist. Extract the other characters named in the source.')
   }
   const sourceText = `${input.topic || ''}\n${input.content || ''}`
   const castText = (result.subjects ?? [])
@@ -2248,48 +2277,48 @@ export function storyboardQualityIssues(
     '顾客', '主持人', '女孩', '男孩', '女人', '男人'
   ].filter((role) => sourceText.includes(role) && !castText.includes(role))
   if (visibleRoles.length) {
-    issues.push(`严重：subjects 遗漏原文人物：${visibleRoles.join('、')}`)
+    issues.push(`Critical: The following source characters are missing from subjects: ${visibleRoles.join('、')}`)
   }
   const normalizedTitles = result.shots.map((shot) => shot.title.trim())
   if (
-    normalizedTitles.some((title) => /^镜头\s*\d*$/.test(title)) ||
+    normalizedTitles.some((title) => /^(?:镜头|샷|Shot)\s*\d*$/i.test(title)) ||
     new Set(normalizedTitles).size !== normalizedTitles.length
   ) {
-    issues.push('严重：分镜标题缺失或重复；每镜必须使用不同的内容标题，不能统一写“镜头”')
+    issues.push('Critical: Shot titles are missing or duplicated. Give every shot a specific title. Do not use the generic title “Shot.”')
   }
   const targetDuration = targetSec
   const totalDuration = result.shots.reduce((sum, shot) => sum + shot.duration, 0)
   const durationIssue = durationWindowIssue(totalDuration, targetDuration)
   if (durationIssue) issues.push(durationIssue)
   if (!result.h3Aesthetic || result.h3Aesthetic.length < 35) {
-    issues.push('缺少可直接传给 H3 的英文 Aesthetic')
+    issues.push('Provide an English aesthetic description suitable for H3.')
   }
   const people = (result.subjects ?? []).filter((s) => s.kind !== 'other')
   const voicedShots = result.shots.filter((shot) => (shot.voiceover || '').trim())
-  const looksLikeAd = /带货|产品演示|口播文案/.test(`${input.topic || ''}\n${input.content || ''}`)
+  const looksLikeAd = AD_COPY.test(`${input.topic || ''}\n${input.content || ''}`)
   if (
     !looksLikeAd &&
     people.length >= 2 &&
     result.shots.length >= 4 &&
     voicedShots.length < Math.max(3, Math.ceil(result.shots.length * 0.35))
   ) {
-    issues.push('对白过少：有人物同场的镜头几乎不说话，短剧/短电影不能写成默片。唤名、问答、相认、对峙、劝阻必须落到 voiceover。禁止把全部前情塞进第一镜成年旁白')
+    issues.push('Add dialogue to shots with multiple characters. Write lines for calling names, questions and answers, recognition, confrontation, and persuasion. Do not put the entire backstory in the first shot’s adult narration.')
   }
   if (
-    voicedShots.some((shot) => /成年/.test(shot.voiceover)) &&
-    voicedShots.filter((shot) => !/成年/.test(shot.voiceover)).length < 2
+    voicedShots.some((shot) => ADULT_NARRATOR.test(shot.voiceover)) &&
+    voicedShots.filter((shot) => !ADULT_NARRATOR.test(shot.voiceover)).length < 2
   ) {
-    issues.push('出镜对白被改成了「成年某某」旁白；本场人物必须自己开口，故事背景不要用旁白复述')
+    issues.push('Restore on-screen dialogue instead of narration by an older version of a character. Let the visible characters speak and do not summarize the backstory in narration.')
   }
   if (
     totalDuration >= 25 &&
     voicedShots.length >= 3 &&
     voicedShots.every((shot) => spokenSentenceCount(shot.voiceover) <= 1)
   ) {
-    issues.push('口播被机械拆成了“一镜一句”；同一人物、同一表达意图的连续 2-4 个短句应合进一个 7-10 秒镜头，只给短促反应保留单句')
+    issues.push('Dialogue is split mechanically into one line per shot. Combine 2–4 successive lines by the same speaker with the same intent into one 7–10-second shot. Reserve a single line for brief reactions.')
   }
   result.shots.forEach((shot, index) => {
-    const label = `第 ${index + 1} 镜`
+    const label = `Shot ${index + 1}`
     const speakers = voiceoverSpeakerLabels(shot.voiceover || '')
     const speaker = speakers[0]
     if (shot.audioMode === 'h3-dialogue' && speaker) {
@@ -2297,16 +2326,16 @@ export function storyboardQualityIssues(
         .filter(Boolean)
         .join('\n')
       if (!staging.includes(speaker)) {
-        issues.push(`${label} 出镜对白没点名说话者「${speaker}」`)
+        issues.push(`${label} does not identify “${speaker}” as the on-screen speaker.`)
       }
     }
     if ((shot.visualPrompt || '').trim().length < 50) {
-      issues.push(`${label} 画面描述过短，无法稳定生成`)
+      issues.push(`${label} needs a longer, more concrete visual description for reliable generation.`)
     }
     const performance = (shot.videoPrompt || '').trim()
     const still = (shot.visualPrompt || '').trim()
     if (!performance || performance === still) {
-      issues.push(`${label} 缺少视频内容表现（谁做什么、说什么、镜头怎么走），不能复用配图描述`)
+      issues.push(`${label} lacks video direction. Describe who acts and speaks, what they do and say, and how the camera moves. Do not reuse the still-image description.`)
     } else {
       const names = (result.subjects || [])
         .filter((s) => (shot.subjectIds || []).includes(s.id) || performance.includes(s.name))
@@ -2314,22 +2343,22 @@ export function storyboardQualityIssues(
       const perfIssue = videoPerformanceIssue(performance, names)
       if (perfIssue) issues.push(`${label} ${perfIssue}`)
     }
-    if (!shot.sceneId) issues.push(`${label} 没有关联场景`)
-    if (!shot.cameraMovement) issues.push(`${label} 缺少运镜方式`)
+    if (!shot.sceneId) issues.push(`${label} has no linked location.`)
+    if (!shot.cameraMovement) issues.push(`${label} has no camera movement.`)
     const continuity = (shot.continuity || '').trim()
     const continuitySteps = (continuity.match(/→/g) || []).length
     if (continuity.length < 28 || continuitySteps < 2) {
-      issues.push(`严重：${label} continuity 没写清“承接上一镜末态 → 本镜变化 → 下一镜末态”，无法保证跨段连续`)
+      issues.push(`Critical: ${label} needs continuity specifying the previous shot’s ending → the visible change in this shot → the next shot’s ending.`)
     }
     const emptyPlate =
-      !shot.voiceover.trim() && /空镜|空景|无人/.test(`${shot.title}${shot.visualPrompt}`)
+      !shot.voiceover.trim() && /空镜|空景|无人|빈 장면|인물 없음|사람이 없는|empty (?:shot|frame|scene)|no (?:people|characters)/i.test(`${shot.title}${shot.visualPrompt}`)
     if (people.length && !(shot.subjectIds ?? []).length && !emptyPlate) {
-      issues.push(`严重：${label} 没有关联人物，人设图不会进这镜配图`)
+      issues.push(`Critical: ${label} has no linked characters, so the image generator cannot use their character sheets.`)
     }
   })
   const source = (input.content || '').trim()
   if (source.length > 0 && result.shots.every((shot) => !shot.voiceover.trim())) {
-    issues.push('严重：用户有完整文案，但所有镜头口播均为空')
+    issues.push('Critical: The user supplied a script, but all shots have empty narration and dialogue.')
   }
   for (const sub of people) {
     const used = result.shots.some(
@@ -2337,7 +2366,7 @@ export function storyboardQualityIssues(
         (shot.subjectIds ?? []).includes(sub.id) ||
         inferSubjectsFromText(shotCastText(shot as Shot), [sub]).length > 0
     )
-    if (!used) issues.push(`严重：人物「${sub.name}」已建档，但所有分镜都没用上`)
+    if (!used) issues.push(`Critical: Character “${sub.name}” has a profile but appears in no storyboard shot.`)
   }
   return issues.slice(0, 16)
 }
@@ -2397,14 +2426,14 @@ function extractSceneRows(raw: any): any[] {
 
 function shotTitle(raw: any, index: number): string {
   const explicit = String(raw?.title ?? raw?.shotTitle ?? raw?.name ?? '').trim()
-  if (explicit && !/^镜头\s*\d*$/.test(explicit)) return explicit.slice(0, 12)
+  if (explicit && !/^(?:镜头|샷)\s*\d*$/.test(explicit)) return explicit.slice(0, 12)
 
   const source = String(raw?.purpose ?? raw?.visualPrompt ?? raw?.videoPrompt ?? '')
     .replace(/^(特写|近景|中景|全景|远景|镜头|画面)[：:，,、\s-]*/i, '')
     .replace(/[【】()[\]<>"'“”‘’]/g, '')
     .trim()
   const phrase = source.split(/[，。！？；,:.!?;\n]/)[0]?.replace(/\s+/g, '') || ''
-  return phrase ? `${phrase.slice(0, 6)}${index + 1}` : `分镜${index + 1}`
+  return phrase ? `${phrase.slice(0, 6)}${index + 1}` : `샷 ${index + 1}`
 }
 
 function resolveIds(
@@ -2448,8 +2477,8 @@ function pickBoundScene(
 function stampCastNames(prompt: string, chars: Subject[]): string {
   const body = (prompt || '').trim()
   if (!chars.length) return body
-  const line = `出场：${chars.map((c) => c.name).join('、')}。必须是人设里这些人，脸、发型、衣服跟设计图一致，禁止另造路人。`
-  if (body.includes('出场：') && chars.every((c) => body.includes(c.name))) return body
+  const line = `Cast: ${chars.map((c) => c.name).join('、')}. Use only these characters. Match their faces, hairstyles, and clothing to the reference and add no bystanders.`
+  if (/(?:出场[：:]|등장[：:]|\bCast:)/i.test(body) && chars.every((c) => body.includes(c.name))) return body
   return body ? `${body}\n${line}` : line
 }
 
@@ -2469,7 +2498,7 @@ function bindCastIntoShots(shots: StoryboardShot[], subjects: Subject[]): Storyb
   })
 }
 
-/** 把 LLM 的 subjects/scenes/shot 绑定规范成稳定 id；按用户主题画风补强过短提示 */
+/** 모델의 캐릭터, 장면, 샷 연결에 안정적인 ID를 부여하고 짧은 프롬프트에 요청한 스타일을 반영한다. */
 export function normalizeStoryboard(
   raw: any,
   opts: {
@@ -2516,25 +2545,25 @@ export function normalizeStoryboard(
         : []
   const rawScenes = extractSceneRows(raw)
 
-  /** 模型偶尔会把「一句话故事 / 对抗引擎 / 身材」这类标签当成人物，这里统一剔掉 */
+  /** 한 문장 이야기, 갈등 구조, 체격처럼 모델이 인물로 잘못 반환하는 항목을 제거한다. */
   const subjectRows = rawSubjects.filter((s: any) => {
     const n = String(s?.name || '').trim()
     return n && !isFieldLabelName(n)
   })
   const subjects: Subject[] = subjectRows.slice(0, 8).map((s: any, i: number) => ({
     id: `sub_${i + 1}`,
-    name: String(s?.name || `角色${i + 1}`).trim() || `角色${i + 1}`,
+    name: String(s?.name || `캐릭터 ${i + 1}`).trim() || `캐릭터 ${i + 1}`,
     kind: asKind(s?.kind),
     description: String(s?.description || '').trim(),
     role: optStr(s?.role),
-    stateVariants: optStr(s?.stateVariants),
+    stateVariants: /^单一状态$/.test(String(s?.stateVariants ?? '').trim()) ? 'none' : optStr(s?.stateVariants),
     voicePrompt: normalizeVoicePrompt(s?.voicePrompt, asKind(s?.kind)),
     fromReference: Boolean(s?.fromReference)
   }))
 
   const scenes: Scene[] = rawScenes.slice(0, 8).map((s: any, i: number) => ({
     id: `scn_${i + 1}`,
-    name: String(s?.name || `场景${i + 1}`).trim() || `场景${i + 1}`,
+    name: String(s?.name || `장면 ${i + 1}`).trim() || `장면 ${i + 1}`,
     description: String(s?.description || '').trim(),
     mainAnchor: optStr(s?.mainAnchor),
     anchors: optStr(s?.anchors),
@@ -2544,20 +2573,20 @@ export function normalizeStoryboard(
   if (subjects.length === 0) {
     subjects.push({
       id: 'sub_1',
-      name: '主角',
+      name: '주인공',
       kind: 'person',
-      description: '全片同一位主角，面部、发型、服装与配色保持完全一致',
-      role: '主角',
-      stateVariants: '单一状态'
+      description: '영상 전체에 같은 주인공이 등장하며 얼굴, 헤어스타일, 의상과 색상을 유지해요.',
+      role: '주인공',
+      stateVariants: 'none'
     })
   }
   if (scenes.length === 0) {
     scenes.push({
       id: 'scn_1',
-      name: '主场景',
-      description: '全片同一主场景，光线与建筑材质保持一致',
-      mainAnchor: '场景中心视觉焦点',
-      lighting: '与文案情绪匹配的主光源'
+      name: '주요 장면',
+      description: '영상 전체에 같은 주요 장소가 나오며 조명과 건물 재질을 유지해요.',
+      mainAnchor: '장면 중심의 주요 기준물',
+      lighting: '원고의 감정에 어울리는 주 광원'
     })
   }
 
@@ -2627,7 +2656,7 @@ export function normalizeStoryboard(
     }
     const boundScene = pickBoundScene(sceneIds[0], scenes, placeDraft)
 
-    // 只补极短/缺画风词的镜头；不把技法套话和导演表单拼进画面描述
+    // 매우 짧거나 스타일이 빠진 샷만 보완한다. 일반적인 기법 문구와 연출 양식은 화면 설명에 넣지 않는다.
     visualPrompt = enrichVisualPrompt(visualPrompt, {
       style,
       userStyleLock: styleLockFromUser,
@@ -2682,8 +2711,8 @@ export function normalizeStoryboard(
   })
 
   const boundShots = bindCastIntoShots(shots, subjects)
-  // 角色音色绑到分镜：每镜按口播说话人取人物卡的 voicePrompt，
-  // 生成视频与后期配音都读这份，保证同一角色全片一个声线。
+  // 대사의 화자에 해당하는 캐릭터 카드에서 voicePrompt를 가져온다.
+  // 영상 생성과 후반 더빙에 동일한 값을 전달한다.
   bindShotVoiceHints(boundShots, subjects)
 
   const look = lookFromTexts(style, options.topic, options.content, options.keywords)
@@ -2707,8 +2736,8 @@ export function normalizeStoryboard(
     styleBrief:
       optStr(raw?.styleBrief) ??
       (styleLockFromUser
-        ? `画风严格遵循用户主题：${styleLockFromUser.split('\n')[0]}`
-        : `${styleCn}短片，先让人看下去，再把事讲清楚`),
+        ? `요청한 화면 스타일을 적용해요. ${styleLockFromUser.split('\n')[0]}`
+        : `${styleCn} 스타일의 단편 영상. 시선을 끈 뒤 사건을 분명하게 전달해요.`),
     colorPalette: optStr(raw?.colorPalette),
     lightingNote: optStr(raw?.lightingNote),
     subjects,
@@ -2717,7 +2746,7 @@ export function normalizeStoryboard(
   }
 }
 
-/** 画面描述缺画风词时点一下名字；禁止往镜头语言前面堆技法说明书。 */
+/** 화면 설명에 스타일이 없으면 이름을 언급한다. 화면 묘사 앞에 기법 설명을 쌓지 않는다. */
 function enrichVisualPrompt(
   prompt: string,
   ctx: {
@@ -2739,12 +2768,12 @@ function enrichVisualPrompt(
   if (!body) {
     body = [
       ctx.sceneName ? `${ctx.sceneName}` : '',
-      ctx.sceneAnchor ? `看得见${ctx.sceneAnchor}` : '',
-      ctx.sceneLighting ? `光线：${ctx.sceneLighting}` : '',
+      ctx.sceneAnchor ? `Visible anchor: ${ctx.sceneAnchor}` : '',
+      ctx.sceneLighting ? `Lighting: ${ctx.sceneLighting}` : '',
       ctx.blocking ? ctx.blocking : '',
       ctx.shotSize ? ctx.shotSize : '',
-      ctx.propFocus && ctx.propFocus !== '无' ? `手里/近处：${ctx.propFocus}` : '',
-      '写清地面、水或风是否在动、光从哪来。'
+      ctx.propFocus && !isPlaceholderSpokenLine(ctx.propFocus) ? `In hand or nearby: ${ctx.propFocus}` : '',
+      'Show whether the ground, water, or wind is moving and where the light comes from.'
     ]
       .filter(Boolean)
       .join('。')
@@ -2762,7 +2791,7 @@ function enrichVisualPrompt(
   return body
 }
 
-/** 按当前视频模型上限规划单镜；缺省时按口播字数估算，并避免整片同一秒数。 */
+/** 선택한 영상 모델의 상한을 따른다. 값이 없으면 대사 길이로 추정하고 샷별 길이를 달리한다. */
 function clampShotDuration(
   raw: unknown,
   voiceover: string,
@@ -2789,47 +2818,39 @@ export async function generateStoryboard(
   const look = lookFromTexts(input.style, input.topic, input.content, input.keywords)
   const resolved: StoryboardInput = { ...input, style: look.style, signal }
   if (look.matched && look.matched !== input.style) {
-    log(`画风已从用户原话对上已知画种：${input.style} → ${look.matched}（${look.medium}）`)
+    log(`요청에 맞는 화면 스타일을 찾았어요. ${input.style} → ${look.matched}（${look.medium}）`)
   } else if (look.userNamed && !look.matched) {
-    log(`画风按用户原词锁定：${look.medium}（不套下拉枚举）`)
+    log(`요청한 화면 스타일을 적용해요. ${look.medium}`)
   }
-  log(`当前 AI 模式：${mode}`)
+  log(`현재 AI 모드 ${mode}`)
 
   if (mode === 'real') {
       onProgress?.(
         input.mode === 'extract'
           ? (input.extractStopAfter || input.extractStartAt) === 'scenes'
-            ? '第 2 步：只提炼场景锚点…'
+            ? '2단계에서 장면 기준물만 추출하고 있어요…'
             : (input.extractStopAfter || input.extractStartAt) === 'shots'
-              ? '第 3 步：按已保存的人物和场景拆分镜…'
-              : '第 1 步：只提炼人物角色…'
-          : `正在按「${look.medium}」拆能拍的镜头...`
+              ? '3단계 — 저장된 캐릭터와 장면을 바탕으로 스토리보드를 추출하는 중…'
+              : '1단계 — 캐릭터를 추출하는 중…'
+          : `「${look.medium}」 스타일로 촬영할 수 있는 샷을 나누고 있어요…`
       )
     try {
       const { result, model } = await realStoryboard(resolved, onProgress)
       onProgress?.(
         input.mode === 'extract' && !result.shots.length
-          ? '✓ 当前提炼阶段已完成并保存'
-          : `✓ 已交付 ${result.shots.length} 个可编辑分镜`
+          ? '✓ 현재 추출 단계를 완료하고 저장했습니다.'
+          : `✓ ${result.shots.length}개의 편집 가능한 스토리보드 샷`
       )
       return { result, source: 'real', model }
     } catch (e: any) {
       const msg = e?.message ?? String(e)
-      log(`✗ 真实 LLM 调用失败：${msg}`)
-      if (isAbortError(e) && !isTimeoutAbort(e)) throw e
-      throw new Error(
-        msg.startsWith('脚本') ||
-          msg.startsWith('提炼') ||
-          msg.startsWith('模型超过') ||
-          msg.startsWith('连不上') ||
-          msg.startsWith('粗分镜')
-          ? msg
-          : `脚本生成失败：${msg}`
-      )
+      log(`✗ 언어 모델 호출에 실패했어요. ${msg}`)
+      if (isAbortError(e) || isTimeoutAbort(e) || /^(?:대본 본문|스토리보드 초안|모든 스토리보드 작업|언어 모델에 연결|(?:캐릭터|장면|소품|Props|Locations)[을를]? (?:추출|JSON)|脚本|提炼|连不上|粗分镜)/i.test(msg)) throw e
+      throw new Error(`대본 생성에 실패했습니다. ${msg}`, { cause: e })
     }
   }
 
-  onProgress?.('🎭 演示模式（未配置 VITE_AI_REAL_MODE=true）')
+  onProgress?.('🎭 데모 모드(VITE_AI_REAL_MODE=true 설정 필요)')
   const result = normalizeStoryboard(
     mockStoryboardFromPrompt(
       `style: ${resolved.style} duration: ${resolved.shotDuration} """${resolved.content}"""`
@@ -2845,7 +2866,7 @@ export async function generateStoryboard(
   return { result, source: 'mock' }
 }
 
-/** 把分镜结果转成项目里的 Shot[] */
+/** 스토리보드 결과를 프로젝트의 Shot 배열로 변환한다. */
 export function storyboardToShots(
   result: StoryboardResult,
   prefix: string = 'shot'
@@ -2856,7 +2877,7 @@ export function storyboardToShots(
     title: s.title,
     visualPrompt: s.visualPrompt,
     videoPrompt: s.videoPrompt,
-    // 拆分镜时只初始化一次。之后用户即使全部删除，也绝不自动回填。
+    // 스토리보드 생성 시 한 번만 초기화한다. 사용자가 삭제한 항목은 자동 복원하지 않는다.
     compiledVideoPrompt: s.videoPrompt,
     audioDescription: s.audioDescription ?? '',
     voiceover: cleanShotVoiceover(s.voiceover),
@@ -2877,7 +2898,7 @@ export function storyboardToShots(
   }))
 }
 
-/** 把项目级导演字段应用到 Script */
+/** 프로젝트 전체의 연출 정보를 Script에 반영한다. */
 export function applyAestheticToScript(
   script: Pick<Script, 'aesthetic' | 'h3Aesthetic' | 'styleBrief' | 'colorPalette' | 'lightingNote'>,
   result: StoryboardResult
@@ -2907,44 +2928,46 @@ export interface PlayRunResult {
 function playBibleGaps(md: string): string[] {
   const t = md || ''
   const gaps: string[] = []
-  if (!/##\s*(故事背景|本章承接)/.test(t)) gaps.push('故事背景（一句话故事、对抗引擎、完整梗概；禁止高潮切片）')
+  if (!/##\s*(?:故事背景|本章承接|이야기 배경|챕터 연결|Story background|Chapter handoff)/i.test(t)) {
+    gaps.push('Story background: include a one-sentence premise, the central conflict, and the full synopsis. Do not include only the climax.')
+  }
   else {
-    if (!/一句话故事/.test(t)) gaps.push('故事背景必须写明「一句话故事」')
-    if (!/对抗引擎/.test(t)) gaps.push('故事背景必须写明「对抗引擎」（对手是谁、要什么、如何抬高代价）')
+    if (!/一句话故事|한 문장 이야기|one-sentence (?:story|premise)/i.test(t)) gaps.push('Include a one-sentence premise in the story background.')
+    if (!/对抗引擎|갈등 구조|central conflict/i.test(t)) gaps.push('State the central conflict: who the opponent is, what they want, and how they raise the stakes.')
     if (/本片从|本段从哪一帧|从.*瞬间开始/.test(t) && !/完整梗概/.test(t)) {
-      gaps.push('故事背景被写成高潮切片，必须补完整梗概：开端、对手、递进阻力、高潮选择、结局')
+      gaps.push('The background is only a climax excerpt. Add a full synopsis with the opening, the antagonist, escalating obstacles, the decisive choice, and the ending.')
     }
   }
-  if (!/##\s*人物/.test(t)) {
-    gaps.push('人物（主角、对手、关键亲人；每人含欲望/恐惧/弧光/视觉锚点）')
+  if (!/##\s*(?:人物|캐릭터|인물|Characters)/i.test(t)) {
+    gaps.push('Characters: include the protagonist, opponent, and key family members. State each person’s desire, fear, arc, and visual anchor.')
   } else {
-    if (!/欲望/.test(t) || !/恐惧/.test(t) || !/弧光/.test(t)) {
-      gaps.push('人物小传缺少欲望、恐惧或弧光，按编剧手册补全每人字段')
+    if (!/欲望|욕망|desire/i.test(t) || !/恐惧|두려움|fear/i.test(t) || !/弧光|변화|character arc/i.test(t)) {
+      gaps.push('Character profiles need desires, fears, and character arcs. Fill in each missing field using the screenwriting guide.')
     }
-    const people = t.split(/##\s*人物/)[1]?.split(/##\s+/)[0] || ''
+    const people = t.split(/##\s*(?:人物|캐릭터|인물|Characters)/i)[1]?.split(/^##\s+/m)[0] || ''
     const charCount = (people.match(/^###\s+/gm) || []).length
-    const looksLikeAd = /口播|带货|产品演示/.test(t)
+    const looksLikeAd = AD_COPY.test(t)
     if (!looksLikeAd && charCount > 0 && charCount < 3) {
-      gaps.push('人物表过薄：除路人外必须有主角、对手、关键亲人/导师；已故父亲和活人对手也要建档，不能只留两人高潮对手戏')
+      gaps.push('The character list is too thin. Beyond extras, include the lead, the antagonist, and key family or mentors. Profile the deceased father and living antagonist too. Do not reduce the screenplay to the two-person climax.')
     }
   }
-  if (!/##\s*环境与场景/.test(t) && !/##\s*场景\s*$/m.test(t)) {
-    gaps.push('环境与场景（无人时的空间、天气、年代肌理）')
+  if (!/##\s*(?:环境与场景|환경과 장면|Environment and locations)/i.test(t) && !/##\s*场景\s*$/m.test(t)) {
+    gaps.push('Environment and locations: describe spaces without people, the weather, and period details.')
   }
-  const sceneCount = (t.match(/##\s*场景[一二三四五六七八九十百0-9]/g) || []).length
-  if (sceneCount > 0 && !/场次任务/.test(t)) {
-    gaps.push('每场必须有场次任务（目标 / 阻力 / 结果）')
+  const sceneCount = [...t.matchAll(NUMBERED_SCENE)].length
+  if (sceneCount > 0 && !/场次任务|장면 과제|scene objective/i.test(t)) {
+    gaps.push('Give each scene an objective, obstacle, and outcome.')
   }
-  const tableHits = t.match(/\*\*口播\*\*/g)?.length || 0
-  if (tableHits >= 3) gaps.push('把口播/画面/时长四格改写成连续动作和对白，不要再填表')
-  const looksLikeAd = /口播|带货|产品演示/.test(t)
+  const tableHits = t.match(/\*\*(?:口播|내레이션|Narration)\*\*/gi)?.length || 0
+  if (tableHits >= 3) gaps.push('Rewrite narration, visuals, and duration tables as continuous action and dialogue. Do not retain the table.')
+  const looksLikeAd = AD_COPY.test(t)
   const quotes = t.match(/「[^」]{2,}」/g)?.length || 0
   const namedLines = t.match(/\*\*[^*：\n]{1,16}：\*\*/g)?.length || 0
   if (!looksLikeAd && sceneCount >= 3 && quotes + namedLines < Math.max(6, sceneCount)) {
-    gaps.push('对白过少：这是影视剧不是默片。相认、唤名、对峙、劝阻、问答必须写出可念的对白往来，禁止把前情塞进一句成年旁白、其余场次全哑巴')
+    gaps.push('There is too little dialogue for a screen drama. Write speakable exchanges for recognition, calling a name, confrontation, persuasion, or questions and answers. Do not bury the backstory in one adult narrator line while the other scenes remain silent.')
   }
-  if (/成年[^「\n]{0,8}：/.test(t) && quotes < 4) {
-    gaps.push('禁止用「成年某某」旁白代替出镜对白；让本场人物自己开口')
+  if (t.split('\n').some((line) => ADULT_NARRATOR.test(line.split(/[：:]/, 1)[0]) && /[：:]/.test(line)) && quotes < 4) {
+    gaps.push('Do not substitute narration from an older version of a character for on-screen dialogue. Let the characters in the scene speak for themselves.')
   }
   return gaps
 }
@@ -2958,16 +2981,16 @@ async function fillPlayBibleIfThin(
   const gaps = playBibleGaps(draft.playMarkdown)
   if (!gaps.length) return draft
   try {
-    log(`⚠ 剧本缺少设定节，补写一次：${gaps.join('；')}`)
+    log(`⚠ 대본에 설정 항목을 보완해요. ${gaps.join('；')}`)
     const repair = await callLLM({
       messages: [
         {
           role: 'system',
-          content: `你是影视编剧。用户已经有一稿，但缺故事引擎、设定或对白。补全下列缺失。允许增补人物小传、对抗引擎、对手/亲人入镜场次，并补出可念的出镜对白（**人物名：**「原词」）；已有好场次尽量保留原文，但高潮切片必须补回被抽掉的对抗与关键人物，默片必须补回相认/对峙/问答的对白往来，不能只在背景里加一句名字，也不能改成成年旁白。${PLAY_MARKDOWN_SPEC}\n只输出 JSON：{"playMarkdown":"..."}。`
+          content: `You are a screenwriter. Fill the listed gaps in the draft's story engine, setting, or dialogue. You may add character profiles, the central conflict, scenes with the opponent or family, and speakable on-screen dialogue in the format **캐릭터 이름：**「대사 원문」. Preserve existing scenes that work. Restore omitted conflict and key people when the draft contains only a climax. Add spoken exchanges for recognition, confrontation, and questions or answers when the draft is silent. Do not merely add a name to the background or replace on-screen dialogue with older-character narration. Write the script and new lines in Korean (한국어).${PLAY_MARKDOWN_SPEC}\nReturn JSON only: {"playMarkdown":"..."}`
         },
         {
           role: 'user',
-          content: `必须补上：\n- ${gaps.join('\n- ')}\n\n用户要求：\n${input.topic}\n${input.content}\n\n待补剧本：\n${draft.playMarkdown}`
+          content: `Required additions\n- ${gaps.join('\n- ')}\n\nUser requirements\n${input.topic}\n${input.content}\n\nScreenplay to complete\n${draft.playMarkdown}`
         }
       ],
       model,
@@ -2977,87 +3000,87 @@ async function fillPlayBibleIfThin(
       signal: input.signal,
       timeoutMs: PLAY_LLM_TIMEOUT_MS
     })
-    const repaired = await parseJsonWithModelRepair(repair.content, input, '剧本设定补全')
+    const repaired = await parseJsonWithModelRepair(repair.content, input, '대본 설정 보완')
     const playMarkdown = String(repaired?.playMarkdown || '').trim()
     if (playMarkdown.length < draft.playMarkdown.length * 0.8) return draft
     return { ...draft, playMarkdown }
   } catch (error) {
-    log(`⚠ 剧本设定补全失败，保留首稿：${(error as Error).message}`)
+    log(`⚠ 대본 설정을 보완하지 못해 초안을 유지해요. ${(error as Error).message}`)
     return draft
   }
 }
 
 function mockPlayFromBrief(input: StoryboardInput): PlayDraftResult {
-  const topic = input.topic?.trim() || '短视频剧本'
+  const topic = input.topic?.trim() || '숏폼 대본'
   const brief = input.content?.trim() || topic
   if (input.playMode === 'continue' && brief.length > 80) {
     const next = mergeContinuedPlay(
       brief,
       [
-        '## 场景续｜往后',
+        `## 장면 ${playSceneHeadings(brief).length + 1}｜이후`,
         '',
-        '**外景｜主场景｜与上一场同一天气**',
+        '**실외｜주요 장면｜이전 장면과 같은 날씨**',
         '',
-        `从上一场结尾接着演。${(input.continueHint || '把这件事做完。').slice(0, 80)}`,
+        `이전 장면의 마지막 동작에서 이어진다. ${(input.continueHint || '이 일을 마무리한다.').slice(0, 80)}`,
         ''
       ].join('\n')
     )
     return {
       topic,
       playMarkdown: next,
-      aesthetic: `围绕「${topic}」的叙事`,
-      styleBrief: '演示模式续写'
+      aesthetic: `「${topic}」을 중심으로 한 이야기`,
+      styleBrief: '데모 모드에서 이어 쓴 대본'
     }
   }
   const playMarkdown = [
     `# ${topic}`,
     '',
-    '> 类型：剧情　时间：按文案　地点：按文案　建议时长：1 分钟内',
+    '> 장르: 드라마　시간: 원고 기준　장소: 원고 기준　권장 길이: 1분 이내',
     '',
-    '## 故事背景',
+    '## 이야기 배경',
     '',
     brief,
     '',
-    '## 人物',
+    '## 캐릭터',
     '',
-    '### 主角',
+    '### 주인공',
     '',
-    '年龄与外貌待按文案锁定。这一段的衣服、鞋和手里的东西保持统一。',
+    '인물의 나이와 외모는 원고를 따른다. 이 구간에서 옷, 신발, 손에 든 물건을 같은 상태로 유지한다.',
     '',
-    '## 环境与场景',
+    '## 환경과 장면',
     '',
-    '### 主场景',
+    '### 주요 장면',
     '',
-    '无人时的地面、建筑、光线和天气。年代物件与文案一致。',
+    '사람이 없는 상태의 지면, 건물, 빛, 날씨를 보여 준다. 시대를 드러내는 물건은 원고를 따른다.',
     '',
-    '## 拍摄原则',
+    '## 촬영 원칙',
     '',
-    '按写实，不煽情。人物看向场景里的人或物，不要看镜头。',
+    '사실적으로 찍고 감정을 과장하지 않는다. 인물은 장면 속 사람이나 물건을 보며 카메라를 바라보지 않는다.',
     '',
-    '## 场景一｜开场',
+    '## 장면 1｜시작',
     '',
-    '**外景｜主场景｜按文案时辰**',
+    '**실외｜주요 장면｜원고의 시간대**',
     '',
-    '从主场景切入，完成开场信息。',
+    '주요 장면에서 시작해 도입에 필요한 정보를 전달한다.',
     '',
-    '## 场景二｜收口',
+    '## 장면 2｜마무리',
     '',
-    '把这件事落到一个清楚的结束状态。',
+    '사건을 분명한 결말로 맺는다.',
     '',
-    '## 本章情绪线',
+    '## 챕터의 감정선',
     '',
-    '从进入到收口，情绪跟看见的事走。',
+    '도입부터 마무리까지 눈앞에서 벌어지는 사건에 따라 감정이 움직인다.',
     '',
-    '## 视觉与声音基调',
+    '## 영상과 소리의 기조',
     '',
-    '自然光，现场环境声。',
+    '자연광과 현장 환경음.',
     ''
   ].join('\n')
   return {
     topic,
     playMarkdown,
-    aesthetic: `围绕「${topic}」的叙事`,
-    styleBrief: '演示模式生成的完整剧本草稿'
+    aesthetic: `「${topic}」을 중심으로 한 이야기`,
+    styleBrief: '데모 모드에서 작성한 전체 대본 초안'
   }
 }
 
@@ -3071,11 +3094,11 @@ async function ensurePlayNarrativeContinuity(
       messages: [
         {
           role: 'system',
-          content: `你是影视剧本连续性编审。${NARRATIVE_CONTINUITY_RULES}\n先判断用户这次只要求讲到哪里。只检查该边界内会导致情节突兀的实质问题，不把悬念结尾、未讲下一集或刻意留白判为缺失，不改风格，不挑遣词。只输出 JSON：{"issues":["具体问题及边界内应补的过渡拍点"]}；没有问题输出 {"issues":[]}。最多 6 条。`
+          content: `Audit the script's narrative continuity.${NARRATIVE_CONTINUITY_RULES}\nFirst determine where the user asks this installment to end. Check only substantial gaps that make the plot jump within that boundary. Do not flag a suspense ending, omitted later episode, or deliberate silence, or edit style and phrasing. Write QA comments in Korean (한국어). Return only {"issues":["specific issue and the transition to add within the boundary"]}, at most six. If there are none, return {"issues":[]}.`
         },
         {
           role: 'user',
-          content: `用户要求：\n${input.topic}\n${input.content}\n\n完整剧本：\n${draft.playMarkdown}`
+          content: `사용자 요청\n${input.topic}\n${input.content}\n\n전체 대본\n${draft.playMarkdown}`
         }
       ],
       model,
@@ -3092,16 +3115,16 @@ async function ensurePlayNarrativeContinuity(
       .slice(0, 6)
     if (!issues.length) return draft
 
-    log(`⚠ 完整剧本发现叙事断层，自动局部重写：${issues.join('；')}`)
+    log(`⚠ 대본에서 이어지지 않는 부분을 찾아 다시 작성해요. ${issues.join('；')}`)
     const repair = await callLLM({
       messages: [
         {
           role: 'system',
-          content: `你是影视编剧。只修复指出的叙事断层，保留用户事实、人物关系、重要台词、画风和已经成立的段落。${NARRATIVE_CONTINUITY_RULES}\n可以在断层附近新增、拆分或重排场次，使核心事件获得足够画面与时长；不要用旁白一句带过关键过程。必须保留或补全「故事背景 / 人物 / 环境与场景 / 拍摄原则」。禁止改回口播/画面/时长四格表。只输出 JSON：{"playMarkdown":"..."}。`
+          content: `You are a screenwriter. Repair only the identified narrative discontinuities. Preserve user facts, character relationships, important dialogue, visual style, and scenes that already work.${NARRATIVE_CONTINUITY_RULES}\nAdd, split, or reorder nearby scenes as needed to give central events enough visible action and runtime. Do not skip an important process with a single narration line. Keep or complete the story background, characters, environments, and filming principles. Write the script and new dialogue in Korean (한국어), keeping existing important lines verbatim. Do not use a four-cell narration, image, and duration table. Return JSON only: {"playMarkdown":"..."}.`
         },
         {
           role: 'user',
-          content: `用户要求：\n${input.topic}\n${input.content}\n\n必须修复：\n- ${issues.join('\n- ')}\n\n待修完整剧本：\n${draft.playMarkdown}`
+          content: `사용자 요청\n${input.topic}\n${input.content}\n\nRequired fixes\n- ${issues.join('\n- ')}\n\nFull script to repair\n${draft.playMarkdown}`
         }
       ],
       model,
@@ -3111,89 +3134,90 @@ async function ensurePlayNarrativeContinuity(
       signal: input.signal,
       timeoutMs: PLAY_LLM_TIMEOUT_MS
     })
-    const repaired = await parseJsonWithModelRepair(repair.content, input, '完整剧本连续性修订')
+    const repaired = await parseJsonWithModelRepair(repair.content, input, '대본 연결 수정')
     const playMarkdown = String(repaired?.playMarkdown || '').trim()
     if (playMarkdown.length < 80) return draft
     return { ...draft, playMarkdown }
   } catch (error) {
-    log(`⚠ 完整剧本连续性自检不可用，保留首稿：${(error as Error).message}`)
+    log(`⚠ 대본의 이야기 연결을 검사하지 못해 초안을 유지해요. ${(error as Error).message}`)
     return draft
   }
 }
 
-const PLAY_MARKDOWN_SPEC = `playMarkdown 必须是能拍、能拆镜的完整剧本，禁止压成「口播 / 画面 / 声音 / 时长」四格表。后面提炼人物、场景、分镜都只读这份正文，背景、人设、环境写不进剧本，拆镜就会空洞、不连贯。
+// 한국어 대본의 구조, 장면·캐릭터 요건과 작성 규칙.
+const PLAY_MARKDOWN_SPEC = `Write playMarkdown as a complete script that can be filmed and broken into shots. Do not compress it into a table of narration, visuals, sound, and duration. Later extraction reads the script to identify characters, locations, and shots, so include the background, character profiles, and environments in the text.
 
-必须用简体中文，结构如下。场次按故事需要写够：短片可以压缩时长，但不能抽掉对手、关键亲人和对抗引擎；传说/IP 改编禁止压成高潮切片。电影章节按场写够。
+Write the title, headings, descriptions, and dialogue in Korean (한국어). Use the structural labels shown below. Write as many scenes as the story needs. A short film can be compressed without dropping the opponent, key family members, or central conflict. Do not reduce an adaptation of folklore or intellectual property to a clip from its climax. Cover all scenes needed for a film chapter.
 
-# 标题
-> 类型：…　时间：年代/季节/昼夜　地点：城市与具体区域　建议时长：…
+# 제목
+> 유형: …　시간: 시대/계절/낮밤　장소: 도시와 구체적인 구역　권장 길이: …
 
-## 故事背景
-必须按这三项写，禁止用「本片从某一帧开始」代替完整故事（用户明确只要某一段时除外）：
-- 一句话故事：[主角] 为了 [外在目标]，必须 [高难行动]，否则 [失败代价]
-- 对抗引擎：对手是谁、他要什么、价值逻辑是什么、如何持续抬高代价
-- 完整梗概：用连贯散文写完开端、转折、递进阻力、高潮选择和结局。对手和关键亲人必须在场，不能蒸发成背景一句
+## 이야기 배경
+Include all three items. Do not replace the full story by saying where the opening frame begins unless the user explicitly requests an excerpt.
+- 한 문장 이야기: the protagonist must take a difficult action to reach an external goal or pay the cost of failure.
+- 갈등 구조: identify the opponent, what they want, their values, and how they keep raising the stakes.
+- 전체 줄거리: write connected prose from the beginning through turning points, escalating obstacles, the climactic choice, and the ending. Keep the opponent and key family members present in the story.
 
-## 人物
-构成故事引擎的人每人一节（### 短名）：主角、对手（或其人格化代表）、父母、导师、执法者。已故、缺席、后段才出场的人同样建档。路人一笔带过；有台词或推动因果的人不能并成「一个男人」。
-每节必须写到能画人设、能对戏：
-- 身份
-- 年龄与外形识别点：脸、发型、体型、身高印象
-- 性格与语感
-- 欲望
-- 恐惧与弱点
-- 关系
-- 弧光：本章从哪变到哪
-- AI视觉锚点：服装、鞋、配饰、随身物、磨损脏污（能画四视图）
-- 跨场状态变化：饥饿、衣服干湿、伤势、手里拿什么
-- 本片出场：出镜 / 已故画外（遗物或画像入画） / 对手可见压力
+## 캐릭터
+Use one subsection (### short name) for each person who drives the story, including the protagonist, the opponent or their personified representative, parents, mentors, and law enforcement. Include people who are deceased, absent, or appear late. Passersby can be brief, but give people with dialogue or a causal role their own identities.
+Write each subsection with enough detail for a character sheet and actor direction:
+- 신분
+- 나이와 외모 식별 특징: face, hair, build, and impression of height
+- 성격과 말투
+- 욕망
+- 두려움과 약점
+- 관계
+- 변화: how they change over the chapter
+- AI 시각 기준점: clothes, shoes, accessories, possessions, and signs of wear or dirt, suitable for a four-view character sheet
+- 장면 간 상태 변화: hunger, wet or dry clothes, injury, and what they hold
+- 등장 방식: on screen, deceased and off screen with a keepsake or portrait, or visible pressure from the opponent
 
-## 环境与场景
-每个会拍的地点单独一节（### 地点短名）。写无人时的空间，供后面场景图使用：
-- 建筑结构、入口出口、地面、主锚物件
-- 天气、干湿、光线从哪来
-- 年代城市肌理（车辆、招牌、服装、电线、卷帘门等，按剧本年份地区写）
-同一连续天气跨场保持，不能一场大雨下一场地面干燥。
+## 환경과 장면
+Use one subsection (### short place name) per location. Describe the empty space so it can be used for the location image.
+- Building structure, access points, ground, and a primary physical anchor
+- Weather, wet or dry surfaces, and the direction of the light
+- Period and city details, such as vehicles, signs, clothing, wiring, and shutters appropriate to the year and region
+Maintain continuous weather between scenes. Do not follow a downpour with an inexplicably dry ground.
 
-## 拍摄原则
-写清不拍什么、善意如何落地、苦难如何克制呈现。没有特殊限制也写「按写实，不煽情」。
+## 촬영 원칙
+State what to omit, how kindness appears in visible actions, and how to portray hardship with restraint. If no special limits apply, choose a realistic treatment and avoid melodrama.
 
-## 场景一｜场记标题
-**内景或外景｜地点原名｜天气时辰**
-人物：本场在场的人（含遗物/画像所代表的缺席者时注明）
-场次任务：目标 / 阻力 / 结果
+## 장면 1｜현장 기록 제목
+**실내｜장소 원래 이름｜날씨와 시간대**
+등장인물: List the people present and identify absent characters represented by a keepsake or portrait.
+장면 과제: goal / obstacle / outcome
 
-用现在时写可见、可听、可执行的动作。可用 ■ 条列出动作节拍。谁在哪一层（近处/后面）、身体朝哪、看见什么、做什么。前面的人侧对或回头，不要正面看镜头。
-对白写成：
+Write visible, audible, performable action in the present tense. Use ■ for action beats if helpful. Specify who is in the foreground or background, how they face, what they see, and what they do. The foreground character can stand sideways or turn back instead of facing the camera.
+Use this dialogue format:
 
-**人物名：**
+**캐릭터 이름：**
 
-「原词」
+「대사 원문」
 
-有人物交流的场必须有对白往来，不能只写动作。唤名、问答、相认、对峙、劝阻、告别至少写出一问一答。禁止把故事背景塞进「成年某某」旁白；开口的人必须是本场出镜的那个人。
-「克制」是不写口号金句，不是整片只剩一两句。纯赶路、纯空镜可以没有台词，人物同场对手戏不行。
-场末用【节拍：触发/抉择/阻力/转向/高潮/回收】收束。
-需要时间压缩时用 ### 蒙太奇，每条都是看得见的画面，禁止写「时间流逝」「几天过去」。
-成年旁白用引用块，并标明画外音。
-场与场之间的衣服、伤势、手里的东西、天气必须接得上。
+Scenes involving interaction must include back-and-forth dialogue. Calling someone by name, questions and answers, recognition, confrontation, persuasion, and farewells need at least one line and a response. Let visible characters speak. Do not explain the backstory through narration by an older version of a character.
+Restraint means avoiding slogans and quotable maxims. Do not cut an entire film to one or two lines. Travel and empty establishing shots can remain silent, but scenes with interacting characters need dialogue.
+End each scene with a beat label: 【장면 박자：계기/선택/장애/전환/절정/회수】.
+For time compression, use ### 몽타주 and describe something visible in each entry. Do not write "time passes" or "days pass."
+Put older-character narration in a block quote and identify it as off-screen.
+Keep wardrobe, injuries, objects in hand, and weather consistent between scenes.
 
-（后续场次：场景二、场景三…）
+(Continue with 장면 2, 장면 3, and so on.)
 
-## 本章情绪线
-一段话写清从开场到收束的情绪变化，帮助后面拆镜不要演成空脸。
+## 챕터 감정선
+Describe the emotional progression from opening to ending in one paragraph so shot breakdown retains expressive performances.
 
-## 视觉与声音基调
-色彩、胶片或纪实质感、主环境声。温暖场面靠热水、热气、人声，不要突然金碧辉煌。
+## 시각 및 소리 기조
+Describe color, film or documentary texture, and real ambient sound. For warm scenes use hot water, steam, and people's voices. Do not suddenly introduce opulent surroundings.
 
-原则：
-- 先把故事引擎、人设和环境写明白，再写戏。禁止只有对白没有站位。
-- 善意是普通人做的小事。苦难用衣服、步态、呼吸、环境呈现。
-- 带货/口播：主持人和产品也要写进人物；口播原词放进对白，但场面仍要写清在哪、看着什么、手里拿什么。
-- 不要机械一场一句。同一意图的连续对白留在同一场；有交流的场必须有对白往来，不能整场哑巴。`
+Additional rules:
+- Establish the story engine, characterization, and environment before writing the scenes. Give speaking characters physical positions.
+- Show kindness through small things ordinary people do. Show hardship through clothes, gait, breathing, and environment.
+- In sales and presenter-led videos, include the host and product under characters. Put narration into dialogue, and specify the location, what the speaker looks at, and what they hold.
+- Keep lines that share one intention in the same scene. Do not force one line per scene or leave an interaction silent.`
 
 /**
- * 目标成片时长 → 剧本规模约束。
- * 这是控制分镜数量的最上游闸门：剧本写多长，后面就拆多少个镜。
+ * 최종 영상의 목표 길이로 대본 규모를 제한한다.
+ * 대본 분량은 이후 스토리보드 샷 수의 기준이 된다.
  */
 function playScaleBrief(targetSec: number | undefined): string {
   const target = Number(targetSec) || 0
@@ -3201,7 +3225,7 @@ function playScaleBrief(targetSec: number | undefined): string {
   const scenes = Math.max(2, Math.min(6, Math.round(target / 15)))
   const chars = Math.max(400, Math.round(target * 18))
   const lines = Math.max(4, Math.round(target / 5))
-  return `目标成片时长：${target} 秒（硬约束，必须照它定规模）。成片允许 ${target - DURATION_TOLERANCE_SEC}–${target + DURATION_TOLERANCE_SEC} 秒，超出这个窗口就不合格。按 ${target} 秒反推：分场不超过 ${scenes} 场；分场正文（不含人物小传与环境清单）控制在 ${chars} 字以内；对白总量控制在 ${lines} 句以内。宁可写短、写透，也不要铺场面——多写一场，后面分镜就超预算、成片就拖长。`
+  return `The target video length is ${target} seconds. Size the screenplay to fit that target. The finished video must run between ${target - DURATION_TOLERANCE_SEC} and ${target + DURATION_TOLERANCE_SEC} seconds. For ${target} seconds, use at most ${scenes} scenes, ${chars} characters across the scene text excluding the character introductions and setting list, and ${lines} sentences of dialogue in total. Keep scenes compact and dense. Each extra scene makes the later storyboard run over its shot budget and lengthens the finished video.`
 }
 
 async function realGeneratePlay(input: StoryboardInput): Promise<{ result: PlayDraftResult; model?: string }> {
@@ -3213,37 +3237,37 @@ async function realGeneratePlay(input: StoryboardInput): Promise<{ result: PlayD
   const scaleBrief = playScaleBrief(targetSec)
   const { model: cfgModel } = getLlmConfig()
   const model = resolvePlayModel(input) || cfgModel
-  log(`→ ${continueMode ? '续写剧本' : '写剧本'} LLM: ${model}`)
+  log(`→ ${continueMode ? '대본 이어 쓰기' : '대본 작성'} LLM: ${model}`)
   const resp = await callLLM({
     disableThinking: true,
     messages: [
       {
         role: 'system',
-        content: `你是编剧。根据用户的要求和已有内容，直接写出剧本。
-只输出 Markdown 正文，不要 JSON，不要解释，不要自检。
-用简体中文。先写标题、故事背景、人物、环境与场景，再写分场。分场标题用「## 场景N｜标题」，对白用「**人物名：**」。
-用户给了时长，就按这个时长写完。有交流的地方写出能念的对白。不要新增用户没提的价格和功效。`
+        content: `You are a screenwriter. Write the script directly from the user's request and the existing material.
+Return only the Markdown body. Do not output JSON, explanations, or self-review.
+Write the title, script, character descriptions, and dialogue in Korean (한국어). Start with the title, story background, characters, and environment and locations, then write each scene. Use the exact section headings "## 이야기 배경", "## 캐릭터", and "## 환경과 장면". Use "## 장면 N｜제목" for scene headings and "**실내｜장소｜날씨와 시간대**" or "**실외｜장소｜날씨와 시간대**" for the scene line. For dialogue, write "**캐릭터 이름：**" followed by 「대사 원문」 on the next line.
+Match the requested running time if supplied. Write speakable lines when characters interact. Do not add prices or efficacy claims that the user did not mention.`
       },
       {
         role: 'user',
         content: continueMode
-          ? `在已有剧本后面续写。保留已有场次原文，只往后加。
+          ? `Continue the script by appending new scenes. Preserve existing scenes verbatim.
 
-续写方向：
-${hint || '顺着已经发生的事再写下去。'}
+Continuation direction
+${hint || 'Continue from what has already happened.'}
 
-当前剧本：
-${existingPlay || '（空）'}
+Current script
+${existingPlay || '(empty)'}
 ${scaleBrief}`
-          : `按下面的要求写完整剧本。
+          : `Write a complete script based on the following requirements.
 
-要求：
-${input.topic || '（未填）'}
+Requirements
+${input.topic || '(unspecified)'}
 
-已有内容：
-${input.content?.trim() || '（没有）'}
-${input.keywords?.length ? `关键词：${input.keywords.join('、')}` : ''}
-比例：${input.aspectRatio || '16:9'}
+Existing material
+${input.content?.trim() || '(none)'}
+${input.keywords?.length ? `Keywords: ${input.keywords.join(', ')}` : ''}
+Aspect ratio: ${input.aspectRatio || '16:9'}
 ${scaleBrief}`
       }
     ],
@@ -3258,15 +3282,15 @@ ${scaleBrief}`
     .replace(/\s*```$/, '')
     .trim()
   if (continueMode) playMarkdown = mergeContinuedPlay(existingPlay, playMarkdown)
-  if (playMarkdown.length < 40) throw new Error('模型没有返回剧本')
+  if (playMarkdown.length < 40) throw new Error('모델이 대본을 반환하지 않았습니다.')
   const result: PlayDraftResult = {
-    topic: playMarkdown.match(/^#\s+(.+)$/m)?.[1]?.trim() || input.topic?.trim() || '短视频剧本',
+    topic: playMarkdown.match(/^#\s+(.+)$/m)?.[1]?.trim() || input.topic?.trim() || '숏폼 대본',
     playMarkdown
   }
   return { result, model: resp.model ?? model }
 }
 
-/** 第一步：只生成完整剧本 Markdown，不拆节点 */
+/** 첫 단계에서는 완성 대본 Markdown을 생성한다. 노드 추출은 별도 단계에서 한다. */
 export async function generatePlay(
   input: StoryboardInput,
   onProgress?: (msg: string) => void,
@@ -3275,31 +3299,31 @@ export async function generatePlay(
   const mode = getAIMode()
   const look = lookFromTexts(input.style, input.topic, input.content, input.keywords)
   const resolved: StoryboardInput = { ...input, style: look.style, signal }
-  log(`${input.playMode === 'continue' ? '续写剧本' : '写剧本'} · AI 模式：${mode}`)
+  log(`${input.playMode === 'continue' ? '대본 이어 쓰기' : '대본 작성'} · AI 모드 ${mode}`)
 
   if (mode === 'real') {
-    onProgress?.(input.playMode === 'continue' ? '正在续写剧本…' : '正在写完整剧本…')
+    onProgress?.(input.playMode === 'continue' ? '대본을 이어 쓰는 중…' : '전체 대본을 작성하는 중…')
     try {
       const { result, model } = await realGeneratePlay(resolved)
       onProgress?.(
         input.playMode === 'continue'
-          ? '✓ 已续写（保留原场次）'
-          : '✓ 完整剧本已写好（尚未提炼节点）'
+          ? '✓ 기존 장면을 보존하고 대본을 이어 썼습니다.'
+          : '✓ 전체 대본을 작성했습니다. 노드 추출은 아직 시작하지 않았습니다.'
       )
       return { result, source: 'real', model }
     } catch (e: any) {
       const msg = e?.message ?? String(e)
-      log(`✗ 写剧本失败：${msg}`)
-      if (isAbortError(e) && !isTimeoutAbort(e)) throw e
-      throw new Error(msg.startsWith('写剧本') || msg.startsWith('模型超过') ? msg : `写剧本失败：${msg}`)
+      log(`✗ 대본 작성에 실패했습니다. ${msg}`)
+      if (isAbortError(e) || isTimeoutAbort(e) || /^(?:대본 작성|모델이 대본을|언어 모델에 연결|写剧本)/.test(msg)) throw e
+      throw new Error(`대본 작성에 실패했습니다. ${msg}`, { cause: e })
     }
   }
 
-  onProgress?.('🎭 演示模式写剧本')
+  onProgress?.('🎭 데모 모드에서 대본을 작성합니다.')
   return { result: mockPlayFromBrief(resolved), source: 'mock' }
 }
 
-/** 是否已有可提炼的完整剧本 */
+/** 추출할 수 있는 완성 대본이 있는지 확인한다. */
 export function isPlayReady(script: Script | null | undefined): boolean {
   return Boolean(script?.playReady && script.content?.trim())
 }

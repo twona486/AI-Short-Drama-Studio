@@ -1,14 +1,15 @@
 /**
- * 字幕相关
+ * 자막 처리
  *
- * - SRT 解析/生成
- * - 把字幕烧录进视频（FFmpeg drawtext / ass）
+ * SRT 읽기 및 생성
+ * FFmpeg drawtext 또는 ASS를 이용한 영상 자막 합성
  *
- * 注：FFmpeg.wasm 默认不包含 libass，所以用 drawtext 单条字幕动态绘制。
- *     大量字幕建议用 WebVTT + canvas overlay（性能更好）。
+ * 기본 FFmpeg.wasm에는 libass가 없어 drawtext로 자막을 한 줄씩 그린다.
+ *     자막이 많으면 WebVTT와 Canvas 오버레이를 사용하면 처리 성능이 향상된다.
  */
 
 import type { CaptionStyle } from '@/types'
+import { t } from '@/i18n'
 
 export interface SubtitleCue {
   id: number
@@ -81,7 +82,7 @@ function pad(n: number, w: number): string {
   return String(n).padStart(w, '0')
 }
 
-/** 把字幕按片段时间映射（每个 clip 一个 cue） */
+/** 클립마다 자막 큐 하나를 배정한다. */
 export function buildCuesFromClips(
   clips: Array<{ startTime: number; duration: number; text: string }>
 ): SubtitleCue[] {
@@ -93,7 +94,7 @@ export function buildCuesFromClips(
   }))
 }
 
-/** 为 FFmpeg drawtext 转义特殊字符 */
+/** FFmpeg drawtext의 특수 문자를 이스케이프한다. */
 export function escapeDrawText(s: string): string {
   return s
     .replace(/\\/g, '\\\\')
@@ -103,7 +104,7 @@ export function escapeDrawText(s: string): string {
     .replace(/\n/g, '\\n')
 }
 
-/** 把 Cue 列表 + 样式 → FFmpeg drawtext 滤镜（多段叠加） */
+/** 자막 큐와 스타일을 drawtext 필터로 변환해 여러 구간에 합성한다. */
 export function cuesToDrawTextFilter(
   cues: SubtitleCue[],
   style: CaptionStyle,
@@ -112,7 +113,7 @@ export function cuesToDrawTextFilter(
   const fontSize = Math.round(videoHeight * style.fontSizeRatio)
   const y = calcY(style.position, videoHeight, fontSize)
   const fontFile = ''
-  // 字号 / 颜色 / 描边 / 位置
+  // 글자 크기, 색상, 외곽선, 위치
   const base = (text: string) =>
     [
       `text='${escapeDrawText(text)}'`,
@@ -137,13 +138,13 @@ export function cuesToDrawTextFilter(
 }
 
 const CJK_FONT =
-  '"Microsoft YaHei", "PingFang SC", "Noto Sans SC", "Noto Sans CJK SC", "Hiragino Sans GB", sans-serif'
+  '"Apple SD Gothic Neo", "Malgun Gothic", "Noto Sans KR", "Noto Sans CJK KR", "Microsoft YaHei", "PingFang SC", "Noto Sans SC", "Noto Sans CJK SC", "Hiragino Sans GB", sans-serif'
 
 export interface CaptionHighlightOptions {
   enabled?: boolean
   color?: string
   scale?: number
-  /** 可选人工覆盖；为空时自动提取 */
+  /** 직접 강조할 단어를 지정한다. 비어 있으면 자동으로 찾는다. */
   words?: string[]
 }
 
@@ -151,14 +152,18 @@ const EMPHASIS_WORDS = [
   '超级工厂', '产业带', '运营中心', '诚信通', '外贸版', '黑五', '圣诞',
   '出海', '合规', '现货', '利润', '增长', '机会', '资源', '流量', 'AI能力',
   '关键', '核心', '重点', '第一', '必须', '一定', '直接', '提前', '稳定出货',
-  '售后保障', '点击下方', '锁定席位', '不见不散'
+  '售后保障', '点击下方', '锁定席位', '不见不散',
+  '핵심', '중요', '성장', '기회', '수익', '필수', '예약', '혜택',
+  'essential', 'growth', 'key point', 'profit', 'opportunity', 'reserve'
 ]
 
 const HIGHLIGHT_STOP_WORDS = new Set([
   '这个', '那个', '这些', '那些', '我们', '你们', '他们', '自己', '一个', '一些',
   '就是', '还是', '已经', '现在', '今年', '这里', '这样', '那样', '如果', '因为',
   '所以', '但是', '而且', '可以', '可能', '开始', '之后', '之前', '时候', '怎么',
-  '什么', '很多', '越来越', '一下', '一条', '一波', '起来', '下来', '出来'
+  '什么', '很多', '越来越', '一下', '一条', '一波', '起来', '下来', '出来',
+  '이것', '그것', '저것', '우리', '지금', '그리고', '하지만', '그래서',
+  'a', 'an', 'the', 'and', 'this', 'that', 'there', 'with', 'they', 'have'
 ])
 
 interface HighlightCandidate {
@@ -168,16 +173,18 @@ interface HighlightCandidate {
 }
 
 /**
- * 为一条字幕自动挑出最多两个重点词。
- * 优先级：完整日期/时间与数字 → 营销实体/结论词 → 中文分词中的高信息词。
+ * 자막 한 줄에서 강조할 단어를 최대 두 개 선택한다.
+ * 날짜와 시간 및 수치, 홍보 관련 키워드, 정보량이 큰 단어 순으로 찾는다.
  */
 export function pickCaptionHighlights(text: string, limit = 2): string[] {
-  const source = text.replace(/\s+/g, '')
+  const source = /\p{Script=Han}/u.test(text) && !/\p{Script=Hangul}/u.test(text)
+    ? text.replace(/\s+/g, '')
+    : text.trim()
   if (source.length < 4 || limit <= 0) return []
   const candidates: HighlightCandidate[] = []
   const add = (word: string, score: number, start = source.indexOf(word)) => {
     const clean = word.replace(/^[，。！？；：、,.!?;:]+|[，。！？；：、,.!?;:]+$/g, '')
-    if (!clean || clean.length > 12 || start < 0 || HIGHLIGHT_STOP_WORDS.has(clean)) return
+    if (!clean || clean.length > 12 || start < 0 || HIGHLIGHT_STOP_WORDS.has(clean.toLowerCase())) return
     if (clean.length >= Math.max(8, Math.ceil(source.length * 0.65))) return
     candidates.push({ word: clean, score, start })
   }
@@ -187,7 +194,9 @@ export function pickCaptionHighlights(text: string, limit = 2): string[] {
     /\d{1,2}月\d{1,2}[日号]/g,
     /\d{1,2}[点时]\s*\d{0,2}分?/g,
     /\d+(?:\.\d+)?(?:%|％|万|亿|千|百|元|天|月|年|号|日|点|分|秒|个|条|家|次|倍|成|以上|以下)/g,
-    /(?:AI|AIGC|Q[1-4]|B2B|B2C|1688|Amazon|亚马逊)/gi
+    /(?:AI|AIGC|Q[1-4]|B2B|B2C|1688|Amazon|亚马逊|아마존)/gi,
+    /\d{2,4}년\s*\d{1,2}월\s*\d{1,2}일/g,
+    /\d+(?:\.\d+)?\s*(?:원|초|분|시간|일|개월|년|개|명|배|seconds?\b|minutes?\b|hours?\b|days?\b|months?\b|years?\b)/gi
   ]
   priorityPatterns.forEach((pattern, patternIndex) => {
     for (const match of source.matchAll(pattern)) {
@@ -195,11 +204,13 @@ export function pickCaptionHighlights(text: string, limit = 2): string[] {
     }
   })
 
+  const searchable = source.toLowerCase()
   EMPHASIS_WORDS.forEach((word) => {
-    let start = source.indexOf(word)
+    const term = word.toLowerCase()
+    let start = searchable.indexOf(term)
     while (start >= 0) {
-      add(word, 88 + Math.min(word.length, 8), start)
-      start = source.indexOf(word, start + word.length)
+      add(source.slice(start, start + word.length), 88 + Math.min(word.length, 8), start)
+      start = searchable.indexOf(term, start + word.length)
     }
   })
 
@@ -210,16 +221,17 @@ export function pickCaptionHighlights(text: string, limit = 2): string[] {
       }
     }).Segmenter
     if (Segmenter) {
-      const segmenter = new Segmenter('zh-CN', { granularity: 'word' })
+      const language = /\p{Script=Hangul}/u.test(source) ? 'ko' : /\p{Script=Han}/u.test(source) ? 'zh-CN' : 'en'
+      const segmenter = new Segmenter(language, { granularity: 'word' })
       for (const part of segmenter.segment(source)) {
         const word = part.segment.replace(/[，。！？；：、,.!?;:]/g, '')
         if (part.isWordLike === false || word.length < 2 || word.length > 7) continue
-        const verbBoost = /增长|提升|降低|决定|锁定|发布|成立|出海|下单|备货|发货/.test(word) ? 12 : 0
+        const verbBoost = /增长|提升|降低|决定|锁定|发布|成立|出海|下单|备货|发货|성장|향상|감소|결정|출시|주문|배송|\b(?:grow|launch|order|ship)\b/i.test(word) ? 12 : 0
         add(word, 42 + word.length * 3 + verbBoost, part.index)
       }
     }
   } catch {
-    /* 不支持 Intl.Segmenter 时，数字和词典规则仍然可用 */
+    /* Intl.Segmenter가 없으면 숫자와 키워드 규칙만 적용한다. */
   }
 
   const ranked = candidates.sort((a, b) => b.score - a.score || a.start - b.start)
@@ -305,8 +317,8 @@ function hexToRgba(hex: string, alpha: number): string {
 }
 
 /**
- * 用浏览器 Canvas 把一句字幕画成整帧透明 PNG。
- * ffmpeg.wasm 没有 freetype，drawtext 烧中文会失败；overlay PNG 才能真正叠字。
+ * 브라우저 Canvas로 자막 한 줄을 투명한 전체 프레임 PNG로 그린다.
+ * FFmpeg.wasm의 drawtext가 지원하지 않는 문자를 PNG 오버레이로 합성한다.
  */
 export async function renderCaptionPng(
   text: string,
@@ -320,7 +332,7 @@ export async function renderCaptionPng(
   canvas.width = width
   canvas.height = height
   const ctx = canvas.getContext('2d')
-  if (!ctx) throw new Error('无法创建字幕画布')
+  if (!ctx) throw new Error('자막 캔버스를 만들 수 없습니다.')
   ctx.clearRect(0, 0, width, height)
 
   const fontSize = Math.max(18, Math.round(height * style.fontSizeRatio))
@@ -335,7 +347,7 @@ export async function renderCaptionPng(
   const highlightWords = highlight.enabled
     ? (highlight.words?.filter(Boolean) ?? pickCaptionHighlights(text))
     : []
-  // 重点词会变大，换行时预留少量宽度，避免靠近安全区边缘。
+  // 강조 단어의 크기가 커지므로 줄바꿈 시 여유 폭을 두어 안전 영역을 지킨다.
   const maxWidth = width * (highlightWords.length ? 0.82 : 0.86)
   const lines = wrapCaptionLines(ctx, text.trim(), maxWidth)
   if (lines.length === 0) {
@@ -409,7 +421,7 @@ export async function renderCaptionPng(
   })
 
   const blob = await new Promise<Blob>((resolve, reject) => {
-    canvas.toBlob((b) => (b ? resolve(b) : reject(new Error('字幕 PNG 生成失败'))), 'image/png')
+    canvas.toBlob((b) => (b ? resolve(b) : reject(new Error(t('ffmpegExport.captionPngFailed')))), 'image/png')
   })
   return blob
 }

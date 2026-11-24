@@ -1,7 +1,9 @@
 import type { Project } from '@/types'
+import { t } from '@/i18n'
 
-export const PLAY_GATE_MSG =
-  '请先查看左侧完整剧本并点「确认通过」。验收后才做人设、故事看板或视频。除非你明确说全流程。'
+export function playGateMessage() {
+  return t('canvasRunner.scriptReview')
+}
 
 export function isPlayApproved(p: Project | null | undefined): boolean {
   if (!p) return false
@@ -14,17 +16,19 @@ export function isPlayApproved(p: Project | null | undefined): boolean {
   return hasDownstream
 }
 
-/** 有分镜但剧本还没验收时才需要拦；是否真的拦由调用方按「本次动作」决定 */
+/** 스토리보드가 있고 대본이 승인되지 않았는지 확인한다. 실제 제한은 호출자가 판단한다. */
 export function needsPlayReview(p: Project | null | undefined): boolean {
   return Boolean(p?.shots.length) && !isPlayApproved(p)
 }
 
 export function isFullPipelineRequest(text: string) {
-  return /全部做完|全部生成|都生成|全做|一口气|整条流水线|从头到尾|缺的都补|全流程|完整流程|全套|전체\s*과정/.test(text)
+  return /全部做完|全部生成|都生成|全做|一口气|整条流水线|从头到尾|缺的都补|全流程|完整流程|全套|전체\s*과정/.test(text) ||
+    /^(?:전체\s*워크플로(?:를?\s*(?:진행해|실행해)(?:\s*줘)?)?|(?:run (?:the )?)?(?:full|entire) workflow)[.!。！]*$/i.test(text.trim())
 }
 
 export function isApprovePlayRequest(text: string) {
-  return /确认剧本|验收通过|确认通过|剧本没问题|通过验收|验收了/.test(text)
+  return /确认剧本|验收通过|确认通过|剧本没问题|通过验收|验收了/.test(text) ||
+    /^(?:검수\s*통과|대본\s*승인|(?:approve|accept) (?:the )?(?:script|screenplay)|script approved)[.!。！]*$/i.test(text.trim())
 }
 
 export const DOWNSTREAM_TOOLS = new Set([

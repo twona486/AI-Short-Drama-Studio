@@ -1,57 +1,50 @@
 ---
 name: pipeline-batch
-description: 仅当用户明确说全部做完、一口气、整条流水线时，才按顺序批量推进。平时不要加载。
-triggers: 全部做完,一口气,整条流水线,都生成,全做,全部生成,从头到尾,缺的都补上,全流程
+description: Run the full production workflow in order only when the user explicitly asks to batch or complete everything.
+triggers: 全部做完,一口气,整条流水线,都生成,全做,全部生成,从头到尾,缺的都补上,全流程,전부 완료,한 번에,전체 워크플로,모두 생성,전부 해,전체 생성,처음부터 끝까지,빠진 것 전부,전체 과정,full workflow,generate all,finish everything
 ---
 
-# 流水线（仅限本轮用户明确要求批量）
+# Batch workflow
 
-像现场催进度。一次最多 12 个动作。
+Use this guide only when the user explicitly requests a batch on this turn. Execute at most 12 actions at a time. Skip steps the user did not request. Use `generate_all_*` only for an explicit request for all results.
 
-## 最高优先级
+## Default progression
 
-用户这一句没点名的步骤，一律不要做。没说「全部」就不要 `generate_all_*`。
+Stop after writing the script. Tell the user in Korean (한국어) that the complete script is on the left side of the canvas and node extraction has not started. Ask whether to extract nodes.
 
-## 一步一停（默认）
+- When the user says to continue and there are no nodes, extract characters, then locations, then storyboard shots, one step per invocation. Save immediately after each. When nodes are present, verify and do only the next step.
+- When the user approves, verify and ask whether to continue.
+- Run everything in one workflow only on an explicit request for the full workflow.
+- When unclear, ask for the subject, duration, and whether the user wants the script or the full workflow.
 
-拆完剧本必须停，并告诉用户「画布左侧已经出现完整剧本，还没拆节点」。问要不要提炼节点。
+## Order for the full workflow
 
-用户说「继续」= 若还没节点则按人物 → 场景 → 分镜逐次提炼；一次调用只做一步并立即保存。节点齐了才验收 + 只做下一步。
-用户说「确认通过」= 只验收，再问要不要继续。
-用户说「全流程 / 全部做完」才一次做完。
+1. Without a complete script, use `generate_play`.
+2. Without storyboard nodes, use `extract_cast`.
+3. Use `approve_play`. Automatically approve only in a full workflow.
+4. For missing character sheets, use `generate_all_sheets`.
+5. For missing location anchors, use `generate_all_scenes`.
+6. For missing storyboard panels, use `generate_all_boards`.
+7. If panels exist and videos are missing, use `generate_all_videos`. Supply character images, location images, and panels without pre-generating shot images.
+8. Use `generate_all_images` only when the user explicitly requests shot images.
 
-需求含糊时不要猜，先问主题、时长、只要剧本还是全流程。
+## Checks and recovery
 
-## 只有用户说了全流程 / 全部做完时才走死顺序
+- Check dependencies before each action. Fill the smallest missing prerequisite and then return to the original objective.
+- Verify the actual script, nodes, or assets in the project after tool success.
+- Fix only affected parts for input or quality problems. Retry the same objective once after a transient service error.
+- Stop repeated attempts after the same error happens twice. Pause and explain authentication, quota, content safety, user-approval, or authorization issues.
+- Record automatic prerequisite actions and replanning counts so they can be traced after a refresh or reopening.
 
-1. 没有完整剧本 → `generate_play`
-2. 没有分镜节点 → `extract_cast`
-3. `approve_play`（全流程才自动过闸）
-4. 人物四视图缺 → `generate_all_sheets`
-5. 场景锚点图缺 → `generate_all_scenes`
-6. 镜头还没故事看板 → `generate_all_boards`
-7. 有看板没视频 → `generate_all_videos`（传角色设计图 + 场景图 + 看板，不要先出配图）
-8. 用户点名配图才 `generate_all_images`
+## Requests for one stage
 
-## 自检与恢复
+- Write the script or break down the story: use only `generate_play` and stop.
+- Continue or add two scenes: use only `continue_play` and preserve existing scenes.
+- Extract nodes: use only `extract_cast`; characters first, then locations after confirmation, then shots on a later turn.
+- Character sheet: generate only character images.
+- Location: generate the four-panel location anchor only.
+- Storyboard panel: generate the line-art composition only.
+- Draw the third shot: generate that image only, and fill its missing panel first if needed.
+- Generate the third shot video: generate that video only.
 
-- 每个动作执行前先检查依赖；缺上游产物时补最小依赖，然后回到原目标。
-- 工具返回成功后检查项目状态里是否真的落了剧本、节点或资产，不能只相信成功文案。
-- 产物质量或输入问题只局部修改并重试；临时服务错误允许一次原目标重试。
-- 同一错误连续出现两次就停止盲试。鉴权、额度、内容安全、用户审批或会扩大授权范围的问题必须暂停说明。
-- 自动补依赖和重规划次数写入任务记录，刷新或重新打开项目后仍可追溯。
-
-## 用户只说了一截（平时默认）
-
-- 「写剧本 / 拆分镜」：只 `generate_play`，做完停。
-- 「续写 / 接着写 / 再写两场」：只 `continue_play`，保留已有场次。
-- 「提炼节点」：只 `extract_cast`，首次只拆人物；用户再次确认后才提炼场景，再下一次才拆分镜。
-- 「出人设 / 四视图」：只角色图，不要配图、不要视频。
-- 「出场景」：只场景四宫格锚点图。
-- 「故事看板」：只线稿构图。
-- 「把第三镜画出来」：只那一镜的配图（缺看板会先补）。
-- 「第三镜视频」：只那一镜的视频。
-
-## 说话
-
-回复短、具体。不要「好的，我将为您启动全流程」。
+Report briefly and concretely in Korean (한국어). Write prompts sent to generation models in English, preserving Korean dialogue or explicitly requested Korean on-screen text.

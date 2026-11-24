@@ -1,11 +1,11 @@
 import { t } from '@/i18n'
 /**
- * 口播 TTS：按分镜字幕生成人声
+ * 스토리보드 자막으로 내레이션 음성을 생성한다.
  *
- * 对接阿里云百炼语音合成（文档 2938790 / 实时与非实时 SpeechSynthesizer）：
+ * Alibaba Cloud Bailian SpeechSynthesizer API(문서 2938790)를 사용한다.
  *   POST {origin}/api/v1/services/audio/tts/SpeechSynthesizer
- * 默认模型：qwen-audio-3.0-tts-flash（同系列，视频配音用非实时 HTTP）
- * 生成视频时顺带合成，导出时叠到对应片段上。
+ * 기본 모델은 qwen-audio-3.0-tts-flash다. 영상 더빙에는 비실시간 HTTP를 사용한다.
+ * 영상 생성과 함께 음성을 만들고 내보낼 때 해당 클립에 합성한다.
  */
 
 import { getAIMode } from './client'
@@ -16,7 +16,7 @@ export interface TTSInput {
   text: string
   voice?: string
   language?: 'Chinese' | 'English' | 'Auto'
-  /** 自然语言语气指令；不应包含要朗读的正文 */
+  /** 읽을 본문과 별도로 자연어로 말투를 지정한다. */
   instruction?: string
   signal?: AbortSignal
 }
@@ -33,7 +33,7 @@ const MAX_CHARS = 580
 const log = (msg: string) =>
   console.log('%c[tts]', 'color:#06b6d4;font-weight:600', msg)
 
-/** qwen-audio-3.0-tts-flash 系统音色（百炼音色列表） */
+/** Bailian의 qwen-audio-3.0-tts-flash 기본 음색 */
 export const TTS_VOICES: { id: string; label: string }[] = [
   { id: 'longanhuan_v3.6', get label() { return t('voice.longanhuan') } },
   { id: 'longjielidou_v3.6', get label() { return t('voice.longjielidou') } },
@@ -43,7 +43,7 @@ export const TTS_VOICES: { id: string; label: string }[] = [
   { id: 'loongeva_v3.6', get label() { return t('voice.loongeva') } }
 ]
 
-/** 这些仍按缩写处理（可以逐字母或习惯读法） */
+/** 이 항목은 이니셜이나 관용적인 발음으로 읽는 약어로 처리한다. */
 const SPELL_ACRONYMS = new Set([
   'VIP',
   'SKU',
@@ -73,8 +73,8 @@ function spellDigits(digits: string, yao = false): string {
 }
 
 /**
- * 平台号 / 客服号 / 活动日：必须按位读。
- * 否则 1688 会被念成「一千六百八十八」或「一千六百88」。
+ * 플랫폼 번호, 연락처, 행사 날짜는 자릿수별 발음을 적용한다.
+ * 1688 같은 수가 한 덩어리 숫자로 읽히는 일을 방지한다.
  */
 const SPELLED_NUMBER_CODES: Array<{ pattern: RegExp; spoken?: string; yao?: boolean }> = [
   { pattern: /1688/g, spoken: '一六八八' },
@@ -104,10 +104,10 @@ function normalizeSpokenNumbers(text: string): string {
 }
 
 /**
- * 送给 TTS / 口播模型的文本预处理，字幕原文不改，只影响发音。
- * 中文模型遇到 POLO / NIKE 这种全大写，会当成缩写念成 P-O-L-O。
- * 有元音、长度≥3 的全大写词改成首字母大写（Polo），按单词读。
- * 1688、12306 这类平台号按位读，避免念成一千六百八十八。
+ * 음성 합성에 보낼 텍스트만 전처리하고 자막 원문을 유지한다.
+ * 중국어 모델은 모두 대문자인 브랜드 이름을 글자별로 읽을 수 있다.
+ * 모음이 있고 세 글자 이상인 대문자 단어는 첫 글자만 대문자로 바꾼다.
+ * 1688이나 12306 같은 플랫폼 번호는 한 자리씩 읽는다.
  */
 export function normalizeForSpeech(text: string): string {
   const branded = normalizeSpokenNumbers(text)
@@ -123,6 +123,7 @@ export function normalizeForSpeech(text: string): string {
 }
 
 export function detectSpeechLanguage(text: string): 'Chinese' | 'English' | 'Auto' {
+  if (/[가-힣]/.test(text)) return 'Auto'
   const cjk = (text.match(/[\u4e00-\u9fff]/g) || []).length
   const latin = (text.match(/[A-Za-z]/g) || []).length
   if (cjk > 0 && latin > 0) return 'Auto'
@@ -135,13 +136,13 @@ function ttsConfig() {
   return getTtsConfig()
 }
 
-/** 解析出可请求 SpeechSynthesizer 的 origin（含 /api/v1） */
+/** SpeechSynthesizer 요청에 쓸 /api/v1 포함 주소를 구한다. */
 function speechApiRoot(baseUrl: string): string {
   let u = baseUrl.replace(/\/+$/, '')
-  // compatible-mode / chat 兼容地址 → 切回原生 api/v1
+  // 호환 채팅 주소를 기본 /api/v1 경로로 바꾼다.
   u = u.replace(/\/compatible-mode\/v1$/i, '/api/v1')
   if (/\/api\/v1$/i.test(u)) return u
-  // 仅给了域名时补 /api/v1
+  // 도메인만 주어지면 /api/v1을 추가한다.
   if (/^https?:\/\//i.test(u) && !/\/api\//i.test(u)) {
     return `${u}/api/v1`
   }
@@ -169,7 +170,7 @@ function languageHint(language: string): string | undefined {
 
 async function downloadAudioUrl(audioUrl: string, signal?: AbortSignal): Promise<Blob> {
   const aResp = await fetch(audioUrl, { signal })
-  if (!aResp.ok) throw new Error(`[TTS] 下载音频失败 ${aResp.status}`)
+  if (!aResp.ok) throw new Error(`[TTS] 오디오 다운로드에 실패했습니다. ${aResp.status}`)
   const buf = await aResp.arrayBuffer()
   const ct = (aResp.headers.get('content-type') || '').toLowerCase()
   const mime =
@@ -189,9 +190,9 @@ function blobFromBase64(data: string, mime = 'audio/wav'): Blob {
 }
 
 /**
- * 百炼 SpeechSynthesizer（非实时 HTTP）
- * 文档：https://help.aliyun.com/zh/model-studio/cosyvoice-tts-http-api
- * 对应控制台文档 url=2938790 同系列模型
+ * Bailian SpeechSynthesizer 비실시간 HTTP
+ * 문서 https://help.aliyun.com/zh/model-studio/cosyvoice-tts-http-api
+ * 콘솔 문서 2938790의 모델 제품군
  */
 async function speechSynthesizer(
   apiRoot: string,
@@ -241,12 +242,12 @@ async function speechSynthesizer(
   }
   const audioUrl = audio?.url
   if (!audioUrl) {
-    throw new Error(`[TTS] SpeechSynthesizer 无音频：${JSON.stringify(data).slice(0, 240)}`)
+    throw new Error(`[TTS] SpeechSynthesizer 응답에 오디오가 없습니다. ${JSON.stringify(data).slice(0, 240)}`)
   }
   return downloadAudioUrl(audioUrl, signal)
 }
 
-/** 旧版 Qwen3-TTS multimodal-generation（兜底） */
+/** 이전 Qwen3-TTS multimodal-generation 대체 경로 */
 async function nativeQwen3Speech(
   origin: string,
   apiKey: string,
@@ -287,12 +288,12 @@ async function nativeQwen3Speech(
   if (audio?.data) return blobFromBase64(String(audio.data), 'audio/wav')
   const audioUrl = audio?.url
   if (!audioUrl) {
-    throw new Error(`[TTS] native 无音频：${JSON.stringify(data).slice(0, 240)}`)
+    throw new Error(`[TTS] 네이티브 TTS 응답에 오디오가 없습니다. ${JSON.stringify(data).slice(0, 240)}`)
   }
   return downloadAudioUrl(audioUrl, signal)
 }
 
-/** 模型和音色版本不匹配时，服务偶尔不报错但输出异常发音；这里改成稳定安全音色。 */
+/** 모델과 음색 버전이 맞지 않아 발음이 어색해질 수 있어 호환 음색으로 전환한다. */
 export function compatibleVoice(model: string, requested?: string): string {
   const voice = (requested || '').trim()
   if (/^qwen-audio-3\.0-tts-flash/i.test(model)) {
@@ -343,16 +344,17 @@ function mockSpeechWav(text: string): Blob {
 }
 
 export async function generateSpeech(input: TTSInput): Promise<TTSOutput> {
-  const text = normalizeForSpeech(clipText(spokenTextOnly(input.text || '')))
-  if (!text) throw new Error('没有口播文案，无法配音')
+  const spoken = clipText(spokenTextOnly(input.text || ''))
+  const text = /[가-힣]/.test(spoken) ? spoken : normalizeForSpeech(spoken)
+  if (!text) throw new Error('내레이션 원고가 없어 더빙할 수 없습니다.')
 
   const cfg = ttsConfig()
   const voice = compatibleVoice(cfg.model, input.voice || cfg.voice)
   const language = input.language || detectSpeechLanguage(text)
-  log(`口播文本：${text.slice(0, 80)}${text.length > 80 ? '…' : ''}  lang=${language}`)
+  log(`내레이션 텍스트 ${text.slice(0, 80)}${text.length > 80 ? '…' : ''}  lang=${language}`)
 
   if (getAIMode() !== 'real' || !cfg.apiKey) {
-    log('演示模式：生成占位音轨')
+    log('데모 모드에서 임시 오디오 트랙을 만들어요.')
     const blob = mockSpeechWav(text)
     return { blob, mimeType: blob.type, model: 'mock-tts' }
   }
@@ -376,14 +378,14 @@ export async function generateSpeech(input: TTSInput): Promise<TTSOutput> {
     return { blob, mimeType: blob.type, model: cfg.model }
   } catch (e: any) {
     errors.push(e?.message ?? String(e))
-    log(`SpeechSynthesizer 失败：${e?.message ?? e}`)
+    log(`음성 합성에 실패했어요. ${e?.message ?? e}`)
   }
 
-  // 若仍配置了旧版 qwen3-tts-*，再试 multimodal 兜底
+  // 이전 qwen3-tts 모델을 사용하는 경우 멀티모달 방식으로 다시 시도한다.
   if (/^qwen3-tts/i.test(cfg.model) || /^qwen-tts/i.test(cfg.model)) {
     try {
       const origin = apiRoot.replace(/\/api\/v1$/i, '')
-      log(`→ multimodal 兜底 (${cfg.model}, ${voice})`)
+      log(`→ 멀티모달 모델로 다시 시도해요. (${cfg.model}, ${voice})`)
       const blob = await nativeQwen3Speech(
         origin,
         cfg.apiKey,
@@ -400,5 +402,5 @@ export async function generateSpeech(input: TTSInput): Promise<TTSOutput> {
     }
   }
 
-  throw new Error(errors.join('\n') || 'TTS 失败')
+  throw new Error(errors.join('\n') || 'TTS에 실패했습니다.')
 }

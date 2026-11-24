@@ -78,7 +78,7 @@ export interface ZealmanImageWorkflow {
   defaultNegative: string
 }
 
-/** Zealman 内置文生图。workflow_id 和 input_values 用镜像导出的扁平字段，不传 workflow_template。 */
+/** Zealman 내장 텍스트→이미지. 미러의 평면 workflow_id 및 input_values 필드를 사용한다. */
 export const ZEALMAN_IMAGE_WORKFLOWS: ZealmanImageWorkflow[] = [
   {
     id: 'API-A01-文生图-Qwen2512高清放大',
@@ -92,7 +92,7 @@ export const ZEALMAN_IMAGE_WORKFLOWS: ZealmanImageWorkflow[] = [
     defaultWidth: 1280,
     defaultHeight: 720,
     defaultNegative:
-      '低分辨率，低画质，肢体畸形，手指畸形，画面过饱和，蜡像感，人脸无细节，过度光滑，画面具有AI感。构图混乱。文字模糊，扭曲'
+      'Low resolution, poor image quality, malformed limbs or fingers, oversaturation, waxy appearance, faces without detail, excessive smoothing, artificial-looking imagery, cluttered composition, blurred or distorted text.'
   }
 ]
 
@@ -111,7 +111,7 @@ export function normalizeZealmanBaseUrl(value: string): string {
   try {
     const url = new URL(raw)
     if (url.protocol !== 'http:' && url.protocol !== 'https:') return ''
-    // 完全以用户配置的地址为准，不做任何域名改写。
+    // 사용자가 설정한 주소의 도메인을 유지한다.
     url.pathname = url.pathname.replace(/\/api(?:\/workflow(?:\/generate)?)?\/?$/i, '') || '/'
     return url.toString().replace(/\/+$/, '')
   } catch {

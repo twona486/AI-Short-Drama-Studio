@@ -1,4 +1,4 @@
-/** 数字人口播专用 H3 视觉锁；所有首次生成与单镜重做入口必须复用。 */
+/** 디지털 휴먼용 H3 이미지 지침. 최초 생성과 샷 재생성에서 같은 값을 사용한다. */
 export const DIGITAL_HUMAN_VISUAL_LOCK = [
   'Create one continuous photorealistic talking-head shot using Picture 1 as the immutable visual source.',
   'Exactly one person is visible: the same person from Picture 1 and nobody else.',

@@ -1,5 +1,5 @@
 /**
- * 画布内合成最终视频（不跳转经典导出页）
+ * 캔버스에서 최종 영상을 합성한다.
  */
 
 import { exportVideo, parseSRT, buildCuesFromClips, probeMedia, trimTimelineBySpeech } from '@/services/ffmpeg'
@@ -11,9 +11,9 @@ export async function generateFinalCut(onProgress?: (msg: string) => void) {
   const project = useProjectStore()
   const assets = useAssetsStore()
   const p = project.current
-  if (!p) throw new Error('没有打开的项目')
+  if (!p) throw new Error('열려 있는 프로젝트가 없습니다.')
   if (!canBuildExport(p)) {
-    throw new Error('还没有可导出的视频或图片，请先生成分镜视频')
+    throw new Error('내보낼 영상이나 이미지가 없습니다. 먼저 스토리보드 샷 영상을 생성하세요.')
   }
 
   const { built, clips } = ensureTimelineFromShots(p)
@@ -22,10 +22,10 @@ export async function generateFinalCut(onProgress?: (msg: string) => void) {
   }
   const timeline = project.current!.timeline.filter((c) => c.enabled)
   if (!timeline.length) {
-    throw new Error('时间线为空，无法合成')
+    throw new Error('타임라인이 비어 있어 합성할 수 없습니다.')
   }
 
-  onProgress?.('准备素材...')
+  onProgress?.('소재를 준비하고 있어요…')
   const digitalHuman = isDigitalHumanSpeechProject(p)
   const mediaMap = new Map<string, { blob: Blob; kind: 'video' | 'image' }>()
   for (const clip of timeline) {
@@ -40,11 +40,11 @@ export async function generateFinalCut(onProgress?: (msg: string) => void) {
       kind: (assets.getMeta(assetId)?.kind || (shot?.videoAssetId ? 'video' : 'image')) as 'video' | 'image'
     })
   }
-  if (mediaMap.size === 0) throw new Error('没有可用的分镜素材')
+  if (mediaMap.size === 0) throw new Error('사용 가능한 스토리보드 자료가 없습니다.')
 
   let working = timeline
   if (digitalHuman && p.speechWorkflow?.options.removePauses !== false) {
-    onProgress?.('正在切掉句首句尾气口...')
+    onProgress?.('문장 앞뒤의 숨소리를 잘라내고 있어요…')
     working = await trimTimelineBySpeech(working, async (shotId) => mediaMap.get(shotId)?.blob)
     project.setTimeline(working)
   }
@@ -170,15 +170,15 @@ export async function generateFinalCut(onProgress?: (msg: string) => void) {
     onProgress
   })
 
-  onProgress?.('写入视频...')
+  onProgress?.('영상을 저장하고 있어요…')
   const asset = await assets.add(blob, 'video', 'ai-generated', {
     filename: `final_${p.name || 'cut'}_${Date.now().toString(36)}.mp4`,
-    prompt: `视频 · ${p.script?.topic || p.name || ''}`,
+    prompt: `영상 · ${p.script?.topic || p.name || ''}`,
     projectId: p.id
   })
   project.setFinalVideo(asset.id)
 
-  // 刷新画布节点状态
+  // 캔버스 노드 상태를 갱신한다.
   if (project.current?.canvas) {
     const nodes = project.current.canvas.nodes.map((n) => {
       if (n.id === 'export' || n.id === 'final' || n.type === 'final') {

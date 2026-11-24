@@ -1,6 +1,6 @@
 /**
- * 设置页内置接入：只放大厂官方。中转 / 聚合请用「自定义」。
- * LLM / 视觉按 OpenAI 兼容 /chat/completions 填。
+ * 공식 공급자만 기본 제공한다. 중계 및 통합 서비스는 사용자 지정 연결을 사용한다.
+ * 언어 및 비전 모델은 OpenAI 호환 /chat/completions 경로를 사용한다.
  */
 
 import { t } from '@/i18n'
@@ -257,7 +257,7 @@ export function applyProviderPreset(
 ): { provider: string; baseUrl: string; model: string; models: string[] } {
   const keepUrl = preset.id === 'custom'
   const model = (keepUrl ? current.model : current.model || preset.defaultModel).trim()
-  // 预设目录只当建议，不写进已配置列表。已配置的名字只来自当前这一项和调用方显式传入的模型名。
+  // 프리셋은 제안 목록이다. 설정 모델 이름은 현재 연결과 호출자가 지정한 값에서만 가져온다.
   const models = uniq([...(model ? [model] : []), ...current.models])
   return {
     provider: preset.id,

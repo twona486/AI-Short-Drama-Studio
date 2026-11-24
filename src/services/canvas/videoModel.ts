@@ -14,13 +14,13 @@ import {
 import { stillModeFromNode } from '@/utils/videoStill'
 import { rebuildCanvasGraph } from './layout'
 
-/** 节点切视频模型时同时写入参考图策略，必要时重铺「分镜关键帧」分组。 */
+/** 노드 모델을 변경할 때 참조 방식도 저장하고 필요하면 샷 키프레임 그룹을 다시 배치한다. */
 export function applyShotVideoModel(nodeId: string, model: VideoGenModel, profileId?: string) {
   const project = useProjectStore()
   const settings = useSettingsStore()
   const node = project.current?.canvas?.nodes.find((n) => n.id === nodeId)
   if (!node) return
-  // 「H3 v5」这组选项写明走 AutoDL 令牌。没点具体接入时不能回落到当前 Zealman。
+  // H3 v5는 AutoDL 토큰을 사용하며 선택한 연결이 없다고 Zealman으로 바꾸지 않는다.
   const selectedProfileId = profileId
     || (model === 'h3' || model === 'h3-v5' ? autodlVideoProfileId() : undefined)
   const selectedProfile = selectedProfileId
@@ -63,7 +63,7 @@ export function applyShotVideoModel(nodeId: string, model: VideoGenModel, profil
   }
 }
 
-/** 节点明确选择某条接入线路；不能只改全局当前项，否则 UI 与实际提交线路会分叉。 */
+/** 노드에서 지정한 연결을 저장해 화면과 실제 요청을 일치시킨다. */
 export function applyShotVideoProfile(nodeId: string, profileId: string) {
   const settings = useSettingsStore()
   if (!settings.config.videos.some((profile) => profile.id === profileId)) return
@@ -71,7 +71,7 @@ export function applyShotVideoProfile(nodeId: string, profileId: string) {
   applyShotVideoModel(nodeId, 'h3', profileId)
 }
 
-/** 设置里改当前视频接入的参考图方式后，同步所有走该接入的分镜节点。 */
+/** 영상 연결의 참조 방식을 바꾸면 해당 연결을 사용하는 샷 노드를 갱신한다. */
 export function syncH3ShotStillModes(stillMode: VideoStillMode) {
   const project = useProjectStore()
   const p = project.current

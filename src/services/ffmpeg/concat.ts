@@ -1,21 +1,21 @@
 /**
- * 视频拼接（concat）
+ * 영상 클립 이어 붙이기
  *
- * 用法：先把每个片段转成统一规格（编码、分辨率、帧率），再 concat。
+ * 클립의 코덱, 해상도와 프레임률을 통일한 뒤 이어 붙인다.
  */
 
 import { getFFmpeg, writeFile, readFile, toBlob } from './client'
 
 export interface ConcatSegment {
-  /** 输入 blob */
+  /** 입력 Blob */
   blob: Blob
-  /** 从素材的哪个时间点开始裁（秒） */
+  /** 원본 소재에서 자르기 시작할 위치(초) */
   sourceIn: number
-  /** 用多久（秒） */
+  /** 사용할 길이(초) */
   duration: number
-  /** 速度倍率 */
+  /** 재생 속도 배율 */
   speed?: number
-  /** 是否禁用 */
+  /** 클립 비활성화 여부 */
   enabled?: boolean
 }
 
@@ -23,17 +23,17 @@ export interface ConcatOptions {
   width: number
   height: number
   fps: number
-  /** 输出格式 */
+  /** 출력 형식 */
   format?: 'mp4' | 'webm'
-  /** 输出 mime */
+  /** 출력 MIME 유형 */
   mimeType?: string
   onProgress?: (msg: string) => void
 }
 
 /**
- * 把多个片段拼成一个视频
- * - 每个片段单独裁剪、转码、统一规格
- * - 用 concat demuxer 拼
+ * 여러 클립을 영상 하나로 합친다.
+ * 클립마다 잘라내고 공통 형식으로 인코딩한다.
+ * concat 디먹서로 이어 붙인다.
  */
 export async function concatVideos(
   segments: ConcatSegment[],
@@ -45,10 +45,10 @@ export async function concatVideos(
 
   const active = segments.filter((s) => s.enabled !== false && s.duration > 0)
   if (active.length === 0) {
-    throw new Error('没有可拼接的片段')
+    throw new Error('이어 붙일 클립이 없습니다.')
   }
 
-  // 1) 每个片段转成统一规格
+  // 각 클립을 공통 형식으로 변환한다.
   const listPath = 'list.txt'
   const lines: string[] = []
   for (let i = 0; i < active.length; i++) {
@@ -101,7 +101,7 @@ export async function concatVideos(
 
   await ffmpeg.writeFile(listPath, lines.join('\n'))
 
-  // 2) 拼接
+  // 변환한 클립을 이어 붙인다.
   const outName = `out.${format}`
   await ffmpeg.exec([
     '-f',

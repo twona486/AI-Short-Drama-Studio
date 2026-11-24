@@ -48,20 +48,21 @@ export function formatBeatRangeEn(start: number, end: number): string {
 }
 
 /** 编辑器里仍写中文内容表现；选 H3 出片时再编译成官方 Ref2VA / I2VA。用户若已粘贴官方英文全文，原样使用。 */
-export const SCENE_NARRATIVE_SPEC = `用导演给演员和摄影说戏的口吻，写这一镜最终会怎样动起来。中文 220–650 字。只写本镜，不要把上一镜或下一镜的剧情演进来。
+// 영상 모델용 영어 연출과 한국어 대사 보존 규칙.
+export const SCENE_NARRATIVE_SPEC = `Write in the voice of a director explaining this shot to actors and camera crew. Use English for model-facing direction. Describe only the current shot. Preserve Korean (한국어) dialogue, narration, and requested Korean on-screen text verbatim.
 
-先写清楚开场站位：画面里每一个出场的人各写一句——在近处还是后面、身体朝哪、眼睛看谁或看什么。说话的人可以在后面或侧面，前面的人必须侧对或回头看他、或看他指的东西。禁止合影式正面排排站、禁止所有人看镜头。人设图是正面身份锁，成片姿势不要抄人设。
+Establish the opening blocking. For every visible person, state whether they are near or farther back, how their body is oriented, and exactly where they look. The speaker may stand in the background or to one side. Foreground characters may turn sideways or look back at the speaker or what the speaker points to. Avoid lining up the cast frontally or making everyone look at the camera. Character sheets lock identity; do not copy their poses.
 
-再按因果写清：开场身体状态 → 什么声音/目光/道具触发变化 → 手脚和身体如何完成动作 → 道具与环境产生什么可见结果 → 最后停在什么状态。必须使用本镜真实道具和空间细节，不能把动作缩成情绪摘要。表情必须跟正在发生的事挂钩。
+Describe a causal progression: initial physical state → sound, gaze, or prop that triggers change → hands, feet, and body carrying out the action → visible effect on the prop or environment → final state. Use the real props and location details of this shot. Describe observable expressions changing in response to what happens.
 
-按本镜总时长写 2–5 个连续时间段，从 0 秒覆盖到最后一秒。时间段按剧情拍点分，不要机械等分。每段都写清当前谁在做什么、谁在说什么、其他人物站在哪里并看向谁、表情因什么发生变化，以及摄影机如何跟随或保持。摄影不是另贴一句“固定/推近”：写明镜头从哪里、什么景别起幅，为什么随某个动作移动或改变焦点，移动中逐步揭示什么，最后落在哪里。大场面、走位、揭示与冲击必须允许拉远、跟拍、升降、摇移或切镜，不能一律固定近景。
+Split the full duration from zero to the end into 2–5 consecutive ranges using labels such as 0–2s. Assign the ranges by story beats instead of equal divisions. In each range, identify current actions and speakers, other people's blocking and eyelines, what triggers expression changes, and how the camera follows or holds. Give the opening position and framing, the reason to move or change focus, what the movement reveals, and where it ends. Allow pullbacks, tracking, vertical moves, pans, or cuts when a large space, blocking, reveal, or impact needs them.
 
-写出与画面同步的声音节点，以及光、雨、雾、灰尘、火焰、衣料、桌面物件如何被动作影响。有台词只写口播原词；成年旁白是画外音，画面里的人闭嘴。剧本写了不拍的必须遵守。
+Tie sound to visible events. Show how the action affects light, rain, mist, dust, flame, fabric, and objects. Use only trusted original dialogue. Narration by an older version of a character is off screen and people on screen keep their mouths closed. Follow the script's exclusions.
 
-人物脸和衣服由参考图负责，这里不要报身份证。不要写「禁止呆脸空眼」「衣摆、光和空气里的东西跟着动」这种套话，也不要只在结尾加一句「人物看向场景里的人或物，不要看镜头」却不写每个人看哪。
+Reference images determine faces and clothing. Avoid reciting identity details or using generic language such as "no blank stares" or "clothing, light and air move." Name each person's actual eyeline instead of adding a general rule at the end.
 
-坏例子：「林遥指着田垄说话。老农和差役在场。人物看向场景里的人或物，不要看镜头。」
-好例子：「近处：老农和差役侧对镜头站在石板路上，不朝向镜头。林遥在他们身后稍远，从跪姿撑起半身，泥手指向田垄。老农回头眯眼打量林遥，差役停步，视线跟着那只手看向田垄。三个人都不看镜头。」`
+Weak: Lin Yao points at the ridge and talks. The farmer and constable are present. Everyone looks at someone or something in the scene.
+Better: In the foreground, the farmer and constable stand sideways on the stone path. Behind them, Lin Yao rises partway from his knees and points a muddy hand at the ridge. The farmer squints back at Lin Yao. The constable stops and follows his hand toward the ridge. None looks at the camera.`
 
 /** 格式化：人物图 + 空镜底板直接出视频时，内容表现仍写细，出片再套 H3 结构 */
 export const FORMATTED_VIDEO_PERFORMANCE_SPEC = SCENE_NARRATIVE_SPEC
@@ -71,7 +72,7 @@ export function videoPerformanceSpec(style: VideoPromptStyle = 'scene-narrative'
 }
 
 export function videoPromptJsonHint(_style: VideoPromptStyle = 'scene-narrative'): string {
-  return '<中文220-650字的可执行时间轴。从0秒到本镜结束分2-5段，每段写当前行动者、动作与表情、说话人和原词、其他人物占位与视线、一个合理运镜及落点、同步声音和环境反应。按剧情拍点分段，禁止机械等分和套话。>'
+  return '<English shot direction in 2–5 beat-based time ranges such as 0–2s. Cover the full shot and specify actions, expressions, speakers and verbatim dialogue, blocking and eyelines, motivated camera motion and ending, synchronized sound, and environmental reactions. Preserve Korean dialogue and Korean on-screen text.>'
 }
 
 /** 写给编剧 / 质检 / 出视频：默认按当前主流的场景叙事 */
@@ -86,8 +87,8 @@ export function stripFrameLead(text: string): string {
 
 /** 去掉已有的「画面中：…是谁」身份段，只留下演戏叙述 */
 export function stripIdentityOpening(text: string): string {
-  let t = stripFrameLead(text)
-  if (!/^画面中[：:]/.test(t)) return t
+  const t = stripFrameLead(text)
+  if (!/^(?:画面中|화면 속|In the frame)[：:]/i.test(t)) return t
   const parts = t.split(/\n\s*\n/)
   if (parts.length >= 2) return parts.slice(1).join('\n\n').trim()
   const m = t.match(/^画面中[：:][\s\S]+?(?:是[^；;\n]{1,16}[。；;]\s*)+/)
@@ -98,7 +99,7 @@ export function stripIdentityOpening(text: string): string {
 export function normalizeIdentityLock(lock: string): string {
   let t = stripFrameLead(lock)
   if (!t) return ''
-  if (!/^画面中[：:]/.test(t)) t = `画面中：${t}`
+  if (!/^(?:画面中|화면 속|In the frame)[：:]/i.test(t)) t = `In the frame: ${t}`
   return t
 }
 
@@ -123,17 +124,17 @@ export function assembleShotVideoPrompt(opts: {
 }
 
 const FACE_RE =
-  /表情|神态|眉|眼|笑|愣|皱|歪|低头|抬头|眼神|嘴角|脸|惊喜|开心|认真|犹豫|紧张|温柔|点头|摇头|吃惊|无奈|得意|委屈|好奇|惊|呆/
+  /表情|神态|眉|眼|笑|愣|皱|歪|低头|抬头|眼神|嘴角|脸|惊喜|开心|认真|犹豫|紧张|温柔|点头|摇头|吃惊|无奈|得意|委屈|好奇|惊|呆|표정|눈빛|미소|\b(?:eyes?|brows?|smiles?|frowns?|glances?|nods?|jaw)\b/i
 const BODY_RE =
-  /跑|走|拿|放|伸|举|弯|站|坐|蹲|抱|推|拉|转身|回头|抬手|伸手|迈|踏|递|捧|摸|拍|跳|停|凑|靠|俯|仰|躺|撑|醒/
+  /跑|走|拿|放|伸|举|弯|站|坐|蹲|抱|推|拉|转身|回头|抬手|伸手|迈|踏|递|捧|摸|拍|跳|停|凑|靠|俯|仰|躺|撑|醒|걷|뛰|잡|밀|당기|돌아|\b(?:runs?|walks?|reaches?|holds?|pushes?|pulls?|turns?|sits?|stands?|stops?|opens?|closes?)\b/i
 const ENV_RE =
-  /门|桌|地|光|风|窗|墙|衣|树|水|灯|屋|院|街|天|雾|雨|烟|火|锅|盘|碗|杯|台|椅|梨|包|产品|案|桥|石|帘|影|尘|叶|草|田/
+  /门|桌|地|光|风|窗|墙|衣|树|水|灯|屋|院|街|天|雾|雨|烟|火|锅|盘|碗|杯|台|椅|梨|包|产品|案|桥|石|帘|影|尘|叶|草|田|바닥|조명|창문|바람|빗물|\b(?:light|wind|rain|smoke|mist|dust|door|window|floor|table|wall|fabric|water)\b/i
 
 const TEMPLATE_RE =
   /禁止呆脸空眼|衣摆、光和空气里的东西跟着动|把这件事做起来：|表情往前走：眼神一转|人物看向场景里的人或物，不要看镜头/
 
 const ENSEMBLE_LAYER_RE =
-  /近处|近景里|身前|身后|稍远|前景|后景|侧对|侧身|侧过|四分之三|过肩|回头|扭头/
+  /近处|近景里|身前|身后|稍远|前景|后景|侧对|侧身|侧过|四分之三|过肩|回头|扭头|전경|배경|앞쪽|뒤쪽|뒤돌|\b(?:foreground|background|behind|in front|sideways|over the shoulder|looks back)\b/i
 
 /** 多人在场却没写谁在前、谁在后、各自看谁 → 模型会摆成合影看镜头。 */
 export function lacksEnsembleBlocking(text: string, names: string[] = []): boolean {
@@ -152,7 +153,7 @@ export function isVideoPerformanceTemplate(text: string): boolean {
 }
 
 export function timedBeatCount(text: string): number {
-  return ((text || '').match(/\d+(?:\.\d+)?\s*(?:秒|s)?\s*[–\-~到至]\s*\d+(?:\.\d+)?\s*(?:秒|s)/gi) || []).length
+  return ((text || '').match(/\d+(?:\.\d+)?\s*(?:秒|초|s)?\s*(?:[–\-~到至]|\bto\b)\s*\d+(?:\.\d+)?\s*(?:秒|초|s(?:ec(?:onds?)?)?)/gi) || []).length
 }
 
 /** continuity 常写成「上一镜末态 → 本镜变化 → 下一镜初态」；出视频只演中间这一截。 */
@@ -168,20 +169,20 @@ export function thisShotAction(continuity?: string): string {
   return raw
 }
 
-function cameraStoryCn(movement: Shot['cameraMovement']): string {
+function cameraDirection(movement: Shot['cameraMovement']): string {
   switch (movement) {
     case 'push':
-      return '镜头跟着他的注意慢慢推近，幅度小，结束时停住。'
+      return 'The camera slowly pushes in toward the point of focus, then holds.'
     case 'pull':
-      return '镜头从近处慢慢拉开，把环境和后来靠近的人带进画面，不要猛拉。'
+      return 'The camera pulls back slowly to reveal the surroundings and approaching people.'
     case 'pan':
-      return '镜头顺着他的视线慢慢横移，停在他看见的东西上。'
+      return 'The camera pans slowly along the eyeline and settles on what the character sees.'
     case 'tilt':
-      return '镜头顺着他抬头或低头的方向慢慢俯仰，停在结束视线。'
+      return 'The camera tilts slowly with the gaze and settles where the character looks.'
     case 'orbit':
-      return '镜头小幅度绕着他转一点，带出周围环境，不要绕出半圈。'
+      return 'The camera arcs slightly around the character to reveal the surroundings, well short of a half circle.'
     default:
-      return '机位基本不动，只随呼吸和动作有一点微晃。'
+      return 'Keep the camera nearly still, with slight motion following breathing and action.'
   }
 }
 
@@ -195,15 +196,15 @@ export function isVideoPerformanceThin(text: string): boolean {
 
 export function videoPerformanceIssue(text: string, names?: string[]): string | null {
   const t = (text || '').trim()
-  if (!t) return '缺少视频内容表现'
-  if (isVideoPerformanceTemplate(t)) return '视频内容表现是套话，没有写出每个人站哪、看谁'
-  if (t.length < 120) return '视频内容表现过短，必须写清触发、连续动作、道具结果、运镜落点和同步声音'
-  if (timedBeatCount(t) < 2) return '视频内容表现缺少从0秒到镜头结束的分段时间轴，无法明确每一拍谁在做什么、谁在说什么'
+  if (!t) return 'Video direction is missing.'
+  if (isVideoPerformanceTemplate(t)) return 'Video direction is generic. Specify each character’s position and eyeline.'
+  if (t.length < 120) return 'Video direction is too short. Specify the trigger, continuous actions, resulting prop state, camera endpoint, and synchronized sound.'
+  if (timedBeatCount(t) < 2) return 'Add a timeline from zero to the end of the shot. Identify who acts and who speaks in each beat.'
   if (lacksEnsembleBlocking(t, names)) {
-    return '多人同框却没写谁在近处、谁在后面、各自看谁，会拍成合影看镜头'
+    return 'For multiple characters, specify who is near the camera or in the background and who each person looks at. Avoid posing them for the camera.'
   }
   if (!BODY_RE.test(t) && !FACE_RE.test(t) && !ENV_RE.test(t)) {
-    return '视频内容表现缺少具体动作或反应'
+    return 'Describe concrete actions or reactions.'
   }
   return null
 }
@@ -234,35 +235,35 @@ export function synthesizeVideoPerformance(shot: Shot): string {
     thisShotAction(shot.continuity) ||
     (shot.blocking || '').trim() ||
     (shot.title || '').trim() ||
-    '把这一镜的事做完'
+    'Complete the action planned for this shot'
   const look = (shot.eyeline || '').trim()
   const line = (shot.voiceover || '').trim()
   const speaker = line.match(/^([^：:\n]{1,12})[：:]/)?.[1]?.trim() || ''
   const spokenRaw = line.replace(/^([^：:\n]{1,12})[：:]\s*/, '').trim()
-  const spoken = /^(?:无|没有|暂无|空|无对白|无台词|无口播|none|n\/a)$/i.test(spokenRaw.replace(/[。.\s]/g, ''))
+  const spoken = /^(?:无|没有|暂无|空|无对白|无台词|无口播|없음|대사없음|내레이션없음|none|n\/a)$/i.test(spokenRaw.replace(/[。.\s]/g, ''))
     ? ''
     : spokenRaw
   const movement = normalizeCameraMovement(shot.cameraMovement)
   const firstEnd = Number((secs * 0.3).toFixed(1))
   const secondEnd = Number((secs * 0.75).toFixed(1))
   const bits = [
-    `${formatBeatRangeCn(0, firstEnd)}：起幅先交代人物前后站位和当前身体状态。${look ? `视线：${look.replace(/^看/, '')}。` : '每个人看向场景里的行动对象，不朝镜头。'}`,
-    `${formatBeatRangeCn(firstEnd, secondEnd)}：${happening.replace(/[。；;]+$/, '')}。动作连续发生，人物的眼神、眉眼和呼吸随触发事件变化。`
+    `${formatBeatRangeEn(0, firstEnd)}: Establish foreground and background blocking and each person's physical state. ${look ? `Eyeline: ${look}.` : 'Everyone looks at the relevant person or object in the scene, away from the lens.'}`,
+    `${formatBeatRangeEn(firstEnd, secondEnd)}: ${happening.replace(/[。；;]+$/, '')}. The action unfolds without interruption and the trigger changes the character's gaze, brow, and breathing.`
   ]
   if ((shot.blocking || '').trim() && happening !== (shot.blocking || '').trim()) {
-    bits[0] += `站位：${(shot.blocking || '').trim()}。`
+    bits[0] += ` Blocking: ${(shot.blocking || '').trim()}.`
   }
-  bits.push(cameraStoryCn(movement))
+  bits.push(cameraDirection(movement))
   if (spoken) {
     bits[1] +=
       speaker
-        ? `${speaker}开口说「${spoken}」。旁边的人闭嘴，侧头或回头看他，脸上要有反应。`
-        : `有人开口说「${spoken}」。旁边的人闭嘴，看向说话者或他指的东西。`
+        ? ` ${speaker} says 「${spoken}」. The others keep their mouths closed, look toward the speaker, and react visibly.`
+        : ` A person says 「${spoken}」. The others keep their mouths closed and look at the speaker or the object indicated.`
   } else {
-    bits[1] += '无对白。'
+    bits[1] += ' No dialogue.'
   }
-  bits.push(`${formatBeatRangeCn(secondEnd, secs)}：${cameraStoryCn(movement)}动作完成后停在明确的结果状态，其他人物保持与行动者的视线关系。`)
-  return bits.join('')
+  bits.push(`${formatBeatRangeEn(secondEnd, secs)}: ${cameraDirection(movement)} Show the clear physical result of the action and maintain the other people's eyelines toward the actor.`)
+  return bits.join('\n')
 }
 
 /** 编辑框里的原文：空就是空，不要把场记补回去；旧稿里的套话顺手剥掉 */

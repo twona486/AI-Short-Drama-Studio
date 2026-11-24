@@ -4,7 +4,7 @@ import { getAgentState } from './taskStore'
 import { effectiveShotAudioMode, needsExternalTts } from '@/utils/shot'
 import { shotsMissingKeyframe } from '@/utils/videoStill'
 
-/** 明细段最多带几段：上下文是给模型规划用的摘要，不是全量转储 */
+/** 계획에 필요한 상세 정보의 최대 개수를 제한한다. */
 export const MAX_DETAIL_SECTIONS = 5
 
 type SectionKey = 'script' | 'subjects' | 'scenes' | 'shots' | 'canvas'
@@ -20,7 +20,7 @@ const SECTION_RULES: { key: SectionKey; test: RegExp }[] = [
   { key: 'canvas', test: /节点|画布|连线|参考图|选中|整理|删除|布局|生成节点|跑一下/ }
 ]
 
-/** 明确要看全貌的话，放宽到带所有有数据的段（仍封顶 MAX 段） */
+/** 전체 현황이 필요하면 데이터가 있는 구역을 최대치까지 추가한다. */
 const BROAD_ASK = /全流程|全部|整体|所有|检查|体检|什么问题|怎么样|状态|梳理|盘点/
 
 function selectSections(userText: string, p: Project): SectionKey[] {
@@ -50,7 +50,7 @@ function hasSectionData(p: Project, key: SectionKey): boolean {
 
 function truncate(text: string | undefined, limit: number): string | null {
   if (!text) return null
-  return text.length > limit ? `${text.slice(0, limit)}…(已截断，全文在项目里，工具执行时会读实时数据)` : text
+  return text.length > limit ? `${text.slice(0, limit)}…(Truncated. The full text is in the project. Tools read current project data.)` : text
 }
 
 function shotContext(shot: Shot) {
@@ -105,7 +105,7 @@ export function buildProjectContext(userText: string) {
     project: {
       id: p.id,
       name: p.name,
-      /** 当前生成配置：用户在智能体底栏选的比例与模型，生成时直接照此执行 */
+      /** 캔버스 아래쪽에서 선택한 생성 비율과 모델을 적용한다. */
       genConfig: {
         aspectRatio: p.settings.aspectRatio,
         imageModel: imageProfile ? `${imageProfile.name} · ${imageProfile.model}` : null,
@@ -173,7 +173,7 @@ export function buildProjectContext(userText: string) {
                 hasOutput: Boolean(node.data.outputAssetId),
                 error: node.error
               })),
-              /** 连线关系，智能体据此判断谁接在谁后面、哪些节点还没下游 */
+              /** 상하위 노드 연결과 후속 노드가 없는 항목을 나타낸다. */
               edges: (p.canvas?.edges ?? []).map((edge) => ({
                 source: edge.source,
                 target: edge.target
@@ -181,7 +181,7 @@ export function buildProjectContext(userText: string) {
             }
           }
         : {}),
-      /** 本轮带了哪些明细段；没带的段说明模型不需要，需要时以工具实时数据为准 */
+      /** 이번에 포함한 상세 구역을 알려 준다. 필요하면 도구가 최신 데이터를 읽는다. */
       contextSections: sections
     },
     agent: {

@@ -9,7 +9,7 @@ function extension(mime: string, fallback: string): string {
   return fallback
 }
 
-/** 删除生成视频的临时声音，换成最终克隆语音，让剪辑台预览和导出听到同一音轨。 */
+/** 임시 오디오를 복제 음성으로 교체해 편집 미리보기와 내보내기에 동일하게 사용한다. */
 export async function replaceVideoAudio(
   video: Blob,
   audio: Blob,
@@ -22,7 +22,7 @@ export async function replaceVideoAudio(
   const outputName = 'talking_cloned.mp4'
   await writeFile(ffmpeg, videoName, video)
   await writeFile(ffmpeg, audioName, audio)
-  onProgress?.('正在把克隆语音写入人物视频…')
+  onProgress?.('복제한 음성을 인물 영상에 합성하고 있어요…')
   const exitCode = await ffmpeg.exec([
     '-i', videoName,
     '-i', audioName,
@@ -36,11 +36,11 @@ export async function replaceVideoAudio(
     '-movflags', '+faststart',
     '-y', outputName
   ])
-  if (exitCode !== 0) throw new Error(`替换数字人音轨失败（FFmpeg ${exitCode}）`)
+  if (exitCode !== 0) throw new Error(`디지털 휴먼 오디오 트랙을 교체하지 못했습니다.（FFmpeg ${exitCode}）`)
   return toBlob((await readFile(ffmpeg, outputName)) as Uint8Array, 'video/mp4')
 }
 
-/** 按秒从整段口播里切出这一镜的音频，交给 H3 音画同步。 */
+/** 전체 내레이션에서 이 샷의 오디오 구간을 잘라 H3 립싱크에 전달한다. */
 export async function sliceAudio(
   audio: Blob,
   start: number,
@@ -52,7 +52,7 @@ export async function sliceAudio(
   const inputName = `src.${extension(audio.type, 'mp3')}`
   const outputName = 'slice.m4a'
   await writeFile(ffmpeg, inputName, audio)
-  onProgress?.('正在按台词时长切开播音频…')
+  onProgress?.('대사 길이에 맞춰 오디오를 나누고 있어요…')
   const exitCode = await ffmpeg.exec([
     '-ss', String(Math.max(0, start)),
     '-t', String(Math.max(0.4, duration)),
@@ -63,13 +63,13 @@ export async function sliceAudio(
     '-y',
     outputName
   ])
-  if (exitCode !== 0) throw new Error(`切音频失败（FFmpeg ${exitCode}）`)
+  if (exitCode !== 0) throw new Error(`오디오를 자르지 못했습니다.（FFmpeg ${exitCode}）`)
   return toBlob((await readFile(ffmpeg, outputName)) as Uint8Array, 'audio/mp4')
 }
 
 /**
- * 数字人音画同步只要 WAV/MP3，时长 5–15 秒。
- * 切片若是 AAC/m4a 或不足 5 秒，提交会被判「参数值非法」。
+ * 디지털 휴먼 립싱크는 5~15초 WAV나 MP3만 받는다.
+ * AAC, m4a 또는 5초 미만 클립은 공급자에서 거부한다.
  */
 export async function toDigitalHumanWav(
   audio: Blob,
@@ -86,7 +86,7 @@ export async function toDigitalHumanWav(
   await clearFS(ffmpeg)
   const inputName = `src.${extension(audio.type, 'mp3')}`
   await writeFile(ffmpeg, inputName, audio)
-  onProgress?.('正在把口播音频转成 WAV，并对齐到 5–15 秒…')
+  onProgress?.('내레이션을 WAV로 변환하고 길이를 5~15초로 맞추고 있어요…')
   const exitCode = await ffmpeg.exec([
     '-i', inputName,
     '-af', 'apad=whole_dur=5',
@@ -97,7 +97,7 @@ export async function toDigitalHumanWav(
     '-y',
     'out.wav'
   ])
-  if (exitCode !== 0) throw new Error(`口播音频转码失败（FFmpeg ${exitCode}）`)
+  if (exitCode !== 0) throw new Error(`내레이션 오디오를 변환하지 못했습니다.（FFmpeg ${exitCode}）`)
   const blob = toBlob((await readFile(ffmpeg, 'out.wav')) as Uint8Array, 'audio/wav')
   const info = await probeMedia(blob).catch(() => ({ duration: 5 }))
   const duration = Math.max(5, Math.min(15, Math.round(info.duration || 5)))

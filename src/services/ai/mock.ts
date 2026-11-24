@@ -1,16 +1,16 @@
 /**
- * Mock 实现 —— 不用任何 API key 就能跑通整个流程
+ * API 키 없이 전체 과정을 실행하는 데모 구현
  *
- * 图像：用 Canvas 程序化绘制（每个 prompt 算出不同颜色和形状，演示足够）
- * 视频：用 Canvas 录屏（MediaRecorder）生成短动画
- * LLM：用基于关键词的规则生成 mock 分镜
+ * 이미지는 Canvas에 그리며 프롬프트에 따라 색상과 모양을 바꾼다.
+ * 영상은 MediaRecorder로 Canvas를 녹화해 짧은 애니메이션을 만든다.
+ * 언어 모델 대신 키워드 규칙으로 데모 스토리보드를 만든다.
  */
 
 import type { LLMRequest, LLMResponse } from './client'
 import { messageText } from './client'
 import type { Shot, VisualStyle } from '@/types'
 
-/** Hash 函数（确定性） */
+/** 동일한 입력에 동일한 값을 반환하는 해시 함수 */
 function hashCode(s: string): number {
   let h = 0
   for (let i = 0; i < s.length; i++) {
@@ -20,13 +20,13 @@ function hashCode(s: string): number {
   return Math.abs(h)
 }
 
-/** 基于文字生成稳定的"伪随机"颜色 */
+/** 텍스트에서 재현 가능한 의사 난수 색상을 생성한다. */
 function colorFromText(s: string, sat = 70, light = 55): string {
   const h = hashCode(s) % 360
   return `hsl(${h}, ${sat}%, ${light}%)`
 }
 
-/** 风格 → CSS 滤镜 */
+/** 스타일별 CSS 필터 */
 export function styleToFilter(style: VisualStyle): string {
   switch (style) {
     case 'cinematic':
@@ -53,11 +53,11 @@ export function styleToFilter(style: VisualStyle): string {
 // ============== LLM mock ==============
 
 export async function mockLLM(req: LLMRequest): Promise<LLMResponse> {
-  // 模拟网络延迟
+  // 네트워크 지연을 재현한다.
   await new Promise((r) => setTimeout(r, 600 + Math.random() * 800))
 
   const userMsg = messageText(req.messages[req.messages.length - 1]?.content ?? '')
-  const isStoryboard = userMsg.includes('分镜') || userMsg.includes('storyboard')
+  const isStoryboard = /分镜|스토리보드|storyboard/i.test(userMsg)
 
   if (isStoryboard) {
     return {
@@ -67,20 +67,20 @@ export async function mockLLM(req: LLMRequest): Promise<LLMResponse> {
   }
 
   return {
-    content: `[mock] 收到：${userMsg.slice(0, 60)}...`,
+    content: `[데모] 요청을 받았습니다. ${userMsg.slice(0, 60)}...`,
     model: 'mock-llm'
   }
 }
 
-/** 从 prompt 里抽出文案 + 关键词生成 mock 分镜 */
+/** 프롬프트의 원고와 키워드로 데모 스토리보드를 만든다. */
 export function mockStoryboardFromPrompt(userMsg: string) {
-  // 提取文案：通常在 """ 和 """ 之间
+  // 원고를 추출한다. 일반적으로 """ 사이에 있다.
   const match = userMsg.match(/"""\s*([\s\S]*?)\s*"""/)
   const script = match?.[1]?.trim() || userMsg.slice(0, 200)
 
-  // 按句子拆分
+  // 문장 단위로 나눈다.
   const sentences = script
-    .split(/[。！？!?\n]+/)
+    .split(/[。！？!?\n]+|\.(?=\s|$)/)
     .map((s) => s.trim())
     .filter((s) => s.length > 4)
 
@@ -89,69 +89,69 @@ export function mockStoryboardFromPrompt(userMsg: string) {
   const durationMatch = userMsg.match(/duration:\s*(\d+(?:\.\d+)?)/i)
   const duration = durationMatch ? Number(durationMatch[1]) : 3
 
-  // 关键词启发
+  // 키워드별 화면 묘사
   const keywords: Record<string, string> = {
-    城市: '现代城市天际线，霓虹灯，都市建筑',
-    山: '壮丽山景，云雾峰峦，戏剧天空',
-    海: '海浪拍岸，海上金色日落，电影感',
-    森林: '茂密森林，树隙阳光，生机自然',
-    人物: '人物肖像，眼神有戏，柔和布光',
-    科技: '未来科技感，全息界面，科幻氛围',
-    产品: '产品特写，干净棚拍光，简洁构图',
-    食物: '美食特写，热气升腾，暖色光',
-    旅行: '旅行目的地，黄金时段，向往感',
-    运动: '运动动态，轻微运动模糊，充满能量',
-    动物: '动物特写，清晰对焦，自然栖息地',
-    花卉: '鲜艳花卉，微距，背景虚化'
+    '城市|도시|city': 'Modern skyline, neon lighting, and city architecture',
+    '山|산봉우리|mountain': 'Dramatic mountain peaks under mist and clouds',
+    '海|바다|ocean': 'Waves on the shore at a golden sunset',
+    '森林|숲|forest': 'Dense forest with sun filtering through the trees',
+    '人物|인물|character': 'Character portrait with an expressive gaze and soft light',
+    '科技|기술|technology': 'Futuristic technology and holographic interfaces',
+    '产品|제품|product': 'Product close-up with clean studio light and simple framing',
+    '食物|음식|food': 'Food close-up with steam and warm light',
+    '旅行|여행|travel': 'Evocative travel destination in golden-hour light',
+    '运动|운동|sports': 'Energetic athletic movement with slight motion blur',
+    '动物|동물|animal': 'Sharp close-up of an animal in its habitat',
+    '花卉|꽃|flowers': 'Colorful macro flowers with a blurred background'
   }
+  const sizes = ['전경', '중경', '근경', '클로즈업'] as const
 
   const shots: Array<Omit<Shot, 'id' | 'status'>> = sentences
     .slice(0, 12)
     .map((s, i) => {
-      // 从句子中匹配关键词，决定画面
+      // 문장의 키워드에 맞는 화면 묘사를 고른다.
       let visual = ''
       for (const [k, v] of Object.entries(keywords)) {
-        if (s.includes(k)) {
+        if (k.split('|').some((keyword) => s.toLowerCase().includes(keyword))) {
           visual = v
           break
         }
       }
       if (!visual) {
-        // fallback：按 hash 选个稳定描述
+        // 일치하는 키워드가 없으면 해시로 묘사를 고른다.
         const opts = [
-          '电影感建立镜头，戏剧光影',
-          '浅景深特写，背景虚化',
-          '广角风景，黄金时段',
-          '动态运动镜头，充满能量',
-          '极简构图，大量留白'
+          'Establishing shot with dramatic light',
+          'Close-up with shallow focus and soft background',
+          'Wide landscape during golden hour',
+          'Dynamic, energetic movement',
+          'Minimal framing with ample negative space'
         ]
         visual = opts[hashCode(s) % opts.length]
       }
 
-      const sizes = ['全景', '中景', '近景', '特写'] as const
       const purposes = ['建立', '推进', '反应', '揭示'] as const
       const styleGuide =
         style === 'anime'
-          ? '日系动画·赛璐璐上色，线稿清晰，眼睛高光鲜明'
+          ? 'Japanese cel animation with clear lines and bright eye highlights'
           : style === 'ink-wash'
-            ? '中国水墨·墨色浓淡与留白'
+            ? 'Chinese ink wash with layered tones and negative space'
             : style === '3d-render'
-              ? '三维渲染·PBR材质与全局光照'
+              ? '3D rendering with PBR surfaces and global illumination'
               : style === 'oil-painting'
-                ? '古典油画·厚涂笔触与布面纹理'
+                ? 'Classical oil impasto and canvas texture'
                 : style === 'watercolor'
-                  ? '水彩画·透明叠色与纸纹晕染'
+                  ? 'Watercolor washes with transparent layers and paper grain'
                   : style === 'pixel-art'
-                    ? '复古像素·有限色板与清晰像素格'
+                    ? 'Retro pixel art with a limited palette and sharp grid'
                     : style === 'photorealistic'
-                      ? '写实摄影·真实材质与自然光'
-                      : '电影感·胶片调色与戏剧光比'
+                      ? 'Realistic photography with natural light and believable materials'
+                      : 'Film color grading and dramatic contrast'
       return {
         index: i,
         title: s.slice(0, 8),
-        visualPrompt: `【${styleGuide}】画面呈现${visual}。内容：${s}。环境材质与空间纵深清晰，主体姿态表情明确，动作连贯。景别为${sizes[i % sizes.length]}，运镜服务叙事。色彩与光影服务整体氛围。${styleGuide}，高清细节，商业级完成度。`,
-        videoPrompt: `画面中的人把这一镜演完：${s}。有人说「${s}」。镜头跟着动作走。`,
-        audioDescription: '环境音、轻微氛围音乐',
+        visualPrompt: `[${styleGuide}] ${visual}. Story context: ${s}. Show readable depth, materials, pose, expression, and coherent action. Use the ${['wide shot', 'medium shot', 'close shot', 'close-up'][i % sizes.length]} and let the camera serve the story. Match light and color to the tone. High detail and production-quality finish.`,
+        videoPrompt: `Show the action described in the source: ${s}. Someone says 「${s}」. The camera follows the action.`,
+        audioDescription: '환경음과 잔잔한 배경음악',
         voiceover: s,
         duration: Math.min(
           10,
@@ -162,55 +162,55 @@ export function mockStoryboardFromPrompt(userMsg: string) {
         ],
         purpose: purposes[i % purposes.length],
         shotSize: sizes[i % sizes.length],
-        blocking: '相对场景主锚站位，面向叙事焦点',
-        eyeline: '视线朝向本镜叙事焦点',
-        continuity: `起始：承接上一镜末态 → 本镜变化：${s.slice(0, 12)} → 末态：供下一镜承接`,
-        propFocus: '本镜关键道具保持状态连续'
+        blocking: '장면의 주요 기준물 가까이 서서 이야기의 초점을 향한다.',
+        eyeline: '현재 샷의 이야기 중심을 본다.',
+        continuity: `이전 샷의 끝 상태 → 현재 샷의 변화: ${s.slice(0, 12)} → 다음 샷으로 이어지는 상태`,
+        propFocus: '주요 소품의 상태를 유지한다.'
       }
     })
 
   if (shots.length === 0) {
-    // 完全 fallback：4 个空镜
+    // 원고가 없으면 기본 샷 네 개를 반환한다.
     return {
-      aesthetic: `整体氛围\n\n${style}风格，电影感构图，戏剧光影，商业级质感。`,
-      styleBrief: `${style}短片，强调节奏与视觉冲击`,
-      colorPalette: '暖主色 + 冷辅色对比',
-      lightingNote: '电影感侧光，高光与阴影层次清晰',
+      aesthetic: `전체 분위기\n\n${style} 스타일. 영화적 구도와 극적인 명암을 사용한다.`,
+      styleBrief: `리듬과 시각적 인상을 강조한 ${style} 단편`,
+      colorPalette: '따뜻한 주조색과 차가운 보조색의 대비',
+      lightingNote: '영화적 측광으로 밝은 부분과 그림자가 또렷하다.',
       shots: [1, 2, 3, 4].map((i) => ({
         index: i - 1,
-        title: `镜头 ${i}`,
-        visualPrompt: `抽象的${style}风格场景，暖色光影与电影氛围。本片第 ${i} 个镜头。`,
-        videoPrompt: `画面中的人把第 ${i} 镜演完，把该说的话说完，镜头跟着走。`,
-        audioDescription: '环境音、氛围音乐',
-        voiceover: `这是第 ${i} 个分镜`,
+        title: `샷 ${i}`,
+        visualPrompt: `Abstract ${style} location with warm light and cinematic atmosphere. Shot ${i}.`,
+        videoPrompt: `For shot ${i}, follow the people through the complete action and spoken lines.`,
+        audioDescription: '환경음과 배경음악',
+        voiceover: ['지우: 마당에 비가 내리기 시작했어요.', '지우: 창문을 닫아 줄래요?', '지우: 잠깐만요. 우산부터 가져올게요.', '지우: 좋아요. 여기서 기다릴게요.'][i - 1],
         duration: Math.min(10, Math.max(5, duration + ((i - 1) % 3))),
         cameraMovement: 'static' as const,
         subjectIds: ['sub_1'],
         sceneId: 'scn_1',
         purpose: i === 1 ? '建立' : i === 4 ? '揭示' : '推进',
-        shotSize: (['全景', '中景', '近景', '特写'] as const)[(i - 1) % 4],
-        blocking: '相对主锚站位，面向叙事焦点',
-        eyeline: '视线朝向叙事焦点',
-        continuity: `起始承接 → 本镜变化 → 末态供下一镜`,
-        propFocus: '关键道具状态连续'
+        shotSize: sizes[(i - 1) % sizes.length],
+        blocking: '주요 기준물을 기준으로 서서 이야기의 중심을 향한다.',
+        eyeline: '이야기의 중심을 본다.',
+        continuity: `앞 샷과 연결 → 현재 샷의 변화 → 다음 샷으로 이어지는 상태`,
+        propFocus: '주요 소품의 상태를 유지한다.'
       })),
       subjects: [
         {
           id: 'sub_1',
-          name: '主角',
+          name: '지우',
           kind: 'person' as const,
-          description: '全片同一位主角，面部、发型与服装保持一致',
-          role: '主角',
-          stateVariants: '单一状态'
+          description: '전체 영상에서 주인공의 얼굴, 헤어스타일과 의상을 유지한다.',
+          role: '주인공',
+          stateVariants: 'none'
         }
       ],
       scenes: [
         {
           id: 'scn_1',
-          name: '主场景',
-          description: '全片同一主场景，光线保持一致',
-          mainAnchor: '场景中心视觉焦点',
-          lighting: '电影侧光'
+          name: '주요 장면',
+          description: '전체 영상에서 주 장면과 조명을 유지한다.',
+          mainAnchor: '장면의 주요 시각 기준물',
+          lighting: '영화적 측광'
         }
       ]
     }
@@ -219,11 +219,11 @@ export function mockStoryboardFromPrompt(userMsg: string) {
   return { shots }
 }
 
-// ============== 图像 mock ==============
+// ============== 이미지 데모 ==============
 
 /**
- * 程序化生成一张占位图（PNG Blob）
- * 完全在 Canvas 上画出来，根据 prompt 决定颜色 / 形状 / 滤镜
+ * 코드로 이미지 자리표시자(PNG Blob)를 생성한다.
+ * 프롬프트에 따라 색상, 모양, 필터를 선택해 Canvas에 그린다.
  */
 export async function generateMockImage(
   prompt: string,
@@ -237,13 +237,13 @@ export async function generateMockImage(
   const ctx = canvas.getContext('2d')!
   const filter = styleToFilter(style)
 
-  // 离屏画
+  // 화면 밖 캔버스에 그린다.
   const off = document.createElement('canvas')
   off.width = width
   off.height = height
   const offCtx = off.getContext('2d')!
 
-  // 背景渐变
+  // 배경 그라디언트
   const seed = hashCode(prompt)
   const c1 = colorFromText(prompt + 'bg', 70, 40)
   const c2 = colorFromText(prompt + 'fg', 80, 65)
@@ -253,7 +253,7 @@ export async function generateMockImage(
   offCtx.fillStyle = grad
   offCtx.fillRect(0, 0, width, height)
 
-  // 随机几何
+  // 임의의 도형
   const rng = mulberry32(seed)
   for (let i = 0; i < 6; i++) {
     const x = rng() * width
@@ -268,7 +268,7 @@ export async function generateMockImage(
     offCtx.fill()
   }
 
-  // 主体圆
+  // 중앙 원
   const cx = width / 2
   const cy = height / 2
   const radius = Math.min(width, height) * 0.25
@@ -288,12 +288,12 @@ export async function generateMockImage(
   offCtx.arc(cx, cy, radius, 0, Math.PI * 2)
   offCtx.fill()
 
-  // 把滤镜应用到主 canvas
+  // 기본 캔버스에 필터를 적용한다.
   ctx.filter = filter
   ctx.drawImage(off, 0, 0)
   ctx.filter = 'none'
 
-  // 文字
+  // 텍스트
   ctx.fillStyle = 'rgba(255,255,255,0.85)'
   ctx.font = `bold ${Math.round(width * 0.025)}px sans-serif`
   ctx.textAlign = 'center'
@@ -304,7 +304,7 @@ export async function generateMockImage(
   )
 }
 
-/** 确定性随机数（seed -> [0,1)） */
+/** 시드로 재현하는 의사 난수(0 이상 1 미만) */
 function mulberry32(seed: number) {
   let a = seed
   return function () {
@@ -317,11 +317,11 @@ function mulberry32(seed: number) {
   }
 }
 
-// ============== 视频 mock ==============
+// ============== 영상 데모 ==============
 
 /**
- * 程序化生成一段短动画（WebM via MediaRecorder）
- * 模拟"图生视频"的 motion
+ * MediaRecorder로 짧은 WebM 애니메이션을 만든다.
+ * 이미지→영상의 움직임을 재현한다.
  */
 export async function generateMockVideo(
   imageBlob: Blob,
@@ -364,7 +364,7 @@ export async function generateMockVideo(
       const elapsed = performance.now() - startTime
       const t = Math.min(elapsed / totalMs, 1)
 
-      // ken burns 效果
+      // 켄 번스 효과
       let scale = 1
       let offsetX = 0
       let offsetY = 0
@@ -398,14 +398,14 @@ export async function generateMockVideo(
       ctx.scale(scale, scale)
       ctx.translate(-width / 2 + offsetX, -height / 2 + offsetY)
 
-      // 保持比例
+      // 종횡비를 유지한다.
       const ratio = Math.max(width / bitmap.width, height / bitmap.height)
       const dw = bitmap.width * ratio
       const dh = bitmap.height * ratio
       ctx.drawImage(bitmap, (width - dw) / 2, (height - dh) / 2, dw, dh)
       ctx.restore()
 
-      // 字幕
+      // 자막
       if (t < 0.95) {
         ctx.fillStyle = 'rgba(255,255,255,0.85)'
         ctx.font = `bold ${Math.round(width * 0.035)}px sans-serif`

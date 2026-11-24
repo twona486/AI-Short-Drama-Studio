@@ -1,13 +1,13 @@
 /**
- * 整片背景音乐（纯音乐，无人声）
+ * 영상 전체의 보컬 없는 배경음악
  *
- * 分镜视频自带的配乐切来切去不流畅，导出时会丢掉。
- * 这里按主题/风格生成一段 BGM，循环铺满视频，再叠口播。
+ * 내보낼 때 샷마다 달라지는 기존 배경음악을 제거한다.
+ * 주제와 스타일에 맞는 배경음악을 반복하고 내레이션을 합성한다.
  *
  * MiniMax Music 3.0：
  *   POST https://api.minimaxi.com/v1/music_generation
- *   is_instrumental: true  → 纯音乐，不跟口播抢人声
- * （lyrics_generation 只写词，不出音频）
+ *   is_instrumental을 true로 설정해 내레이션과 겹치는 보컬을 제거한다.
+ * lyrics_generation은 오디오 없이 가사만 반환한다.
  */
 
 import { t as translate } from '@/i18n'
@@ -17,7 +17,7 @@ import type { Project, VisualStyle } from '@/types'
 
 export interface MusicGenInput {
   prompt: string
-  /** 目标时长（秒），生成结果会在导出时循环/裁切对齐 */
+  /** 목표 길이(초). 내보낼 때 반복하거나 잘라 맞춘다. */
   duration?: number
 }
 
@@ -32,18 +32,18 @@ const log = (msg: string) =>
   console.log('%c[music]', 'color:#10b981;font-weight:600', msg)
 
 const STYLE_MUSIC: Record<VisualStyle, string> = {
-  cinematic: '电影感配乐，温暖弦乐与轻电子铺底，节奏平稳',
-  anime: '日系动画风轻快配乐，钢琴与合成器，明亮但不吵',
-  photorealistic: '现代纪录片感原声，木吉他与氛围垫音',
-  '3d-render': '科技感电子氛围，干净低频，节奏克制',
-  'oil-painting': '古典油画气质，轻弦乐与钢琴，舒缓',
-  watercolor: '清新水彩感，木吉他与长笛，轻柔',
-  'pixel-art': '复古游戏风芯片音乐，轻快但音量克制',
-  'ink-wash': '中国风水墨，古筝笛箫点到为止，留白多'
+  cinematic: 'Cinematic music. Warm strings and a light electronic bed at a steady pace.',
+  anime: 'Bright Japanese-animation-inspired piano and synth, upbeat and restrained.',
+  photorealistic: 'Modern documentary score with acoustic guitar and ambient pads.',
+  '3d-render': 'Futuristic electronic ambience with clean bass and restrained rhythm.',
+  'oil-painting': 'Gentle strings and piano with a classical oil-painting mood.',
+  watercolor: 'Light acoustic guitar and flute with a fresh watercolor mood.',
+  'pixel-art': 'Upbeat retro game chiptune, mixed quietly.',
+  'ink-wash': 'Sparse Chinese ink-wash mood with restrained guzheng and flutes.'
 }
 
 export function buildMusicPrompt(project: Project): string {
-  const topic = project.script?.topic || project.name || '短视频'
+  const topic = project.script?.topic || project.name || 'short video'
   const style = project.script?.style ?? 'cinematic'
   const aesthetic = (project.script?.aesthetic || '').replace(/\s+/g, ' ').slice(0, 180)
   const titles = project.shots
@@ -53,12 +53,12 @@ export function buildMusicPrompt(project: Project): string {
     .join('、')
   const mood = STYLE_MUSIC[style] || STYLE_MUSIC.cinematic
   return [
-    `纯音乐背景，绝对无人声、无歌词、无对白。`,
-    `主题：${topic}。`,
-    titles ? `画面段落：${titles}。` : '',
-    `音乐风格：${mood}。`,
-    aesthetic ? `整体氛围：${aesthetic}。` : '',
-    `适合短视频 BGM：音量铺底、不要抢人声口播，节奏连贯可循环，淡入淡出自然。`
+    `Instrumental background music only, with no voices, lyrics, or dialogue.`,
+    `Topic: ${topic}.`,
+    titles ? `Visual sequence: ${titles}.` : '',
+    `Music style: ${mood}.`,
+    aesthetic ? `Overall mood: ${aesthetic}.` : '',
+    `Mix quietly under narration. Keep a continuous loopable rhythm and use natural fades.`
   ]
     .filter(Boolean)
     .join('')
@@ -73,7 +73,7 @@ export async function refineMusicPrompt(project: Project): Promise<string> {
         {
           role: 'system',
           content:
-            '你是专业的短视频配乐导演。根据项目信息用简体中文写一段 80-180 字的纯音乐提示词。必须强调：仅器乐、无人声、无歌词，适合口播铺底。只输出提示词本身，不要解释。'
+            'You are a music director for short-form video. From the project context, write an 80–180-character instrumental music prompt in English for the generation model. Specify instruments only, no vocals or lyrics, and a mix suitable under narration. Return only the prompt.'
         },
         { role: 'user', content: fallback }
       ],
@@ -83,7 +83,7 @@ export async function refineMusicPrompt(project: Project): Promise<string> {
     const text = (resp.content || '').replace(/```[\s\S]*?```/g, '').trim()
     if (text.length >= 20 && text.length <= 2000) return text
   } catch (e) {
-    log(`润色提示词失败，用模板：${e}`)
+    log(`프롬프트를 다듬지 못해 기본 프롬프트를 사용합니다. ${e}`)
   }
   return fallback
 }
@@ -95,7 +95,7 @@ function musicConfig() {
 function hexToBytes(hex: string): Uint8Array {
   const clean = hex.replace(/^0x/i, '').replace(/\s/g, '')
   if (clean.length < 8 || clean.length % 2 !== 0) {
-    throw new Error('[music] hex 音频数据异常')
+    throw new Error('[music] 16진수 오디오 데이터가 유효하지 않습니다.')
   }
   const bytes = new Uint8Array(clean.length / 2)
   for (let i = 0; i < bytes.length; i++) {
@@ -141,7 +141,7 @@ function mockBgm(durationSec: number): Blob {
 
 async function downloadAudio(url: string): Promise<Blob> {
   const resp = await fetch(url)
-  if (!resp.ok) throw new Error(`[music] 下载失败 ${resp.status}`)
+  if (!resp.ok) throw new Error(`[music] 다운로드에 실패했습니다. ${resp.status}`)
   const buf = await resp.arrayBuffer()
   const ct = (resp.headers.get('content-type') || '').toLowerCase()
   return new Blob([buf], {
@@ -207,24 +207,24 @@ async function realMinimaxMusic(prompt: string, model: string): Promise<MusicGen
   const audio = data.data?.audio ?? data.audio
   const status = data.data?.status
   if (status === 1) {
-    throw new Error('[music] 配乐仍在合成中，请稍后重试')
+    throw new Error('[music] 배경음악을 합성하고 있습니다. 잠시 후 다시 시도하세요.')
   }
   if (!audio) {
-    throw new Error(`[music] 响应无音频：${raw.slice(0, 240)}`)
+    throw new Error(`[music] 응답에 오디오가 없습니다. ${raw.slice(0, 240)}`)
   }
 
   const blob = await audioFromPayload(String(audio), format)
-  if (blob.size < 400) throw new Error('[music] 音频过短，可能失败')
+  if (blob.size < 400) throw new Error('[music] 오디오가 너무 짧습니다. 생성이 실패했을 수 있습니다.')
   log(`✓ ${(blob.size / 1024).toFixed(1)} KB`)
   return { blob, mimeType: blob.type, prompt, model }
 }
 
 export async function generateMusic(input: MusicGenInput): Promise<MusicGenOutput> {
   const prompt = input.prompt.trim()
-  if (!prompt) throw new Error('没有配乐提示词')
+  if (!prompt) throw new Error('배경음악 프롬프트가 없습니다.')
 
   if (getAIMode() !== 'real') {
-    log('演示模式：生成占位配乐')
+    log('데모 모드에서 임시 배경음악을 생성합니다.')
     const blob = mockBgm(input.duration ?? 24)
     return { blob, mimeType: blob.type, prompt, model: 'mock-music' }
   }
@@ -238,7 +238,7 @@ export async function generateMusic(input: MusicGenInput): Promise<MusicGenOutpu
     } catch (e: any) {
       const msg = e?.message ?? String(e)
       errors.push(`${model}: ${msg}`)
-      log(`${model} 失败：${msg}`)
+      log(`${model} 실패 ${msg}`)
     }
   }
   throw new Error(errors.join('\n'))

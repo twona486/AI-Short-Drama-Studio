@@ -1,27 +1,28 @@
 ---
 name: shot-image
-description: 按分镜出关键帧。配图前必须有人设和场景。用户说配图、出图、关键帧、把镜头画出来时用。
-triggers: 配图,出图,关键帧,图片,画面,画这一镜,生成图片,四宫格
+description: Generate storyboard keyframes after character and location references are ready. Use when the user asks for an image of a shot, keyframes, or shot images.
+triggers: 配图,出图,关键帧,图片,画面,画这一镜,生成图片,四宫格,샷 이미지,이미지 생성,키프레임,화면,이 샷을 그려,4분할,shot image,keyframe,generate image,draw this shot
 ---
 
-# 配图 / 关键帧
+# Shot images and keyframes
 
-普通创作的关键帧 = 一张 2×2 四宫格，正好 4 格，不能超过 4 格，也不能少格留白。
+A keyframe image for ordinary production is a single 2×2 grid, with exactly four populated panels.
 
-## 开工前
+## Before starting
 
-- 没有分镜：先拆分镜。
-- 本镜用到的人没四视图，或场景没锚点图：先补。
-- 普通创作：不要生成故事看板。直接 `generate_shot_image`，参考槽只用角色设计图 + 场景图。
-- AI 短剧：本镜没故事看板时才 `generate_shot_board`。
-- 只画用户点名的镜头；说「全部关键帧 / 全部配图」才 `generate_all_images`。
+- Create the storyboard first if it is missing.
+- Provide the four-view character sheets and location anchor image needed by the shot.
+- For ordinary production, call `generate_shot_image` directly. Use only the character design images and location image as references.
+- For an AI short drama, call `generate_shot_board` only when this shot lacks a storyboard panel.
+- Draw only the named shots. Use `generate_all_images` only when the user asks for all keyframes or shot images.
 
-## 怎么画
+## Composition
 
-- 固定 2 列 × 2 行，正好四格。左上到右下：初态、准备、核心事件、结束。
-- 禁止 5 格、6 格、8 格；禁止空白格、纯色空格。
-- 参考槽：四视图 + 场景锚点图。脸跟人设，地点跟场景。
-- 禁止另造一张脸；禁止把人设四视图格子画进画面。
-- 出视频时四宫格只当动作时间线，成片必须是单画面，禁止把四格画进视频。
+- Use exactly two columns and two rows. Read from top left to bottom right: initial state, preparation, main event, and ending.
+- Reject five, six, or eight panels and blank or flat-color filler panels.
+- Use the character sheets and location anchor image. Match faces to the sheets and the location to its anchor.
+- Do not invent a face or reproduce the character-sheet panel borders inside the shot.
+- Use the grid only as an action timeline for video. The video must show one continuous image without grid panels.
+- Write final generation instructions in English. Preserve any Korean (한국어) text explicitly requested on screen. Write user-facing notices in Korean (한국어).
 
-一次最多安排 12 个动作。镜头多就先画缺图的，下一轮再续。
+Queue at most 12 actions per batch. If there are many shots, start with those missing images and resume in the next batch.

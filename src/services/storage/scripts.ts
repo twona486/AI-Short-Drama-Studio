@@ -1,10 +1,10 @@
 /**
- * 剧本库存储
+ * 대본 라이브러리 저장소
  *
- * 桌面端：用户所选保存目录/_scripts/
- *   index.json        剧本元数据清单
- *   <id>.md           每份剧本一份 Markdown
- * 浏览器：IndexedDB store `scripts`（每条约 100KB 以内，正文直接入库）
+ * 데스크톱은 사용자가 선택한 디렉터리의 _scripts에 저장한다.
+ *   index.json은 대본 메타데이터 목록이다.
+ *   각 대본은 ID별 Markdown 파일로 저장한다.
+ * 브라우저에서는 IndexedDB scripts 저장소에 본문을 직접 저장한다.
  */
 
 import { toRaw } from 'vue'
@@ -46,7 +46,7 @@ export async function listScriptDocs(): Promise<ScriptDoc[]> {
   }
 }
 
-/** 写元数据清单（桌面端） */
+/** 데스크톱의 메타데이터 목록을 쓴다. */
 export async function saveScriptMeta(doc: ScriptDoc): Promise<void> {
   if (!isDesktop()) return
   const dir = await scriptsDir()
@@ -58,7 +58,7 @@ export async function saveScriptMeta(doc: ScriptDoc): Promise<void> {
   await desktop().writeText(await indexPath(dir), JSON.stringify(toPlain(list), null, 2))
 }
 
-/** 写正文 Markdown 并返回落盘路径（相对 _scripts） */
+/** Markdown 본문을 쓰고 _scripts 기준 상대 경로를 반환한다. */
 export async function saveScriptMarkdown(
   id: string,
   markdown: string
@@ -75,7 +75,7 @@ export async function saveScriptMarkdown(
   return rel
 }
 
-/** 一次性保存元数据 + 正文，返回实际落库的剧本 */
+/** 메타데이터와 본문을 저장하고 저장된 대본을 반환한다. */
 export async function saveScript(doc: ScriptDoc, markdown: string): Promise<ScriptDoc> {
   if (!isDesktop()) {
     await idb.putScriptRecord(doc, markdown)
@@ -113,7 +113,7 @@ export async function deleteScriptDoc(id: string): Promise<void> {
   )
 }
 
-/** 桌面端：剧本文件绝对路径（用于在文件夹里打开） */
+/** 파일 탐색기에서 열 대본의 절대 경로 */
 export async function scriptAbsPath(id: string): Promise<string | undefined> {
   if (!isDesktop()) return undefined
   const dir = await scriptsDir()

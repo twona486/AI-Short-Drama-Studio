@@ -1,7 +1,8 @@
 /** 剧本续写：保留已有分场，只往后加。 */
+import { t } from '@/i18n'
 
 function fenChangBlock(md: string): string {
-  const m = md.match(/^##\s*分场\s*$/m)
+  const m = md.match(/^##\s*(?:分场|장면 구성|Scene breakdown)\s*$/im)
   if (!m || m.index == null) return ''
   const from = m.index
   const rest = md.slice(from + m[0].length)
@@ -12,11 +13,11 @@ function fenChangBlock(md: string): string {
 /** 戏剧场次标题：章节「场景一｜…」或旧稿「第 N 场」。不含人物/环境设定节。 */
 export function playSceneHeadings(md: string): string[] {
   const text = md || ''
-  const chapter = [...text.matchAll(/^##\s+(场景[一二三四五六七八九十百0-9][^\n]*)\s*$/gm)].map((m) =>
+  const chapter = [...text.matchAll(/^##[ \t]+((?:场景[一二三四五六七八九十百0-9]|(?:장면|Scene)[ \t]+\d+)[^\n]*)$/gim)].map((m) =>
     m[1].trim()
   )
   const numbered = [...fenChangBlock(text).matchAll(/^###\s+(.+)\s*$/gm)].map((m) => m[1].trim())
-  const loose = [...text.matchAll(/^###\s+(第\s*\d+\s*场[^\n]*)\s*$/gm)].map((m) => m[1].trim())
+  const loose = [...text.matchAll(/^###[ \t]+((?:第\s*\d+\s*场|(?:장면|Scene)[ \t]+\d+)[^\n]*)$/gim)].map((m) => m[1].trim())
   return [...new Set([...chapter, ...numbered, ...loose])]
 }
 
@@ -33,7 +34,7 @@ export function mergeContinuedPlay(original: string, generated: string): string 
   const orig = (original || '').trim()
   const gen = (generated || '').trim()
   if (!orig) return gen
-  if (!gen) throw new Error('续写没有返回内容')
+  if (!gen) throw new Error(t('scriptContinuation.empty'))
 
   const origHeads = playSceneHeadings(orig)
   const genHeads = playSceneHeadings(gen)
@@ -50,12 +51,12 @@ export function mergeContinuedPlay(original: string, generated: string): string 
 
   if (!genHeads.length && gen.length > 40 && !gen.includes(orig.slice(0, 80))) {
     const n = origHeads.length + 1
-    return `${orig.replace(/\s*$/, '')}\n\n## 场景${n}｜续写\n\n${gen}\n`
+    return `${orig.replace(/\s*$/, '')}\n\n## ${t('scriptContinuation.heading', { number: n })}\n\n${gen}\n`
   }
 
   if (gen.length > orig.length && (added.length > 0 || genHeads.length >= origHeads.length)) {
     return gen
   }
 
-  throw new Error('续写没有新增场次。请写明方向，例如「再写两场，写父亲回家之后」。')
+  throw new Error(t('scriptContinuation.noNewScenes'))
 }

@@ -1,42 +1,42 @@
 ---
 name: h3-prompt-writing
-description: 分镜出片提示词。多模态参考用官方六段；首尾帧/首帧/尾帧/纯文本用三段加对齐句。(S1)(S2) 绑定人物，台词只进 <d>。
-triggers: 视频,Comfy,H3,配音,口播,图生视频,提示词,优化提示词
+description: Write official MiniMax prompts for storyboard shots. Multimodal reference uses six sections. Frame and text-only modes use three fields, with the appropriate alignment sentence where applicable. Bind characters as (S1)(S2) and put dialogue inside <d>.
+triggers: 视频,Comfy,H3,配音,口播,图生视频,提示词,优化提示词,영상,더빙,내레이션,이미지→영상,프롬프트,프롬프트 최적화
 ---
 
-# 分镜视频提示词
+# Storyboard video prompts
 
-点「优化提示词」按节点模式出官方格式。画布上仍然是 **一镜一条成片**。
+Use prompt optimization to write the official format for the node mode. Generate **one clip per canvas shot**.
 
-- 多模态参考：六段 `subject_definitions` / `summary` / `retention_analysis` / `detailed_description` / `overall_soundscape` / `non_diegetic_music`。人物是 `<Subject N> (S#)`，图是身份锁定，不是首帧。summary 以 `[reference generation]` 开头。
-- 首尾帧 FL2VA：对齐句（Picture 1 = 0.00 秒，Picture 2 = 片尾）加三段 `integrated_multimodal_description`。
-- 单张首帧 I2VA：`at 0.00 seconds` 对齐句加三段。
-- 只有尾帧 L2VA：Picture 1 对齐片尾，加三段。
-- 纯文本 T2VA：只有三段，没有对齐句。
+- Multimodal reference uses six sections: `subject_definitions` / `summary` / `retention_analysis` / `detailed_description` / `overall_soundscape` / `non_diegetic_music`。Use `<Subject N> (S#)` for characters and use references to lock identity. Begin summary with `[reference generation]`.
+- FL2VA uses a first-and-last-frame alignment sentence (Picture 1 at 0.00 seconds and Picture 2 at the end), followed by three fields including `integrated_multimodal_description`.
+- I2VA has one first frame. Use the `at 0.00 seconds` alignment sentence followed by three fields.
+- L2VA aligns Picture 1 with the end and uses three fields.
+- Text-only T2VA uses three fields without an alignment sentence.
 
-## 人物图用 (S1) (S2)，不要用「图1 是人设」
+## Character reference identifiers
 
-(S1) 永远是第一张人物参考图，(S2) 永远是第二张。编号跟着人走，不跟台词顺序走。参考图是身份锁定，**不是首帧**。
+(S1) always uses the first character reference; (S2) uses the second. The numbering follows the person across the clip, regardless of dialogue order. These are identity references.
 
 ```text
 Speaker lock (these labels are the pictures):
-(S1) is 「阿凯」 / <Picture 1>. Lock face, hair, body, age and outfit. Identity reference only, not the first frame.
-(S2) is 「大斌」 / <Picture 2>. Lock face, hair, body, age and outfit. Identity reference only, not the first frame.
-<Picture 3> is the location 「出租屋」. Lock space, materials, weather and light. One unified place.
+(S1) is 「민준」 / <Picture 1>. Lock face, hair, body, age and outfit. Identity reference only, not the first frame.
+(S2) is 「도윤」 / <Picture 2>. Lock face, hair, body, age and outfit. Identity reference only, not the first frame.
+<Picture 3> is the location 「임대 아파트」. Lock space, materials, weather and light. One unified place.
 Only one (S#) speaks at a time, and each person says their own line once. Everyone else keeps their lips completely closed. No overlap, no chorus, no second person repeating the same line.
 ```
 
-多模态参考不要写 `Picture 1 aligns with 0.00 seconds`。首尾帧才写那句对齐。不要把六段和三段混在同一条稿里。
+Do not use `Picture 1 aligns with 0.00 seconds` for multimodal reference. Reserve alignment for frame modes. Keep the six-section and three-field formats separate.
 
-## 多模态参考的六段
+## Six sections for multimodal reference
 
-`subject_definitions` 写 `<Subject N> is 「名字」 (S#) in <Picture N>`。下面这段镜头正文放进 `detailed_description`，不要再外包一层 `integrated_multimodal_description`。首尾帧 / 首帧 / 尾帧 / 纯文本才用三段，而且对齐句在三段前面。
+In `subject_definitions`, use `<Subject N> is 「name」 (S#) in <Picture N>`. Put the shot body below directly in `detailed_description`. Use the three fields for first-and-last-frame, first-frame, last-frame, and text-only modes. Place an applicable alignment sentence before those fields.
 
 ```text
 subject_definitions:
-<Subject 1> is 「阿凯」 (S1) in <Picture 1>. Lock face, hair, body, age and outfit. Identity reference only, not the first frame.
-<Subject 2> is 「大斌」 (S2) in <Picture 2>. Lock face, hair, body, age and outfit. Identity reference only, not the first frame.
-<Subject 3> is 「出租屋」 in <Picture 3>, the location for [Shot 1].
+<Subject 1> is 「민준」 (S1) in <Picture 1>. Lock face, hair, body, age and outfit. Identity reference only, not the first frame.
+<Subject 2> is 「도윤」 (S2) in <Picture 2>. Lock face, hair, body, age and outfit. Identity reference only, not the first frame.
+<Subject 3> is 「임대 아파트」 in <Picture 3>, the location for [Shot 1].
 
 summary:
 [reference generation] The target video is one continuous [Shot 1] of <Subject 1> and <Subject 2> in <Subject 3>. Character sheets lock identity only.
@@ -47,19 +47,19 @@ retention_analysis:
 <Subject 3> (appears in [Shot 1]): fully_preserved - space, materials, weather and light from <Picture 3>.
 
 detailed_description:
-[Shot 1] Grounded contemporary comedy, photorealistic live-action, 9:16. Afternoon light through the living-room window. (S1) 「阿凯」 squats at the left sofa, digging through cushions. (S2) 「大斌」 sprawls on the right sofa with a bag of chips. Neither looks into the lens.
+[Shot 1] Grounded contemporary comedy, photorealistic live-action, 9:16. Afternoon light through the living-room window. (S1) 「민준」 squats at the left sofa, digging through cushions. (S2) 「도윤」 sprawls on the right sofa with a bag of chips. Neither looks into the lens.
 
 [00:00.000–00:01.200]
 Wide view from the doorway. Both mouths stay closed. Chip crunch and cushion rustle only.
 
 [00:01.200–00:05.600]
 Cut to (S1) alone. (S2) is off screen.
-(S1) says: <d>[Chinese] 我那条黑领带呢！上周刚买的！你见着没有啊！</d>
+(S1) says: <d>[Korean] 내 검은 넥타이 어디 갔지? 지난주에 산 건데! 너 못 봤어?</d>
 Only (S1) speaks in this shot. (S2) keeps their lips completely closed and makes no voice.
 
 [Shot 2] At 00:05.600
 Cut to (S2) alone. He swallows before he talks.
-(S2) says: <d>[Chinese] 你自己扔的地方问我？反正我零食罐里没藏领带。</d>
+(S2) says: <d>[Korean] 네가 둔 걸 왜 나한테 물어봐? 내 과자통에 숨긴 건 아니야.</d>
 Only (S2) speaks in this shot. (S1) keeps their lips completely closed and makes no voice.
 The chip bag is visibly emptier than at the start. The action develops continuously and finishes naturally within 8 seconds.
 
@@ -70,16 +70,16 @@ non_diegetic_music:
 N/A
 ```
 
-## 台词
+## Dialogue
 
-- 每句台词只说一次，由它自己的 (S#) 说，单独占一个时间段。
-- 形式固定：`(S1) says: <d>[Chinese] 原词</d>`，紧跟着写另一个人嘴唇闭合。
-- 场记、时长、画风、人物名单都不是台词。
-- 没有对白就写 `No dialogue. No lips moving.`，不要把「无」放进 `<d>`。
+- Each line is spoken once by its assigned (S#) in its own time range.
+- Use original words and the correct language tag. For Chinese use `(S1) says: <d>[Chinese] verbatim line</d>`; for Korean use `(S1) says: <d>[Korean] 대사 원문</d>`. Immediately say that the other people keep their lips closed.
+- Keep production notes, duration, style, and cast details outside dialogue tags.
+- When there is no dialogue, write `No dialogue. No lips moving.`. Do not put a placeholder such as “none” or ‘없음’ inside `<d>`.
 
-## 写法
+## Writing guidance
 
-- 动作、机位、光用英文写。中文只留在 `<d>` 和「人名」里。写中文场面会被删掉，最后只剩人物名单。
-- 写这场戏里真正发生的事：谁在左谁在右、手里拿什么、道具怎么变少。不要写 “Begin with the opening frame” 或 “let the frame breathe”。
-- `overall_soundscape` 写这场的真实声音，例如薯片咔嚓、靠垫哗啦。不要只写 close breath。
-- `non_diegetic_music` 固定 `N/A`。
+- Write the final model prompt in English, including action, camera position, and light. Keep Korean dialogue and explicitly requested Korean (한국어) on-screen text verbatim. Preserve original dialogue and names; avoid model-facing scene narration in Chinese.
+- Describe what actually happens: who is to the left or right, what they hold, and how the prop changes. Avoid template language like “Begin with the opening frame” or “let the frame breathe”.
+- In `overall_soundscape`, name the actual sounds, such as crisp chip crunch or cushion rustle. Do not just write close breath.
+- Set `non_diegetic_music` to `N/A`. Write user-facing explanations in Korean (한국어).

@@ -1,85 +1,81 @@
 ---
 name: storyboard-director
-description: 把文案写成完整剧本，再从剧本提炼人物、场景、分镜节点。用户说写剧本、拆分镜、提炼节点、改剧本时用。
-triggers: 分镜,拆镜,编剧,故事板,文案,脚本,口播,重写,剧本,镜头,提炼,续写,接着写
+description: Develop a full script, then extract character, location, and storyboard nodes. Use for writing, revising, or breaking down scripts and extracting nodes.
+triggers: 分镜,拆镜,编剧,故事板,文案,脚本,口播,重写,剧本,镜头,提炼,续写,接着写,스토리보드,샷 나누기,시나리오,스토리보드 이미지,원고,스크립트,내레이션,다시 쓰기,대본,샷,추출,이어 쓰기,계속 써,storyboard,shot breakdown,script,extract nodes
 ---
 
-# 编剧（两步走）
+# Script and storyboard production
 
-**第一步只写完整剧本。不要在这一步创建人物/场景/分镜节点。**
-**第二步才根据剧本提炼 subjects / scenes / shots。**
+**Step 1 creates the complete script only. Do not create character, location, or storyboard nodes.**
+**Step 2 extracts subjects / scenes / shots from the script.**
 
-## 第一步：完整剧本
+## Step 1: Complete script
 
-用户丢来主题或草稿，你交一份能给人读、能改字、后面能拆镜的 Markdown 剧本。
+Turn the user's premise or draft into editable, readable, filmable Markdown. Write the title, headings, body, character descriptions, and dialogue in Korean (한국어).
 
-**禁止**短视频四格表（口播 / 画面 / 声音 / 时长）。那种写法没有背景、人设和环境，后面分镜只能猜。
+Never use a four-cell table of narration, picture, sound, and duration. Include background, characters, and environments so the subsequent storyboard is grounded.
 
-必须按这个顺序写：
+Use this order:
 
-1. **标题 + 类型/时间/地点/建议时长**
-2. **故事背景**：一句话故事、对抗引擎、完整梗概（开端到结局）。禁止写成「本片从某一帧开始」的高潮切片，除非用户只要某一段
-3. **人物**：构成故事引擎的人都要建档——主角、对手、父母、导师；已故也写（外形或遗物锚点）。每人必须有身份、外形、性格语感、欲望、恐惧、关系、弧光、AI 视觉锚点、跨场状态。不要只写会站在镜头正中的人
-4. **环境与场景**：每个地点写无人时的空间、地面、天气、光线、年代城市肌理
-5. **拍摄原则**：不拍什么、善意如何落地
-6. **分场**：`## 场景一｜标题`，每场写清人物、场次任务（目标/阻力/结果），动作用现在时可见动作（可用 ■），**对白必须写成可念的原词**（`**人物名：**` + 「原词」），蒙太奇每条都是看得见的画面
-7. **情绪线**和**视觉与声音基调**
+1. **Title, genre, time, location, and suggested duration**
+2. **Story background (`## 이야기 배경`)**: one-sentence premise, opposition and escalation, and a complete synopsis through the ending. Do not reduce a complete story to the climax unless the user requests that excerpt.
+3. **Characters (`## 캐릭터`)**: record everyone who drives the story, including protagonist, opponent, parents, and mentors. Include deceased characters and use appearance, keepsakes, or other visible anchors. Each profile needs identity, appearance, personality and voice, desire, fear, relationships, arc, visual anchors, and cross-scene state. Include more than the people standing at the center of the shot.
+4. **Environment and locations (`## 환경과 장면`)**: for each location describe the empty space, ground, weather, light, and period or city texture.
+5. **Filming principles (`## 촬영 원칙`)**: identify exclusions and how acts of kindness are shown.
+6. **Scenes**: use `## 장면 N｜제목`. Name the present characters and give each scene an objective, obstacle, and outcome. Write visible action in the present tense, optionally prefixed by ■. Write speakable dialogue as `**캐릭터 이름：**` followed by 「대사 원문」. Make every montage beat observable.
+7. **Chapter emotional arc** and **visual and sound tone**.
 
-带货/口播也要写主持人和产品进人物、写拍摄场地进环境；口播原词放进对白，但场面仍要写清在哪、看着什么、手里拿什么。
+For sales and presenter-led narration, include the host and product in characters and the setting in environments. Put the exact spoken narration in dialogue. Show where the person is, where they look, and what they hold.
 
-- 口播/对白要能直接念。像人在场上说话，不像宣传册，也不像默片字幕。
-- 不要机械地“一场一句”。同一人物、同一意图的连续 2–4 个短句优先合在一场；有交流的场必须有对白往来，不能整场不说话。
-- 「克制」不是少说话：相认、唤名、对峙、劝阻、问答、告别禁止写成哑巴戏。禁止用「成年某某」旁白复述故事背景。
-- 说话镜头按画面感、动作、空间关系和情绪节奏选景别。禁止把每个说话镜头模板化为特写。
-- 禁止：赋能、沉浸式、质感拉满、cinematic、aesthetic。
-- 人设写成街上能碰上的人；场景写成晚上几点、什么地方、挡路的是啥。
-- 场次按故事需要写够。短片可以压缩，但不能抽掉对手、关键亲人和对抗引擎；传说/IP 改编禁止压成 3–5 场高潮切片。电影章节按场次和蒙太奇写够，不要压成短视频体量。
-- 先锁定用户这次要讲到哪里：整篇、第一集、一个片段、预告或某个悬念点。用户要完整短片或完整改编时，必须写全故事引擎人物与对抗，禁止为了「好看的闭环」切成相认/高潮小品。只有用户明确只要某一段时才切片。禁止为了闭环擅自续写下一集或提前揭晓用户要求停住的后果。
-- 核心事件不能只写“发生前”和“发生后”。地点、时代、身份、关系或身体状态突变时，只在本次边界内补足必要的触发、过程、冲击和反应；可以停在链条中间作为悬念，但已经展示的两个拍点之间不能跳过因果桥。
-- 穿越、事故、变身、发现秘密、重逢、背叛、战斗爆发等若是本集卖点，要给足与本集重要性相称的画面和时长；用户明确只作背景或要求略过时则服从用户。
-- 解释性对白要有当前剧情触发；用户明确要求从讲解、复盘或既定关系开场时不补前情。写完逐场检查“上一场末态 → 下一场初态”。
+- Write lines people can speak naturally. Avoid brochure copy and silent-film captions.
+- Keep 2–4 consecutive short lines with the same speaker and intent together. Interactions need spoken exchanges; do not force one line per scene.
+- Restraint means avoiding slogans and maxims. Include visible exchanges for recognition, calling someone's name, confrontation, persuasion, questions, and farewells. Do not recap the backstory through narration by an older version of a character.
+- Choose framing from action, spatial relationships, and emotion rather than making every speaker a close-up.
+- Avoid vague promotional expressions such as empowering, immersive, premium-looking, cinematic, and aesthetic.
+- Write people as recognizable individuals and locations as concrete places at definite times, including physical obstacles.
+- Cover the number of scenes the story needs. Compress a short film without losing the opponent, key family, and central conflict. Do not reduce a folk tale or adaptation to a 3–5-scene climax. Use all the scenes and montage beats needed for a film chapter.
+- Pin down the requested boundaries: full story, first episode, excerpt, trailer, or suspense point. A complete short film or adaptation must retain its core characters and conflicts. Only excerpt when asked. Do not add a later episode or reveal an outcome where the user requested a suspenseful stop.
+- Do not skip from before to after a central event. For major changes in place, era, identity, relationships, or physical state, show the trigger, process, impact, and reaction necessary within the requested boundary. You may stop at a suspense point but must bridge two shown beats causally.
+- Give central time travel, accidents, transformations, discoveries, reunions, betrayals, or battle outbreaks enough screen time. Treat them only as background or omit them when expressly requested.
+- Give explanatory lines a local story trigger. If the user asks to begin with explanation, recap, or an established relationship, do not add prior events. Check each prior ending against the next opening.
 
-工具：`generate_play`。写完必须停，问要不要提炼节点。
-用户说「续写 / 接着写 / 再写两场」时用 `continue_play`：保留已有场次原文，只往后加，不要整篇重写。
-用户在讲一个和当前剧本无关的新故事时：`seed_script` 写入这几轮原文，再 `generate_play`。禁止拿旧剧本当草稿。
+Use `generate_play`, stop after writing, and ask whether to extract nodes. For continuation, use `continue_play` and append without rewriting existing scenes. If the user begins an unrelated story, seed it with `seed_script` using the original recent text, then use `generate_play`. Do not reuse the old script as a draft.
 
-## 续写
+## Continuation
 
-已有完整剧本后才能续写：
+Continue only after a complete script exists.
 
-- 已有故事背景、人物、环境、分场原文一句不改。
-- 新场从最后一场后面接着写「## 场景N｜标题」。
-- 新人物/新地点补进人物、环境与场景节。
-- 默认再写 2–3 场；用户指定方向时按用户的来。
-- 续写后若已提炼过节点，提醒在「分镜关键帧」分组点重新提取。
+- Preserve existing background, characters, environments, and scene text verbatim.
+- Append after the last scene with `## 장면 N｜제목`.
+- Add new characters and places to their sections.
+- Default to 2–3 additional scenes unless the user provides direction.
+- If nodes already exist, tell the user to re-extract them from the storyboard keyframe group.
 
-## 第二步：提炼节点
+## Step 2: Extract nodes
 
-剧本已经在左侧、用户说「继续 / 提炼节点」时，才 `extract_cast`。这个工具一次只做当前一步并立即落库：第一次只提炼人物，第二次只提炼场景，第三次才拆分镜；每一步结束后停下，不能并行，也不能把三步绑成一个总事务。
+When a script exists on the left and the user asks to continue or extract, use `extract_cast`. It saves one stage at a time: characters first, locations second, storyboard third. Stop after each stage. Do not parallelize or bundle the three stages.
 
-- 忠实对应剧本里的人物、地点、分场，不要另起炉灶。人物章每一个 ### 都要建档，包括已故父亲、未到场的对手；已故用遗物/画像/闪回入镜，活人对手必须有对峙或可见压力镜。人物外貌和环境描写从剧本设定节来，不要另造路人。
-- 口播原文保留。剧本里的 `**人物名：**「台词」` 必须原词进入对应镜头 voiceover，禁止改写成「成年某某」旁白，禁止因为「用动作代替」而清空。visualPrompt 按剧本画面写成静帧可画描述。
-- videoPrompt 写成这一场的**视频内容表现时间轴**。从0秒到本镜结束按剧情拍点分2–5段，每段写谁从什么状态开始、看见什么、做什么、谁说什么、其他人如何占位和反应、情绪怎么变、镜头怎么走和落下。视线看向场景里的人或物，禁止无故看镜头。蒙太奇要写成看得见的连续动作，不要写「时间流逝」。成年旁白是画外音。不要抄 visualPrompt，不要机械等分填套话，不要把上一镜和下一镜的剧情都塞进来。剧本里的拍摄原则和不拍清单必须带进该镜。
+- Follow the script's characters, locations, and scenes. Create a record for every ### under characters, including deceased parents and absent opponents. Use a keepsake, portrait, or flashback for the deceased and a confrontation or visible pressure for a living opponent. Do not add passersby or invent appearances or environments.
+- Preserve original spoken lines in each matching shot's voiceover. Do not replace them with older-character narration or empty them in favor of action. Write the still-frame visualPrompt in English for the image model.
+- Write videoPrompt as English generation direction covering zero through the end in 2–5 real story beats. In each range describe the initial state, what is seen and done, who speaks, how others are placed and react, emotional changes, and camera motion and endpoint. Keep Korean dialogue or explicitly requested Korean on-screen text verbatim. Give actors in-scene eyelines and describe montage as visible action. Do not copy visualPrompt, divide time equally, insert neighboring action, or ignore the script's exclusions. Older-character narration is off screen.
 
-## 每一镜怎么写（仅第二步）
+## Shot fields
 
-用大白话写给摄像和演员：
+- **title**: distinct 3–8-character Korean (한국어) title suitable for a slate.
+- **purpose**: retain the existing category values `钩子 / 说明 / 反应 / 揭示 / 收口`.
+- **shotSize**: state framing and its reason.
+- **blocking / eyeline**: locate every person and give body direction and eyeline. A speaker can be behind others; foreground characters can look back or sideways.
+- **voiceover**: use "Character name: line". Keep 2–4 consecutive short phrases with the same intent together. H3 strips the speaker prefix. Leave empty if there is no dialogue.
+- **audioDescription**: audible sounds in the scene.
+- **duration**: integer seconds from 5 to 10; vary across the film.
+- **cameraMovement**: one of push / pull / pan / tilt / static / orbit per shot.
+- **visualPrompt**: English still-frame prompt with near, underfoot, surrounding, and far details, visible action, and light.
+- **videoPrompt**: 2–5 beat-based ranges with action, expression, original lines, other people's blocking and reaction, one motivated camera move, and its endpoint. Avoid posing at the lens, ending with a generic eyeline instruction, or dividing equally.
+- **Dialogue framing**: a close-up is optional. The speaker need not face the camera or occupy the center. Establish who speaks, turns sideways, or looks back.
+- **Speaker clarity**: the speaker's mouth is visible from front, side, or background. Foreground listeners keep their mouths closed and look at the speaker or the indicated object.
+- **Exchanges**: dialogue in one space can stay in one shot. For H3 use internal `[Shot 1]/[Shot 2]/[Shot 3]` beats, one `<d>` tag per line. Consecutive short lines from one speaker may stay in one shot.
+- **Continuity**: previous shot's concrete ending → current visible change → concrete state for the next shot. Match positions, poses, orientation, props, injuries, emotion, and what people know.
 
-- **title**：3–8 个字，像场记板上能写的。
-- **purpose**：钩子 / 说明 / 反应 / 揭示 / 收口。
-- **shotSize**：远近为什么。
-- **blocking / eyeline**：每个人写近处还是后面、身体朝哪、看谁。说话者可以在后；前面的人回头或侧头看他。
-- **voiceover**：写成「人物名：台词」。同一表达意图优先容纳 2–4 个短句，生成 H3 时人物名前缀会被自动剥离；没口播就空着。
-- **audioDescription**：现场能听到的。
-- **duration**：5–10 秒整数，禁止全片同一秒数。
-- **cameraMovement**：push / pull / pan / tilt / static / orbit。一镜一种。
-- **visualPrompt**：近处、脚下、身边、远处；必须有动态和光。这是给**配图**用的静帧词。
-- **videoPrompt**：从0秒到结束分2–5个实际拍点。每段写当前行动者、动作表情、说话人和原词、其他人物占位视线与反应、一个合理运镜和落点。禁止合影看镜头，禁止只加一句「不要看镜头」，禁止机械等分。
-- **说话构图**：特写只是可选手段。说话者不必正面朝向镜头或站在画面正中。多人同框时写清谁开口、谁侧对、谁回头。
-- **说话者归属**：开口的人嘴要可读；可以在后面或侧面。前面的人闭嘴，看向说话者或他指的东西。
-- **对白往来**：同一空间、连续对打/问答可以留在一镜。发给 H3 时用内部 `[Shot 1]/[Shot 2]/[Shot 3]` 切开说话拍，每句一个 `<d>` 标签。同一人连续 2–4 个短句也可留在一镜。
-- **跨镜承接**：continuity 必须写成“接住上一镜的具体末态 → 本镜可见变化 → 留给下一镜的具体末态”。相邻两镜的位置、姿势、朝向、道具、伤势、情绪与已知信息必须接得上。
+## Visual style
 
-## 画风
-
-用户主题里写了想要什么味道，就按他的词来。画风写进桥、水、衣，不要单独堆技法套话。
+Follow the user's description of the desired look. Express it in visible bridges, water, and clothes instead of a separate block of technique jargon.

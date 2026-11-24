@@ -112,15 +112,34 @@ export function composeProjectPlayMarkdown(p: Project): string {
   return parts.join('\n').replace(/\n{3,}/g, '\n\n').trim() + '\n'
 }
 
-function splitH2(md: string): { title: string; body: string }[] {
+// 한국어·영어 제목을 파서 내부의 기존 구조 키로 정규화한다.
+function canonicalPlayHeading(title: string): string {
+  const aliases: Record<string, string> = {
+    '이야기 배경': '故事背景', 'story background': '故事背景',
+    '챕터 연결': '本章承接', 'chapter handoff': '本章承接',
+    '캐릭터': '人物', '인물': '人物', characters: '人物',
+    '환경과 장면': '环境与场景', 'environment and locations': '环境与场景',
+    '촬영 원칙': '拍摄原则', 'filming principles': '拍摄原则',
+    '각색 원칙': '改编原则', 'adaptation principles': '改编原则',
+    '챕터 감정선': '本章情绪线', 'chapter emotional arc': '本章情绪线',
+    '시각 및 소리 기조': '视觉与声音基调', 'visual and sound tone': '视觉与声音基调',
+    '소품': '道具', props: '道具'
+  }
+  const key = title.toLowerCase()
+  if (Object.hasOwn(aliases, key)) return aliases[key]
+  return title.replace(/^(?:장면|scene)\s*(\d+)\s*(?:[｜|:：-]\s*)?/i, '场景$1｜')
+}
+
+function splitH2(md: string, normalizePlayHeadings = true): { title: string; body: string }[] {
   const lines = md.replace(/\r\n/g, '\n').split('\n')
   const sections: { title: string; body: string }[] = []
   let cur: { title: string; body: string[] } | null = null
   for (const line of lines) {
-    const m = line.match(/^##\s+(.+)\s*$/)
+    const m = line.match(/^##(?!#)\s*(.+)\s*$/)
     if (m) {
       if (cur) sections.push({ title: cur.title, body: cur.body.join('\n').trim() })
-      cur = { title: m[1].trim(), body: [] }
+      const title = m[1].trim()
+      cur = { title: normalizePlayHeadings ? canonicalPlayHeading(title) : title, body: [] }
       continue
     }
     if (!cur) {
@@ -265,7 +284,7 @@ export function applyProjectPlayMarkdown(p: Project, markdown: string): void {
   const titleM = md.match(/^#\s+(.+)\s*$/m)
   const topic = titleM?.[1]?.trim() || p.script?.topic || p.name
 
-  const sections = splitH2(md)
+  const sections = splitH2(md, false)
   const byTitle = (name: string) =>
     sections.find((s) => s.title === name || s.title.startsWith(name))
 
@@ -440,10 +459,10 @@ export function looksLikeFilmChapterPlay(markdown: string): boolean {
   const t = markdown || ''
   return (
     /改编原则|拍摄原则/.test(t) ||
-    /##\s*故事背景/.test(t) ||
-    /##\s*环境与场景/.test(t) ||
-    /##\s*场景[一二三四五六七八九十0-9]/.test(t) ||
-    /(?:内景|外景)\s*｜/.test(t) ||
+    splitH2(t).some(({ title }) =>
+      /^(?:故事背景|环境与场景|拍摄原则|改编原则|视觉与声音基调|场景[一二三四五六七八九十0-9])/.test(title)
+    ) ||
+    /(?:内景|外景|실내|실외|INT\.?|EXT\.?)\s*[｜|]/i.test(t) ||
     /成年[^\n]{0,16}旁白/.test(t) ||
     /视觉与声音基调/.test(t)
   )
@@ -537,7 +556,7 @@ export function extractLocationsFromPlay(markdown: string): PlayLocationDraft[] 
   }
 
   for (const sec of sections.filter((s) => /^场景[一二三四五六七八九十百0-9]/.test(s.title))) {
-    const heading = sec.body.match(/(?:内景|外景|半外景)\s*｜\s*([^｜\n*]+)\s*｜\s*([^\n*]+)/)
+    const heading = sec.body.match(/(?:内景|外景|半外景|실내|실외|반실외|INT\.?|EXT\.?)\s*[｜|]\s*([^｜|\n*]+)\s*[｜|]\s*([^\n*]+)/i)
     const loc = heading?.[1]?.trim()
     const weather = heading?.[2]?.trim()
     add(loc || sec.title, sec.body.slice(0, 600), weather)
@@ -661,8 +680,8 @@ export function extractSubjectsFromPlay(markdown: string): Array<{
     if (!name || name.length > 16 || SKIP_SUBJECT.test(name)) return
     if (isFieldLabelName(name)) return
     const key = name.replace(/\s+/g, '').toLowerCase()
-    const ident = description.match(/身份[：:]\s*([^\n]+)/)
-    const state = description.match(/跨场状态[变化]*[：:]\s*([^\n]+)/)
+    const ident = description.match(/(?:身份|신분|Identity)[：:]\s*([^\n]+)/i)
+    const state = description.match(/(?:跨场状态[变化]*|장면 간 상태 변화|Cross-scene state)[：:]\s*([^\n]+)/i)
     const roleText = (ident?.[1] || role).trim()
     const stateText = (state?.[1] || '').trim()
     if (seen.has(key)) {
@@ -680,7 +699,7 @@ export function extractSubjectsFromPlay(markdown: string): Array<{
       kind: 'person',
       description: (description || `${name}，外貌与服装按剧本补全`).slice(0, 1200),
       role: roleText.slice(0, 200),
-      stateVariants: stateText || '单一状态',
+      stateVariants: stateText || 'none',
       fromReference: false
     })
   }
@@ -718,7 +737,7 @@ export function extractPlayForSceneStage(markdown: string, maxChars = 8000): str
     if (hit?.body?.trim()) chunks.push(`## ${hit.title}\n${hit.body.trim()}`)
   }
   for (const sec of sections.filter((s) => /^场景[一二三四五六七八九十百0-9]/.test(s.title))) {
-    const head = sec.body.match(/(?:内景|外景|半外景)[^\n]{0,80}/)?.[0] || ''
+    const head = sec.body.match(/(?:内景|外景|半外景|실내|실외|반실외|INT\.?|EXT\.?)[^\n]{0,80}/i)?.[0] || ''
     const preview = sec.body.split('\n').filter((l) => l.trim()).slice(0, 6).join('\n')
     chunks.push(`## ${sec.title}\n${head}\n${preview}`)
   }

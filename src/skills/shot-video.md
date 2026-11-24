@@ -1,28 +1,28 @@
 ---
 name: shot-video
-description: 使用角色设计图、场景图和本镜故事看板生成可控的 MiniMax H3 视频。
-triggers: 视频,出片,图生视频,运镜,动起来,生成视频
+description: Generate controllable MiniMax H3 video using character design images, the location image, and the shot's storyboard panel.
+triggers: 视频,出片,图生视频,运镜,动起来,生成视频,영상,영상 생성,이미지→영상,카메라 움직임,움직이게,video,generate video,image-to-video
 ---
 
-# 图生视频
+# Image-to-video
 
-出视频不要传人物+场景配图。最多 9 张参考图，按顺序传：本镜每个角色的设计图、这一镜的场景图、本镜故事看板。看板必须先按场景图和角色设计图生成，再作为这一镜的动作计划送给视频模型。
+Send no composited character-and-location shot image. Use at most nine references in this order: each character design image for this shot, the current location image, and this shot's storyboard panel. Generate the panel from the character and location images first, then send it to the video model as the action plan.
 
-缺人设、场景或看板先补，不要先出配图。画外音镜头里被叫到的人不能张嘴。最终视频必须是单一完整画面，禁止复制四宫格、分格、边框、拼贴、字幕或标签。
+Provide missing character, location, or panel references before generating. In an off-screen narration shot, a person whose name is called keeps their lips closed. The final video must show one complete image with no grid, panel borders, collage, subtitles, or labels unless the user explicitly asks for on-screen text.
 
-出片使用 `videoPrompt` 的动作表演信息，不把配图用的 `visualPrompt` 原样送入 H3。`videoPrompt` 必须从0秒到本镜结束按实际剧情拍点分2–5段，逐段写谁看见什么、做什么、谁说什么、其他人如何反应、情绪和运镜怎样变化；禁止机械等分填套话。选 **H3** 时点「优化提示词」编成官方三段（见 `h3-prompt-writing`）：`integrated_multimodal_description` / `overall_soundscape` / `non_diegetic_music`。一条成片内部可切 `[Shot 1]` / `[Shot 2]` / `[Shot 3]`；第一镜不加时间戳，后续镜写 `At 00:03.000`。人物用 `(S1)` `(S2)` 固定对应人物参考图，不按台词顺序重编号。只有台词用中文，写进 `<d>[Chinese] 原词</d>`。每次只有一个 (S#) 开口，其他人嘴唇闭合。人设图不是 I2VA 首帧。选万相时不套这套格式。
+Use the action and performance in `videoPrompt`; do not send `visualPrompt` unchanged. Divide the full duration into 2–5 ranges based on the story's real beats. State who sees and does what, who speaks, how others react, and how emotion and camera motion change. Do not divide into equal generic blocks. For **H3**, use prompt optimization and follow `h3-prompt-writing` for the official `integrated_multimodal_description`, `overall_soundscape`, and `non_diegetic_music` format. One generated clip may have internal `[Shot 1]`, `[Shot 2]`, and `[Shot 3]` cuts. Leave the first shot untimed and use a timestamp such as `At 00:03.000` for later cuts. Bind each character to their assigned (S1), (S2), and reference image. Preserve the spoken words in their original language. Tag Korean as `<d>[Korean] 대사 원문</d>` and Chinese as `<d>[Chinese] verbatim line</d>`. Only one person speaks at a time. Character sheets are not I2VA first frames. Do not apply this H3 format to Wan.
 
-## 配音
+## Dubbing
 
-- `h3-dialogue`：默认。H3 生成出镜对白和自然口型。
-- `h3-voiceover`：H3 生成画外口播，画面人物不做说话口型。
-- `tts`：H3 不生成人声，最终合成时混入独立 TTS。
-- `none`：只有环境声。
+- `h3-dialogue` is the default. H3 generates on-screen dialogue and natural lip movement.
+- `h3-voiceover` generates off-screen narration with on-screen mouths closed.
+- `tts` disables H3 voices and mixes separate TTS into the final edit.
+- `none` uses ambient sound only.
 
-人物名、声线和镜头描述都不是台词。最终 H3 提示词用官方英文；只有 `<d>[Chinese] 原词</d>` 会被朗读。出镜把说话动作写在标签外，画外音写 `says in an off-screen voiceover` 并让嘴唇闭合。口播栏如果写的是景别或动作说明，就写 `No dialogue. No lips moving.`
+Write the final generation prompt in English and keep Korean dialogue, narration, or user-requested Korean on-screen text verbatim. Names, vocal qualities, and shot directions go outside the spoken tag. For off-screen narration use `says in an off-screen voiceover` and specify closed lips. If the narration field only contains a shot size or direction, write `No dialogue. No lips moving.` Write user-facing explanations in Korean (한국어).
 
-## 运动与队列
+## Motion and queue
 
-- 每镜只采用分镜指定的一种主要运镜，动作在时长内完整结束。
-- 指定镜头使用 `generate_video + shotId`；全部镜头使用 `generate_all_videos`（AutoDL 支持并发，缺视频的镜头会同时提交）。
-- 任一步自检或生成失败都暂停后续流水线并报告具体镜头。
+- Use the storyboard's single main camera movement and complete the action within the allotted duration.
+- For an individual shot use `generate_video + shotId`; for all shots use `generate_all_videos`. AutoDL can submit multiple missing videos concurrently.
+- If self-check or generation fails, suspend later workflow steps and report the affected shot.

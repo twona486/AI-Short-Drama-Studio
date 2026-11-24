@@ -14,14 +14,14 @@ import { parseJsonRobust } from '@/utils/jsonRepair'
 import { importedDirectorPrefix } from '@/services/settings/directorSkill'
 
 function shotLine(shot?: Shot): string {
-  if (!shot) return '（无）'
+  if (!shot) return '（없음）'
   const action = thisShotAction(shot.continuity) || shot.title || ''
-  return `${shot.title || '未标题'}。${action}`
+  return `${shot.title || '제목 없음'}。${action}`
 }
 
 /**
- * 出视频前的内容表现：你亲手写过、且不像套话的原文原样用。
- * 空着、过短、缺少时间轴、或旧套话稿，按本镜剧情重写。
+ * 사용자가 작성한 구체적인 영상 연출 프롬프트를 보존한다.
+ * 비어 있거나 너무 짧거나 구간과 구체적인 묘사가 없으면 샷에 맞춰 다시 쓴다.
  */
 export async function enrichVideoPerformance(opts: {
   shot: Shot
@@ -55,7 +55,7 @@ export async function enrichVideoPerformance(opts: {
     .map((s) => `${s.name}${s.role ? `（${s.role}）` : ''}：${(s.description || '').slice(0, 180)}`)
     .join('\n')
   const scene = opts.scene
-    ? `${opts.scene.name}。${opts.scene.description || ''} 光：${opts.scene.lighting || ''} 主锚：${opts.scene.mainAnchor || ''}`
+    ? `${opts.scene.name}。${opts.scene.description || ''} 광원 ${opts.scene.lighting || ''} 주요 기준물 ${opts.scene.mainAnchor || ''}`
     : ''
 
   try {
@@ -63,46 +63,46 @@ export async function enrichVideoPerformance(opts: {
       messages: [
         {
           role: 'system',
-          content: `${importedDirectorPrefix()}你给图生视频写「视频内容表现」。${videoPerformanceSpec(getVideoPromptStyle())}
-只输出 JSON：{"videoPrompt":"..."}
-像给演员说戏，不要像填表。只写本镜这 ${opts.shot.duration} 秒里发生的事。
-从0秒到${opts.shot.duration}秒按实际剧情拍点分成2–5段，不机械等分。每段明确当前行动者、动作和表情、说话人和原词、其他人物占位与视线、一个有动机的运镜及落点。时间轴是导演调度，不是四行摘要；每段都要有可见的画面进展。
-画面里每一个出场的人都必须写：近处还是后面、身体朝哪（侧对/四分之三，禁止正面朝镜头）、眼睛看谁或看什么。说话者可以在后面；前面的人回头或侧头看他，或看他指的东西。人设图是正面照，成片不要抄成合影。
-坏例子：「林遥指着田垄说话。老农和差役在场。人物看向场景里的人或物，不要看镜头。」
-好例子：「近处：老农和差役侧对镜头站在石板路上。林遥在他们身后稍远，从跪姿撑起半身，泥手指向田垄。老农回头眯眼打量林遥，差役视线跟着那只手看向田垄。三个人都不看镜头。」
-配图静帧词只当布景。continuity 若带箭头，只演中间这一截，不要把上一镜和下一镜也演了。
-剧本里的改编原则、不拍清单、年代天气必须遵守。成年旁白是画外音，画面里的人闭嘴。善意写成普通人做的小事，不要写成救世主登场。`
+          content: `${importedDirectorPrefix()}Write image-to-video direction. Write the final videoPrompt in English for the video generation model, retaining verbatim dialogue and requested Korean on-screen text. ${videoPerformanceSpec(getVideoPromptStyle())}
+Return JSON only: {"videoPrompt":"..."}.
+Direct the actors. Cover only the ${opts.shot.duration} seconds of this shot.
+Divide zero through ${opts.shot.duration} seconds into 2–5 ranges by the story's actual beats. Do not divide the time mechanically. In each range specify current actions and expressions, the speaker and their original words, other actors' blocking and eyelines, a motivated camera move, and its endpoint. Each range must add visible progression.
+For each visible person, state foreground or background position, profile or three-quarter orientation, and their eyeline. A speaker can be farther back. Foreground characters look back or sideways toward the speaker or the indicated object. Do not reproduce the frontal character-sheet pose as a group portrait.
+Weak: Lin Yao points at the ridge and talks. The farmer and constable are present. They look at something within the scene.
+Better: In the foreground, the farmer and constable face sideways on the stone path. Behind them, Lin Yao rises partway from his knees and points a muddy hand at the ridge. The farmer squints back at Lin Yao and the constable follows his hand toward the ridge. None looks at the camera.
+Treat still-frame notes as set context. When continuity uses arrows, perform only the middle part of the chain. Do not replay the previous or next shot.
+Follow the script's adaptation rules, exclusions, period, and weather. Older-character narration is off screen. People in the frame keep their mouths closed. Show kindness through small actions ordinary people take.`
         },
         {
           role: 'user',
-          content: `人物：
-${roster || '（按画面里已有的人）'}
+          content: `Characters
+${roster || '(Use the characters already in frame.)'}
 
-场景：
-${scene || '（按参考画面）'}
+Scene
+${scene || '(Follow the reference frame.)'}
 
-上一镜（不要演进来，只作承接）：${shotLine(opts.prevShot)}
-下一镜（不要演进来）：${shotLine(opts.nextShot)}
+Previous shot (continuity only, do not replay) ${shotLine(opts.prevShot)}
+Next shot (exclude from the current shot) ${shotLine(opts.nextShot)}
 
-本镜标题：${opts.shot.title}
-时长：${opts.shot.duration} 秒
-运镜：${opts.shot.cameraMovement}
-站位：${opts.shot.blocking || ''}
-视线：${opts.shot.eyeline || '每个人写清看谁，禁止看镜头'}
-本镜出场人物（每个人都要写站位和视线）：${names.join('、') || '（按画面里已有的人）'}
-本镜动作（只拍这一段）：${thisShotAction(opts.shot.continuity) || opts.shot.blocking || opts.shot.title || ''}
-道具：${opts.shot.propFocus || '无'}
-原词台词：${opts.shot.voiceover || '（无）'}
-现有草稿（若是套话请丢掉重写）：
+Current shot title ${opts.shot.title}
+Duration ${opts.shot.duration} seconds
+Camera movement ${opts.shot.cameraMovement}
+Blocking ${opts.shot.blocking || ''}
+Eyeline ${opts.shot.eyeline || 'Specify what each person is looking at and have them keep their eyes off the camera.'}
+Current cast (include each person’s position and eyeline) ${names.join('、') || '(Use the characters already in frame.)'}
+Current action (film only this beat) ${thisShotAction(opts.shot.continuity) || opts.shot.blocking || opts.shot.title || ''}
+Props ${opts.shot.propFocus || 'none'}
+Verbatim dialogue ${opts.shot.voiceover || '(none)'}
+Existing draft (rewrite if it relies on clichés)
 ${own || current}
 
-本章约束（必须遵守）：
-${opts.chapterNotes || '（无）'}
+Mandatory chapter constraints
+${opts.chapterNotes || '(none)'}
 
-本场剧本原文（从这里演，不要另编情节）：
-${opts.sceneExcerpt || '（无，按本镜场记演）'}
+Original scene excerpt (follow it without inventing events)
+${opts.sceneExcerpt || '(None. Follow the current shot’s continuity notes.)'}
 
-参考静帧（只当布景，不要复述）：
+Reference still (use as set context only, do not describe it again)
 ${(opts.shot.visualPrompt || '').slice(0, 400)}`
         }
       ],
