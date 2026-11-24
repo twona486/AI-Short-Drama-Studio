@@ -3343,7 +3343,7 @@ async function realGeneratePlay(input: StoryboardInput): Promise<{ result: PlayD
   const hint = (input.continueHint || '').trim()
   const targetSec =
     Number(input.targetDurationSec) || extractTargetDurationSec(input.topic, input.content, hint)
-  const scaleBrief = playScaleBrief(targetSec) || '未指定时长：按不超过两分钟的单集成片设计，不必填满两分钟。'
+  const scaleBrief = playScaleBrief(targetSec) || 'Without a specified duration, plan an episode of up to two minutes.'
   const { model: cfgModel } = getLlmConfig()
   const model = resolvePlayModel(input) || cfgModel
   log(`→ ${continueMode ? '대본 이어 쓰기' : '대본 작성'} LLM: ${model}`)
@@ -3352,11 +3352,10 @@ async function realGeneratePlay(input: StoryboardInput): Promise<{ result: PlayD
     messages: [
       {
         role: 'system',
-        content: `${importedDirectorPrefix()}你是编剧。根据用户的要求和已有内容，直接写出剧本。
-只输出 Markdown 正文，不要 JSON，不要解释，不要自检。
+        content: `${importedDirectorPrefix()}Write the screenplay from the user request and supplied material. Output only the Markdown script, without JSON, explanation, or QA notes.
 ${SHORT_DRAMA_WRITING_RULES}
-用简体中文。先写标题、故事背景、人物、环境与场景，再写分场。分场标题用「## 场景N｜标题」，对白用「**人物名：**」。
-用户给了时长，就按这个时长写完。有交流的地方写出能念的对白。不要新增用户没提的价格和功效。
+Write in natural Korean. Start with the title, premise, characters, and settings, followed by scenes. Use "## 장면 N | 제목" and "**인물명:**" for dialogue. Preserve supplied dialogue verbatim.
+Honor the requested duration. Write speakable dialogue where characters interact. Do not invent prices or product claims.
 ${scriptReferenceBrief(useSettingsStore().config.scriptReferenceType, input.topic, input.content, input.continueHint, ...(input.keywords || []))}`
       },
       {

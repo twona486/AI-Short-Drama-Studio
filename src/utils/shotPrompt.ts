@@ -48,13 +48,15 @@ export function formatBeatRangeEn(start: number, end: number): string {
   return `From ${start.toFixed(2)}s to ${end.toFixed(2)}s`
 }
 
-/** 编辑器里仍写中文内容表现；选 H3 出片时再编译成官方 Ref2VA / I2VA。用户若已粘贴官方英文全文，原样使用。 */
-export const DIRECTOR_TIMELINE_SPEC = `参考图角色/场景对应由程序单独生成；不要重写图号清单，也不要把身份锁定凑进正文。正文用中文，按剧情拍点每段另起一行，格式“镜头 N（起秒–止秒）：…”。从 0 连续覆盖到 duration，上一段止秒等于下一段起秒（例如 0–4、4–9、9–15），不能跳秒或重叠。4–6 秒可用两段，10–15 秒通常用三至四段；拍点不等于硬切，同一次运镜可以跨段。短镜通常写约 180–300 字，10–15 秒通常约 280–500 字，以信息量为准，不灌水。
-每段都给出可执行的拍法：① 景别、机位角度或主体在构图中的位置；② 摄影机固定、推拉、摇移或跟随的方向、速度和起落位置，焦点跟什么走、逐步揭示什么；③ 用起始姿态、连续可见的动作及反应、可见的落幅状态说明表演。对关键拍点补光线/景深/材质、被动作影响的环境和同步现场声，不强行添加道具或声音。转场处说明是同机位连续运镜还是硬切；不中断的就写继续，不制造切镜。
-例如“镜头拉远，展现困境”不够。可写“贴地侧拍从虚化腐叶间的前足起幅，足节蜷起再徒劳伸直；焦点留在打滑的足尖，镜头沿原轴匀速后撤到中全景，露出压在身侧的湿叶。停在坑沿与角色同框的位置，叶片随扒抓擦响。”只借鉴写法，不能照抄动作到别的剧情。
-系统面板/屏显文字是画面事件：写出现的拍点、屏幕方位、层级和停留/消失时机，避开角色关键动作；逐字保留原文和顺序，禁止擅自简写、数字换格式或编造文字。人物不是人类时，按参考图的真实形态写表演，不默认有手、衣服、发型或人脸。`
+export const DIRECTOR_TIMELINE_SPEC = `The runtime assigns image numbers and identity locks separately. In English, start each beat on a new line, such as "Beat 1 (0–4s): ...". Cover zero through duration without gaps or overlaps. Two beats can work for 4–6 seconds, and three or four often work for 10–15 seconds. Keep continuous camera movement within a shot across beat boundaries. Give each beat enough detail to film it.
 
-export const SCENE_NARRATIVE_SPEC = `用导演给演员和摄影说戏的口吻，写这一镜最终会怎样动起来。只写本镜，不要把上一镜或下一镜的剧情演进来。
+For every beat, specify shot size, camera angle or subject placement, how the camera holds or moves, direction and speed, starting and ending composition, focus target, and what the motion reveals. Describe the initial pose, continuous visible action and reaction, and final visible result. Add light, depth of field, materials, environmental reactions and synchronized sound where they matter. Distinguish a true cut from continuous movement without introducing gratuitous cuts, extra props or sounds.
+
+Concrete example: "A ground-level side view begins on a foot between blurred wet leaves. It curls, extends and slips. Focus holds on the toes as the camera pulls straight back to a medium-wide view, revealing the leaves pressed against the subject's body. It comes to rest with the rim and the subject in frame. The leaves rustle as the foot catches." Use the level of detail without copying the example's story.
+
+Treat system panels and visible text as on-screen action. Specify when each cue appears, its on-screen position and visual hierarchy, and when it fades. Preserve literal text, numbers, format and order, and keep it clear of key action. Use each nonhuman subject's actual reference anatomy.`
+
+export const SCENE_NARRATIVE_SPEC = `Direct actors and camera for this shot only, keeping adjacent story events out of it.
 
 ${DIRECTOR_TIMELINE_SPEC}
 
@@ -79,7 +81,7 @@ export function videoPerformanceSpec(style: VideoPromptStyle = 'scene-narrative'
 }
 
 export function videoPromptJsonHint(_style: VideoPromptStyle = 'scene-narrative'): string {
-  return '<中文可执行分镜：每段另起一行写镜头 N（起秒–止秒），无缝覆盖全时长。逐段写景别、机位、运镜起落与焦点、可见动作过程和落幅，按剧情交代转场、声音及屏显原文。不是剧情简述。>'
+  return '<English timed direction. On each line write Beat N (start–ends): then specify framing, camera position, movement and focus, visible action and its end state, sound, and exact on-screen text. Cover the entire duration without gaps.>'
 }
 
 /** 편집기와 영상 생성 지침에 쓰는 연기 설명을 정리한다. */
@@ -165,8 +167,8 @@ export function timedBeatCount(text: string): number {
 
 /** 只验收时间轴正文；图号清单和出场锁定不计入细节。 */
 export function directorTimelineIssue(text: string, duration?: number): string | null {
-  const body = text.split(/\n\s*(?:出场|转场)\s*[:：]/)[0]
-  const ranges = [...body.matchAll(/(?:^|[^\d.])([0-9]+(?:\.[0-9]+)?)\s*(?:秒|s)?\s*[-–—~～到至]\s*([0-9]+(?:\.[0-9]+)?)\s*(?:秒|s)(?=\s*[）)】：:]|\s|$)/gi)]
+  const body = text.split(/\n\s*(?:出场|转场|등장|장면 전환|cast|transition)\s*[:：]/i)[0]
+  const ranges = [...body.matchAll(/(?:^|[^\d.])([0-9]+(?:\.[0-9]+)?)\s*(?:秒|초|s)?\s*[-–—~～到至]\s*([0-9]+(?:\.[0-9]+)?)\s*(?:秒|초|s)(?=\s*[）)】：:]|\s|$)/gi)]
   if (ranges.length < 2) return '缺少分段导演时间轴（至少两段）'
   let end = 0
   for (const range of ranges) {
@@ -176,12 +178,13 @@ export function directorTimelineIssue(text: string, duration?: number): string |
     end = next
   }
   if (duration && Math.abs(end - duration) > 0.001) return `时间轴止于 ${end} 秒，与本镜 ${duration} 秒不一致`
-  const camera = /景别|特写|近景|中景|全景|远景|微距|机位|俯拍|仰拍|侧拍|过肩|构图|固定|跟拍|跟移|拉远|后撤|推近|焦点|景深|连续拉|沿原轴|镜头(?:慢|缓|匀|向|从|沿|停|不动|保持)/
+  const camera = /景别|特写|近景|中景|全景|远景|微距|机位|俯拍|仰拍|侧拍|过肩|构图|固定|跟拍|跟移|拉远|后撤|推近|焦点|景深|连续拉|沿原轴|镜头(?:慢|缓|匀|向|从|沿|停|不动|保持)|클로즈업|구도|카메라|앵글|초점|트래킹|\b(?:shot|framing|angle|macro|camera|focus|pans?|track(?:s|ing)?|locked.off|wide|close.up|foreground)\b/i
   const beats = ranges.map((range, i) => body.slice(range.index! + range[0].length, ranges[i + 1]?.index ?? body.length)
-    .replace(/(?:镜头\s*\d+\s*[（(【]?|[\s\p{P}])/gu, ''))
-  if (beats.some(beat => beat.length < 36 || !camera.test(beat))) return '部分拍点只是剧情摘要；逐段补机位或构图、运镜起落与连续动作细节'
+    .replace(/(?:镜头|샷|beat|shot)\s*\d+\s*[（(【]?/giu, '').trim())
+  const length = (beat: string) => beat.replace(/[\s\p{P}]/gu, '').length
+  if (beats.some(beat => length(beat) < 36 || !camera.test(beat))) return '部分拍点只是剧情摘要；逐段补机位或构图、运镜起落与连续动作细节'
   const min = end >= 10 ? 210 : end >= 7 ? 150 : 105
-  if (beats.reduce((sum, beat) => sum + beat.length, 0) < min) return '动态正文缺少可拍细节；补足景别、焦点、动作过程、环境反馈及结束姿势，不要用身份锁定凑字数'
+  if (beats.reduce((sum, beat) => sum + length(beat), 0) < min) return '动态正文缺少可拍细节；补足景别、焦点、动作过程、环境反馈及结束姿势，不要用身份锁定凑字数'
   return null
 }
 

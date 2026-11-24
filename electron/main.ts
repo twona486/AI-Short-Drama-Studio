@@ -36,6 +36,49 @@ function nativeText(key: keyof typeof ko.electron, fields: Record<string, string
   )
 }
 
+function installApplicationMenu() {
+  if (process.platform !== 'darwin') {
+    Menu.setApplicationMenu(null)
+    return
+  }
+  const item = (role: Electron.MenuItemConstructorOptions['role'], label: keyof typeof ko.electron) => ({
+    role,
+    label: nativeText(label, { app: USER_DATA_NAME })
+  })
+  const separator = { type: 'separator' as const }
+  Menu.setApplicationMenu(Menu.buildFromTemplate([
+    {
+      label: USER_DATA_NAME,
+      submenu: [
+        item('about', 'menuAbout'), separator,
+        item('hide', 'menuHide'), item('hideOthers', 'menuHideOthers'), item('unhide', 'menuShowAll'), separator,
+        item('quit', 'menuQuit')
+      ]
+    },
+    { label: nativeText('menuFile'), submenu: [item('close', 'menuClose')] },
+    {
+      label: nativeText('menuEdit'),
+      submenu: [
+        item('undo', 'menuUndo'), item('redo', 'menuRedo'), separator,
+        item('cut', 'menuCut'), item('copy', 'menuCopy'), item('paste', 'menuPaste'),
+        item('pasteAndMatchStyle', 'menuPastePlain'), item('selectAll', 'menuSelectAll')
+      ]
+    },
+    {
+      label: nativeText('menuView'),
+      submenu: [
+        item('resetZoom', 'menuActualSize'), item('zoomIn', 'menuZoomIn'), item('zoomOut', 'menuZoomOut'), separator,
+        item('togglefullscreen', 'menuFullScreen')
+      ]
+    },
+    {
+      label: nativeText('menuWindow'),
+      role: 'window',
+      submenu: [item('minimize', 'menuMinimize'), item('zoom', 'menuZoomWindow')]
+    }
+  ]))
+}
+
 const mainDir = path.dirname(fileURLToPath(import.meta.url))
 
 /**
@@ -496,7 +539,7 @@ if (app.isPackaged && !app.commandLine.hasSwitch('user-data-dir')) {
 }
 
 app.whenReady().then(async () => {
-  Menu.setApplicationMenu(null)
+  installApplicationMenu()
   const root = readStorageRootPreference(rootPreferencePath()) ?? defaultRoot()
   activeRoot = root
   await ensureDir(root)
@@ -516,8 +559,12 @@ app.whenReady().then(async () => {
   })
 
   ipcMain.handle('desktop:setLocale', (event, locale: unknown) => {
-    nativeLocale = locale === 'zh' ? 'zh' : 'ko'
-    BrowserWindow.fromWebContents(event.sender)?.setTitle(nativeLocale === 'zh' ? zh.common.appName : ko.common.appName)
+    const next = locale === 'zh' ? 'zh' : 'ko'
+    if (nativeLocale !== next) {
+      nativeLocale = next
+      installApplicationMenu()
+    }
+    BrowserWindow.fromWebContents(event.sender)?.setTitle(USER_DATA_NAME)
   })
 
   const confirming = new Set<number>()
@@ -640,6 +687,8 @@ app.whenReady().then(async () => {
   ipcMain.handle('desktop:pickFiles', async (_e, filters?: Electron.FileFilter[]) => {
     const win = BrowserWindow.getFocusedWindow()
     const res = await dialog.showOpenDialog(win ?? undefined, {
+      title: nativeText('pickFilesTitle'),
+      buttonLabel: nativeText('dialogOpen'),
       properties: ['openFile', 'multiSelections'],
       filters: filters ?? [{ name: nativeText('media'), extensions: ['png', 'jpg', 'jpeg', 'webp', 'mp4', 'webm', 'mp3', 'wav'] }]
     })
@@ -672,6 +721,8 @@ app.whenReady().then(async () => {
                 ]
       const win = BrowserWindow.getFocusedWindow()
       const res = await dialog.showOpenDialog(win ?? undefined, {
+        title: nativeText('importFilesTitle'),
+        buttonLabel: nativeText('dialogImport'),
         properties: opts?.multiple === false ? ['openFile'] : ['openFile', 'multiSelections'],
         filters
       })
@@ -762,6 +813,8 @@ app.whenReady().then(async () => {
   }) => {
     const win = BrowserWindow.getFocusedWindow()
     const res = await dialog.showSaveDialog(win ?? undefined, {
+      title: nativeText('saveFileTitle'),
+      buttonLabel: nativeText('dialogSave'),
       defaultPath: String(opts?.defaultName || 'script.md'),
       filters: opts?.filters ?? [{ name: 'Markdown', extensions: ['md'] }]
     })
@@ -773,6 +826,8 @@ app.whenReady().then(async () => {
   ipcMain.handle('desktop:pickDirectory', async () => {
     const win = BrowserWindow.getFocusedWindow()
     const res = await dialog.showOpenDialog(win ?? undefined, {
+      title: nativeText('pickDirectoryTitle'),
+      buttonLabel: nativeText('dialogChoose'),
       properties: ['openDirectory']
     })
     return res.canceled ? null : res.filePaths[0]
@@ -857,8 +912,7 @@ app.whenReady().then(async () => {
     }
   })
 
-  // 语言模型一次要等好几分钟才吐出完整 JSON。Chromium 的 net.fetch 走 HTTP/2，
-  // 长时间没有字节时会把连接掐掉，上游日志里却已经是成功返回。这里改用 Node 的 HTTP/1.1。
+  // 긴 LLM 응답에서 Chromium의 HTTP/2 연결이 일찍 끊길 수 있어 Node의 HTTP/1.1을 사용한다.
   const readLlmText = (
     target: URL,
     method: 'GET' | 'POST',
@@ -896,7 +950,7 @@ app.whenReady().then(async () => {
         const buf = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk)
         size += buf.length
         if (size > 32 * 1024 * 1024) {
-          fail(new Error('语言模型返回过大'))
+          fail(new Error(nativeText('llmResponseTooLarge')))
           req.destroy()
           return
         }

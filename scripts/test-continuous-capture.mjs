@@ -10,8 +10,8 @@ const mocks = {
     export const useLibraryStore=()=>({getBlob:async()=>null});`,
   '@/services/ai/client': `export const blobToChatImageUrl=async()=> 'data:image/png;base64,dGVzdA==';
     export const callLLM=async req=>{const h=globalThis.h;h.requests.push(req);const system=req.messages[0].content;
-    if(system.includes('生成前对白场记')){h.preflightCalls=(h.preflightCalls||0)+1;return {content:JSON.stringify(h.preflightReviews?.shift() ?? {ok:true,issues:[]})}};
-    if(system.includes('只改这一条镜头'))return {content:JSON.stringify(h.repairs?.shift() ?? {invalid:true})};const review=system.includes('独立的短剧场记');
+    if(system.startsWith('Audit dialogue before generation.')){h.preflightCalls=(h.preflightCalls||0)+1;return {content:JSON.stringify(h.preflightReviews?.shift() ?? {ok:true,issues:[]})}};
+    if(system.startsWith('Edit only this shot.'))return {content:JSON.stringify(h.repairs?.shift() ?? {invalid:true})};const review=system.startsWith('Independently review individual shots');
     if(system.includes('图几是什么')||system.includes('你看图确认参考图身份'))return {content:JSON.stringify({pictures:[{id:'a',role:'character',caption:'阿默'},{id:'b',role:'character',caption:'阿青'},{id:'room',role:'scene',caption:'室内'}]})};
     return {content:JSON.stringify(review ? h.reviews?.shift() ?? {ok:true,reason:''} : h.responses.shift()||h.fixture)}};`,
   '@/services/ai/image': `export const generateImage=async req=>{globalThis.h.images.push(req);globalThis.h.afterImage?.();return {blob:new Blob(['image'],{type:'image/png'})}};`,

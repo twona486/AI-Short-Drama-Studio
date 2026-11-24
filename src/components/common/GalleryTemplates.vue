@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
+import { t } from '@/i18n'
 import { galleryAlbums, galleryTemplates } from '@/utils/galleryTemplates'
 import { openLightbox } from '@/composables/useLightbox'
 
@@ -7,13 +8,6 @@ const props = defineProps<{ selectable?: boolean; selected?: Set<string> }>()
 const emit = defineEmits<{ pick: [id: string] }>()
 
 type Item = (typeof galleryTemplates)[number]
-
-const albumNotes = [
-  '适用于单人特写、走位与情绪转折镜头',
-  '适用于对白、冲突与暧昧拉扯的双人镜头',
-  '适用于打斗、追逐与高能转折片段',
-  '多视角设定板，用于锁定角色外观一致性',
-]
 
 const album = ref(-1)
 const query = ref('')
@@ -25,10 +19,10 @@ const total = galleryTemplates.length
 const groups = computed(() => {
   const q = query.value.trim().toLowerCase()
   return galleryAlbums
-    .map((name, index) => ({
-      name,
+    .map((key, index) => ({
+      name: t(`galleryTemplates.${key}`),
       index,
-      note: albumNotes[index],
+      note: t(`galleryTemplates.${key}Note`),
       total: galleryTemplates.filter((item) => item.album === index).length,
       items: galleryTemplates.filter((item) => {
         if (item.album !== index) return false
@@ -39,8 +33,8 @@ const groups = computed(() => {
     .filter((group) => group.items.length > 0)
 })
 
-const activeGroup = computed(() => galleryAlbums[detail.value.album] || '')
-const activeNote = computed(() => albumNotes[detail.value.album] || '')
+const activeGroup = computed(() => t(`galleryTemplates.${galleryAlbums[detail.value.album]}`))
+const activeNote = computed(() => t(`galleryTemplates.${galleryAlbums[detail.value.album]}Note`))
 const activeCode = computed(() => codeOf(detail.value))
 const activePicked = computed(() => !!props.selected?.has(detail.value.id))
 
@@ -80,9 +74,9 @@ async function copyPrompt() {
   if (!detail.value.prompt) return
   try {
     await navigator.clipboard.writeText(detail.value.prompt)
-    copyStatus.value = '已复制'
+    copyStatus.value = t('galleryTemplates.copied')
   } catch {
-    copyStatus.value = '复制不可用，请选中文本手动复制'
+    copyStatus.value = t('galleryTemplates.copyFailed')
   }
 }
 </script>
@@ -91,17 +85,17 @@ async function copyPrompt() {
   <section class="template-album" :class="{ picker: selectable }">
     <header v-if="!selectable" class="gl-head">
       <div>
-        <span class="kicker">图库模板 · 内置线稿</span>
-        <h1>{{ total }} 张姿态参考，覆盖 90% 的短剧运镜</h1>
-        <p>内置线稿姿态与站位。在画布节点的「资产库」打开图库模板并选用后，这张图会作为参考图进入当前项目。</p>
+        <span class="kicker">{{ $t('galleryTemplates.headline') }}</span>
+        <h1>{{ $t('galleryTemplates.heading', { total }) }}</h1>
+        <p>{{ $t('galleryTemplates.intro') }}</p>
       </div>
-      <span class="badge">{{ total }} 张 · 分 {{ galleryAlbums.length }} 组</span>
+      <span class="badge">{{ $t('galleryTemplates.count', { total, groups: galleryAlbums.length }) }}</span>
     </header>
 
     <div class="gl-jump">
-      <span class="kicker plain">快速定位</span>
+      <span class="kicker plain">{{ $t('galleryTemplates.jump') }}</span>
       <button type="button" class="chip" :class="{ on: album === -1 }" :aria-pressed="album === -1" @click="album = -1">
-        全部 {{ total }}
+        {{ $t('galleryTemplates.all', { total }) }}
       </button>
       <button
         v-for="(name, i) in galleryAlbums"
@@ -112,22 +106,22 @@ async function copyPrompt() {
         :aria-pressed="album === i"
         @click="album = i"
       >
-        {{ name }} {{ galleryTemplates.filter((item) => item.album === i).length }}
+        {{ $t(`galleryTemplates.${name}`) }} {{ galleryTemplates.filter((item) => item.album === i).length }}
       </button>
       <label class="search">
         <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7" /><path d="m20 20-3.2-3.2" /></svg>
-        <input v-model="query" class="input" type="search" placeholder="搜索姿势名称" aria-label="搜索姿势名称" />
+        <input v-model="query" class="input" type="search" :placeholder="$t('galleryTemplates.search')" :aria-label="$t('galleryTemplates.search')" />
       </label>
     </div>
 
     <div class="gl-layout">
       <div>
-        <p v-if="groups.length === 0" class="empty">没有名称匹配的模板</p>
+        <p v-if="groups.length === 0" class="empty">{{ $t('galleryTemplates.noMatch') }}</p>
         <section v-for="group in groups" :key="group.name" class="gl-group">
           <div class="gl-group-h">
             <span class="kicker plain">{{ groupLabel(group.index) }}</span>
             <h2>{{ group.name }}</h2>
-            <span class="c">{{ group.total }} 张</span>
+            <span class="c">{{ $t('galleryTemplates.groupCount', { total: group.total }) }}</span>
             <span class="d">{{ group.note }}</span>
           </div>
           <div class="gl-grid">
@@ -140,7 +134,7 @@ async function copyPrompt() {
               <button
                 type="button"
                 class="gl-hit"
-                :aria-label="selectable ? `选择${item.title}` : `查看${item.title}`"
+                :aria-label="selectable ? $t('galleryTemplates.selectItem', { name: item.title }) : $t('galleryTemplates.viewItem', { name: item.title })"
                 :aria-pressed="selectable ? isOn(item) : undefined"
                 @click="onCard(item)"
               >
@@ -154,7 +148,7 @@ async function copyPrompt() {
                 <div class="nm">{{ item.title }}</div>
               </button>
               <button v-if="selectable" type="button" class="gl-peek" @click="peek(item)">
-                {{ item.prompt ? '查看 · 提示词' : $t('common.enlarge') }}
+                {{ item.prompt ? $t('galleryTemplates.viewPrompt') : $t('common.enlarge') }}
               </button>
             </article>
           </div>
@@ -164,9 +158,9 @@ async function copyPrompt() {
       <aside v-if="detail" class="gl-detail">
         <section class="panel">
           <div class="panel-head">
-            <div class="panel-title"><i class="sq"></i>模板详情</div>
+            <div class="panel-title"><i class="sq"></i>{{ $t('galleryTemplates.details') }}</div>
             <span class="badge" :class="{ accent: !selectable || activePicked }">
-              {{ !selectable || activePicked ? '已选中' : $t('common.notSelected') }}
+              {{ !selectable || activePicked ? $t('galleryTemplates.selected') : $t('common.notSelected') }}
             </span>
           </div>
           <div class="panel-body">
@@ -191,15 +185,15 @@ async function copyPrompt() {
             <div class="divider"></div>
 
             <div class="stack">
-              <span class="label">用途说明</span>
-              <p class="use">{{ activeNote }}。可在画布节点的「资产库 → 图库模板」里选用这张参考图。</p>
+              <span class="label">{{ $t('galleryTemplates.usage') }}</span>
+              <p class="use">{{ $t('galleryTemplates.useHint', { note: activeNote }) }}</p>
             </div>
 
             <template v-if="detail.prompt">
               <div class="divider"></div>
               <div class="stack">
                 <div class="spread">
-                  <span class="label">可复制提示词</span>
+                  <span class="label">{{ $t('galleryTemplates.copyablePrompt') }}</span>
                   <button type="button" class="outline" @click="copyPrompt">
                     <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="8" y="8" width="12" height="12" rx="2" /><path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2" /></svg>
                     {{ $t('common.copy') }}
@@ -214,14 +208,14 @@ async function copyPrompt() {
 
             <div class="stack">
               <button v-if="selectable" type="button" class="use-btn" @click="emit('pick', detail.id)">
-                {{ activePicked ? '取消选用' : '选用这张' }}
+                {{ activePicked ? $t('galleryTemplates.unselect') : $t('galleryTemplates.select') }}
               </button>
-              <button type="button" class="outline block" @click="enlarge">放大查看</button>
+              <button type="button" class="outline block" @click="enlarge">{{ $t('galleryTemplates.enlarge') }}</button>
               <span class="hint">
                 {{
                   selectable
-                    ? '点选卡片会勾选这张模板。确认导入请用窗口底部的「选用」。'
-                    : '在画布节点的资产库中打开图库模板，选用后写入当前项目。'
+                    ? $t('galleryTemplates.selectHint')
+                    : $t('galleryTemplates.galleryHint')
                 }}
               </span>
             </div>
