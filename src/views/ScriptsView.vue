@@ -1097,7 +1097,7 @@ onMounted(async () => {
           </div>
           <label class="writing-mode"><span>{{ $t('scriptDesk.writingMode') }}</span><select v-model="writingMode" :disabled="episodeWriting"><option value="auto">{{ $t('scriptDesk.auto') }}</option><option value="series">{{ $t('scriptDesk.series') }}</option><option value="episode">{{ $t('scriptDesk.singleEpisode') }}</option></select></label>
           <textarea v-model="episodeHint" class="writing-input" :placeholder="$t('scriptDesk.askPlaceholder')" :disabled="episodeWriting" @keydown.ctrl.enter.prevent="writeCurrentEpisode" />
-          <div class="writing-actions"><span>{{ $t('scriptDesk.sendHint') }}</span><button v-if="episodeWriting" class="writing-send cancel" type="button" @click="cancelEpisodeWrite">{{ $t('scripts.cancelGeneration') }}</button><button v-else class="writing-send" type="button" :disabled="writingHistoryLoading" @click="writeCurrentEpisode">{{ $t("agentChat.send") }}</button></div>
+          <div class="writing-actions"><span>{{ $t('scriptDesk.sendHint') }}</span><button v-if="episodeWriting" class="writing-send cancel" type="button" @click="cancelEpisodeWrite">{{ $t('scripts.cancelGeneration') }}</button><button v-else class="writing-send" type="button" :disabled="writingHistoryLoading" @click="writeCurrentEpisode">{{ $t("common.send") }}</button></div>
         </div>
       </aside>
       </div>
