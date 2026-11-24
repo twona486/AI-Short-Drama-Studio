@@ -20,6 +20,7 @@ import {
 } from './comfyInputMap'
 import { zealmanWorkflowById } from './zealman'
 import { providerVideoResolution } from './modelOptions'
+import { adaptOpenAiChatBody, isOfficialOpenAi, OPENAI_DEFAULT_CHAT_MODEL } from './openAiChat'
 
 function timeoutSignal(ms: number): AbortSignal {
   const c = new AbortController()
@@ -1129,12 +1130,12 @@ export async function testEndpointConnection(
           const res = await api.llmFetch({
             url: chatUrl,
             authorization: String(authValue || ''),
-            body: JSON.stringify({
-              model: ep.model || 'gpt-4o-mini',
+            body: JSON.stringify(adaptOpenAiChatBody(base, {
+              model: ep.model || (isOfficialOpenAi(base) ? OPENAI_DEFAULT_CHAT_MODEL : 'gpt-4o-mini'),
               messages: [{ role: 'user', content: 'ping' }],
-              max_tokens: 1,
+              max_tokens: isOfficialOpenAi(base) ? 16 : 1,
               temperature: 0
-            }),
+            })),
             timeoutMs: 25_000
           })
           if (res.ok) return { ok: true, detail: `연결 확인（POST chat/completions → ${res.status}，데스크톱 경로）` }

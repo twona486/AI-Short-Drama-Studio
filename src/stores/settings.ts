@@ -14,7 +14,6 @@ import { stillModeForVideoModel, type VideoGenModel, type VideoStillMode } from 
 import type { VideoPromptStyle } from '@/utils/shotPrompt'
 import { isAutodlHost, normalizeStoredVideoEndpoint, type AdapterConfig } from '@/services/ai/adapters'
 import { normalizeModelNodeOptions, type ModelNodeOptions } from '@/services/ai/modelOptions'
-import { LLM_PROVIDERS } from '@/services/ai/providers'
 import { GENERAL_STORY_SKILL_ID, normalizeStorySkillId, storySkillById } from '@/skills/storyStyles'
 
 export type { AdapterConfig }
@@ -141,14 +140,6 @@ export interface DirectorSkillDoc {
   importedAt: number
 }
 
-export const LLM_PRESETS = [
-  'deepseek-v4-flash',
-  'deepseek-chat',
-  'deepseek-reasoner'
-]
-
-export const VISION_PRESETS = ['qwen-vl-max', 'qwen-vl-plus', 'gpt-4o']
-
 export const IMAGE_PRESETS = [
   'doubao-seedream-4-0-250828',
   'gpt-image-1',
@@ -162,21 +153,6 @@ export const MUSIC_PRESETS = ['music-3.0']
 
 function uniq(list: string[]): string[] {
   return [...new Set(list.map((s) => s.trim()).filter(Boolean))]
-}
-
-const LLM_CATALOG = new Set(LLM_PROVIDERS.flatMap((preset) => preset.models))
-
-/**
- * 목록에는 직접 구성한 모델만 표시한다.
- * 카탈로그 모델 중 현재 사용 중인 모델만 구성된 것으로 본다.
- * 사용자가 직접 추가한 카탈로그 외 모델도 유지한다.
- */
-function configuredLlmModels(models: string[] | undefined, active: string): string[] {
-  const saved = uniq(models ?? [])
-  const current = active.trim()
-  const manual = saved.filter((name) => !LLM_CATALOG.has(name))
-  const chosen = current && (saved.includes(current) || !saved.length) ? [current] : []
-  return uniq([...chosen, ...manual])
 }
 
 export function uniqueProfileName(existing: string[], base: string): string {
@@ -462,7 +438,7 @@ function buildDefaults(): AppSettings {
   const env = envDefaults()
   const llm = endpoint(env.llm.baseUrl, env.llm.apiKey, env.llm.model, [])
   const first = profileFromEndpoint(llm, t('settings.defaults.llm'), newId('llm'))
-  const vision = endpoint(env.vision.baseUrl, env.vision.apiKey, env.vision.model, VISION_PRESETS)
+  const vision = endpoint(env.vision.baseUrl, env.vision.apiKey, env.vision.model, [])
   const visionFirst = profileFromEndpoint(vision, t('settings.defaults.vision'), newId('vis'))
   const image = endpoint(env.image.baseUrl, env.image.apiKey, env.image.model, IMAGE_PRESETS)
   const imageFirst = profileFromEndpoint(image, t('settings.defaults.image'), newId('img'))
@@ -523,41 +499,25 @@ function resolveStoryPreference(value: unknown, legacy: unknown, group: 'style' 
   return storySkillById(id)?.group === group ? id : GENERAL_STORY_SKILL_ID
 }
 
+function savedChatEndpoint(saved: ServiceEndpoint | undefined, defaults: ServiceEndpoint): ServiceEndpoint {
+  if (!saved) return defaults
+  const model = saved.model ?? ''
+  return { ...saved, apiKey: saved.apiKey ?? '', model, models: uniq([model, ...(saved.models ?? [])]) }
+}
+
+function savedChatProfiles(list: NamedEndpoint[] | undefined) {
+  return Array.isArray(list) ? list.map((profile) => profile && { ...profile, apiKey: profile.apiKey ?? '' }) : []
+}
+
 function parseSettings(raw: string | null): AppSettings {
   const defaults = buildDefaults()
   if (!raw) return defaults
   try {
     const parsed = JSON.parse(raw) as Partial<AppSettings>
-    const savedLlm = parsed.llm
-    const legacyQwenPrimary = /^qwen/i.test(savedLlm?.model ?? '')
-    const llmSnap = legacyQwenPrimary
-      ? { ...defaults.llm, models: configuredLlmModels(defaults.llm.models, defaults.llm.model) }
-      : {
-          ...defaults.llm,
-          ...savedLlm,
-          model: savedLlm?.model || defaults.llm.model,
-          models: configuredLlmModels(savedLlm?.models, savedLlm?.model || defaults.llm.model).filter(
-            (model) => !/^qwen/i.test(model)
-          )
-        }
-    const savedVision = parsed.vision
-    const legacyTextOnlyVision = /^(qwen3\.7|qwen-vl-)/i.test(savedVision?.model ?? '')
-    const visionSnap = {
-      ...defaults.vision,
-      ...savedVision,
-      model: legacyTextOnlyVision ? defaults.vision.model : (savedVision?.model || defaults.vision.model),
-      models: uniq([...(savedVision?.models ?? []), ...defaults.vision.models]).filter(
-        (model) => !/^(qwen3\.7|qwen-vl-)/i.test(model)
-      )
-    }
-    const llmRaw = hydrateNamed(parsed.llms, llmSnap, t('settings.defaults.llm'), parsed.activeLlmId, 'llm')
-    const llmList = llmRaw.list.map((profile) => {
-      const models = configuredLlmModels(profile.models, profile.model)
-      return { ...profile, models, model: models.includes(profile.model) ? profile.model : models[0] || '' }
-    })
-    const llmActive = llmList.find((profile) => profile.id === llmRaw.activeId) || llmList[0]
-    const llm = { list: llmList, activeId: llmActive.id, active: asEndpoint(llmActive) }
-    const vision = hydrateNamed(parsed.visions, visionSnap, t('settings.defaults.vision'), parsed.activeVisionId, 'vis')
+    const llmSnap = savedChatEndpoint(parsed.llm, defaults.llm)
+    const visionSnap = savedChatEndpoint(parsed.vision, defaults.vision)
+    const llm = hydrateNamed(savedChatProfiles(parsed.llms), llmSnap, t('settings.defaults.llm'), parsed.activeLlmId, 'llm')
+    const vision = hydrateNamed(savedChatProfiles(parsed.visions), visionSnap, t('settings.defaults.vision'), parsed.activeVisionId, 'vis')
     const image = hydrateNamed(
       parsed.images,
       {

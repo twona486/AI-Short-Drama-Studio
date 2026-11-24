@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
 import type { ProviderPreset } from '@/services/ai/providers'
-import { applyProviderPreset, findProvider, matchProviderId } from '@/services/ai/providers'
+import { applyProviderPreset, findProvider, matchProviderId, suggestedPresetModels } from '@/services/ai/providers'
 
 const props = defineProps<{
   title: string
@@ -67,7 +67,7 @@ watch(
 )
 
 const suggested = computed(() =>
-  currentPreset.value.models.filter((m) => m && !props.models.includes(m))
+  suggestedPresetModels(currentPreset.value, props.models)
 )
 
 function onAdd() {

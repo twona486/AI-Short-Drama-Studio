@@ -21,16 +21,13 @@ export function getAIMode(): AIMode {
   return 'real'
 }
 
+function chatConfig(kind: 'llm' | 'vision') {
+  const config = pick()?.[kind] ?? envDefaults()[kind]
+  return { ...config, baseUrl: (config.baseUrl || '').replace(/\/+$/, '') }
+}
+
 export function getLlmConfig() {
-  const d = envDefaults().llm
-  const s = pick()?.llm
-  return {
-    baseUrl: (s?.baseUrl || d.baseUrl).replace(/\/+$/, ''),
-    apiKey: s?.apiKey || d.apiKey,
-    model: s?.model || d.model,
-    adapter: s?.adapter,
-    provider: s?.provider
-  }
+  return chatConfig('llm')
 }
 
 /** 이미지 이해 기능이 켜져 있고 현재 연결의 주소, 키, 모델이 모두 설정돼 있어야 한다. */
@@ -41,17 +38,7 @@ export function visionCallsEnabled(): boolean {
 }
 
 export function getVisionConfig() {
-  const d = envDefaults().vision
-  const s = pick()?.vision
-  const selectedModel = s?.model || d.model
-  return {
-    baseUrl: (s?.baseUrl || d.baseUrl).replace(/\/+$/, ''),
-    apiKey: s?.apiKey || d.apiKey,
-    // 이전 비전 설정을 프로젝트의 Qwen3-VL 설정으로 마이그레이션한다.
-    model: /^(qwen3\.7|qwen-vl-)/i.test(selectedModel) ? 'qwen3-vl-plus' : selectedModel,
-    adapter: s?.adapter,
-    provider: s?.provider
-  }
+  return chatConfig('vision')
 }
 
 export function getImageConfig() {
@@ -172,10 +159,6 @@ export function getMusicConfig() {
     apiKey: s?.apiKey || d.apiKey,
     model: s?.model || d.model
   }
-}
-
-export function getRemakeVisionModel() {
-  return envDefaults().remakeVisionModel || 'qwen-vl-max'
 }
 
 export function getRemakeImageModel() {

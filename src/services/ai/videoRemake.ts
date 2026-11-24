@@ -4,7 +4,6 @@
  */
 
 import { callLLM, blobToChatImageUrl, getAIMode, type LLMContentPart } from './client'
-import { getRemakeVisionModel, getVisionConfig } from './runtime'
 import { normalizeStoryboard, storyboardToShots } from './storyboard'
 import type { StoryboardResult } from './storyboard'
 import type { VisualStyle } from '@/types'
@@ -280,47 +279,23 @@ Split narration to match the shots. Do not invent benefits or promises absent fr
         image_url: { url: await blobToChatImageUrl(frames[i], 960, 0.78) }
       })
     }
-    const primary = getRemakeVisionModel()
-    const fallback = getVisionConfig().model
-    const models = fallback && fallback !== primary ? [primary, fallback] : [primary]
-    let lastErr: unknown
-    let respContent = ''
-    for (const model of models) {
-      try {
-        input.onProgress?.('샷을 분석하는 중…')
-        const resp = await callLLM({
-          provider: 'vision',
-          model,
-          messages: [
-            {
-              role: 'system',
-              content: 'Return valid JSON only. Analyze the shot language and produce a filmable storyboard. Write descriptions for the user in Korean (한국어), generation prompts in English, and leave all dubbing to postproduction TTS.'
-            },
-            { role: 'user', content: parts }
-          ],
-          jsonMode: true,
-          temperature: 0.2,
-          maxTokens: 8192,
-          timeoutMs: 180_000,
-          signal: input.signal
-        })
-        respContent = resp.content
-        lastErr = null
-        break
-      } catch (e: any) {
-        lastErr = e
-        const msg = String(e?.message || e)
-        const canFallback =
-          model !== models[models.length - 1] &&
-          /does not support.*image|image.*not supported|Unexpected item type in content|不支持图片/i.test(
-            msg
-          )
-        if (!canFallback) throw e
-        input.onProgress?.('현재 모델이 이미지를 지원하지 않아 다른 모델을 사용하는 중…')
-      }
-    }
-    if (lastErr) throw lastErr
-    raw = parseJsonLoose(respContent)
+    input.onProgress?.('샷을 분석하는 중…')
+    const resp = await callLLM({
+      provider: 'vision',
+      messages: [
+        {
+          role: 'system',
+          content: 'Return valid JSON only. Analyze the shot language and produce a filmable storyboard. Write descriptions for the user in Korean (한국어), generation prompts in English, and leave all dubbing to postproduction TTS.'
+        },
+        { role: 'user', content: parts }
+      ],
+      jsonMode: true,
+      temperature: 0.2,
+      maxTokens: 8192,
+      timeoutMs: 180_000,
+      signal: input.signal
+    })
+    raw = parseJsonLoose(resp.content)
   }
 
   if (!Array.isArray(raw?.shots) || !raw.shots.length) {
