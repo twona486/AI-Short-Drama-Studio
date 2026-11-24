@@ -117,8 +117,8 @@ function formatRules(input: OptimizeNodePromptInput, current: string): string {
 
   const shotBlock =
     input.kind === 'video'
-      ? `This is one continuous ${duration}-second shot. Expand only the opening image, onset of action, and ending. Do not cut or add new time ranges. Preserve the original timing marks.`
-      : 'This is a still frame. Add only visible details, with no passage of time.'
+      ? `目标共 ${duration} 秒，保持用户已有切镜、时间标记和模型格式。在每个原有拍点内写清景别、机位与开幅、焦点、运镜方向和速度及落幅；补具体连续动作、道具或环境反馈、同步声与结束姿势。连续运镜不变成硬切，已有硬切不被省略。屏显原文逐字保留，补清位置、出现时间、停留和避让主体。禁止将具体镜头压成剧情摘要。`
+      : '这是静帧：只加厚已经能看见的画面，不要写时间流逝。'
 
   return `Improve the visual details already present in the prompt. Preserve its format.
 Task type: ${kindLabel}.

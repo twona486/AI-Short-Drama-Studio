@@ -27,6 +27,7 @@ import {
 } from './env'
 import type { AspectRatio, H3VideoGenMode, Shot, VideoGenModel, VideoResolution } from '@/types'
 import { normalizeVideoResolution, videoMaxSeconds } from '@/types'
+import { pickDocVideoResolution, videoResolutionApiValue, videoResolutionChoices } from '@/services/ai/modelOptions'
 import { abortableDelay, controlledSignal, isTimeoutAbort, throwIfAborted } from './abort'
 import type { VideoPromptStyle } from '@/utils/shotPrompt'
 import { blobFromPath, desktop, isDesktop } from '@/services/desktop'
@@ -76,6 +77,8 @@ export interface VideoGenInput {
   imageSlots?: H3ImageSlot[]
   onScreenNames?: string[]
   duration: number
+  /** 独立连续拍计划已验证的时长上限；未传时保持原有接入行为。 */
+  durationLimit?: number
   width: number
   height: number
   /** 프롬프트 앞에 붙이는 화면 비율 태그(예를 들어 [16:9]) */
@@ -574,7 +577,7 @@ async function downloadGeneratedVideo(
 ): Promise<VideoGenOutput> {
   log(`→ 영상 다운로드  ${videoUrl}`)
   onProgress?.('영상을 다운로드하는 중…')
-  const dl = controlledSignal(signal, 120_000)
+  const dl = controlledSignal(signal, 10 * 60_000)
   try {
     const { blob: rawBlob, mime: mimeHint } = await fetchVideoBytes(videoUrl, dl.signal)
     onProgress?.('영상 파일을 확인하는 중…')
@@ -702,7 +705,7 @@ async function realWorkflowVideo(
           ? `시작·끝 프레임 작업을 제출하는 중(${input.aspectRatio || resolution})…`
           : `생성 작업을 제출하는 중(${input.aspectRatio || resolution}, 참조 이미지 ${dataUrls.length}장)…`
     )
-    const submitCtl = controlledSignal(input.signal, 120_000)
+    const submitCtl = controlledSignal(input.signal, 10 * 60_000)
     let submitResp: AutodlHttpResult
     try {
       submitResp = await autodlRequest(
@@ -713,12 +716,12 @@ async function realWorkflowVideo(
           body: JSON.stringify(body),
           signal: submitCtl.signal
         },
-        120_000
+        10 * 60_000
       )
     } catch (error: any) {
       if (isTimeoutAbort(error, submitCtl.signal)) {
         throw new Error(
-          `[video] 작업 제출 시간이 120초를 초과했습니다. 참조 이미지는 약 ${referencePayloadMb.toFixed(1)}MB입니다. 네트워크를 확인하거나 참조 이미지 크기를 줄이세요.`
+          `[video] 提交超时（10 分钟），参考图约 ${referencePayloadMb.toFixed(1)} MB。请检查网络或减小参考图。`
         )
       }
       throw new Error(
@@ -845,7 +848,7 @@ async function realWorkflowVideo(
   throw new Error(`[video] 영상 생성 시간이 30분을 초과했습니다.，task_id=${taskId}`)
 }
 
-/** Bailian wan3.0-video-prime은 720p 고정이며 단일 시작 프레임 또는 다중 참조를 지원한다. */
+/** 百炼 wan3.0-video-prime：单张首帧，多张走全能参考（reference_image）。分辨率跟节点选择，文档档位是 480P / 720P / 1080P。 */
 async function realWanVideo(
   input: VideoGenInput,
   onProgress?: (msg: string) => void
@@ -881,11 +884,14 @@ async function realWanVideo(
   if (!prompt) throw new Error('[video] 먼저 프롬프트를 작성하세요.')
   if (prompt.length > 20000) prompt = prompt.slice(0, 20000)
 
+  const wanChoices = videoResolutionChoices({ model: 'wan-prime' })
+  const wanTier = pickDocVideoResolution(input.videoResolution, wanChoices) || '720p'
+  const wanQuality = videoResolutionApiValue(wanTier)
   const body = {
     model: WAN_PRIME_MODEL,
     input: { prompt, media },
     parameters: {
-      resolution: '720P',
+      resolution: wanQuality,
       ratio: wanRatio(input.aspectRatio),
       duration: targetDuration,
       prompt_extend: true,
@@ -894,10 +900,10 @@ async function realWanVideo(
     }
   }
 
-  const modeLabel = media[0]?.type === 'first_frame' ? '시작 프레임' : `멀티모달 참조 ${media.length}개`
-  onProgress?.(`Wan 작업을 제출하는 중(720P, ${modeLabel}, ${targetDuration}초)…`)
+  const modeLabel = media[0]?.type === 'first_frame' ? '首帧' : `全能参考 ${media.length} 张`
+  onProgress?.(`提交万相任务（${wanQuality}，${modeLabel}，${targetDuration}s）...`)
   const auth = `Bearer ${apiKey}`
-  const submitCtl = controlledSignal(input.signal, 120_000)
+  const submitCtl = controlledSignal(input.signal, 10 * 60_000)
   let submitResp: AutodlHttpResult
   try {
     submitResp = await dashscopeRequest(
@@ -909,11 +915,11 @@ async function realWanVideo(
         body: JSON.stringify(body),
         signal: submitCtl.signal
       },
-      120_000
+      10 * 60_000
     )
   } catch (error: any) {
     if (isTimeoutAbort(error, submitCtl.signal)) {
-      throw new Error('[video] Wan 작업 제출 시간이 120초를 초과했습니다. 네트워크를 확인하거나 참조 이미지 크기를 줄이세요.')
+      throw new Error('[video] 万相提交超时（10 分钟），请检查网络或减小参考图')
     }
     throw new Error(`[video] Bailian에 연결할 수 없습니다. ${error?.message || String(error)}`)
   } finally {
@@ -1095,6 +1101,7 @@ async function realApimartVideo(
     height: input.height,
     duration: input.duration,
     resolution: input.videoResolution,
+    durationLimit: input.durationLimit,
     generateAudio: input.generateAudio,
     audioField: cfg.options?.audioField,
     images,
@@ -1117,6 +1124,11 @@ async function realHttpCustomVideo(
     throw new Error('[video] APIMart 영상 연결의 워크플로 ID에 MiniMax-H3 같은 모델 이름을 입력하세요.')
   }
   const prompt = buildPrompt(input)
+  const resolutionChoices = videoResolutionChoices({
+    model: input.videoModel,
+    profile: { name: cfg.name, workflowId: cfg.workflowId, options: cfg.options }
+  })
+  const pickedResolution = pickDocVideoResolution(input.videoResolution, resolutionChoices)
   onProgress?.('사용자 지정 HTTP API에서 영상을 생성하는 중…')
   const images: string[] = []
   if (input.imageBlob) images.push(await blobToDataUrl(input.imageBlob))
@@ -1138,6 +1150,7 @@ async function realHttpCustomVideo(
       aspect_ratio: input.aspectRatio && String(input.aspectRatio) !== 'auto' ? input.aspectRatio : '16:9',
       width: input.width,
       height: input.height,
+      ...(pickedResolution ? { resolution: videoResolutionApiValue(pickedResolution) } : {}),
       ...(typeof input.generateAudio === 'boolean'
         ? { [cfg.options?.audioField || 'audio']: input.generateAudio }
         : {})
@@ -1163,6 +1176,9 @@ async function realZealmanVideo(
   }
   if (!workflow) throw new Error(`[video] 인식할 수 없는 Zealman 워크플로 ${cfg.workflowId || '없음'}`)
 
+  if (workflow.mode !== 'fl2va' && [input.imageBlob, ...(input.referenceImages || [])].filter(Boolean).length > workflow.maxImages) {
+    throw new Error(`[video] 当前工作流最多支持 ${workflow.maxImages} 张参考图，请减少参考图后再生成；不能静默丢弃图片，否则人物编号会失效。`)
+  }
   const blobs = workflow.mode === 'fl2va'
     ? [input.imageBlob, input.lastFrameBlob].filter((item): item is Blob => Boolean(item))
     : [input.imageBlob, ...(input.referenceImages || [])]
@@ -1199,7 +1215,7 @@ async function realZealmanVideo(
         headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
         body: submitBody,
         signal: input.signal
-      }, 180_000)
+      }, 10 * 60_000)
     let finalSubmitUrl = submitUrl
     let response = await postSubmit(finalSubmitUrl)
     let text = await response.text()
@@ -1276,12 +1292,18 @@ async function realComfyNativeVideo(
     apiKey: cfg.apiKey,
     prompt,
     imageDataUrl,
+    referenceImageDataUrls: await Promise.all((input.referenceImages || []).map(blobToDataUrl)),
     imageEndDataUrl,
     audioDataUrl,
     adapter: cfg.adapter,
+    duration: input.duration,
+    width: input.width,
+    height: input.height,
     signal: input.signal,
     kind: 'video',
-    onProgress
+    onProgress,
+    resumeTaskId: input.resumeTaskId,
+    onTaskSubmitted: input.onTaskSubmitted
   })
   return { blob, mimeType, prompt, duration: input.duration }
 }

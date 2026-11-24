@@ -3,7 +3,7 @@ import { confirmAction } from '@/utils/confirmAction'
 import { t as translate } from '@/i18n'
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { Handle, Position, useVueFlow } from '@vue-flow/core'
-import { useProjectStore, useSettingsStore, useToastStore } from '@/stores'
+import { useProjectStore, useScriptsStore, useSettingsStore, useToastStore } from '@/stores'
 import { llmChoiceKey, llmModelGroups, parseLlmChoiceKey } from '@/stores/settings'
 import { runScriptNode } from '@/services/canvas/runner'
 import { isNodeRunning } from '@/services/canvas/jobs'
@@ -14,11 +14,13 @@ import {
 } from '@/utils/scriptMarkdown'
 import { pickPlayMarkdownFile } from '@/utils/pickPlayFile'
 import { markdownToHtml } from '@/utils/markdown'
+import { parseScriptDoc, serializeScriptDoc, type ParsedScriptDoc } from '@/utils/scriptEpisodes'
 import { needsPlayReview } from '@/services/canvas/playGate'
 import { type ExtractStage } from '@/services/canvas/pipeline'
 import { isPlayReady } from '@/services/ai'
 import { friendlyAiError, shouldToastAiError } from '@/services/ai/abort'
 import NodeBusyOverlay from '@/components/canvas/NodeBusyOverlay.vue'
+import NodeLinkPlus from '@/components/canvas/NodeLinkPlus.vue'
 
 const props = defineProps<{
   id: string
@@ -35,10 +37,74 @@ const MIN_W = 320
 const MIN_H = 360
 
 const project = useProjectStore()
+const scripts = useScriptsStore()
 const settings = useSettingsStore()
 const toast = useToastStore()
 const { getViewport, findNode, removeSelectedNodes } = useVueFlow()
 const panelOpen = ref(false)
+const libraryOpen = ref(false)
+const libraryLoading = ref(false)
+const librarySelected = ref('')
+const libraryEpisodes = ref<ParsedScriptDoc['episodes']>([])
+const libraryEpisodeIndex = ref<number | null>(null)
+let libraryRequestId = 0
+
+async function openScriptLibrary(ev?: Event) {
+  ev?.stopPropagation()
+  if (generating.value) return
+  libraryOpen.value = true
+  libraryLoading.value = true
+  librarySelected.value = ''
+  libraryEpisodes.value = []
+  libraryEpisodeIndex.value = null
+  ++libraryRequestId
+  try {
+    await scripts.refresh()
+  } catch (error: any) {
+    toast.error(error?.message || '读取剧本库失败')
+  } finally {
+    libraryLoading.value = false
+  }
+}
+
+async function selectLibraryScript(id: string) {
+  if (libraryLoading.value) return
+  const requestId = ++libraryRequestId
+  librarySelected.value = id
+  libraryEpisodes.value = []
+  libraryEpisodeIndex.value = null
+  libraryLoading.value = true
+  try {
+    const content = await scripts.readContent(id, true)
+    if (requestId !== libraryRequestId || !libraryOpen.value) return
+    libraryEpisodes.value = parseScriptDoc(content).episodes
+  } catch (error: any) {
+    if (requestId === libraryRequestId) toast.error(error?.message || '读取剧本集数失败')
+  } finally {
+    if (requestId === libraryRequestId) libraryLoading.value = false
+  }
+}
+
+async function useLibraryScript() {
+  const doc = scripts.docs.find((item) => item.id === librarySelected.value)
+  const index = libraryEpisodeIndex.value
+  if (!doc || index === null || libraryLoading.value) return
+  const episode = libraryEpisodes.value[index]
+  if (!episode?.content.trim()) {
+    toast.warn('这一集还没有正文，请选择有内容的集数')
+    return
+  }
+  libraryLoading.value = true
+  try {
+    const title = `${doc.title} · ${episode.title}`
+    const content = serializeScriptDoc({ title, preamble: '', episodes: [episode] })
+    if (await applyImportedMarkdown(content, `${title}.md`)) libraryOpen.value = false
+  } catch (error: any) {
+    toast.error(error?.message || '读取剧本失败')
+  } finally {
+    libraryLoading.value = false
+  }
+}
 
 watch(
   () => props.selected,
@@ -198,9 +264,9 @@ async function approvePlay(ev: Event) {
 }
 
 async function applyImportedMarkdown(text: string, filename: string) {
-  if (!project.current) return
+  if (!project.current) return false
   const existing = (project.current.script?.content || '').trim()
-  if (existing && !await confirmAction(translate('common.replaceScriptConfirm'))) return
+  if (existing && !confirm('导入会替换当前剧本正文，确定吗？')) return false
   try {
     const script = scriptFromImportedPlay(project.current, text, filename)
     project.setScript(script)
@@ -210,8 +276,10 @@ async function applyImportedMarkdown(text: string, filename: string) {
     editing.value = false
     dirty.value = false
     toast.success(translate('common.importedNamed', { p0: script.topic }))
+    return true
   } catch (e: any) {
     toast.error(e?.message || translate('common.importFailed'))
+    return false
   }
 }
 
@@ -352,6 +420,7 @@ async function generateThis(ev: Event, kind: 'play' | 'extract' | 'continue' = '
 
 <template>
   <div class="sdoc" :class="[`st-${status}`, { editing, on: selected && panelOpen, busy: generating }]">
+    <NodeLinkPlus :node-id="id" />
     <div
       class="sdoc-card"
       @dragover="onPlayDragOver"
@@ -370,6 +439,9 @@ async function generateThis(ev: Event, kind: 'play' | 'extract' | 'continue' = '
           </button>
         </template>
         <template v-else-if="!emptyState">
+          <button type="button" class="sdoc-btn" :disabled="generating" @click="openScriptLibrary" @mousedown.stop>
+            {{ $t('common.scriptLibrary') }}
+          </button>
           <button type="button" class="sdoc-btn" :disabled="generating" @click="importMarkdown" @mousedown.stop>
             {{ $t('common.import') }}
           </button>
@@ -400,6 +472,11 @@ async function generateThis(ev: Event, kind: 'play' | 'extract' | 'continue' = '
       <template v-if="emptyMode === 'pick'">
         <p class="empty-title">{{ $t('scriptDocNode.noScript') }}</p>
         <div class="empty-cards">
+          <button type="button" class="empty-card" :disabled="generating" @click="openScriptLibrary">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 4.5h11a2 2 0 0 1 2 2v13H6.5A2.5 2.5 0 0 1 4 17V6a1 1 0 0 1 1-1.5Z" /><path d="M4 17a2.5 2.5 0 0 1 2.5-2.5H18M8 8h6M8 11h6" /></svg>
+            <strong>从剧本库选择</strong>
+            <span>从剧本管理中心选择要拍摄的集数</span>
+          </button>
           <button type="button" class="empty-card" :disabled="generating" @click="importMarkdown">
             <svg viewBox="0 0 24 24" aria-hidden="true">
               <path d="M12 4.5V16M7.5 11 12 15.5 16.5 11" />
@@ -456,6 +533,36 @@ async function generateThis(ev: Event, kind: 'play' | 'extract' | 'continue' = '
       </template>
     </div>
     <div v-else class="sdoc-md nowheel nodrag" :class="{ 'has-panel': selected && panelOpen }" v-html="html" />
+
+    <Teleport to="body">
+      <div v-if="libraryOpen" class="script-library-backdrop" @click.self="libraryOpen = false" @keydown.esc="libraryOpen = false">
+        <section class="script-library-dialog" role="dialog" aria-modal="true" aria-labelledby="script-library-title" @mousedown.stop @click.stop>
+          <header class="script-library-head">
+            <div><strong id="script-library-title">从剧本库选择</strong><p>先选剧本，再选择本次拍摄的集数；只会载入这一集。</p></div>
+            <button type="button" class="sdoc-btn" :aria-label="$t('common.close')" @click="libraryOpen = false">✕</button>
+          </header>
+          <p v-if="libraryLoading" class="script-library-empty">正在读取剧本…</p>
+          <p v-else-if="!scripts.docs.length" class="script-library-empty">剧本库还是空的，请先在剧本管理中心创建或导入剧本。</p>
+          <div v-else class="script-library-list">
+            <button v-for="doc in scripts.docs" :key="doc.id" type="button" class="script-library-item" :class="{ on: librarySelected === doc.id }" @click="selectLibraryScript(doc.id)">
+              <strong>{{ doc.title }}</strong><span>{{ doc.episodeCount }} 集 · {{ doc.totalWords }} 字</span>
+            </button>
+          </div>
+          <div v-if="librarySelected && !libraryLoading && libraryEpisodes.length" class="script-library-episodes">
+            <strong>选择集数</strong>
+            <div class="script-library-episode-list">
+              <button v-for="(episode, index) in libraryEpisodes" :key="index" type="button" class="script-library-item" :class="{ on: libraryEpisodeIndex === index }" :disabled="!episode.content.trim()" @click="libraryEpisodeIndex = index">
+                <strong>{{ episode.title || `第 ${index + 1} 集` }}</strong><span>{{ episode.content.trim() ? `${episode.content.replace(/\s/g, '').length} 字` : '暂无正文' }}</span>
+              </button>
+            </div>
+          </div>
+          <footer class="script-library-foot">
+            <button type="button" class="sdoc-btn" @click="libraryOpen = false">{{ $t('common.cancel') }}</button>
+            <button type="button" class="sdoc-btn primary" :disabled="libraryEpisodeIndex === null || libraryLoading" @click="useLibraryScript">使用这一集</button>
+          </footer>
+        </section>
+      </div>
+    </Teleport>
 
     <div v-if="!playReady && !emptyState && !editing" class="sdoc-gate nodrag">
       <span>{{ $t('scriptDocNode.draftHint') }}</span>
@@ -594,6 +701,40 @@ async function generateThis(ev: Event, kind: 'play' | 'extract' | 'continue' = '
 </template>
 
 <style scoped>
+.script-library-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 5000;
+  display: grid;
+  place-items: center;
+  padding: 20px;
+  background: rgba(0, 0, 0, 0.6);
+}
+.script-library-dialog {
+  width: min(520px, 100%);
+  max-height: min(650px, 85vh);
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--color-border);
+  border-radius: 14px;
+  background: var(--color-bg-1);
+  color: var(--color-text-1);
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.35);
+}
+.script-library-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; padding: 20px; }
+.script-library-head p { margin: 6px 0 0; font-size: 12px; color: var(--color-text-3); }
+.script-library-empty { margin: 0; padding: 30px 20px; color: var(--color-text-3); font-size: 13px; }
+.script-library-list { overflow: auto; padding: 0 12px; min-height: 0; }
+.script-library-episodes { padding: 12px 12px 0; border-top: 1px solid var(--color-border); min-height: 0; display: flex; flex-direction: column; gap: 6px; }
+.script-library-episodes > strong { padding: 0 12px; color: var(--color-text-2); font-size: 12px; }
+.script-library-episode-list { overflow: auto; min-height: 0; }
+.script-library-item { display: flex; flex-direction: column; align-items: flex-start; gap: 5px; width: 100%; padding: 12px; border: 1px solid transparent; border-radius: 9px; background: transparent; color: var(--color-text-1); text-align: left; cursor: pointer; }
+.script-library-item:disabled { opacity: 0.45; cursor: not-allowed; }
+.script-library-item:hover, .script-library-item.on { background: var(--color-fill); border-color: var(--color-border); }
+.script-library-item.on { border-color: var(--color-accent); }
+.script-library-item span { color: var(--color-text-3); font-size: 12px; }
+.script-library-foot { display: flex; justify-content: flex-end; gap: 8px; padding: 16px 20px; border-top: 1px solid var(--color-border); }
+.script-library-foot button:disabled { opacity: 0.5; cursor: default; }
 .sdoc {
   width: 100%;
   height: 100%;
@@ -613,9 +754,9 @@ async function generateThis(ev: Event, kind: 'play' | 'extract' | 'continue' = '
   height: 100%;
   display: flex;
   flex-direction: column;
-  background: var(--color-bg-1);
+  background: color-mix(in srgb, var(--nb-bg-2) 62%, transparent);
   border: 1px solid var(--color-node-border);
-  border-radius: 14px;
+  border-radius: 8px;
   overflow: hidden;
   box-shadow: var(--shadow-node);
   position: relative;
@@ -652,7 +793,7 @@ async function generateThis(ev: Event, kind: 'play' | 'extract' | 'continue' = '
   gap: 10px;
   padding: 10px 14px 8px;
   border-bottom: 1px solid var(--color-border);
-  background: var(--color-node-well);
+  background: transparent;
   flex-shrink: 0;
   cursor: grab;
 }
@@ -717,7 +858,7 @@ async function generateThis(ev: Event, kind: 'play' | 'extract' | 'continue' = '
   resize: none;
   border: none;
   outline: none;
-  background: var(--color-bg-1);
+  background: transparent;
   color: var(--color-text-1);
   font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
   font-size: 12px;
@@ -811,6 +952,7 @@ async function generateThis(ev: Event, kind: 'play' | 'extract' | 'continue' = '
   width: 100%;
   max-width: 380px;
 }
+.empty-card:first-child { grid-column: 1 / -1; }
 .empty-card {
   display: flex;
   flex-direction: column;

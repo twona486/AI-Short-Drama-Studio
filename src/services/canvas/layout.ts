@@ -123,12 +123,17 @@ export function nextFreeformPosition(
   opts: {
     source?: CanvasNode
     click?: { x: number; y: number }
+    place?: 'before' | 'after'
+    span?: number
   }
 ): { x: number; y: number } {
   let pos: { x: number; y: number }
   if (opts.source) {
     const abs = absoluteCanvasPosition(nodes, opts.source)
-    pos = { x: abs.x + NODE_W + 48, y: abs.y }
+    pos =
+      opts.place === 'before'
+        ? { x: abs.x - (opts.span ?? NODE_W) - 48, y: abs.y }
+        : { x: abs.x + NODE_W + 48, y: abs.y }
   } else if (opts.click && Number.isFinite(opts.click.x) && Number.isFinite(opts.click.y)) {
     pos = { x: opts.click.x, y: opts.click.y }
   } else {
@@ -150,7 +155,7 @@ export function nextFreeformPosition(
       (n) => Math.abs(n.position.x - pos.x) < 36 && Math.abs(n.position.y - pos.y) < 36
     )
   ) {
-    pos = { x: pos.x + 36, y: pos.y + 36 }
+    pos = opts.place === 'before' ? { x: pos.x - 36, y: pos.y } : { x: pos.x + 36, y: pos.y + 36 }
     guard += 1
   }
   return pos
@@ -189,8 +194,35 @@ export function rescueStrandedFreeformNodes(nodes: CanvasNode[]): CanvasNode[] |
   })
 }
 
+const FIXED_PIPELINE_TYPES = new Set<CanvasNode['type']>([
+  'script',
+  'groupFrame',
+  'subject',
+  'subjectProps',
+  'prop',
+  'scene',
+  'sceneProps',
+  'shotBoard',
+  'shotImage',
+  'shotFrames',
+  'shotVideo',
+  'audio',
+  'export',
+  'final'
+])
+
 export function rebuildCanvasGraph(project: Project, preservePositions = true): CanvasGraph {
   const prevList = project.canvas?.nodes ?? []
+  if (project.continuousCaptureEnabled) {
+    const nodes = prevList.filter((node) => !FIXED_PIPELINE_TYPES.has(node.type))
+    const ids = new Set(nodes.map((node) => node.id))
+    return {
+      nodes,
+      edges: (project.canvas?.edges ?? []).filter((edge) => ids.has(edge.source) && ids.has(edge.target)),
+      groups: [],
+      viewport: project.canvas?.viewport ?? emptyCanvas().viewport
+    }
+  }
   const subjects = project.subjects ?? []
   const storyProps = project.props ?? []
   const scenes = project.scenes ?? []
@@ -216,10 +248,11 @@ export function rebuildCanvasGraph(project: Project, preservePositions = true): 
       ? shotsNeedingStills.length > 0
       : (project.settings?.h3ShotChainMode || 'auto') !== 'fl2va'
   const useStills =
-    stillsWanted &&
+    shots.some(s => s.imageAssetId || s.boardAssetId) ||
+    (stillsWanted &&
     (shotVideoPrev.length
       ? shotVideoPrev.some((n) => videoStillNeedsCanvas(stillModeFromNode(n)))
-      : videoStillNeedsCanvas(defaultStill))
+      : videoStillNeedsCanvas(defaultStill)))
   const stillGroupLabel = shotVideoPrev.some((n) => stillModeFromNode(n) === 'storyboard')
     ? '스토리 개요판'
     : '샷 키프레임'
@@ -423,7 +456,8 @@ export function rebuildCanvasGraph(project: Project, preservePositions = true): 
     // 시작·끝 프레임 샷에서 기존 키프레임과 개요판은 유지한다.
     const keepExistingStill = Boolean(shot.imageAssetId || shot.boardAssetId)
     const stillType =
-      shotUsesFrames(shot, project) && !keepExistingStill ? null : stillTypeForMode(resolvedStill)
+      shotUsesFrames(shot, project) && !keepExistingStill ? null :
+        stillTypeForMode(resolvedStill) || (shot.imageAssetId ? 'shotImage' : shot.boardAssetId ? 'shotBoard' : null)
     const stillId = stillType ? `${stillType}:${shot.id}` : ''
     if (stillType && stillId) {
       const prevStillNode = prev.get(stillId) || prevAny.get(stillId)
@@ -470,7 +504,7 @@ export function rebuildCanvasGraph(project: Project, preservePositions = true): 
         shotId: shot.id,
         label: `${i + 1}. ${shot.title}`,
         videoModel: prevVid?.data.videoModel ?? defaultVideoModelPref(),
-        videoResolution: prevVid?.data.videoResolution,
+        videoResolution: prevVid?.data.videoResolution ?? project.settings.defaultVideoResolution,
         videoStillMode: resolvedStill,
         aspectRatio: prevVid?.data.aspectRatio ?? project.settings.aspectRatio
       },
@@ -601,7 +635,9 @@ export function rebuildCanvasGraph(project: Project, preservePositions = true): 
   }
 
   // 레이아웃을 정리할 때 사용자가 추가한 자유 이미지나 영상 노드를 유지한다.
-  const freeNodes = prevList.filter((node) => node.type === 'imageGen' || node.type === 'videoGen')
+  const freeNodes = prevList.filter(
+    (node) => Boolean(node.data.captureId) || node.type === 'imageGen' || node.type === 'videoGen' || node.type === 'audioGen' || node.type === 'compose'
+  )
   const freeIds = new Set(freeNodes.map((node) => node.id))
   for (const node of freeNodes) {
     if (!nodes.some((item) => item.id === node.id)) nodes.push({ ...node, parentGroupId: undefined })
@@ -614,6 +650,10 @@ export function rebuildCanvasGraph(project: Project, preservePositions = true): 
   }
 
   const viewport = project.canvas?.viewport ?? emptyCanvas().viewport
+  for (const node of nodes) {
+    const scale = prevAny.get(node.id)?.data.canvasScale
+    if (scale !== undefined) node.data.canvasScale = scale
+  }
   return { nodes, edges, groups, viewport }
 }
 

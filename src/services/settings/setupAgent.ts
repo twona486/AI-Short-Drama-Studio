@@ -109,15 +109,15 @@ const SYSTEM = `${settingsSkillRaw}
 Return JSON only: { "say": "User-facing message in Korean (한국어)", "actions": [ ... ] }.
 Return at most eight actions. If required information is missing, ask in say and return actions=[]. When the documentation provides enough information, produce actions.
 
-Tools:
-{ "tool": "add_profile", "kind": "vision|image|tts|video|llm", "name": "Display name", "provider": "Optional preset ID", "baseUrl": "", "apiKey": "", "model": "", "models": ["Optional"], "voice": "Optional for tts", "workflowId": "Optional for video", "promptStyle": "scene-narrative|formatted", "stillMode": "identity|keyframe|storyboard. Optional for video. H3 with character/location references uses identity; models needing a keyframe use keyframe", "options": { "imageResolutions": ["1k","2k"], "videoAudio": true, "lastFrameRequired": false, "audioField": "audio" }, "adapter": { "type": "openai-compatible|openai-images|http-custom|comfyui-workflow|comfyui-prompt", "path": "Optional", "pollPath": "Optional, may contain {id}", "resultJsonPath": "Optional", "authHeader": "Optional", "authPrefix": "Optional, Bearer or empty", "workflowTemplate": "ComfyUI /prompt JSON; {{prompt}}{{image}} are supported" } }
-{ "tool": "update_profile", "kind": "…", "id": "profile_id", "name": "Optional", "baseUrl": "Optional", "apiKey": "Optional", "model": "Optional", "models": ["Optional"], "voice": "Optional", "workflowId": "Optional", "promptStyle": "Optional", "options": "Optional, as above", "adapter": "Optional, as above" }
-{ "tool": "select_profile", "kind": "…", "id": "…", "model": "Optional current model" }
-{ "tool": "add_model", "kind": "llm|vision|image|tts", "id": "profile_id, defaults to current profile", "model": "Model name" }
-{ "tool": "test_connection", "kind": "llm|vision|image|tts|video", "id": "Optional, defaults to current profile" }
-{ "tool": "add_comfyui", "baseUrl": "http://127.0.0.1:8188", "apiKey": "Optional", "kinds": ["image","video"], "test": true }
-{ "tool": "list_comfy_workflows", "kind": "image|video", "id": "Optional profile ID" }
-{ "tool": "set_workflow_template", "kind": "image|video", "id": "Optional", "workflowTemplate": "{...API Format JSON...}", "path": "Optional path from the list result" }
+可用工具：
+{ "tool": "add_profile", "kind": "vision|image|tts|video|llm", "name": "显示名", "provider": "预设id，可选", "baseUrl": "", "apiKey": "", "model": "", "models": ["可选"], "voice": "tts可选", "workflowId": "video可选", "promptStyle": "scene-narrative|formatted", "stillMode": "identity|keyframe|storyboard，video可选。H3用人设+场景填 identity，其它模型要关键帧填 keyframe", "options": { "imageResolutions": ["1k","2k"], "videoResolutions": ["480p","720p","1080p"], "videoAudio": true, "lastFrameRequired": false, "audioField": "audio" }, "adapter": { "type": "openai-compatible|openai-images|http-custom|comfyui-workflow|comfyui-prompt", "path": "可选", "pollPath": "可选含{id}", "resultJsonPath": "可选", "authHeader": "可选", "authPrefix": "可选，Bearer 或空", "workflowTemplate": "ComfyUI /prompt JSON，可用{{prompt}}{{image}}" } }
+{ "tool": "update_profile", "kind": "…", "id": "profile_id", "name": "可选", "baseUrl": "可选", "apiKey": "可选", "model": "可选", "models": ["可选"], "voice": "可选", "workflowId": "可选", "promptStyle": "可选", "options": "可选，同上", "adapter": "可选，同上" }
+{ "tool": "select_profile", "kind": "…", "id": "…", "model": "可选，设为当前模型" }
+{ "tool": "add_model", "kind": "llm|vision|image|tts", "id": "profile_id，可省略表示当前套", "model": "模型名" }
+{ "tool": "test_connection", "kind": "llm|vision|image|tts|video", "id": "可选，默认当前套" }
+{ "tool": "add_comfyui", "baseUrl": "http://127.0.0.1:8188", "apiKey": "可选", "kinds": ["image","video"], "test": true }
+{ "tool": "list_comfy_workflows", "kind": "image|video", "id": "可选 profile id" }
+{ "tool": "set_workflow_template", "kind": "image|video", "id": "可选", "workflowTemplate": "{...API Format JSON...}", "path": "可选，从 list 结果里的 path 拉取" }
 
 Presets (id | name | URL | default model | common models):
 LLM
@@ -131,21 +131,22 @@ ${catalog(TTS_PROVIDERS)}
 Video
 ${catalog(VIDEO_PROVIDERS)}
 
-Connection rules:
-- When supplied API docs or a gateway URL, use provider=custom. Extract the exact Base URL and model names and call add_profile. Do not refuse solely because a preset does not exist.
-- When documentation covers chat, vision, and images, add one profile per supported kind. They can share the same URL and key.
-- Keep Base URL at the version root such as /v1, without /chat/completions or /images/generations.
-- Use official-provider presets only when the user supplies no docs or custom URL and asks for setup.
-- For video without a separate workflowId, use model as workflowId.
-- For dubbing, use longanhuan_v3.6 unless the user supplies a voice.
-- When the provider matches a preset and there is no different third-party URL, fill missing fields from the preset. If the supplied domain differs, use custom and preserve the URL.
-- For self-hosted ComfyUI such as http://127.0.0.1:8188, use add_comfyui for image and video. When the user gives only a ComfyUI URL, add the profiles without asking for a model name.
-- Populate adapter.workflowTemplate only from supplied workflow JSON. Without it, add the profile and tell the user to paste it into the adapter settings before generation. Do not invent a workflow or AutoDL lifecycle details.
-- For OpenAI-compatible gateways, use defaults for LLM and vision. If image creation uses a path other than /images/generations, set adapter.type=http-custom and fill path and resultJsonPath.
-- After saving, call test_connection if the user asks to test it.
-- Include only options explicitly documented. Use lower-case 1k, 2k, or 4k entries in imageResolutions only when documented. Omit the field if documentation does not specify resolutions.
-- Set videoAudio=true only for a documented sound toggle. Set audioField to its documented name, which must contain audio, such as audio or generate_audio. Omit videoAudio otherwise.
-- A last frame is optional by default. Use lastFrameRequired=true only if the documentation explicitly requires one, and omit it if no last frame is mentioned.`
+注意：
+- 用户贴 API 文档或中转地址时：provider 必须是 custom，按文档原文抽 Base URL 和模型名，立刻 add_profile。禁止拒绝。
+- 文档同时含聊天 / 看图 / 生图时，每种 kind 各写一条，可共用同一套 Key 和地址。
+- Base URL 写到 /v1 这一层即可，不要带 /chat/completions 或 /images/generations。
+- 只有用户没给任何文档、只说「帮我配」时，才从上面的大厂预设里选。
+- 视频的 model 若没单独给 workflowId，就当作 workflowId。
+- 配音默认音色 longanhuan_v3.6，用户没提音色就用这个。
+- provider 对得上大厂预设、且用户没另给第三方地址时，用预设补全；用户给的 URL 与预设域名不一致时一律当 custom，不要改写成官方地址。
+- 自建 ComfyUI（如 http://127.0.0.1:8188）：优先用 add_comfyui 一次加生图+视频。用户只说「我的 ComfyUI 在 xxx」或只贴地址时立刻添加，不要追问模型名。
+- 有工作流 JSON 再写入 adapter.workflowTemplate；没有也不要拒绝添加，提醒出片前在设置页适配器粘贴。不要编造 AutoDL 生命周期或假工作流。
+- OpenAI 兼容中转：LLM/视觉用默认；生图若不是 /images/generations，设 adapter.type=http-custom 并填 path、resultJsonPath。
+- 写完接入后，若用户要求「测一下」，调用 test_connection。
+- options 只写文档里明确出现的节点参数，禁止编造。生图文档列出 1K/2K/4K 时，imageResolutions 只收录文档有的档位，写成小写 1k、2k、4k。文档没写分辨率就不要填 imageResolutions。
+- 视频文档列出 480P、720P、768P、1080P 时，videoResolutions 只收录文档有的档位，写成小写 480p、720p、768p、1080p。文档没写视频分辨率就不要填 videoResolutions。
+- 视频文档有音频开关时 videoAudio 才写 true，并把文档里的字段名写入 audioField（必须含 audio，例如 audio 或 generate_audio）。没有音频开关就不要写 videoAudio。
+- 尾帧默认不是必填。只有文档写明尾帧、结束帧或 last frame 必填时，lastFrameRequired 才写 true。文档没提尾帧，就不要写这个字段。`
 
 function providersFor(kind: SetupKind): ProviderPreset[] {
   if (kind === 'llm') return LLM_PROVIDERS
@@ -797,7 +798,7 @@ export async function runSetupAgentTurn(
     jsonMode: true,
     temperature: 0.2,
     maxTokens: looksLikeDocs ? 4000 : 1800,
-    timeoutMs: looksLikeDocs ? 180_000 : 120_000,
+    timeoutMs: 5 * 60_000,
     signal
   })
 

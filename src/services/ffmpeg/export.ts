@@ -146,10 +146,13 @@ export async function exportVideo(input: ExportInput): Promise<Blob> {
         /* ignore */
       }
 
-      const voBlob = input.voiceoverAudioMap?.get(clip.shotId)
+      const voBlob = input.voiceoverAudioMap?.get(clip.id) || input.voiceoverAudioMap?.get(clip.shotId)
       if (voBlob && voBlob.size > 200) {
         input.onProgress?.(t('ffmpegExport.addNarration', { current: i + 1, total: enabled.length }))
         const mixedName = `clip_${i}_vo.mp4`
+        const voiceVolume = clip.voiceAssetId
+          ? Math.max(0, Math.min(2, clip.voiceVolume ?? input.voiceoverVolume ?? 1))
+          : input.voiceoverVolume ?? 1
         try {
           await mixVoiceover(
             ffmpeg,
@@ -159,7 +162,7 @@ export async function exportVideo(input: ExportInput): Promise<Blob> {
             duration,
             // 변환 단계에서 환경음 볼륨을 조정했으므로 여기서는 기존 볼륨으로 내레이션과 믹싱한다.
             keepAmbient ? 1 : 0,
-            input.voiceoverVolume ?? 1
+            voiceVolume
           )
           try {
             await ffmpeg.deleteFile(outName)

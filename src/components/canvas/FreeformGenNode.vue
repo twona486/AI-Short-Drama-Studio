@@ -17,11 +17,11 @@ import VideoModelSelect from '@/components/settings/VideoModelSelect.vue'
 import H3GenModeSelect from '@/components/settings/H3GenModeSelect.vue'
 import FramePairSlots from '@/components/canvas/FramePairSlots.vue'
 import CanvasToolbarIcon from '@/components/canvas/CanvasToolbarIcon.vue'
+import NodeLinkPlus from '@/components/canvas/NodeLinkPlus.vue'
 import AspectRatioSeg from '@/components/common/AspectRatioSeg.vue'
-import VideoResolutionSeg from '@/components/common/VideoResolutionSeg.vue'
 import ImageResolutionSeg from '@/components/common/ImageResolutionSeg.vue'
-import DocAudioToggle from '@/components/common/DocAudioToggle.vue'
-import { pickDocImageResolution, type DocImageResolution } from '@/services/ai/modelOptions'
+import VideoSettingsPopover from '@/components/canvas/VideoSettingsPopover.vue'
+import { pickDocImageResolution, pickDocVideoResolution, videoResolutionChoices, type DocImageResolution } from '@/services/ai/modelOptions'
 import { selectCanvasNode } from '@/services/canvas/canvasBridge'
 import { pickLocalFiles } from '@/utils/pickLocalFiles'
 import {
@@ -32,8 +32,6 @@ import type { AspectRatio, CanvasNodeType, H3VideoGenMode, ID, VideoGenModel, Vi
 import {
   normalizeH3GenMode,
   normalizeVideoGenModel,
-  normalizeVideoResolution,
-  videoAllows1080p,
   videoDurationOptions
 } from '@/types'
 
@@ -59,6 +57,7 @@ const library = useLibraryStore()
 const toast = useToastStore()
 const mediaUrl = ref('')
 const posterUrl = ref('')
+const frameRatio = ref('')
 const pickerOpen = ref(false)
 const pickerMode = ref<'ref' | 'output'>('ref')
 const panelOpen = ref(false)
@@ -72,6 +71,7 @@ const { updateNodeData } = useVueFlow()
 const type = computed(() => (props.data.nodeType === 'videoGen' ? 'videoGen' : 'imageGen'))
 const isVideo = computed(() => type.value === 'videoGen')
 const node = computed(() => project.current?.canvas?.nodes.find((n) => n.id === props.id))
+const isCapture = computed(() => Boolean(node.value?.data.captureId))
 const boundRefs = computed(() => {
   const p = project.current
   const n = node.value
@@ -87,11 +87,32 @@ const refs = computed(() => {
 const outputId = computed(() => node.value?.data.outputAssetId || props.data.outputAssetId)
 const hasAsset = computed(() => Boolean(outputId.value))
 const generating = computed(() => isNodeRunning(props.id))
-const title = computed(() => node.value?.data.label || (isVideo.value ? translate('freeformGenNode.video') : translate('freeformGenNode.image')))
+const title = computed(() => {
+  const shotId = node.value?.data.shotId
+  const shot = shotId ? project.current?.shots.find((item) => item.id === shotId) : undefined
+  if (isVideo.value && shot?.title) return shot.title
+  return node.value?.data.label || (isVideo.value ? '视频' : '图片')
+})
 const prompt = computed({
   get: () => node.value?.data.prompt ?? '',
   set: (v: string) => project.setCanvasNodePrompt(props.id, v)
 })
+function rememberFrame(width?: number, height?: number) {
+  if (!width || !height || width < 16 || height < 16) return
+  frameRatio.value = `${Math.round(width)} / ${Math.round(height)}`
+}
+
+const mediaBoxRatio = computed(() => {
+  if (!isVideo.value && mediaUrl.value) return undefined
+  if (isVideo.value && frameRatio.value) return frameRatio.value
+  return cssAspectRatio(aspectRatio.value)
+})
+
+function onFrameLoad(event: Event) {
+  const img = event.target as HTMLImageElement
+  rememberFrame(img.naturalWidth, img.naturalHeight)
+}
+
 const aspectRatio = computed({
   get: () => node.value?.data.aspectRatio ?? project.current?.settings.aspectRatio ?? '16:9',
   set: (v: AspectRatio) => project.patchCanvasNode(props.id, { aspectRatio: v, outputAssetId: undefined, videoTaskId: undefined })
@@ -123,8 +144,18 @@ const videoModel = computed({
   get: () => normalizeVideoGenModel(node.value?.data.videoModel),
   set: (v: VideoGenModel) => applyShotVideoModel(props.id, v)
 })
+const resolutionChoices = computed(() =>
+  videoResolutionChoices({
+    model: videoModel.value,
+    profile: videoModel.value === 'wan-prime' ? null : effectiveVideoProfile.value
+  })
+)
 const videoResolution = computed({
-  get: () => normalizeVideoResolution(node.value?.data.videoResolution, videoModel.value),
+  get: () => {
+    const choices = resolutionChoices.value
+    if (choices.length) return pickDocVideoResolution(node.value?.data.videoResolution ?? project.current?.settings.defaultVideoResolution, choices) || choices[0]
+    return '768p' as VideoResolution
+  },
   set: (v: VideoResolution) => project.patchCanvasNode(props.id, { videoResolution: v })
 })
 const isH3Video = computed(() => isVideo.value && videoModel.value !== 'wan-prime')
@@ -155,36 +186,13 @@ const generateAudio = computed({
   get: () => Boolean(node.value?.data.generateAudio),
   set: (v: boolean) => project.patchCanvasNode(props.id, { generateAudio: v })
 })
-function profileIsAutodl(p?: { provider?: string; baseUrl?: string; adapter?: { type?: string } }) {
-  if (!p) return false
-  const zealman = p.provider === 'zealman' || p.adapter?.type === 'zealman-workflow'
-  if (zealman) return false
-  return p.provider === 'autodl' || /autodl\.art/i.test(p.baseUrl || '')
-}
-function profileDisplayName(p?: { name?: string; provider?: string; adapter?: { type?: string } }) {
-  if (!p) return ''
-  const zealman = p.provider === 'zealman' || p.adapter?.type === 'zealman-workflow'
-  return zealman ? `Zealman · ${p.name}` : p.name || ''
-}
-/** 노드 부제에 실제로 사용하는 연결을 표시한다. */
-const videoKindLabel = computed(() => {
-  if (!isVideo.value) return translate('freeformGenNode.imageGeneration')
-  if (videoModel.value === 'wan-prime') return translate('freeformGenNode.wanVideo', { p0: duration.value })
-  const p = effectiveVideoProfile.value
-  // Zealman이나 자체 ComfyUI 등은 실제 연결 이름을 표시한다.
-  if (p && !profileIsAutodl(p)) {
-    return translate('freeformGenNode.profileVideo', { p0: profileDisplayName(p) || translate('freeformGenNode.customProfile') })
-  }
-  // AutoDL H3의 길이는 노드에서 지정한 값을 사용한다.
-  return videoModel.value === 'h3-v5'
-    ? translate('freeformGenNode.h3VideoResolution', { p0: duration.value, p1: videoResolution.value === '1080p' ? ' 1080p' : '' })
-    : translate('freeformGenNode.h3Video', { p0: duration.value })
-})
+const videoKindLabel = computed(() => (isVideo.value ? '' : '图片生成'))
 const isH3Fl2va = computed(() => isH3Video.value && h3GenMode.value === 'fl2va')
 const durationOptions = computed(() => videoDurationOptions(videoModel.value))
 const duration = computed({
   get() {
     const raw = Math.round(Number(node.value?.data.duration) || 8)
+    if (isCapture.value) return raw
     const opts = durationOptions.value
     if (opts.includes(raw)) return raw
     const min = opts[0] ?? 1
@@ -227,11 +235,14 @@ const refUrls = ref<Record<string, string>>({})
 async function loadMedia() {
   const id = outputId.value
   const seq = ++mediaSeq
+  frameRatio.value = ''
   if (!id) {
     mediaUrl.value = ''
     posterUrl.value = ''
     return
   }
+  const meta = assets.getMeta(id)
+  if (meta && 'width' in meta) rememberFrame(meta.width, meta.height)
   const url = (await assets.getUrl(id)) || (await library.getUrl(id)) || ''
   if (seq !== mediaSeq) return
   mediaUrl.value = url
@@ -404,6 +415,7 @@ function togglePlay() {
 
 function previewFull() {
   if (!mediaUrl.value) return
+  selectCanvasNode(props.id)
   openLightbox(mediaUrl.value, isVideo.value ? 'video' : 'image', title.value)
 }
 
@@ -413,7 +425,7 @@ async function generate() {
     toast.warn(translate('common.enterPromptFirst'))
     return
   }
-  if (isVideo.value) {
+  if (isVideo.value && !isCapture.value) {
     if (isH3Fl2va.value) {
       if (!firstFrameId.value && !refs.value[0]) {
         toast.warn(translate('freeformGenNode.requireFirstFrame'))
@@ -537,6 +549,7 @@ async function removeSelf() {
 
 <template>
   <div class="fnode" :class="[`kind-${type}`, { on: selected && panelOpen, empty: !hasAsset, busy: generating }]">
+    <NodeLinkPlus :node-id="props.id" />
     <Handle id="in" type="target" :position="Position.Left" class="hndl" />
 
     <transition name="float-up">
@@ -592,13 +605,16 @@ async function removeSelf() {
       </div>
     </transition>
 
-    <div class="media" :style="{ aspectRatio: cssAspectRatio(aspectRatio) }">
+    <div class="media" :class="{ 'natural-image': !isVideo && mediaUrl }" :style="{ aspectRatio: mediaBoxRatio }">
       <template v-if="isVideo && mediaUrl">
         <img
           v-if="posterUrl"
-          class="nodrag nowheel frame"
+          class="nowheel frame"
+          :draggable="false"
+          @dragstart.prevent
           :src="posterUrl"
           alt=""
+          @load="onFrameLoad"
         />
         <div v-else class="ready">{{ $t('common.videoGenerated') }}</div>
         <button
@@ -613,7 +629,9 @@ async function removeSelf() {
       </template>
       <img
         v-else-if="mediaUrl"
-        class="nodrag nowheel"
+        class="nowheel"
+        :draggable="false"
+        @dragstart.prevent
         :src="mediaUrl"
         alt=""
       />
@@ -631,7 +649,7 @@ async function removeSelf() {
     </div>
 
     <div class="name">
-      <span class="kind">{{ videoKindLabel }}</span>
+      <span v-if="videoKindLabel" class="kind">{{ videoKindLabel }}</span>
       <span class="title">{{ title }}</span>
     </div>
 
@@ -697,35 +715,26 @@ async function removeSelf() {
             @select-profile="(id) => applyShotVideoProfile(props.id, id)"
           />
           <!-- 비율과 모델을 한 줄에 표시한다. -->
-          <AspectRatioSeg v-model="aspectRatio" compact />
+          <AspectRatioSeg v-if="!isVideo" v-model="aspectRatio" compact />
           <ImageResolutionSeg
             v-if="!isVideo && imageResolutionChoices.length"
             v-model="imageResolution"
             :choices="imageResolutionChoices"
           />
-          <DocAudioToggle v-if="isVideo && showVideoAudio" v-model="generateAudio" />
-          <VideoResolutionSeg
-            v-if="isVideo && videoAllows1080p(videoModel) && !isH3Fl2va"
-            v-model="videoResolution"
-            compact
+          <VideoSettingsPopover
+            v-if="isVideo"
+            :resolution="videoResolution"
+            :resolutions="resolutionChoices"
+            :aspect="aspectRatio"
+            :duration="duration"
+            :durations="durationOptions"
+            :show-audio="showVideoAudio"
+            :audio="generateAudio"
+            @update:resolution="videoResolution = $event"
+            @update:aspect="aspectRatio = $event"
+            @update:duration="duration = $event"
+            @update:audio="generateAudio = $event"
           />
-          <div v-if="isVideo" class="dur-edit">
-            <button type="button" class="dur-btn" @click="durOpen = durOpen === 'foot' ? '' : 'foot'">
-              {{ duration }} {{ $t('common.seconds') }}
-            </button>
-            <div v-if="durOpen === 'foot'" class="dur-menu">
-              <button
-                v-for="n in durationOptions"
-                :key="'foot-' + n"
-                type="button"
-                :class="{ on: n === duration }"
-                @mousedown.prevent.stop
-                @click.stop="pickDuration(n)"
-              >
-                {{ n }} {{ $t('common.seconds') }}
-              </button>
-            </div>
-          </div>
           <button class="go" type="button" :disabled="generating || optimizingPrompt" :title="genLabel" @click="generate">↑</button>
         </div>
       </div>
@@ -762,9 +771,9 @@ async function removeSelf() {
 .fnode {
   position: relative;
   width: 240px;
-  background: var(--color-bg-1);
+  background: color-mix(in srgb, var(--nb-bg-2) 62%, transparent);
   border: 1px solid var(--color-node-border);
-  border-radius: 12px;
+  border-radius: 6px;
   overflow: visible;
   color: var(--color-text-1);
   box-shadow: var(--shadow-node);
@@ -861,7 +870,7 @@ async function removeSelf() {
   width: 100%;
   background: var(--color-node-well);
   overflow: hidden;
-  border-radius: 12px 12px 0 0;
+  border-radius: inherit;
 }
 .media img,
 .media video,
@@ -871,6 +880,12 @@ async function removeSelf() {
   object-fit: contain;
   display: block;
 }
+.media .frame {
+  object-fit: cover;
+}
+.media.natural-image > img { height: auto; }
+.media img { user-select: none; -webkit-user-drag: none; cursor: grab; }
+.media img:active { cursor: grabbing; }
 .ready {
   position: absolute;
   inset: 0;
@@ -963,12 +978,12 @@ async function removeSelf() {
 }
 .prompt {
   position: absolute;
-  left: 0;
+  left: 50%;
   top: calc(100% + 8px);
   z-index: 5;
-  width: 840px;
-  min-width: 560px;
-  transform-origin: 0 0;
+  width: 520px;
+  transform: translateX(-50%);
+  transform-origin: 50% 0;
   overflow: visible;
   background: var(--color-bg-1);
   border: 1px solid var(--color-border);
@@ -1050,7 +1065,7 @@ async function removeSelf() {
 }
 .prompt textarea {
   width: 100%;
-  min-height: 120px;
+  min-height: 240px;
   resize: vertical;
   border: none;
   outline: none;
@@ -1060,6 +1075,10 @@ async function removeSelf() {
   line-height: 1.55;
   font-family: inherit;
 }
+.capture-panel > strong { font-size: 13px; color: var(--color-text-1); }
+.capture-panel > p { margin: 8px 0; font-size: 11px; line-height: 1.6; color: var(--color-text-3); }
+.capture-panel .prompt-foot button { border: 1px solid var(--color-border); border-radius: 7px; padding: 6px 10px; background: var(--color-bg-2); color: var(--color-text-1); font-size: 12px; cursor: pointer; }
+.capture-panel .prompt-foot button:disabled { opacity: .5; cursor: default; }
 .prompt-tools {
   display: flex;
   justify-content: flex-end;
@@ -1191,6 +1210,6 @@ async function removeSelf() {
 .float-down-enter-from,
 .float-down-leave-to {
   opacity: 0;
-  transform: translateY(-6px);
+  transform: translateX(-50%) translateY(-6px);
 }
 </style>

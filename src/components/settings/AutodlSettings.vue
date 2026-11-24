@@ -88,9 +88,9 @@ function apply() {
       <h2>{{ $t('autodlSettings.builtIn') }}</h2>
       <div class="workflow-list">
         <article v-for="workflow in AUTODL_WORKFLOWS" :key="workflow.id">
-          <strong>{{ workflow.displayName }}</strong>
-          <span>{{ workflow.mode === 'fl2va' ? $t('common.firstLastFrame') : workflow.mode === 'audio-sync' ? $t('common.narration') : $t('common.imageToVideo') }}</span>
-          <small>{{ workflow.note }} {{ $t('autodlSettings.maximum') }} {{ workflow.maxDuration }} {{ $t('common.seconds') }}</small>
+          <strong>{{ workflow.name }}</strong>
+          <span>{{ workflow.mode === 'fl2va' ? '首尾帧' : workflow.mode === 'audio-sync' ? '口播' : workflow.mode === 'multi-audio' ? '多图多音频' : '图生视频' }}</span>
+          <small>{{ workflow.note }} · 最长 {{ workflow.maxDuration }} 秒</small>
         </article>
       </div>
     </section>

@@ -32,6 +32,7 @@ import type {
   ProjectSettings,
   AgentWorkspaceState,
   AspectRatio,
+  VideoResolution,
   ID,
   Subject,
   StoryProp,
@@ -61,12 +62,13 @@ function defaultSettings(): ProjectSettings {
       position: 'bottom',
       bold: true
     },
-    defaultTransition: 'fade',
+    defaultTransition: 'none',
     bgmVolume: 0.22,
     originalVolume: 0.55,
     keepAmbientAudio: true,
     captionBg: false,
     burnCaptions: true,
+    defaultVideoResolution: '768p',
     captionHighlight: false,
     captionHighlightColor: '#ffd84d',
     captionHighlightScale: 1.2,
@@ -373,7 +375,7 @@ export const useProjectStore = defineStore('project', () => {
     touch()
   }
 
-  /** 영상 프롬프트를 변경하면 이전 프롬프트로 제출한 작업을 무효화한다. */
+  /** 改提示词只停掉还没回来的旧任务。已经生成的视频留在节点上，下次点生成才按新词重做。 */
   function setShotVideoPrompt(id: ID, value: string) {
     if (!current.value) return
     const idx = current.value.shots.findIndex((s) => s.id === id)
@@ -383,10 +385,7 @@ export const useProjectStore = defineStore('project', () => {
     current.value.shots[idx] = {
       ...shot,
       compiledVideoPrompt: value,
-      videoTaskId: undefined,
-      videoHistoryIds: pushHistory(shot.videoAssetId, '', shot.videoHistoryIds).filter(Boolean),
-      videoAssetId: undefined,
-      status: shot.imageAssetId ? 'image-generated' : 'draft'
+      videoTaskId: undefined
     }
     touch()
   }
@@ -493,6 +492,7 @@ export const useProjectStore = defineStore('project', () => {
   }
 
   /** 음성 방식을 바꾸면 이전 영상을 이력으로 옮기고 해당 영상만 다시 생성한다. */
+  /** 修改口播配置不删除现有视频；新设置在用户主动生成时生效。 */
   function setShotAudioMode(id: ID, audioMode: ShotAudioMode) {
     if (!current.value) return
     const idx = current.value.shots.findIndex((s) => s.id === id)
@@ -503,13 +503,11 @@ export const useProjectStore = defineStore('project', () => {
     current.value.shots[idx] = {
       ...shot,
       audioMode,
-      videoHistoryIds: pushHistory(shot.videoAssetId, '', shot.videoHistoryIds).filter(Boolean),
-      videoAssetId: undefined,
       audioHistoryIds: keepTts
         ? shot.audioHistoryIds
         : pushHistory(shot.audioAssetId, '', shot.audioHistoryIds).filter(Boolean),
       audioAssetId: keepTts ? shot.audioAssetId : undefined,
-      status: shot.imageAssetId ? 'image-generated' : 'draft'
+      status: shot.status
     }
     touch()
   }
@@ -578,17 +576,18 @@ export const useProjectStore = defineStore('project', () => {
     touch()
   }
 
-  /** 자유 생성 노드의 프롬프트를 변경하면 기존 작업과 출력을 무효화한다. */
+  /** 自由生成节点的 prompt 写入口。视频节点改词后保留已有成片；其它节点仍清掉旧输出。 */
   function setCanvasNodePrompt(id: string, prompt: string) {
     const node = current.value?.canvas?.nodes.find((n) => n.id === id)
     if (!node || (node.data.prompt ?? '') === prompt) return
+    const keepVideo = node.type === 'videoGen'
     node.data = {
       ...node.data,
       prompt,
-      outputAssetId: undefined,
+      ...(keepVideo ? {} : { outputAssetId: undefined }),
       videoTaskId: undefined
     }
-    node.status = 'idle'
+    if (!keepVideo) node.status = 'idle'
     node.error = undefined
     touch()
   }
@@ -610,7 +609,7 @@ export const useProjectStore = defineStore('project', () => {
       ? (p.subjects ?? []).find((s) => s.id === node.data.subjectId)
       : undefined
     const scene = node.data.sceneId ? (p.scenes ?? []).find((s) => s.id === node.data.sceneId) : undefined
-    if (node.type === 'imageGen' || node.type === 'videoGen') {
+    if (node.type === 'imageGen' || node.type === 'videoGen' || node.type === 'audioGen' || node.type === 'compose') {
       node.data = { ...node.data, outputAssetId: assetId }
     } else if (node.type === 'shotImage' && shot) {
       assignShotImage(shot.id, assetId)
@@ -663,7 +662,7 @@ export const useProjectStore = defineStore('project', () => {
     const idx = canvas.nodes.findIndex((n) => n.id === id)
     if (idx < 0) return null
     const src = canvas.nodes[idx]
-    if (src.type !== 'imageGen' && src.type !== 'videoGen') return null
+    if (src.type !== 'imageGen' && src.type !== 'videoGen' && src.type !== 'audioGen') return null
     const type = src.type
     const count = canvas.nodes.filter((n) => n.type === type).length + 1
     const copy: CanvasNode = {
@@ -674,7 +673,7 @@ export const useProjectStore = defineStore('project', () => {
         y: src.position.y
       },
       data: {
-        label: t(type === 'imageGen' ? 'project.imageNodeName' : 'project.videoNodeName', { count }),
+        label: type === 'imageGen' ? `图片 ${count}` : type === 'audioGen' ? `音频 ${count}` : `视频 ${count}`,
         prompt: src.data.prompt || '',
         referenceAssetIds: [...(src.data.referenceAssetIds ?? [])],
         referenceSourceNodeIds: [...(src.data.referenceSourceNodeIds ?? [])],
@@ -687,6 +686,14 @@ export const useProjectStore = defineStore('project', () => {
               firstFrameAssetId: src.data.firstFrameAssetId,
               lastFrameAssetId: src.data.lastFrameAssetId,
               videoResolution: src.data.videoResolution
+            }
+          : {}),
+        ...(type === 'audioGen'
+          ? {
+              ttsModel: src.data.ttsModel,
+              referenceAudioAssetId: src.data.referenceAudioAssetId,
+              clonedVoiceId: src.data.clonedVoiceId,
+              clonedVoiceModel: src.data.clonedVoiceModel
             }
           : {})
       },
@@ -729,6 +736,23 @@ export const useProjectStore = defineStore('project', () => {
     current.value.settings.height = height
     if (current.value.script) current.value.script.aspectRatio = ar
     current.value.canvas = rebuildCanvasGraph(current.value, true)
+    touch()
+  }
+
+  function setDefaultVideoResolution(resolution: VideoResolution) {
+    if (!current.value) return
+    current.value.settings.defaultVideoResolution = resolution
+    if (current.value.canvas) {
+      current.value.canvas = {
+        ...current.value.canvas,
+        nodes: current.value.canvas.nodes.map((node) =>
+          (node.type === 'shotVideo' || node.type === 'videoGen') &&
+          node.data.videoResolution == null
+            ? { ...node, data: { ...node.data, videoResolution: resolution } }
+            : node
+        )
+      }
+    }
     touch()
   }
 
@@ -855,6 +879,7 @@ export const useProjectStore = defineStore('project', () => {
     removeCanvasNode,
     syncCanvasFromProject,
     setAspectRatio,
+    setDefaultVideoResolution,
     setPlayApproved,
     save,
     remove,

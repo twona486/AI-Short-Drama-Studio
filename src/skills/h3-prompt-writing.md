@@ -20,9 +20,9 @@ Use prompt optimization to write the official format for the node mode. Generate
 
 ```text
 Speaker lock (these labels are the pictures):
-(S1) is 「민준」 / <Picture 1>. Lock face, hair, body, age and outfit. Identity reference only, not the first frame.
-(S2) is 「도윤」 / <Picture 2>. Lock face, hair, body, age and outfit. Identity reference only, not the first frame.
-<Picture 3> is the location 「임대 아파트」. Lock space, materials, weather and light. One unified place.
+(S1) is Ah Kai / <Picture 1>. Lock face, hair, body, age and outfit. Identity reference only, not the first frame.
+(S2) is Da Bin / <Picture 2>. Lock face, hair, body, age and outfit. Identity reference only, not the first frame.
+<Picture 3> is the location rental room. Lock space, materials, weather and light. One unified place.
 Only one (S#) speaks at a time, and each person says their own line once. Everyone else keeps their lips completely closed. No overlap, no chorus, no second person repeating the same line.
 ```
 
@@ -30,13 +30,13 @@ Do not use `Picture 1 aligns with 0.00 seconds` for multimodal reference. Reserv
 
 ## Six sections for multimodal reference
 
-In `subject_definitions`, use `<Subject N> is 「name」 (S#) in <Picture N>`. Put the shot body below directly in `detailed_description`. Use the three fields for first-and-last-frame, first-frame, last-frame, and text-only modes. Place an applicable alignment sentence before those fields.
+`subject_definitions` 写 `<Subject N> is EnglishName (S#) in <Picture N>`。名字用英文，不要写「中文名」。下面这段镜头正文放进 `detailed_description`，不要再外包一层 `integrated_multimodal_description`。首尾帧 / 首帧 / 尾帧 / 纯文本才用三段，而且对齐句在三段前面。
 
 ```text
 subject_definitions:
-<Subject 1> is 「민준」 (S1) in <Picture 1>. Lock face, hair, body, age and outfit. Identity reference only, not the first frame.
-<Subject 2> is 「도윤」 (S2) in <Picture 2>. Lock face, hair, body, age and outfit. Identity reference only, not the first frame.
-<Subject 3> is 「임대 아파트」 in <Picture 3>, the location for [Shot 1].
+<Subject 1> is Ah Kai (S1) in <Picture 1>. Lock face, hair, body, age and outfit. Identity reference only, not the first frame.
+<Subject 2> is Da Bin (S2) in <Picture 2>. Lock face, hair, body, age and outfit. Identity reference only, not the first frame.
+<Subject 3> is the rental room in <Picture 3>, the location for [Shot 1].
 
 summary:
 [reference generation] The target video is one continuous [Shot 1] of <Subject 1> and <Subject 2> in <Subject 3>. Character sheets lock identity only.
@@ -47,7 +47,7 @@ retention_analysis:
 <Subject 3> (appears in [Shot 1]): fully_preserved - space, materials, weather and light from <Picture 3>.
 
 detailed_description:
-[Shot 1] Grounded contemporary comedy, photorealistic live-action, 9:16. Afternoon light through the living-room window. (S1) 「민준」 squats at the left sofa, digging through cushions. (S2) 「도윤」 sprawls on the right sofa with a bag of chips. Neither looks into the lens.
+[Shot 1] Grounded contemporary comedy, photorealistic live-action, 9:16. Afternoon light through the living-room window. (S1) Ah Kai squats at the left sofa, digging through cushions. (S2) Da Bin sprawls on the right sofa with a bag of chips. Neither looks into the lens.
 
 [00:00.000–00:01.200]
 Wide view from the doorway. Both mouths stay closed. Chip crunch and cushion rustle only.
@@ -72,14 +72,13 @@ N/A
 
 ## Dialogue
 
-- Each line is spoken once by its assigned (S#) in its own time range.
-- Use original words and the correct language tag. For Chinese use `(S1) says: <d>[Chinese] verbatim line</d>`; for Korean use `(S1) says: <d>[Korean] 대사 원문</d>`. Immediately say that the other people keep their lips closed.
-- Keep production notes, duration, style, and cast details outside dialogue tags.
-- When there is no dialogue, write `No dialogue. No lips moving.`. Do not put a placeholder such as “none” or ‘없음’ inside `<d>`.
+- Deliver each line once, using its own speaker ID and time interval.
+- Use `(S1) says: <d>[Korean] 준비됐어요?</d>` and describe the other listeners keeping their mouths closed. Use the actual full English name of the supplied line's language.
+- Keep production notes, duration, style and cast lists out of dialogue. Leave dialogue tags and lip-sync instructions out of silent shots.
 
 ## Writing guidance
 
-- Write the final model prompt in English, including action, camera position, and light. Keep Korean dialogue and explicitly requested Korean (한국어) on-screen text verbatim. Preserve original dialogue and names; avoid model-facing scene narration in Chinese.
-- Describe what actually happens: who is to the left or right, what they hold, and how the prop changes. Avoid template language like “Begin with the opening frame” or “let the frame breathe”.
-- In `overall_soundscape`, name the actual sounds, such as crisp chip crunch or cushion rustle. Do not just write close breath.
-- Set `non_diegetic_music` to `N/A`. Write user-facing explanations in Korean (한국어).
+- Write visible action, camera position, lighting and descriptions of people and places in English. Preserve names where needed and keep supplied dialogue and visible text verbatim.
+- Describe what actually happens: who stands where, what each person holds and how the props change. Avoid generic filler such as “let the frame breathe.”
+- In `overall_soundscape`, name actual sounds, such as the crunch of chips or the rustle of a cushion.
+- For this template, set `non_diegetic_music` to `N/A`.

@@ -12,7 +12,7 @@ import {
 import { normalizeForSpeech } from './tts'
 import { callLLM, getAIMode } from './client'
 import { importedDirectorForH3 } from '@/services/settings/directorSkill'
-import { parseJsonRobust } from '@/utils/jsonRepair'
+import { parseJsonRobust, stripReasoningLeak } from '@/utils/jsonRepair'
 
 export interface H3ImageSlot {
   index: number
@@ -164,38 +164,27 @@ export function isMessyH3Prompt(text: string): boolean {
   return /[㐀-鿿]/.test(stripAllowedCjk(t))
 }
 
-/**
- * 영문 본문에서 대사, 이미지 번호의 인물 매핑, 인용 부호로 감싼 이름은 유지한다.
- * 시작 부분의 캐릭터 음색 블록도 유지한다.
- */
+/** 允许保留 <d> 台词和用方头括号标记的剧情内屏显原文。 */
 function stripAllowedCjk(text: string): string {
-  return String(text || '')
-    .replace(/<d>\s*\[[^\]]+\]\s*[\s\S]*?<\/d>/gi, '')
-    .replace(/图\s*\d+\s*[是：:=]*/g, '')
-    .replace(/「[^」]{1,24}」/g, '')
-    .replace(/人物声音[^\n]*(?:\r?\n(?!\r?\n)[^\n]*)*/g, '')
+  return String(text || '').replace(/<d>\s*\[[^\]]+\]\s*[\s\S]*?<\/d>|【[^】\n]+】/gi, '')
 }
 
 function cjkOutsideSpokenTags(text: string): boolean {
   return /[㐀-鿿]/.test(stripAllowedCjk(text))
 }
 
-/** 본문의 한자를 제거하되 대사와 인물 매핑 및 음색 블록은 보존한다. */
+/** 正文仍用英文，保留原语言台词和明确标记的剧情内文字。 */
 export function stripCjkOutsideSpokenTags(text: string): string {
   const held: string[] = []
   const mask = (block: string) => {
     held.push(block)
     return `__H3KEEP${held.length - 1}__`
   }
-  const masked = String(text || '')
-    .replace(/<d>\s*\[[^\]]+\]\s*[\s\S]*?<\/d>/gi, mask)
-    .replace(/图\s*\d+\s*[是：:=]*/g, mask)
-    .replace(/「[^」]{1,24}」/g, mask)
-    // 음색 블록을 보호해 본문 정리 과정에서 사라지지 않게 한다.
-    .replace(/人物声音[^\n]*(?:\r?\n(?!\r?\n)[^\n]*)*/g, mask)
-    .replace(/voice\s*:\s*[^\n,]*/gi, mask)
+  const masked = String(text || '').replace(/<d>\s*\[[^\]]+\]\s*[\s\S]*?<\/d>|【[^】\n]+】/gi, mask)
   const cleaned = masked
     .replace(/[\u3400-\u9fff]+/g, '')
+    .replace(/[「」『』]/g, '')
+    .replace(/[，。！？、；：（）]/g, ' ')
     .replace(/This shot is titled\s*\./gi, '')
     .replace(/[ \t]{2,}/g, ' ')
     .replace(/\n{3,}/g, '\n\n')
@@ -211,8 +200,6 @@ function looksLikeSpokenDialogue(text: string): boolean {
   if (/图\s*\d+|Camera language|Performance direction|时长|画风|场记|integrated_multimodal|Reference pictures/i.test(line)) {
     return false
   }
-  if (detectDialogueLanguage(line) === 'Korean') return true
-  if (line.length <= 4 && !/[。！？!?，、]/.test(line)) return false
   return /[\u3400-\u9fff]/.test(line)
 }
 
@@ -477,13 +464,12 @@ function pictureRoster(input: H3PromptInput): string {
 }
 
 function identityLabel(slot: LabeledSlot): string {
-  const source = String(slot.sourceName || '').trim()
   const en = String(slot.name || '').trim()
-  const zh = source && /[㐀-鿿]/.test(source) ? `「${source}」` : ''
-  if (zh && (!en || /^Person\s+\d+$/i.test(en) || /^Place\s+\d+$/i.test(en))) return zh
-  if (zh) return `${en}${zh}`
-  if (source && source !== en) return `${en}「${source}」`
-  return en || `reference ${slot.picture}`
+  if (en && !/[㐀-鿿]/.test(en)) return en
+  if (slot.kind === 'scene') return `Place ${slot.picture}`
+  if (slot.kind === 'character') return `Person ${slot.picture}`
+  if (slot.kind === 'prop') return `Prop ${slot.picture}`
+  return `reference ${slot.picture}`
 }
 
 /** 말하는 순서와 무관하게 캐릭터 식별자를 해당 이미지에 고정한다. */
@@ -515,6 +501,10 @@ export function pictureIdentityBlock(input: H3PromptInput): string {
       lines.push(
         `<Picture ${slot.picture}> is a storyboard or keyframe for blocking and order only. Never show the grid, panels or labels on screen.`
       )
+      continue
+    }
+    if (slot.name === 'start frame') {
+      lines.push(`<Picture ${slot.picture}> is the actual first frame at 0.00 seconds. Continue from this pose, wardrobe, light and set. Later pictures lock identity or location only and are not first frames.`)
       continue
     }
     lines.push(`<Picture ${slot.picture}> is additional reference ${who}. Match people, clothing, product, setting or style from this image.`)
@@ -630,9 +620,9 @@ function bareSpeakerName(raw?: string): string {
 }
 
 /** 첫 번째 캐릭터 이미지는 첫 번째 식별자에 고정하며 발화 순서로 다시 번호를 붙이지 않는다. */
-function speakerCode(input: H3PromptInput, raw?: string): string {
+function matchedSpeakerCode(input: H3PromptInput, raw?: string): string | undefined {
   const people = characterPeople(input)
-  const wanted = [bareSpeakerName(raw), bareSpeakerName(input.speakerName)].filter(Boolean)
+  const wanted = [bareSpeakerName(raw)].filter(Boolean)
   for (const name of wanted) {
     const hit = people.findIndex((slot) => {
       const src = bareSpeakerName(slot.sourceName)
@@ -641,7 +631,11 @@ function speakerCode(input: H3PromptInput, raw?: string): string {
     })
     if (hit >= 0) return `S${hit + 1}`
   }
-  return 'S1'
+  return undefined
+}
+
+function speakerCode(input: H3PromptInput, raw?: string): string {
+  return matchedSpeakerCode(input, raw) || matchedSpeakerCode(input, input.speakerName) || 'S1'
 }
 
 function quietOthers(input: H3PromptInput, code: string): string {
@@ -656,13 +650,13 @@ function quietOthers(input: H3PromptInput, code: string): string {
 }
 
 function dialogueBlocks(input: H3PromptInput, lines: string[]): string {
-  if (!lines.length || input.voiceMode === 'none') return 'No dialogue. No lips moving.'
+  if (!lines.length || input.voiceMode === 'none') return ''
   const cues = dialogueCuesForPrompt(input)
-  const voiceTag = String(input.speakerVoice || '').trim().replace(/[；;]+$/, '')
+  const voiceTag = englishOrOmit(String(input.speakerVoice || '').trim().replace(/[；;]+$/, ''))
   if (input.voiceMode === 'voiceover') {
     const spoken = lines
       .map((line, i) => {
-        const cue = cues.find((item) => item.text === line) || cues[i]
+        const cue = cues[i]
         const code = speakerCode(input, cue?.speaker)
         return `(${code})${voiceTag ? `, voice: ${voiceTag}` : ''} says in an off-screen voiceover: ${h3SpokenTag(line)} ${quietOthers(input, code)}`
       })
@@ -672,13 +666,28 @@ function dialogueBlocks(input: H3PromptInput, lines: string[]): string {
   const hint = englishOrOmit(input.speakerHint?.replace(/^\[|\]$/g, ''))
   return lines
     .map((line, i) => {
-      const cue = cues.find((item) => item.text === line) || cues[i]
+      const cue = cues[i]
       const code = speakerCode(input, cue?.speaker)
       const extra = [i === 0 && voiceTag ? `voice: ${voiceTag}` : '', i === 0 ? hint : ''].filter(Boolean).join(', ')
       const lead = extra ? `(${code}), ${extra},` : `(${code})`
       return `${lead} says: ${h3SpokenTag(line)} ${quietOthers(input, code)}`
     })
     .join('\n\n')
+}
+
+/** 没台词时不要留下说话、嘴唇、对白这些词。H3 会把否定句也当成开口指令，并补英文台词。 */
+function stripSilentSpeechPriming(text: string): string {
+  return text
+    .replace(/<d>\s*\[[^\]]*\]\s*[\s\S]*?<\/d>/gi, '')
+    .replace(/No dialogue\.?\s*(No lips moving\.?)?/gi, '')
+    .replace(/No one speaks in this range\.?\s*(Mouths stay closed\.?)?/gi, '')
+    .replace(/Each spoken line belongs to exactly one \(S#\) and one time range\.?\s*/gi, '')
+    .replace(/Listeners keep their lips closed\.?\s*/gi, '')
+    .replace(/One person speaks at a time\.?\s*/gi, '')
+    .replace(/No voices and no music\.?/gi, '')
+    .replace(/[ \t]{2,}/g, ' ')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim()
 }
 
 function stripDialogueMentions(text: string): string {
@@ -868,6 +877,16 @@ function assembleOfficial(desc: string, sound: string, music = 'N/A', input?: H3
     if (!keyframe) body = ensurePictureIdentity(body, input)
     body = ensureVoiceRoster(body, input.voiceRoster || '')
   }
+  if (input?.mode === 'I2VA') {
+    const block = pictureIdentityBlock(input)
+    if (block) {
+      body = body
+        .replace(/Speaker lock \(these labels are the pictures\):[\s\S]*?(?=\n\s*\[Shot\s*\d+\]|\n\s*Camera language\s*:|\n\s*overall_soundscape\s*:|$)/i, '')
+        .replace(/\n{3,}/g, '\n\n')
+        .trim()
+      body = `${block}\n\n${body}`
+    }
+  }
   const extraJobs = input
     ? slotsOf(input)
         .filter((slot) => slot.kind === 'extra' && slot.index > 1)
@@ -1003,8 +1022,10 @@ function spokenLinesForPrompt(input: H3PromptInput): string[] {
   // 내레이션 필드에 내용이 있으면 해당 필드만 대사 원문으로 사용한다.
   // 인물 소개의 욕망이나 변화 같은 설정 문구는 대사로 추출하지 않는다.
   if (input.voiceMode === 'none') return []
+  const labeled = labeledVoiceoverCues(input.voiceover || '')
+  if (labeled.length) return labeled.map((cue) => cue.text)
   const fromVo = spokenCueLines(input.voiceover || '')
-  if (fromVo.length) return [...new Set(fromVo)]
+  if (fromVo.length) return fromVo
   const fromNotes = extractSpokenFromNotes(
     String(input.prompt || '')
       .replace(/<d>\s*\[[^\]]*\]\s*[\s\S]*?<\/d>/gi, '')
@@ -1038,12 +1059,12 @@ function applyDialogue(desc: string, input: H3PromptInput): string {
       const turnIssue = dialogueTurnIssue(body, owned.length ? owned : wanted.map((text) => ({ text })))
       const spokenTurns = [...body.matchAll(/\(S(\d+)\)[^<\n]{0,160}\b(?:says?|asks?|shouts?|replies?|exclaims?|yells?|whispers?)\b[\s\S]{0,80}<d>/gi)]
       const codesMatch = wanted.every((line, index) => {
-        const cue = owned.find((item) => item.text === line) || owned[index]
+        const cue = owned[index]
         const code = speakerCode(input, cue?.speaker).replace(/^S/, '')
         return spokenTurns[index]?.[1] === code
       })
       if (turnIssue || !codesMatch || !/<d>\s*\[/i.test(body)) {
-        body = `${body.replace(/<d>\s*\[[^\]]*\]\s*[\s\S]*?<\/d>/gi, '').trim()}\n\n${dialogueBlocks(input, wanted)}`.trim()
+        body = `${body.replace(/(?:\(S\d+\)[^\n<]{0,120}\b(?:says?|asks?|replies?|shouts?|whispers?)\b[^\n<]{0,40})?<d>\s*\[[^\]]*\]\s*[\s\S]*?<\/d>/gi, '').replace(/\(S\d+\)\s+(?:says?|asks?|replies?|shouts?|whispers?)\s*:\s*(?=\(S\d+\)|$)/gi, '').trim()}\n\n${dialogueBlocks(input, wanted)}`.trim()
       } else {
         body = ensureSpokenTags(body, wanted)
       }
@@ -1053,7 +1074,7 @@ function applyDialogue(desc: string, input: H3PromptInput): string {
           .replace(/<d>\s*\[[^\]]*\]\s*[\s\S]*?<\/d>/gi, '')
           .replace(/\bNo dialogue\.?\s*(No lips moving\.?)?/gi, '')
       )
-      if (!/no dialogue/i.test(body)) body = `${body}\n\nNo dialogue. No lips moving.`.trim()
+      body = stripSilentSpeechPriming(body)
     }
     return body
   }
@@ -1078,7 +1099,7 @@ function applyDialogue(desc: string, input: H3PromptInput): string {
       .replace(/<d>\s*\[[^\]]+\]\s*[\s\S]*?<\/d>/gi, '')
       .replace(/[^.]{0,80}\(S\d+\)[^.]{0,60}says(?: in an off-screen voiceover)?:\s*/gi, '')
       .trim()
-    body = /no dialogue/i.test(cleaned) ? cleaned : `${cleaned} No dialogue. No lips moving.`.trim()
+    body = stripSilentSpeechPriming(cleaned)
   }
   if (!/finishes naturally within/i.test(body)) {
     body = `${body} ${finishLine(input)}`
@@ -1103,7 +1124,7 @@ function defaultSoundscape(input: H3PromptInput, spoken: string): string {
     ? `${english.replace(/\.?$/, '')}, synchronized with the picture.`
     : 'Quiet room tone, cloth, footsteps and handled objects, synchronized with the picture.'
   if (!spoken || input.voiceMode === 'none') {
-    return `${base} No voices and no music.`
+    return base
   }
   return `${base} Only the speaking (S#) is heard, and only the words inside the d tag. No music.`
 }
@@ -1254,7 +1275,6 @@ function descriptionFromNotes(input: H3PromptInput): string {
   const tOpen = formatH3Timestamp(Math.min(1.2, Math.max(0.8, total * 0.2)))
   const tHold = formatH3Timestamp(Math.max(total - 0.8, total * 0.85))
   const tEnd = formatH3Timestamp(total)
-  const lastBeat = Math.max(0.8, total - Number((total * 0.85).toFixed(2))).toFixed(2)
   const angleBit = angle ? `, ${angle}` : ''
   const openCam = cameraBeatEn(movement, 0, 3)
   const midCam = cameraBeatEn(movement, 1, 3)
@@ -1280,17 +1300,23 @@ function descriptionFromNotes(input: H3PromptInput): string {
       const code = line ? speakerCode(input, dialogueCuesForPrompt(input).find((cue) => cue.text === line)?.speaker) : ''
       const speech = line
         ? `(${code || 'S1'}) says: ${h3SpokenTag(line)} ${quietOthers(input, code || 'S1')}`
-        : 'No one speaks in this range. Mouths stay closed.'
+        : ''
       if (index === 0) {
         return `[${start}–${end}]\n${openCam} ${who} in ${where}. ${blocking} ${eyes.replace(/\.$/, '.')}${moodBit} ${speech}`.trim()
       }
       if (index === plan.length - 1) {
-        return `[${start}–${end}]\n${endCam} ${action} The action develops continuously and finishes naturally within ${lastBeat} seconds. ${speech}`.trim()
+        return `[${start}–${end}]\n${endCam} ${action} The action develops continuously and finishes naturally within ${total.toFixed(0)} seconds. ${speech}`.trim()
       }
       return `[${start}–${end}]\n${midCam} ${action} Lighting stays ${lighting}.${extraHint} ${speech}`.trim()
     })
     .join('\n\n')
-  const body = `[Shot 1] ${styleLead(input.aesthetic)}, ${size}${angleBit}, ${compositionEn(input.aspectRatio)}. Clean low-noise digital cinema image, natural skin texture. ${who} in ${where}. One ${total.toFixed(0)}-second clip. Each spoken line belongs to exactly one (S#) and one time range. Listeners keep their lips closed.
+  const speechRule = lines.length
+    ? 'Each spoken line belongs to exactly one (S#) and one time range. Listeners keep their lips closed.'
+    : 'Visible action and ambient sound only.'
+  const performance = lines.length
+    ? 'Keep faces, hair and clothes locked to the speaker pictures. One person speaks at a time. No subtitles, no visible text, no extra people.'
+    : 'Keep the pictured identity locked to the reference pictures. No subtitles, no visible text, no extra people.'
+  const body = `[Shot 1] ${styleLead(input.aesthetic)}, ${size}${angleBit}, ${compositionEn(input.aspectRatio)}. Clean low-noise digital cinema image, natural skin texture. ${who} in ${where}. One ${total.toFixed(0)}-second clip. ${speechRule}
 
 ${beats}
 
@@ -1298,7 +1324,7 @@ Camera language:
 ${size}. ${openCam} Then ${midCam} Then ${endCam}
 
 Performance direction:
-Keep faces, hair and clothes locked to the speaker pictures. One person speaks at a time. No subtitles, no visible text, no extra people.`
+${performance}`
   return roster ? `${roster}\n\n${body}` : body
 }
 
@@ -1347,8 +1373,24 @@ function isGenericActionDump(desc: string): boolean {
 
 type DialogueCue = { text: string; speaker?: string }
 
+/** 先保存每句的说话人，再清洗台词；支持换行及标点后紧跟下一位角色。 */
+function labeledVoiceoverCues(value: string): DialogueCue[] {
+  const raw = String(value || '').replace(/\r\n?/g, '\n')
+  const pattern = /(?:^|\n|(?<=[。！？!?]))\s*(?:\*\*)?([\u3400-\u9fffA-Za-z][\u3400-\u9fffA-Za-z0-9 _-]{0,11})(?:[（(][^）)\n]{0,16}[）)])?\s*[：:](?:\*\*)?\s*/g
+  const matches = [...raw.matchAll(pattern)].filter((match) =>
+    !/^(?:场景|音效|镜头|景别|时长|画风|站位|地点|道具|场记|画面|动作|运镜|机位|构图|环境|光影|备注|说明|台词|对白|口播)$/.test(match[1].trim())
+  )
+  return matches.map((match, index) => {
+    const start = (match.index || 0) + match[0].length
+    const end = index + 1 < matches.length ? matches[index + 1].index : raw.length
+    return { speaker: match[1].trim(), text: sanitizeDialogue(raw.slice(start, end).trim()) }
+  }).filter((cue) => Boolean(cue.text))
+}
+
 /** 어떤 화자가 어떤 대사를 말하는지 연결해 인물별 입 모양을 만들 수 있게 한다. */
 function dialogueCuesForPrompt(input: H3PromptInput): DialogueCue[] {
+  const labeled = labeledVoiceoverCues(input.voiceover || '')
+  if (labeled.length) return labeled
   const wanted = spokenLinesForPrompt(input)
   const raw = `${input.voiceover || ''}\n${input.prompt || ''}`
   return wanted.map((text) => {
@@ -1368,6 +1410,7 @@ function dialogueTurnIssue(desc: string, expected: DialogueCue[]): string {
   const tags = [...String(desc || '').matchAll(/<d>\s*\[[^\]]*\]\s*([\s\S]*?)<\/d>/gi)]
   if (tags.length !== expected.length) return `Expected ${expected.length} dialogue tags but found ${tags.length}.`
   for (let i = 0; i < tags.length; i += 1) {
+    if (sanitizeDialogue(tags[i][1] || '') !== expected[i].text) return `第 ${i + 1} 句台词与原文或顺序不一致`
     const index = tags[i].index || 0
     const lead = desc.slice(Math.max(0, index - 260), index)
     if (!/\(S\d+\)[^.\n]{0,180}\b(?:says?|asks?|shouts?|replies?|exclaims?|yells?|whispers?)\b[^.\n]{0,120}[:，,]?\s*$/i.test(lead)) {
@@ -1375,6 +1418,21 @@ function dialogueTurnIssue(desc: string, expected: DialogueCue[]): string {
     }
   }
   return ''
+}
+
+function assertDialogueOwnership(input: H3PromptInput): void {
+  if (input.voiceMode === 'none' || input.voiceMode === 'voiceover') return
+  const voice = String(input.voiceover || '').trim()
+  if (!voice) return
+  const cues = labeledVoiceoverCues(voice)
+  const people = characterPeople(input)
+  const distinct = [...new Set(cues.map((cue) => bareSpeakerName(cue.speaker)).filter(Boolean))]
+  if (distinct.length > 1) {
+    const missing = distinct.filter((name) => !matchedSpeakerCode(input, name))
+    if (missing.length) throw new Error(`多角色台词无法匹配参考人物：${missing.join('、')}。请确认这些人物已加入本镜并关联人物参考图，然后重新优化。`)
+  } else if (!cues.length && people.length > 1 && !matchedSpeakerCode(input, input.speakerName)) {
+    throw new Error('本镜有多个人物，台词没有标明说话人。请在对白中逐行填写“人物名：台词”，然后重新优化。')
+  }
 }
 
 /** 이전 템플릿의 일반 문구만 사용한 프롬프트를 식별한다. */
@@ -1479,6 +1537,7 @@ function resolvePromptInput(input: H3PromptInput, source: string): H3PromptInput
 export function composeH3VideoPrompt(input: H3PromptInput): string {
   const source = stripFrameLead(input.prompt || '')
   const resolved = resolvePromptInput(input, source)
+  assertDialogueOwnership(resolved)
   const spoken = spokenLinesForPrompt(resolved).join(' ')
 
   if (isOfficialH3Prompt(source) && !isH3FillTemplate(source) && !isMessyH3Prompt(source)) {
@@ -1576,9 +1635,14 @@ function isLLMRequestFailure(error: unknown): boolean {
   )
 }
 
+function cleanH3Field(text: string): string {
+  return stripReasoningLeak(text).trim()
+}
+
 /** 현장 기록을 H3 공식 영문 형식과 내부 샷으로 변환한다. 실패하면 기본 템플릿을 사용한다. */
 export async function compileH3OfficialPrompt(input: H3PromptInput): Promise<string> {
   const resolved: H3PromptInput = { ...input, forceIntegrated: input.forceIntegrated === true }
+  assertDialogueOwnership(resolved)
   const source = stripFrameLead(resolved.prompt || '')
   if (getAIMode() === 'mock') {
     return composeH3VideoPrompt(resolved)
@@ -1602,10 +1666,10 @@ export async function compileH3OfficialPrompt(input: H3PromptInput): Promise<str
 This is ONE generated clip. The field format is fixed, but the filmmaking is NOT a fill-in template. Read the dramatic event first, then author the shot around its unique action and emotional causality.
 
 Required output structure:
-1) START by copying the speaker lock verbatim. (S1) is permanently the first character picture, (S2) the second. Never renumber S by dialogue order, and never write “Picture 1” or "this person's character design" instead of (S#).
-(S1) is 「character name」 / <Picture 1>. Lock face, hair, body, age and outfit. Identity reference only, not the first frame.
-(S2) is 「character name」 / <Picture 2>. Lock face, hair, body, age and outfit. Identity reference only, not the first frame.
-<Picture 3> is the location 「location name」. Lock space, materials, weather and light.
+1) START by copying the speaker lock verbatim. (S1) is permanently the first character picture, (S2) the second. Never renumber S by dialogue order, and never write 图1 or "this person's character design" instead of (S#).
+(S1) is Person 1 / <Picture 1>. Lock face, hair, body, age and outfit. Identity reference only, not the first frame.
+(S2) is Person 2 / <Picture 2>. Lock face, hair, body, age and outfit. Identity reference only, not the first frame.
+<Picture 3> is the location Place 1. Lock space, materials, weather and light.
 Only one (S#) speaks at a time. Everyone else keeps their lips completely closed.
 These images are identity/location locks, NOT first frames. Do not write "Picture 1 is the first frame" or "Picture 1 aligns with 0.00 seconds".
 
@@ -1625,7 +1689,7 @@ The tag contains ONLY the spoken words. Never put continuity notes, timestamps, 
 
 Timeline writing standard:
 - Use the user's timing when supplied; otherwise divide the full duration according to action and dialogue, never into generic equal thirds.
-- Write 2–4 filmable sentences per time range. This is richer than an outline but shorter and clearer than a screenplay paragraph.
+- Preserve the source's shot sizes, camera positions, focus changes, movement start and end points, visible action steps, and motivated transitions. Do not flatten a detailed source into a plot summary or replace its specific direction with a generic camera move. Write enough filmable sentences to carry those details per time range.
 - Preserve spatial blocking throughout: who is foreground/background, left/right, seated/standing, and exactly whom each person looks at. Nobody looks into the camera unless the story explicitly demands it.
 - Expressions must evolve from a visible trigger: eyes refocus, brows tighten or release, jaw sets, breath catches, a hand hesitates, weight shifts. Avoid abstract emotion labels without behavior.
 - Use at most one primary camera move per range. Motivate it through a hand movement, eyeline, reveal or emotional turn; state where it starts and where it lands. Keep screen direction and axis continuous unless an explicit cut is needed.
@@ -1637,13 +1701,13 @@ Rules:
 - Preserve the user's event. Expand only what is already explicitly implied by the script, and never invent a different incident or new characters.
 - STYLE LOCK: when reference pictures are supplied, their art style is authoritative. Match the reference pictures' rendering (medium, palette, texture, character design) exactly. Ignore the Style line above if it conflicts; never switch the referenced subject to a different medium such as live-action, CG, or a generic "cinematic" look.
 - Write direct, decisive filmmaking prose like a director describing the finished moving image. The format is a container, not a prose template.
-- Write action, camera, lighting, and performance in English. Preserve dialogue in its original language inside <d> and preserve 「source names」 in the speaker lock. Write the blocking in English, including who is left or right, what they hold, and how a prop changes over time. Preserve explicitly requested Korean on-screen text.
+- English for action, camera, light, names, places and performance. Preserve the original language inside <d> dialogue and for exact visible diegetic text. Do not use Chinese names as subject labels in action prose. Write the actual blocking in English: who is left/right, what they hold, what a prop does over time.
 - In action prose, call people (S1), (S2) exactly as the speaker lock defines them. Do not invent a new S number per line. Do not anonymize a known character as “the man.” Recurring props keep the (P#) and <Picture N> written in the lock. When a hand touches that object, name that picture.
-- Spoken lines already extracted below are the ONLY dialogue. If the list is empty, write No dialogue. No lips moving. NEVER invent speech from continuity notes, timestamps, style, or the speaker lock. Never put “none” or director notes inside a d tag.
-- MUST COPY the speaker-lock block below verbatim at the start of integrated_multimodal_description. Do not invent, omit, or reorder (S1)/(S2)/<Picture N>.
+- Spoken lines already extracted below are the ONLY dialogue. If the list is empty, do not write dialogue, speech, lips, mouths, voices, or the words "no dialogue". H3 treats those words as a cue to invent English lines. Describe only visible action and ambient sound. NEVER invent speech from 场记, timestamps, style, or the speaker lock. Never put 无 or director notes inside a d tag.
+- MUST COPY the speaker-lock block below verbatim at the start of integrated_multimodal_description. Do not invent, omit, or reorder (S1)/(S2)/<Picture N>. If that lock says Picture 1 is the first frame, keep it that way: (S1) is the first character sheet, not Picture 1, and the location plate stays the scene picture named in the lock.
 - overall_soundscape names the script's real sounds (chip crunch, cushion rustle, room tone). Do not write a generic sentence such as "close breath stay synchronized with the picture. Spoken words appear only inside the d tag."
 - Delivery format is chosen by the app, not by you. Write the shot body only. Multimodal reference (R2VA) is wrapped into six sections: subject_definitions, summary, retention_analysis, detailed_description, overall_soundscape, non_diegetic_music. First-frame (I2VA), first-and-last-frame (FL2VA), last-frame (L2VA) and text-only (T2VA) stay three fields, with the official alignment line added outside your JSON. Do not emit those headers yourself.
-- Do not show grids, four-view sheets, storyboards, collage, captions, subtitles, or labels on screen.
+- Do not show grids, four-view sheets, storyboards, collage, or added subtitles. Story-required HUD panels, system alerts and countdowns are diegetic text: place exact literals inside 【】 to preserve their original language and order. Describe when and where the panel appears, how long it remains, and keep it clear of the main action; never turn it into dialogue unless specified as audio.
 - End the visual description once with: The complete action develops continuously and finishes naturally within ${durationText(resolved)} seconds.
 - overall_soundscape must follow the visible chronology and name the exact synchronized sounds of each action. English ambience and physical sounds only; spoken words are represented by their d tags and should not be quoted again. No music.
 - non_diegetic_music is always N/A.
@@ -1657,13 +1721,14 @@ Aspect: ${resolved.aspectRatio || '16:9'} (${String(resolved.aspectRatio || '16:
 Camera preference (override it when the event needs a motivated reframe or cut): ${camera}
 Scene / light: ${[englishOrOmit(resolved.sceneLighting), englishOrOmit(resolved.sceneAnchor), englishOrOmit(resolved.sceneDescription)].filter(Boolean).join(' / ') || 'from director notes'}
 Available character identity references. (S1) stays (S1) for the whole clip. Do not assume every one is a living body in this beat; infer the actual visible form from the scene:
-${characterPeople(resolved).map((slot, i) => `(S${i + 1}) = ${slot.sourceName || slot.name} = <Picture ${slot.picture}>`).join('\n') || onScreenEnglish(resolved).map((name, i) => `(S${i + 1}) = ${name}`).join('\n') || '(from director notes)'}
+${characterPeople(resolved).map((slot, i) => `(S${i + 1}) = ${identityLabel(slot)} = <Picture ${slot.picture}>`).join('\n') || onScreenEnglish(resolved).map((name, i) => `(S${i + 1}) = ${name}`).join('\n') || '(from director notes)'}
 MUST COPY this speaker lock verbatim (identity/location lock, not first frames):
 ${pictureRoster(resolved) || 'no extra pictures'}
+${slotsOf(resolved).some((slot) => slot.index === 1 && slot.name === 'start frame') ? 'Picture 1 is the first frame of this clip. Do not assign Picture 1 to a person. (S1) is the first character sheet, which is a later picture. The location plate is the scene picture named in the lock.' : ''}
 Voice mode: ${cueLines.length ? resolved.voiceMode || 'dialogue' : 'none — no trusted spoken lines; do NOT invent dialogue'}
 Character voice (this speaker's own timbre, kept verbatim as delivery inside each <d> bracket; do not reinterpret or translate it away): ${resolved.speakerVoice || '(not set — infer a natural timbre that fits the character)'}
 Spoken lines already extracted (quotes, dialogue, or narration fields only; director notes are NOT speech):
-${cueLines.length ? cueLines.map((line, i) => `${i + 1}. ${line}`).join('\n') : '(none — write No dialogue. No lips moving.)'}
+${cueLines.length ? cueLines.map((line, i) => `${i + 1}. ${line}`).join('\n') : '(none — do not mention dialogue, speech, lips, mouths, or voices)'}
 Dialogue ownership recovered from the source (each item is one exclusive turn; preserve this order):
 ${dialogueCues.length ? dialogueCues.map((cue, i) => `${i + 1}. (${speakerCode(resolved, cue.speaker)}) speaker=${cue.speaker || 'unassigned'} | words=${cue.text}`).join('\n') : '(none)'}
 Sound notes: ${englishOrOmit(resolved.audioDescription) || '(from the node text)'}
@@ -1679,14 +1744,17 @@ ${source || '(perform the beat in this location)'}`
     })
     const firstResult = parseH3PromptJson(resp.content)
     let parsed = firstResult.parsed
-    let desc = String(parsed.integrated_multimodal_description || parsed.detailed_description || '').trim()
+    let desc = cleanH3Field(
+      String(parsed.integrated_multimodal_description || parsed.detailed_description || '')
+    )
     if (/overall_soundscape\s*:/i.test(desc)) {
-      desc =
+      desc = cleanH3Field(
         extractField(desc, 'integrated_multimodal_description') ||
-        extractField(desc, 'detailed_description') ||
-        desc
+          extractField(desc, 'detailed_description') ||
+          desc
+      )
     }
-    let sound = String(parsed.overall_soundscape || '').trim()
+    let sound = cleanH3Field(String(parsed.overall_soundscape || ''))
     const firstDialogueIssue = dialogueTurnIssue(desc, dialogueCues)
     if (
       firstResult.truncated ||
@@ -1702,11 +1770,11 @@ ${source || '(perform the beat in this location)'}`
             // H3 초안의 구조와 연출을 고치면서 대사 원문을 보존한다.
             content: `Rewrite a rejected shot-video prompt as JSON only. Write final generation prose in English and preserve all spoken lines verbatim. Use [Korean] for Korean dialogue and [Chinese] for Chinese dialogue. Output schema: {"integrated_multimodal_description":"...","overall_soundscape":"..."}.
 The rejected draft was lifeless because it used a reusable timing template, repeated static-camera instructions, or failed to preserve the actual event.
-Write the moving image itself. Preserve the exact speaker lock and trusted dialogue. (S1) is the first character picture for the whole clip. Subject universe lock: only subjects present in the source material and reference pictures may appear — never add new characters, animals, or plot events, and never turn idioms or fables into literal content. The visual style must match the reference pictures exactly. Build a concrete cause-and-effect action chain with named props, motivated camera changes, observable performance, environmental reaction, and a visible final state. Give each spoken line its own time range. Never create generic opening/middle/hold slots. Never treat a statue, portrait, reflection, hidden presence, or off-screen identity as a living body. Write English action prose; preserve Korean or Chinese names and trusted <d> dialogue verbatim. A Chinese scene body will be deleted.
+Write the moving image itself. Preserve the exact speaker lock and trusted dialogue. (S1) is the first character picture for the whole clip. Subject universe lock: only subjects present in the source material and reference pictures may appear — never add new characters, animals, or plot events, and never turn idioms or fables into literal content. The visual style must match the reference pictures exactly. Build a concrete cause-and-effect action chain with named props, motivated camera changes, observable performance, environmental reaction, and a visible final state. Give each spoken line its own time range. Never create generic opening/middle/hold slots. Never treat a statue, portrait, reflection, hidden presence, or off-screen identity as a living body. English action prose. Chinese only inside trusted <d> dialogue, never in names or 「」. A Chinese scene body will be deleted.
 
 Dialogue is exclusive turn-taking. Immediately before every <d>, write the stable (S#) and says/asks/replies. Form: (S1) says: <d>[Korean] 제 말을 들어 주세요.</d> Only (S1) speaks in this shot. (S2) keeps their lips completely closed. Bare <d> tags are forbidden. Do not split the clip merely because the delivery is fast.
 
-Rebuild the prompt as a concise cinematic timeline, not a four-line outline and not a dense screenplay paragraph. For every range write 2–4 filmable sentences covering framing or one motivated camera move, active body action and eyeline, a trigger-based facial change, listener blocking/reaction, and dialogue when present. Preserve foreground/background and left/right positions, keep the camera axis continuous, prevent anyone from staring into the lens, and use only story-relevant props, light and environmental motion. Every range must visibly advance the event. End once with the full ${durationText(resolved)}-second completion sentence.`
+Rebuild the prompt as a detailed cinematic timeline, not an outline. Preserve source timing, shot sizes, camera positions, focus, movement start and landing, motivated cuts and visible action steps. For each range explain the starting posture, specific movement, environmental feedback and landing image. Preserve any exact diegetic on-screen text in 【】, with its placement and timing; it is not dialogue. Preserve foreground/background and left/right positions, keep the camera axis continuous, and use only story-relevant props, light and environmental motion. Every range must visibly advance the event. End once with the full ${durationText(resolved)}-second completion sentence.`
           },
           {
             role: 'user',
@@ -1714,7 +1782,7 @@ Rebuild the prompt as a concise cinematic timeline, not a four-line outline and 
 ${pictureRoster(resolved) || 'no extra pictures'}
 
 Trusted dialogue:
-${cueLines.length ? cueLines.join('\n') : '(none; no dialogue and no lips moving)'}
+${cueLines.length ? cueLines.join('\n') : '(none — do not mention dialogue, speech, lips, mouths, or voices)'}
 
 Required dialogue ownership and order:
 ${dialogueCues.length ? dialogueCues.map((cue, i) => `${i + 1}. (${speakerCode(resolved, cue.speaker)}) speaker=${cue.speaker || 'unassigned'} | words=${cue.text}`).join('\n') : '(none)'}
@@ -1738,8 +1806,10 @@ ${desc || '(empty)'}`
       const repairResult = parseH3PromptJson(repair.content)
       if (repairResult.truncated) return composeH3VideoPrompt(resolved)
       parsed = repairResult.parsed
-      desc = String(parsed.integrated_multimodal_description || parsed.detailed_description || '').trim()
-      sound = String(parsed.overall_soundscape || '').trim()
+      desc = cleanH3Field(
+        String(parsed.integrated_multimodal_description || parsed.detailed_description || '')
+      )
+      sound = cleanH3Field(String(parsed.overall_soundscape || ''))
     }
     // 품질 규칙은 한 번의 수정 요청을 유도하는 데 사용한다.
     // 두 번째 원고에 본문이 있으면 규칙 기반 정리 단계에 전달한다.
@@ -1753,7 +1823,7 @@ ${desc || '(empty)'}`
           ? 'dialogue'
           : resolved.voiceMode || 'dialogue'
         : 'none',
-      voiceover: trusted.length ? trusted.join('\n') : ''
+      voiceover: trusted.length ? resolved.voiceover || trusted.join('\n') : ''
     }
     let shaped = applyDialogue(desc, resolvedWithSpeech)
     if (shotProseTooThin(shaped)) {

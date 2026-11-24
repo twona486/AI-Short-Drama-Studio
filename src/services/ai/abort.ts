@@ -35,7 +35,7 @@ export function isTimeoutAbort(e: unknown, signal?: AbortSignal): boolean {
 export function llmAbortError(e: unknown, signal?: AbortSignal, timeoutMs = 120_000): Error {
   if (isTimeoutAbort(e, signal)) {
     const sec = Math.max(1, Math.round(timeoutMs / 1000))
-    return new DOMException(t('aiError.timeout', { seconds: sec }), 'TimeoutError')
+    return new Error(`模型超过 ${sec} 秒未完成请求，请重试。`)
   }
   if (signal?.aborted || isAbortError(e)) {
     return new DOMException('작업을 취소했어요.', 'AbortError')
@@ -44,12 +44,8 @@ export function llmAbortError(e: unknown, signal?: AbortSignal, timeoutMs = 120_
 }
 
 export function friendlyAiError(e: unknown): string {
-  if (isAbortError(e) && !isTimeoutAbort(e)) return t('common.cancelled')
-  const message = errMessage(e)
-  if (message === zh.common.reviewScript) return t('common.reviewScript')
-  const timeout = /^模型超过 (\d+) 秒还没写完。/.exec(message)
-  if (timeout) return t('aiError.timeout', { seconds: Number(timeout[1]) })
-  return message || t('common.generateFailed')
+  if (isAbortError(e) && !isTimeoutAbort(e)) return '已取消'
+  return errMessage(e).replace(/^Error invoking remote method '[^']+':\s*(?:Error:\s*)?/i, '').trim() || '生成失败'
 }
 
 export function shouldToastAiError(e: unknown): boolean {

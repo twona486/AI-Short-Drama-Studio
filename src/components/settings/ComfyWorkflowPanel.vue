@@ -7,6 +7,11 @@ import {
   analyzeWorkflowWithLlm,
   describeInputMap,
   describeWorkflowKind,
+  guessInputMap,
+  COMFY_ROLE_LABEL,
+  sanitizeInputMap,
+  type ComfyInputBinding,
+  type ComfyInputRole,
   validateInputMap,
   type ComfyInputMap
 } from '@/services/ai/comfyInputMap'
@@ -24,10 +29,13 @@ const props = defineProps<{
   adapter?: AdapterConfig
   baseUrl?: string
   apiKey?: string
+  draftOnly?: boolean
 }>()
 
 const emit = defineEmits<{
   patch: [adapter: AdapterConfig]
+  confirmed: []
+  imported: [name: string]
 }>()
 
 const toast = useToastStore()
@@ -45,6 +53,33 @@ const analyzing = ref(false)
 const mapInfo = ref<ComfyInputMap | null>(props.adapter?.inputMap || null)
 const mapDraft = ref('')
 const showMapJson = ref(false)
+const editableMap = ref<ComfyInputBinding[]>([])
+const inputs = computed(() => {
+  try {
+    const value = JSON.parse(props.adapter?.workflowTemplate || '{}')
+    return Object.entries(value.prompt || value).flatMap(([id, node]: [string, any]) =>
+      Object.entries(node?.inputs || {}).filter(([, v]) => typeof v === 'number' || typeof v === 'string')
+        .map(([field, v]) => ({ key: JSON.stringify([id, field]), label: `#${id} ${node._meta?.title || node.class_type} · ${field} = ${String(v).slice(0, 36)}` })))
+  } catch { return [] }
+})
+function setTarget(binding: ComfyInputBinding, event: Event) {
+  const [nodeId, field] = JSON.parse((event.target as HTMLSelectElement).value)
+  Object.assign(binding, { nodeId, field })
+}
+function confirmBindings() {
+  const map = validateInputMap(JSON.parse(props.adapter?.workflowTemplate || '{}'), { ...guessInputMap({}), ...mapInfo.value, bindings: editableMap.value.map(b => ({ ...b })) })
+  if (map.bindings.length !== editableMap.value.length || map.bindings.some(b => b.role === 'length' && !b.durationUnit)) {
+    status.value = translate('comfyMapping.invalidBindings')
+    toast.error(status.value)
+    return
+  }
+  commitTemplate(props.adapter!.workflowTemplate!, translate('comfyMapping.confirmed'), map)
+  emit('confirmed')
+}
+function inspectLocally(template: string) {
+  const map = validateInputMap(JSON.parse(template), guessInputMap(JSON.parse(template)))
+  commitTemplate(template, translate('comfyMapping.detected'), map)
+}
 
 watch(
   () => props.adapter?.workflowTemplate,
@@ -55,6 +90,7 @@ watch(
 watch(
   () => props.adapter?.inputMap,
   (v) => {
+    editableMap.value = (v?.bindings || []).map(b => ({ ...b }))
     if (v && (!mapInfo.value || JSON.stringify(v) !== JSON.stringify(mapInfo.value))) {
       mapInfo.value = v
       mapDraft.value = JSON.stringify(v, null, 2)
@@ -83,7 +119,7 @@ function commitTemplate(template: string, detail: string, map?: ComfyInputMap | 
   draft.value = template
   emit('patch', next)
   status.value = detail
-  toast.success(translate('comfyWorkflowPanel.templateSaved'))
+  if (!props.draftOnly) toast.success(translate('comfyMapping.savedTemplate'))
 }
 
 /** 노드 구성을 분석해 프롬프트와 참조 이미지를 넣을 노드를 찾는다. */
@@ -118,9 +154,8 @@ async function onValidateAndSave() {
     toast.error(parsed.detail)
     return
   }
-  // 분석이 실패해도 워크플로를 보존할 수 있도록 템플릿을 먼저 저장한다.
-  commitTemplate(parsed.template, translate('comfyWorkflowPanel.parsedApi'))
-  await analyzeWithAssistant(parsed.payload || JSON.parse(parsed.template), parsed.template)
+  // 先落盘模板，再让助手分析映射（分析失败也至少保住了工作流本身）
+  inspectLocally(parsed.template)
 }
 
 async function onReanalyze() {
@@ -140,11 +175,13 @@ async function onReanalyze() {
 
 function onSaveMapJson() {
   try {
-    const obj = JSON.parse(mapDraft.value) as ComfyInputMap
+    const candidate = sanitizeInputMap(JSON.parse(mapDraft.value))
+    if (!candidate) throw new Error(translate('comfyMapping.invalidMap'))
+    const obj = validateInputMap(JSON.parse(props.adapter?.workflowTemplate || '{}'), candidate)
     mapInfo.value = obj
     emit('patch', { ...(props.adapter || {}), inputMap: obj })
-    status.value = translate('comfyWorkflowPanel.mappingUpdated', { p0: describeInputMap(obj) })
-    toast.success(translate('comfyWorkflowPanel.mappingSaved'))
+    status.value = `映射已更新：${describeInputMap(obj)}`
+    toast.success(props.draftOnly ? translate('comfyMapping.confirmBeforeSave') : translate('comfyMapping.savedMap'))
   } catch (e: any) {
     toast.error(translate('comfyWorkflowPanel.invalidMapping', { p0: e?.message || e }))
   }
@@ -188,7 +225,7 @@ async function onDiscover() {
   }
 }
 
-async function applyParsed(parsed: Awaited<ReturnType<typeof parseComfyWorkflowJson>>) {
+async function applyParsed(parsed: Awaited<ReturnType<typeof parseComfyWorkflowJson>>, name = '') {
   status.value = parsed.detail
   triedUrls.value = parsed.tried || []
   showTried.value = triedUrls.value.length > 0
@@ -196,8 +233,8 @@ async function applyParsed(parsed: Awaited<ReturnType<typeof parseComfyWorkflowJ
     toast.error(parsed.detail)
     return
   }
-  commitTemplate(parsed.template, translate('comfyWorkflowPanel.loadedApi'))
-  await analyzeWithAssistant(parsed.payload || JSON.parse(parsed.template), parsed.template)
+  inspectLocally(parsed.template)
+  emit('imported', name.replace(/\.json$/i, '').trim())
 }
 
 async function onPickDiscovered() {
@@ -213,12 +250,14 @@ async function onPickDiscovered() {
     endpoint: item.endpoint,
     source: item.source
   })
-  await applyParsed(parsed)
+  await applyParsed(parsed, item.name)
 }
 
 async function onImportUrl() {
   const parsed = await fetchWorkflowFromUrl(importUrl.value, props.apiKey, props.adapter)
-  await applyParsed(parsed)
+  let name = ''
+  try { name = decodeURIComponent(new URL(importUrl.value.trim()).pathname.split('/').pop() || '') } catch { /* use default name */ }
+  await applyParsed(parsed, name)
 }
 
 async function onFileChange(ev: Event) {
@@ -226,7 +265,7 @@ async function onFileChange(ev: Event) {
   const file = input.files?.[0]
   if (!file) return
   const parsed = await readWorkflowFile(file)
-  await applyParsed(parsed)
+  await applyParsed(parsed, file.name)
   input.value = ''
 }
 
@@ -290,14 +329,14 @@ function clearTemplate() {
     />
     <div class="row">
       <button type="button" class="go" :disabled="analyzing" @click="onValidateAndSave">
-        {{ analyzing ? $t('comfyWorkflowPanel.assistantAnalyzing') : $t('comfyWorkflowPanel.validateSave') }}
+        {{ analyzing ? $t('comfyWorkflowPanel.assistantAnalyzing') : draftOnly ? $t('comfyMapping.validateJson') : $t('comfyWorkflowPanel.validateSave') }}
       </button>
       <button type="button" class="mini" :disabled="analyzing || !draft.trim()" @click="onReanalyze">
         {{ analyzing ? $t('comfyWorkflowPanel.analyzing') : (hasMap ? $t('comfyWorkflowPanel.analyzeAgain') : $t('comfyWorkflowPanel.analyze')) }}
       </button>
       <button type="button" class="mini ghost" :disabled="!hasTemplate" @click="clearTemplate">{{ $t('common.empty') }}</button>
     </div>
-    <p v-if="status" class="status">{{ status }}</p>
+    <p v-if="status" class="status" role="status">{{ status }}</p>
 
     <div v-if="mapInfo" class="map">
       <p class="map-head">
@@ -314,6 +353,18 @@ function clearTemplate() {
       <p v-if="!hasMap" class="hint">
         {{ $t('comfyWorkflowPanel.noInputHint') }}
       </p>
+      <div v-if="hasTemplate">
+        <p>{{ $t('comfyMapping.reviewMapping') }}</p>
+        <p class="hint">{{ $t('comfyMapping.referenceSlotsHint') }}</p>
+        <div v-for="(binding, index) in editableMap" :key="index" class="mapping-row">
+          <select v-model="binding.role" :aria-label="$t('comfyMapping.role')"><option v-for="(label, key) in COMFY_ROLE_LABEL" :key="key" :value="key">{{ label }}</option></select>
+          <select :value="JSON.stringify([binding.nodeId, binding.field])" :aria-label="$t('comfyMapping.field')" @change="setTarget(binding, $event)"><option :value="JSON.stringify(['',''])" disabled>选择节点字段</option><option v-for="option in inputs" :key="option.key" :value="option.key">{{ option.label }}</option></select>
+          <select v-if="binding.role === 'length'" v-model="binding.durationUnit" :aria-label="$t('comfyMapping.durationUnit')"><option :value="undefined">{{ $t('comfyMapping.selectUnit') }}</option><option value="seconds">{{ $t('common.seconds') }}</option><option value="frames">帧</option></select>
+          <button type="button" class="mini" @click="editableMap.splice(index, 1)">{{ $t('common.remove') }}</button>
+        </div>
+        <button type="button" class="mini" @click="editableMap.push({ role: 'prompt' as ComfyInputRole, nodeId: '', field: '' })">{{ $t('comfyMapping.addMapping') }}</button>
+        <button type="button" class="go" @click="confirmBindings">{{ $t('comfyMapping.confirmMapping') }}</button>
+      </div>
       <button type="button" class="mini ghost" @click="showMapJson = !showMapJson">
         {{ showMapJson ? $t('comfyWorkflowPanel.hideMapping') : $t('comfyWorkflowPanel.editMapping') }}
       </button>
@@ -339,6 +390,8 @@ function clearTemplate() {
 </template>
 
 <style scoped>
+.mapping-row { display: flex; flex-wrap: wrap; gap: 6px; margin: 6px 0; }
+.mapping-row select { min-width: 0; max-width: 100%; background: var(--color-bg-2); color: inherit; }
 .wf {
   display: flex;
   flex-direction: column;

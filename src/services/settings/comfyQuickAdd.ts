@@ -38,6 +38,7 @@ export function normalizeComfyBaseUrl(raw: string): string {
   u = u.replace(/\/+$/, '')
   // 잘못 붙여 넣은 ComfyUI 경로를 제거한다.
   u = u
+    .replace(/\/upload\/image$/i, '')
     .replace(/\/prompt$/i, '')
     .replace(/\/system_stats$/i, '')
     .replace(/\/history(\/.*)?$/i, '')

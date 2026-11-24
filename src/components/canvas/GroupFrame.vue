@@ -175,9 +175,9 @@ async function generateAll(ev: Event) {
 .gframe {
   width: 100%;
   height: 100%;
-  border-radius: 18px;
+  border-radius: 10px;
   border: 1px solid rgba(255, 255, 255, 0.08);
-  background: var(--color-canvas-group);
+  background: color-mix(in srgb, var(--nb-bg-2) 28%, transparent);
   pointer-events: none;
 }
 .gframe-h {
@@ -239,7 +239,7 @@ async function generateAll(ev: Event) {
 .tint-video,
 .tint-audio,
 .tint-export {
-  background: var(--color-canvas-group);
+  background: color-mix(in srgb, var(--nb-bg-2) 28%, transparent);
   border-color: rgba(255, 255, 255, 0.08);
 }
 </style>

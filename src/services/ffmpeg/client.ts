@@ -100,18 +100,24 @@ async function pickBestSource(onLog?: (msg: string) => void): Promise<typeof CDN
   return null
 }
 
+/** 当前这次合成的进度回调。后一次调用会换掉上一次，避免旧的弹窗回调一直收日志。 */
+let progressSink: ((msg: string) => void) | undefined
+
+function reportFfmpeg(msg: string) {
+  console.log('[FFmpeg]', msg)
+  progressSink?.(msg)
+}
+
 /** FFmpeg 싱글턴을 반환하거나 초기화한다. */
 export async function getFFmpeg(
   onProgress?: (msg: string) => void
 ): Promise<FFmpeg> {
+  if (onProgress) progressSink = onProgress
   if (_ffmpeg) return _ffmpeg
   if (_loading) return _loading
 
   _loading = (async () => {
-    const log = (msg: string) => {
-      console.log('[FFmpeg]', msg)
-      onProgress?.(msg)
-    }
+    const log = (msg: string) => reportFfmpeg(msg)
 
     // 브라우저 지원 여부를 확인한다.
     if (typeof SharedArrayBuffer === 'undefined') {
@@ -138,8 +144,8 @@ export async function getFFmpeg(
     const ffmpeg = new FFmpeg()
 
     ffmpeg.on('log', ({ message }) => {
+      if (!message || message.includes('frame=')) return
       if (
-        message.includes('frame=') ||
         message.includes('error') ||
         message.includes('Error') ||
         message.includes('Conversion')
@@ -149,7 +155,7 @@ export async function getFFmpeg(
     })
     ffmpeg.on('progress', ({ progress }) => {
       if (progress > 0) {
-        log(t('ffmpegClient.progress', { percent: Math.round(progress * 100) }))
+        log(`处理中 ${Math.min(100, Math.round(progress * 100))}%`)
       }
     })
 

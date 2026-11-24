@@ -1,6 +1,19 @@
 <script setup lang="ts">
 import { onMounted, onUnmounted, ref } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import { desktop, isDesktop } from '@/services/desktop'
+import ThemeToggle from '@/components/common/ThemeToggle.vue'
+
+const route = useRoute()
+const router = useRouter()
+
+function goHome() {
+  if (route.name === 'home') {
+    window.dispatchEvent(new CustomEvent('aicut:home'))
+    return
+  }
+  router.push({ name: 'home' })
+}
 
 /** 프레임 없는 창은 preload의 준비 여부와 관계없이 제목 표시줄을 표시한다. */
 const show = /electron/i.test(navigator.userAgent) || isDesktop()
@@ -32,11 +45,12 @@ function run(fn: () => void) {
 
 <template>
   <header v-if="show" class="titlebar win-titlebar">
-    <div class="brand">
+    <button type="button" class="brand" :title="$t('common.appName')" @click="goHome">
       <img class="mark" src="/logo.png" alt="" />
       <span class="name">{{ $t('common.appName') }}</span>
-    </div>
+    </button>
     <div class="controls">
+      <ThemeToggle class="theme" />
       <button type="button" class="ctrl" :title="$t('common.minimize')" @click="run(() => desktop().minimize())">
         <svg viewBox="0 0 12 12" aria-hidden="true">
           <path d="M2 6h8" />
@@ -83,13 +97,18 @@ function run(fn: () => void) {
   display: flex;
   align-items: center;
   gap: 8px;
+  margin: 0;
   padding: 0 14px;
-  pointer-events: none;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  -webkit-app-region: no-drag;
+  app-region: no-drag;
 }
 .mark {
   width: 18px;
   height: 18px;
-  border-radius: 5px;
   object-fit: contain;
   display: block;
 }
@@ -101,8 +120,13 @@ function run(fn: () => void) {
 }
 .controls {
   display: flex;
+  align-items: center;
+  margin-left: auto;
   -webkit-app-region: no-drag;
   app-region: no-drag;
+}
+.theme {
+  margin-right: 6px;
 }
 .ctrl {
   width: 52px;
@@ -141,6 +165,7 @@ function run(fn: () => void) {
   -webkit-app-region: drag !important;
   app-region: drag !important;
 }
+.win-titlebar .brand,
 .win-titlebar .ctrl,
 .win-titlebar .controls {
   -webkit-app-region: no-drag !important;

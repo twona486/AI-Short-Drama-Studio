@@ -8,11 +8,11 @@ import { useProjectStore, useSettingsStore, uniqueProfileName } from '@/stores'
 import { TTS_VOICES } from '@/services/ai/tts'
 import EndpointForm from '@/components/settings/EndpointForm.vue'
 import AdapterFields from '@/components/settings/AdapterFields.vue'
-import ComfyQuickAdd from '@/components/settings/ComfyQuickAdd.vue'
 import ProfileLibrary from '@/components/settings/ProfileLibrary.vue'
 import type { AdapterConfig } from '@/services/ai/adapters'
 import { type VideoStillMode } from '@/types/canvas'
 import { syncH3ShotStillModes } from '@/services/canvas/videoModel'
+import { normalizeRouterBaseUrl } from '@/services/ai/openAiRouter'
 import {
   IMAGE_PROVIDERS,
   LLM_PROVIDERS,
@@ -32,6 +32,34 @@ const settings = useSettingsStore()
 const project = useProjectStore()
 const router = useRouter()
 const showVideoKey = ref(false)
+const llmRouterUrl = ref('')
+const llmRouterKey = ref('')
+const llmRouterModel = ref('')
+const llmRouterStatus = ref('')
+const llmRouterFailed = ref(false)
+
+function addLlmRouter() {
+  llmRouterStatus.value = ''
+  llmRouterFailed.value = false
+  try {
+    const baseUrl = normalizeRouterBaseUrl(llmRouterUrl.value)
+    const apiKey = llmRouterKey.value.trim().replace(/^Bearer\s+/i, '').trim()
+    if (!apiKey || /[^\x21-\x7e]/.test(apiKey)) throw new Error(t('studioUpdate.invalidKey'))
+    const model = llmRouterModel.value.trim()
+    if (!model) throw new Error(t('studioUpdate.modelRequired'))
+    const existing = settings.config.llms.find(p => p.baseUrl.replace(/\/+$/, '') === baseUrl && p.apiKey === apiKey)
+    if (existing) {
+      settings.selectLlmModel(existing.id, model)
+    } else {
+      settings.addLlm({ name: uniqueProfileName(settings.config.llms.map(p => p.name), new URL(baseUrl).host), baseUrl, apiKey, model, models: [model], provider: 'custom' })
+    }
+    llmRouterKey.value = ''
+    llmRouterStatus.value = t('studioUpdate.modelSelected', { model })
+  } catch (error) {
+    llmRouterFailed.value = true
+    llmRouterStatus.value = error instanceof Error ? error.message : t('studioUpdate.invalidRouter')
+  }
+}
 const zealmanImage = computed(
   () =>
     settings.config.image.provider === 'zealman' ||
@@ -156,6 +184,22 @@ function patchAdapter(
 <template>
   <div class="mods">
     <template v-if="module === 'llm'">
+      <form class="llm-router" @submit.prevent="addLlmRouter">
+        <h2>{{ $t('studioUpdate.routerTitle') }}</h2>
+        <p>{{ $t('studioUpdate.routerHint') }}</p>
+        <label>Base URL<input v-model.trim="llmRouterUrl" type="url" required placeholder="https://api.example.com/v1" /></label>
+        <label>API Key<input v-model="llmRouterKey" type="password" required autocomplete="off" /></label>
+        <label>{{ $t('studioUpdate.modelId') }}<input v-model.trim="llmRouterModel" type="text" required :placeholder="$t('studioUpdate.modelPlaceholder')" /></label>
+        <button type="submit">{{ $t('comfyQuickAdd.addAndSelect') }}</button>
+        <p v-if="llmRouterStatus" :role="llmRouterFailed ? 'alert' : 'status'" :class="{ 'router-error': llmRouterFailed }">{{ llmRouterStatus }}</p>
+        <label v-if="settings.config.llm.models?.length">{{ $t('studioUpdate.currentModel') }}
+          <select :value="settings.config.llm.model" @change="settings.selectLlmModel(settings.config.activeLlmId, ($event.target as HTMLSelectElement).value)">
+            <option v-for="model in settings.config.llm.models" :key="model" :value="model">{{ model }}</option>
+          </select>
+        </label>
+      </form>
+      <details class="llm-advanced">
+        <summary>{{ $t('studioUpdate.advanced') }}</summary>
       <ProfileLibrary
         :title="$t('studioSettings.savedLlm')"
         :hint="$t('studioSettings.savedLlmHint')"
@@ -190,9 +234,15 @@ function patchAdapter(
         :adapter="settings.config.llm.adapter"
         @patch="patchAdapter('llm', $event)"
       />
+      </details>
     </template>
 
     <template v-else-if="module === 'vision'">
+      <button type="button" class="vision-switch" role="switch" :aria-checked="settings.config.visionEnabled" :class="{ on: settings.config.visionEnabled }" @click="settings.update({ visionEnabled: !settings.config.visionEnabled })">
+        <span class="vision-switch-track" aria-hidden="true"><span /></span>
+        <span>{{ settings.config.visionEnabled ? '视觉模型已开启' : '视觉模型未开启' }}</span>
+      </button>
+      <p class="hint">打开后，看图、确认参考图是谁、以及画面核对才会调用视觉模型。关掉就只用语言模型看图片名称。</p>
       <ProfileLibrary
         :title="$t('studioSettings.savedVision')"
         :hint="$t('studioSettings.savedVisionHint')"
@@ -237,7 +287,7 @@ function patchAdapter(
         <p class="hint">{{ $t('studioSettings.workflow') }}{{ settings.config.image.model || $t('studioSettings.builtinImage') }}</p>
         <button type="button" @click="router.push('/settings/zealman')">{{ $t('studioSettings.openZealman') }}</button>
       </section>
-      <ComfyQuickAdd />
+      <button type="button" @click="router.push('/settings/comfyui')">{{ $t('studioUpdate.comfySetup') }}</button>
       <ProfileLibrary
         :title="$t('studioSettings.savedImage')"
         :hint="$t('studioSettings.savedImageHint')"
@@ -329,7 +379,7 @@ function patchAdapter(
         <p class="hint">{{ $t('studioSettings.workflow') }}{{ settings.config.video.workflowId || $t('studioSettings.builtinWorkflow') }}</p>
         <button type="button" @click="router.push('/settings/zealman')">{{ $t('studioSettings.openZealman') }}</button>
       </section>
-      <ComfyQuickAdd />
+      <button type="button" @click="router.push('/settings/comfyui')">{{ $t('studioUpdate.comfySetup') }}</button>
       <ProfileLibrary
         :title="$t('studioSettings.savedVideo')"
         :hint="$t('studioSettings.savedVideoHint')"
@@ -403,7 +453,7 @@ function patchAdapter(
         </div>
         </details>
         <h3 class="api-title">{{ $t('studioSettings.remoteApi') }}</h3>
-        <p class="hint">{{ $t('studioSettings.cloudApiHint') }}</p>
+        <p class="hint">大厂官方接口和中转站填写在这里；本机工作流请在左侧「ComfyUI 接入」配置。</p>
         <p v-if="settings.config.video.provider === 'apimart'" class="hint">
           {{ $t('studioSettings.apimartVideo') }}
         </p>
@@ -445,6 +495,15 @@ function patchAdapter(
 </template>
 
 <style scoped>
+.llm-router, .llm-advanced { display: grid; gap: 12px; padding: 16px; border: 1px solid var(--color-border); border-radius: 12px; }
+.llm-router h2, .llm-router p { margin: 0; }
+.llm-router p { color: var(--color-text-3); font-size: 13px; overflow-wrap: anywhere; }
+.llm-router label { display: grid; gap: 5px; font-size: 13px; }
+.llm-router input, .llm-router select { min-width: 0; padding: 8px 10px; color: inherit; background: var(--color-bg-2); border: 1px solid var(--color-border); border-radius: 8px; }
+.llm-router button { justify-self: start; padding: 8px 12px; border-radius: 8px; background: var(--color-accent); color: #0c0b14; }
+.llm-router .router-error { color: var(--color-error); }
+.llm-advanced > summary { cursor: pointer; color: var(--color-text-2); }
+.llm-advanced[open] > summary { margin-bottom: 12px; }
 .mods {
   display: flex;
   flex-direction: column;
@@ -497,6 +556,44 @@ function patchAdapter(
   color: var(--color-text-4);
   line-height: 1.5;
 }
+.vision-switch {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  width: fit-content;
+  margin: 0 0 8px;
+  padding: 6px 10px;
+  border: 1px solid var(--color-border);
+  border-radius: 999px;
+  background: var(--color-bg-2);
+  color: var(--color-text-2);
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+}
+.vision-switch-track {
+  display: inline-flex;
+  align-items: center;
+  width: 28px;
+  height: 16px;
+  padding: 2px;
+  border-radius: 12px;
+  background: var(--nb-bg-4, var(--color-bg-3));
+  box-sizing: border-box;
+}
+.vision-switch-track > span {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: var(--nb-t2, var(--color-text-3));
+  transition: transform .15s;
+}
+.vision-switch.on {
+  color: var(--color-text-1);
+  border-color: var(--nb-accent, var(--color-accent));
+}
+.vision-switch.on .vision-switch-track { background: var(--nb-accent, var(--color-accent)); }
+.vision-switch.on .vision-switch-track > span { transform: translateX(12px); background: var(--nb-accent-ink, #062027); }
 label,
 .extra-label,
 .name-label {

@@ -118,6 +118,7 @@ function isGptImageModel(model: string): boolean {
 }
 
 const GPT_IMAGE_QUALITY_SUFFIX = 'Reduce noise, speckling, and smearing. Use smooth colors and a clean finish.'
+const PICTURE_CONTROL_SUFFIX = '画面干净，无噪点，色彩均匀'
 
 function withGptImageQuality(prompt: string, model: string): string {
   const base = String(prompt || '').trim()
@@ -125,6 +126,15 @@ function withGptImageQuality(prompt: string, model: string): string {
   if (!base) return GPT_IMAGE_QUALITY_SUFFIX
   if (base.includes(GPT_IMAGE_QUALITY_SUFFIX)) return base
   return `${base} ${GPT_IMAGE_QUALITY_SUFFIX}`
+}
+
+/** 所有生图模型提交前都在提示词末尾加上画面控制，节点上保存的原文不改。 */
+function withPictureControl(prompt: string): string {
+  const base = String(prompt || '').trim()
+  if (!base) return PICTURE_CONTROL_SUFFIX
+  if (base.includes(PICTURE_CONTROL_SUFFIX)) return base
+  const joiner = /[。！？.!?；;]$/.test(base) ? '' : '。'
+  return `${base}${joiner}${PICTURE_CONTROL_SUFFIX}`
 }
 
 /** 이미지 API 응답을 Blob으로 변환한다. b64_json을 우선 사용한다. */
@@ -297,7 +307,7 @@ async function blobToChatImageDataUri(
 
 function buildPrompt(input: ImageGenInput, _withRefs: boolean): string {
   const model = imageConfig(input.model).model
-  return withGptImageQuality(input.prompt, model)
+  return withPictureControl(withGptImageQuality(input.prompt, model))
 }
 
 /** Seedream은 /images/generations를 호출하고 b64_json을 우선 요청한다. */

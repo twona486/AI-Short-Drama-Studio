@@ -272,7 +272,7 @@ export async function extractVideoThumbnail(blob: Blob): Promise<Blob> {
 }
 
 /** 영상의 끝 프레임을 추출해 다음 샷의 시작 프레임에 쓴다. */
-export async function extractVideoLastFrame(blob: Blob): Promise<Blob> {
+export async function extractVideoLastFrame(blob: Blob, options?: { preserveEnding?: boolean }): Promise<Blob> {
   const typed = playableMediaBlob(blob, 'video')
   const url = URL.createObjectURL(typed)
   const v = document.createElement('video')
@@ -303,7 +303,9 @@ export async function extractVideoLastFrame(blob: Blob): Promise<Blob> {
     const ctx = canvas.getContext('2d')
     if (!ctx) throw new Error('끝 프레임을 만들 수 없습니다.')
     // 인코딩 잡음을 피하려고 마지막 지점에서 반 프레임 앞도 확인해 검지 않은 프레임을 선택한다.
-    const candidates = [Math.max(0.04, dur - 0.08), Math.max(0.04, dur - 0.25)]
+    const candidates = options?.preserveEnding
+      ? [Math.max(0, dur - 0.001), Math.max(0, dur - 0.025)]
+      : [Math.max(0.04, dur - 0.08), Math.max(0.04, dur - 0.25)]
     let lastJpeg: Blob | null = null
     for (const t of candidates) {
       try {
@@ -321,7 +323,7 @@ export async function extractVideoLastFrame(blob: Blob): Promise<Blob> {
         canvas.toBlob((b) => (b ? resolve(b) : reject(new Error('끝 프레임이 비어 있어요.'))), 'image/jpeg', 0.9)
       })
       lastJpeg = jpeg
-      if (!canvasIsDark(ctx, canvas.width, canvas.height)) return jpeg
+      if (options?.preserveEnding || !canvasIsDark(ctx, canvas.width, canvas.height)) return jpeg
     }
     if (lastJpeg) return lastJpeg
     throw new Error('끝 프레임을 만들 수 없습니다.')

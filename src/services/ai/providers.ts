@@ -208,7 +208,7 @@ export const VIDEO_PROVIDERS: ProviderPreset[] = [
     get name() { return t('provider.name.autodl') },
     get hint() { return t('provider.hint.autoDlVideo') },
     baseUrl: 'https://autodl.art',
-    models: ['minimax_h3_lightx2v_v5_15s', 'minimax_h3_lightx2v_v5'],
+    models: ['minimax_h3_lightx2v_v5_15s', 'minimax_h3_lightx2v_v5', 'minimax_h3_zm_u24'],
     defaultModel: 'minimax_h3_lightx2v_v5_15s',
     keyPlaceholder: 'AutoDL Token'
   },

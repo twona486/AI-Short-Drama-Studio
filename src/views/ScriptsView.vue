@@ -17,12 +17,19 @@ import { llmModelGroups } from '@/stores/settings'
 import GlassCard from '@/components/common/GlassCard.vue'
 import GradientButton from '@/components/common/GradientButton.vue'
 import Tag from '@/components/common/Tag.vue'
-import { pickPlayMarkdownFile } from '@/utils/pickPlayFile'
+import { pickScriptFile } from '@/utils/pickPlayFile'
 import { markdownToHtml } from '@/utils/markdown'
-import { parseScriptDoc, toEpisodes, updateEpisode } from '@/utils/scriptEpisodes'
-import { VISUAL_STYLE_LABEL } from '@/utils/visualStyle'
-import { generatePlay } from '@/services/ai'
-import type { ScriptEpisode, VisualStyle } from '@/types'
+import { parseScriptDoc, serializeScriptDoc, toEpisodes, updateEpisode } from '@/utils/scriptEpisodes'
+import { paintScreenplay } from '@/utils/screenplayPaint'
+import { SCREENPLAY_FORMAT_RULES, normalizeScreenplayBody } from '@/utils/screenplayFormat'
+import { callLLM } from '@/services/ai/client'
+import { assertScriptCompletion } from '@/services/ai/scriptCompletion'
+import { SCRIPT_REFERENCE_OPTIONS, normalizeScriptReference, scriptReferenceBrief } from '@/services/ai/scriptReference'
+import { SHORT_DRAMA_WRITING_RULES } from '@/services/ai/shortDramaRhythm'
+import { importedDirectorPrefix } from '@/services/settings/directorSkill'
+import { desktop, isDesktop } from '@/services/desktop'
+import { parseJsonRobust } from '@/utils/jsonRepair'
+import type { ScriptEpisode } from '@/types'
 
 type EditorTab = 'episodes' | 'markdown' | 'preview'
 
@@ -33,7 +40,43 @@ const settings = useSettingsStore()
 const toast = useToastStore()
 
 const keyword = ref('')
+const SIDE_WIDTH_KEY = 'aicut:scripts:side-width'
+const AGENT_WIDTH_KEY = 'aicut:scripts:agent-width'
+
+function storedWidth(key: string, fallback: number, min: number, max: number) {
+  const raw = localStorage.getItem(key)
+  const n = Number(raw)
+  if (raw == null || raw === '' || !Number.isFinite(n)) return fallback
+  return Math.min(max, Math.max(min, Math.round(n)))
+}
+
+const sideWidth = ref(storedWidth(SIDE_WIDTH_KEY, 220, 168, 420))
+const agentWidth = ref(storedWidth(AGENT_WIDTH_KEY, 320, 260, 560))
+const resizingPane = ref<'side' | 'agent' | ''>('')
+
+function startPaneResize(which: 'side' | 'agent', ev: PointerEvent) {
+  ev.preventDefault()
+  const startX = ev.clientX
+  const start = which === 'side' ? sideWidth.value : agentWidth.value
+  resizingPane.value = which
+  const move = (e: PointerEvent) => {
+    const dx = e.clientX - startX
+    if (which === 'side') sideWidth.value = Math.min(420, Math.max(168, start + dx))
+    else agentWidth.value = Math.min(560, Math.max(260, start - dx))
+  }
+  const stop = () => {
+    window.removeEventListener('pointermove', move)
+    window.removeEventListener('pointerup', stop)
+    resizingPane.value = ''
+    localStorage.setItem(SIDE_WIDTH_KEY, String(sideWidth.value))
+    localStorage.setItem(AGENT_WIDTH_KEY, String(agentWidth.value))
+  }
+  window.addEventListener('pointermove', move)
+  window.addEventListener('pointerup', stop)
+}
+
 const activeId = ref('')
+const detailOpen = ref(false)
 const activeTab = ref<EditorTab>('episodes')
 const markdown = ref('')
 const dirty = ref(false)
@@ -42,6 +85,51 @@ const activeEpisodeIndex = ref(0)
 const titleEditing = ref('')
 /** 타이핑 중 Markdown 정리로 입력이 끊기지 않도록 현재 회차의 편집 초안을 유지한다. */
 const draft = ref<{ index: number; title: string; content: string } | null>(null)
+const scriptPaintEl = ref<HTMLElement | null>(null)
+const scriptInputEl = ref<HTMLTextAreaElement | null>(null)
+const scriptPaint = computed(() => paintScreenplay(draft.value?.content || ''))
+const scriptMode = ref<'source' | 'preview'>('source')
+const caret = ref({ line: 1, col: 1 })
+const episodeChars = computed(() => (draft.value?.content || '').replace(/\s/g, '').length)
+const savedLabel = computed(() => {
+  if (saving.value) return '保存中'
+  if (dirty.value) return '未保存'
+  const ts = activeDoc.value?.updatedAt
+  if (!ts) return '已保存'
+  const d = new Date(ts)
+  const pad = (n: number) => String(n).padStart(2, '0')
+  return `已保存 ${pad(d.getHours())}:${pad(d.getMinutes())}`
+})
+const otherDocs = computed(() => scripts.docs.filter((doc) => doc.id !== activeId.value))
+
+function scenesIn(content: string) {
+  return content.split('\n').flatMap((line) => {
+    const trimmed = line.trim()
+    if (/^#{2,}\s+/.test(trimmed) || /^(?:场景|장면|Scene)\s*[0-9０-９]/i.test(trimmed)) {
+      return [trimmed.replace(/^#+\s*/, '')]
+    }
+    return []
+  })
+}
+
+function readCaret() {
+  const input = scriptInputEl.value
+  if (!input) return
+  const pos = input.selectionStart || 0
+  const before = input.value.slice(0, pos)
+  caret.value = { line: before.split('\n').length, col: pos - before.lastIndexOf('\n') }
+}
+
+function editCommand(command: 'undo' | 'redo') {
+  scriptInputEl.value?.focus()
+  document.execCommand(command)
+  readCaret()
+}
+
+function askWriter(text: string) {
+  episodeHint.value = text
+  void writeCurrentEpisode()
+}
 
 const activeDoc = computed(() => scripts.docs.find((d) => d.id === activeId.value) ?? null)
 
@@ -89,12 +177,20 @@ function openEpisode(index: number) {
   syncDraft(index)
 }
 
-async function select(id: string) {
-  if (id === activeId.value) return
-  if (dirty.value && !(await confirmDiscard())) return
+async function openScript(id: string) {
+  if (id !== activeId.value) {
+    if (dirty.value && !confirmDiscard()) return
+    flushDraft()
+    activeId.value = id
+    await loadContent(id)
+  }
+  titleEditing.value = scripts.docs.find((d) => d.id === id)?.title || ''
+  detailOpen.value = true
+}
+
+function backToLibrary() {
   flushDraft()
-  activeId.value = id
-  await loadContent(id)
+  detailOpen.value = false
 }
 
 function confirmDiscard() {
@@ -112,6 +208,15 @@ function scheduleFlush() {
   dirty.value = true
   if (saveTimer) clearTimeout(saveTimer)
   saveTimer = setTimeout(flushDraft, 800)
+  syncScriptScroll()
+}
+
+function syncScriptScroll() {
+  const input = scriptInputEl.value
+  const paint = scriptPaintEl.value
+  if (!input || !paint) return
+  paint.scrollTop = input.scrollTop
+  paint.scrollLeft = input.scrollLeft
 }
 
 function flushDraft() {
@@ -229,33 +334,15 @@ async function createScript() {
     source: 'manual'
   })
   activeId.value = doc.id
+  titleEditing.value = doc.title
+  detailOpen.value = true
   await loadContent(doc.id, true)
   activeTab.value = 'episodes'
   toast.success(translate('scripts.created'))
 }
 
-/* 대본 요청을 입력하면 AI로 작성한 뒤 라이브러리에 자동으로 저장한다. */
 const llmGroups = computed(() => llmModelGroups(settings.config.llms ?? []))
 const llmModel = computed(() => settings.config.llm.model)
-const genOpen = ref(false)
-const genTopic = ref('')
-const genBrief = ref('')
-const genStyle = ref<VisualStyle>('cinematic')
-const genDuration = ref(0)
-const generating = ref(false)
-const genProgress = ref('')
-let genAbort: AbortController | null = null
-
-const styleOptions = (Object.keys(VISUAL_STYLE_LABEL) as VisualStyle[]).map((key) => ({
-  value: key,
-  label: VISUAL_STYLE_LABEL[key]
-}))
-
-/* 목표 영상 길이에 맞춰 대본 분량과 샷 수를 정한다. */
-const durationOptions = [30, 40, 60, 90, 120, 180]
-const durationScenes = (sec: number) => Math.max(2, Math.min(6, Math.round(sec / 15)))
-const durationChars = (sec: number) => Math.max(400, Math.round(sec * 18))
-const durationShots = (sec: number) => Math.max(1, Math.ceil(sec / 8))
 
 const genChoice = computed({
   get() {
@@ -270,84 +357,416 @@ const genChoice = computed({
   }
 })
 
-function openGenerate() {
-  genOpen.value = true
-  genProgress.value = ''
-}
+const episodeHint = ref('')
+type WritingMessage = { role: 'user' | 'assistant'; content: string; episode: number; time: number }
+type StoryPlan = { brief: string; outline: string; episodes: Array<{ title: string; summary: string }>; stage: 'outline-review' | 'ready' | 'episode-review' | 'complete'; nextIndex: number }
+const writingMessages = ref<WritingMessage[]>([])
+const storyPlan = ref<StoryPlan | null>(null)
+const writingMode = ref<'auto' | 'series' | 'episode'>('auto')
+const planEditing = ref(false)
+const planKey = (id: string) => `script-writing-plan:v1:${id}`
+const writingHistoryLoading = ref(false)
+const writingHistoryError = ref(false)
+const writingList = ref<HTMLElement | null>(null)
+const writingKey = (id: string) => `script-writing-chat:v1:${id}`
+let historyLoadToken = 0
+let historyWrites = Promise.resolve()
 
-function closeGenerate() {
-  if (generating.value) return
-  genOpen.value = false
-}
-
-async function submitGenerate() {
-  if (generating.value) return
-  const topic = genTopic.value.trim()
-  const brief = genBrief.value.trim()
-  if (!topic && !brief) {
-    toast.warn(translate('scripts.needDirection'))
-    return
+watch(activeId, async (id) => {
+  const token = ++historyLoadToken
+  writingMessages.value = []
+  storyPlan.value = null
+  planEditing.value = false
+  writingHistoryError.value = false
+  if (!id) return
+  writingHistoryLoading.value = true
+  try {
+    await historyWrites
+    const raw = isDesktop() ? await desktop().kvGet(writingKey(id)) : localStorage.getItem(writingKey(id))
+    const rows: unknown = raw ? JSON.parse(raw) : []
+    if (token !== historyLoadToken) return
+    writingMessages.value = Array.isArray(rows) ? rows.filter((row): row is WritingMessage =>
+      row && (row.role === 'user' || row.role === 'assistant') && typeof row.content === 'string' && typeof row.episode === 'number'
+    ).slice(-100) : []
+    const savedPlan = isDesktop() ? await desktop().kvGet(planKey(id)) : localStorage.getItem(planKey(id))
+    if (token !== historyLoadToken) return
+    if (savedPlan) {
+      const plan = JSON.parse(savedPlan) as StoryPlan
+      if (Array.isArray(plan.episodes) && typeof plan.outline === 'string' && ['outline-review', 'ready', 'episode-review', 'complete'].includes(plan.stage)) storyPlan.value = plan
+    }
+  } catch {
+    if (token === historyLoadToken) writingHistoryError.value = true
+  } finally {
+    if (token === historyLoadToken) writingHistoryLoading.value = false
   }
+}, { immediate: true })
+
+function addWritingMessage(id: string, message: WritingMessage) {
+  if (id !== activeId.value) return
+  writingMessages.value = [...writingMessages.value, message].slice(-100)
+  const data = JSON.stringify(writingMessages.value)
+  historyWrites = historyWrites.catch(() => {}).then(async () => {
+    if (isDesktop()) await desktop().kvSet(writingKey(id), data)
+    else localStorage.setItem(writingKey(id), data)
+  }).catch(() => { writingHistoryError.value = true })
+  void nextTick(() => { if (writingList.value) writingList.value.scrollTop = writingList.value.scrollHeight })
+}
+async function saveStoryPlan(id: string, plan: StoryPlan | null) {
+  const text = JSON.stringify(plan)
+  if (isDesktop()) await desktop().kvSet(planKey(id), text)
+  else localStorage.setItem(planKey(id), text)
+  if (id === activeId.value) storyPlan.value = plan
+}
+const scriptReferenceType = computed({
+  get: () => normalizeScriptReference(settings.config.scriptReferenceType),
+  set: (value: string) => settings.update({ scriptReferenceType: normalizeScriptReference(value) })
+})
+const episodeWriting = ref(false)
+const writingPhase = ref<'episode' | 'outline' | 'chat'>('episode')
+const episodeElapsed = ref(0)
+let episodeTimer: ReturnType<typeof setInterval> | undefined
+let episodeAbort: AbortController | null = null
+
+function startWriting() {
+  episodeWriting.value = true
+  episodeElapsed.value = 0
+  episodeTimer = setInterval(() => { episodeElapsed.value++ }, 1000)
+  episodeAbort = new AbortController()
+  return episodeAbort
+}
+
+function finishWriting() {
+  if (episodeTimer) clearInterval(episodeTimer)
+  episodeTimer = undefined
+  episodeWriting.value = false
+  episodeAbort = null
+}
+
+async function writeStoryPlan(brief: string, revision = false) {
+  const id = activeId.value
+  if (!id || !llmModel.value || episodeWriting.value) return
+  const oldPlan = revision ? storyPlan.value : null
+  if (!brief.trim() && !oldPlan) { toast.warn('请先描述题材、人物或故事想法'); return }
+  writingPhase.value = 'outline'
+  const controller = startWriting()
+  const request = brief.trim() || oldPlan?.brief || ''
+  addWritingMessage(id, { role: 'user', content: request, episode: -1, time: Date.now() })
+  try {
+    const resp = await callLLM({
+      model: llmModel.value, disableThinking: true, temperature: 0.6, useProviderOutputLimit: true,
+      timeoutMs: 300_000, signal: controller.signal,
+      messages: [
+        { role: 'system', content: `${importedDirectorPrefix()}${SHORT_DRAMA_WRITING_RULES}\nPlan an outline and an episode directory for the entire short drama. Do not write episode scripts yet. Respect the requested number of episodes, durations, genre and ending. For an unspecified count, suggest eight episodes and explain in the outline that the count can change. Each episode needs a dramatic task, evolving conflict and a hook for the next episode. Preserve causal and character continuity. Use natural, polite conversational Korean for audience-facing prose. Output only valid JSON without code fences: {"outline":"synopsis, cast, relationships, world rules and emotional arc","episodes":[{"title":"Korean episode title","summary":"Korean episode progression and ending"}]}.\n${scriptReferenceBrief(settings.config.scriptReferenceType, request)}` },
+        { role: 'user', content: `${revision && oldPlan ? `原大纲：${oldPlan.outline}\n原分集目录：${JSON.stringify(oldPlan.episodes)}\n修改要求：` : '创作需求：'}${request}` }
+      ]
+    })
+    assertScriptCompletion(resp)
+    const parsed = parseJsonRobust(resp.content)
+    const outline = typeof parsed?.outline === 'string' ? parsed.outline.trim() : ''
+    const rows = Array.isArray(parsed?.episodes) ? parsed.episodes : []
+    const planned = rows.map((row: any) => ({ title: String(row?.title || '').trim(), summary: String(row?.summary || '').trim() }))
+    if (!outline || !planned.length || planned.length > 100 || planned.some((row: { title: string; summary: string }) => !row.title || !row.summary)) throw new Error('大纲格式不完整，请重试或减少单次规划的集数。')
+    if (controller.signal.aborted || activeId.value !== id) throw new Error('写作已取消或已切换剧本')
+    await saveStoryPlan(id, { brief: revision && oldPlan ? `${oldPlan.brief}\n修改：${request}` : request, outline, episodes: planned, stage: 'outline-review', nextIndex: 0 })
+    episodeHint.value = ''
+    planEditing.value = true
+    addWritingMessage(id, { role: 'assistant', content: `已整理故事大纲和 ${planned.length} 集目录。请先检查、修改，确认后我再写第一集。`, episode: -1, time: Date.now() })
+  } catch (error: any) {
+    const message = controller.signal.aborted ? '本次大纲生成已取消。' : `大纲生成未完成：${error?.message || '请重试'}`
+    if (activeId.value === id) addWritingMessage(id, { role: 'assistant', content: message, episode: -1, time: Date.now() })
+    toast.warn(message)
+  } finally { finishWriting() }
+}
+
+async function writePlannedEpisode() {
+  const plan = storyPlan.value
+  const id = activeId.value
+  if (!plan || !id || episodeWriting.value || !llmModel.value || plan.stage !== 'ready') return
+  const index = plan.nextIndex
+  const episode = plan.episodes[index]
+  if (!episode) return
+  if (saveTimer) { clearTimeout(saveTimer); saveTimer = null }
+  flushDraft()
+  const parsed = parseScriptDoc(markdown.value)
+  if (index > parsed.episodes.length) { toast.warn('集数目录已改变，请先检查剧本。'); return }
+  if (index > 0 && parsed.episodes.slice(0, index).some((item) => !item.content.trim())) { toast.warn('前面有尚未完成的集数，请先补全再继续。'); return }
+  const existing = parsed.episodes[index]?.content.trim() || ''
+  if (existing && !confirm(`第 ${index + 1} 集已有正文。继续会用 AI 结果替换这一集，确定吗？`)) return
+  const snapshot = markdown.value
+  const prior = parsed.episodes.slice(0, index).map((ep, i) => `第${i + 1}集 ${ep.title}\n${ep.content}`).join('\n\n')
+  writingPhase.value = 'episode'
+  const controller = startWriting()
+  addWritingMessage(id, { role: 'assistant', content: `开始写第 ${index + 1} 集：${episode.title}。完成后会等你确认。`, episode: index, time: Date.now() })
+  try {
+    const resp = await callLLM({ model: llmModel.value, disableThinking: true, temperature: 0.6, useProviderOutputLimit: true, timeoutMs: 300_000, signal: controller.signal,
+      messages: [
+        { role: 'system', content: `${importedDirectorPrefix()}${SHORT_DRAMA_WRITING_RULES}\nWrite the complete requested episode in natural Korean. Follow the approved outline and completed episodes. Carry forward relationships, time, location, props and unresolved conflicts. Preserve supplied dialogue and visible text unless the user requests changes. Edit only this episode.\n${SCREENPLAY_FORMAT_RULES}\n${scriptReferenceBrief(settings.config.scriptReferenceType, plan.brief, plan.outline, episode.summary)}` },
+        { role: 'user', content: `用户创作需求：${plan.brief}\n已确认大纲：${plan.outline}\n完整分集目录：${JSON.stringify(plan.episodes)}\n已完成前文${prior.length > 30000 ? '（仅显示最近部分，更早剧情请参考分集目录）' : ''}：\n${prior.slice(-30000) || '（第一集）'}\n当前要写：第 ${index + 1} 集 ${episode.title}\n本集任务：${episode.summary}\n${existing ? `需要替换的原正文：\n${existing}` : ''}` }
+      ] })
+    assertScriptCompletion(resp)
+    const body = normalizeScreenplayBody(String(resp.content || ''))
+    if (!body) throw new Error('模型没有返回正文')
+    if (controller.signal.aborted || activeId.value !== id || markdown.value !== snapshot) throw new Error('剧本已切换或正文发生变化，结果未覆盖原文，请重试。')
+    if (index === parsed.episodes.length) parsed.episodes.push({ title: episode.title, content: body })
+    else parsed.episodes[index] = { title: episode.title, content: body }
+    const updated = serializeScriptDoc(parsed)
+    await scripts.setContent(id, updated)
+    markdown.value = updated
+    syncDraft(index)
+    dirty.value = false
+    const reviewPlan: StoryPlan = { ...plan, stage: 'episode-review' }
+    try {
+      await saveStoryPlan(id, reviewPlan)
+    } catch {
+      if (activeId.value === id) storyPlan.value = reviewPlan
+      toast.warn('本集正文已保存，但创作进度保存失败；请检查存储后再确认下一集。')
+    }
+    addWritingMessage(id, { role: 'assistant', content: `第 ${index + 1} 集已写入正文。请检查并修改，确认后我再写下一集。`, episode: index, time: Date.now() })
+  } catch (error: any) {
+    const message = controller.signal.aborted ? '本集写作已取消，正文未更改。' : `本集写作未完成：${error?.message || '请重试'}`
+    if (activeId.value === id) addWritingMessage(id, { role: 'assistant', content: message, episode: index, time: Date.now() })
+    toast.warn(message)
+  } finally { finishWriting() }
+}
+
+async function confirmStoryPlan() {
+  const plan = storyPlan.value
+  if (!plan || !activeId.value || episodeWriting.value) return
+  if (!plan.outline.trim() || plan.episodes.some((episode) => !episode.title.trim() || !episode.summary.trim())) { toast.warn('请先补全大纲和每集内容'); return }
+  try {
+    await saveStoryPlan(activeId.value, { ...plan, stage: 'ready', nextIndex: 0 })
+    planEditing.value = false
+    episodeHint.value = ''
+    await writePlannedEpisode()
+  } catch (error: any) { toast.error(error?.message || '保存大纲失败') }
+}
+
+async function savePlanDraft() {
+  if (!storyPlan.value || !activeId.value || episodeWriting.value) return
+  try {
+    await saveStoryPlan(activeId.value, { ...storyPlan.value, episodes: storyPlan.value.episodes.map((item) => ({ ...item })) })
+    toast.success('大纲草稿已保存')
+  } catch (error: any) { toast.error(error?.message || '保存大纲失败') }
+}
+
+async function confirmEpisodeAndContinue() {
+  const plan = storyPlan.value
+  const id = activeId.value
+  if (!plan || !id || episodeWriting.value || plan.stage !== 'episode-review') return
+  if (draft.value && draft.value.index !== plan.nextIndex) { toast.warn(`请先切换到第 ${plan.nextIndex + 1} 集检查正文`); return }
+  if (!draft.value?.content.trim()) { toast.warn('这一集正文为空，请先补全'); return }
+  if (saveTimer) { clearTimeout(saveTimer); saveTimer = null }
+  markdown.value = updateEpisode(markdown.value, draft.value.index, { title: draft.value.title, content: draft.value.content })
+  try {
+    await scripts.setContent(id, markdown.value)
+    dirty.value = false
+    episodeHint.value = ''
+    const nextIndex = plan.nextIndex + 1
+    if (nextIndex >= plan.episodes.length) {
+      await saveStoryPlan(id, { ...plan, nextIndex, stage: 'complete' })
+      addWritingMessage(id, { role: 'assistant', content: '全部分集已确认完成。', episode: -1, time: Date.now() })
+      return
+    }
+    await saveStoryPlan(id, { ...plan, nextIndex, stage: 'ready' })
+    await writePlannedEpisode()
+  } catch (error: any) { toast.error(error?.message || '保存失败，请重试') }
+}
+
+function obviousWriterChat(hint: string) {
+  const text = hint.trim()
+  return /^(?:你好|您好|嗨|hi|hello|hey|在吗|在不在|谢谢|谢了|辛苦了?|哈哈+|嗯+|哦+|啊+|好的|好呀|早安|晚安|你是谁|你能干什么|你能做什么)[\s!！。.~～?？]*$/i.test(text)
+    || /^(?:先别写|别写了|先不要写|等一下|等会儿|暂停|不用了|算了)[\s!！。]*$/.test(text)
+}
+
+async function classifyWriterIntent(hint: string, signal: AbortSignal): Promise<'chat' | 'write'> {
+  if (obviousWriterChat(hint)) return 'chat'
+  try {
+    const resp = await callLLM({
+      model: llmModel.value,
+      disableThinking: true,
+      temperature: 0,
+      timeoutMs: 20_000,
+      signal,
+      messages: [
+        {
+          role: 'system',
+          content: 'Classify the request as chat or write. Return only that word. Use chat for greetings, questions, critiques, progress discussion and requests to pause. Mentioning the script or episode does not authorize changes. Use write only for a clear request to create or edit a script, outline, dialogue or plot.'
+        },
+        { role: 'user', content: hint }
+      ]
+    })
+    return /^write\b/i.test(String(resp.content || '').trim()) ? 'write' : 'chat'
+  } catch (error: any) {
+    if (signal.aborted) throw error
+    return /(?:请|帮我|把).{0,12}(?:写|改|续)|^(?:写|改|续|扩|润色|重写|生成|创作|补)/.test(hint) ? 'write' : 'chat'
+  }
+}
+
+async function replyAsWriter(hint: string) {
+  const id = activeId.value
+  const current = draft.value
+  if (!id || !current || !llmModel.value) return
+  writingPhase.value = 'chat'
+  const controller = startWriting()
+  addWritingMessage(id, { role: 'user', content: hint, episode: current.index, time: Date.now() })
+  const recent = writingMessages.value
+    .filter((message) => message.episode === current.index || message.episode < 0)
+    .slice(-8)
+    .map((message) => `${message.role === 'user' ? '用户' : '助手'}：${message.content}`)
+    .join('\n')
+  const plan = storyPlan.value
+  try {
+    const resp = await callLLM({
+      model: llmModel.value,
+      disableThinking: true,
+      temperature: 0.5,
+      timeoutMs: 60_000,
+      signal: controller.signal,
+      messages: [
+        {
+          role: 'system',
+          content: 'Answer as a screenwriting assistant in brief, natural Korean using the polite conversational register. Discuss characters, plot or progress, or respond to a greeting. Only edit a script when explicitly requested. Never claim to have written into an episode from chat.'
+        },
+        {
+          role: 'user',
+          content: `剧本：${activeDoc.value?.title || '未命名剧本'}\n当前：第 ${current.index + 1} 集 ${current.title}\n创作进度：${plan ? plan.stage : '没有整剧大纲'}\n已有正文节选：\n${current.content.trim().slice(0, 800) || '（空）'}\n最近对话：\n${recent || '（无）'}\n\n用户刚说：${hint}`
+        }
+      ]
+    })
+    const text = String(resp.content || '').trim()
+    if (controller.signal.aborted || activeId.value !== id) return
+    addWritingMessage(id, {
+      role: 'assistant',
+      content: text || '我在。想改这一集，直接说要改哪里。',
+      episode: current.index,
+      time: Date.now()
+    })
+    episodeHint.value = ''
+  } catch (error: any) {
+    if (activeId.value === id) {
+      addWritingMessage(id, {
+        role: 'assistant',
+        content: controller.signal.aborted ? '已取消。' : `没接上：${error?.message || '请再发一次'}`,
+        episode: current.index,
+        time: Date.now()
+      })
+    }
+  } finally {
+    finishWriting()
+  }
+}
+
+async function writeCurrentEpisode() {
+  if (!draft.value || episodeWriting.value) return
   if (!llmModel.value) {
     toast.warn(translate('scripts.needModel'))
     return
   }
-  generating.value = true
-  genProgress.value = translate('scripts.generating')
-  genAbort = new AbortController()
+  const hint = episodeHint.value.trim()
+  const existing = draft.value.content.trim()
+  if (writingHistoryLoading.value) { toast.warn('正在读取对话记录，请稍候'); return }
+  if (storyPlan.value?.stage === 'outline-review' && /^\s*(?:确认|通过|开始写|可以|下一步|확인|좋아요|작성 시작|다음 단계)\s*[。！!]*$/.test(hint)) { await confirmStoryPlan(); return }
+  if (storyPlan.value?.stage === 'episode-review' && /^\s*(?:确认|通过|继续|下一集|可以|下一步|확인|좋아요|계속|다음 화|다음 단계)\s*[。！!]*$/.test(hint)) { await confirmEpisodeAndContinue(); return }
+  if (hint) {
+    writingPhase.value = 'chat'
+    const controller = startWriting()
+    let turn: 'chat' | 'write' = 'chat'
+    try {
+      turn = await classifyWriterIntent(hint, controller.signal)
+    } catch {
+      finishWriting()
+      return
+    }
+    finishWriting()
+    if (turn === 'chat') {
+      await replyAsWriter(hint)
+      return
+    }
+  }
+  if (storyPlan.value?.stage === 'outline-review' && hint && writingMode.value !== 'episode') { await writeStoryPlan(hint, true); return }
+  const wantsSeries = writingMode.value === 'series' || (writingMode.value === 'auto' && (/(?:整部|整剧|全集|分集大纲|分集目录|多集)|(?:写|创作|策划|生成).{0,30}(?:短剧|剧本)(?!.*(?:本集|这一集|当前集))/.test(hint) || (!existing && /题材|科幻|悬疑|古装|都市|甜宠|穿越|重生|家庭伦理/.test(hint) && !/本集|这一集|当前集/.test(hint))))
+  if (wantsSeries && hint) {
+    if (storyPlan.value && !confirm('重新规划会替换当前大纲，已写好的剧本正文不会删除。继续吗？')) return
+    await writeStoryPlan(hint)
+    return
+  }
+  if (!hint && !existing) {
+    toast.warn('先写一句要求，或留一点已有正文')
+    return
+  }
+  const conversation = writingMessages.value.filter((message) => message.episode === draft.value?.index && message.role === 'user').slice(-6)
+  episodeWriting.value = true
+  writingPhase.value = 'episode'
+  episodeElapsed.value = 0
+  episodeTimer = setInterval(() => { episodeElapsed.value++ }, 1000)
+  episodeAbort = new AbortController()
+  const targetDocId = activeDoc.value?.id
+  const targetDraft = draft.value
+  if (targetDocId) addWritingMessage(targetDocId, { role: 'user', content: hint || '请根据已有正文写完整这一集。', episode: targetDraft.index, time: Date.now() })
   try {
-    const run = await generatePlay(
-      {
-        topic: topic || translate('scripts.untitledName'),
-        content: brief,
-        style: genStyle.value,
-        shotDuration: 5,
-        aspectRatio: '16:9',
-        targetDurationSec: genDuration.value || undefined,
-        playMode: 'write',
-        model: llmModel.value
-      },
-      (msg) => {
-        genProgress.value = msg
-      },
-      genAbort.signal
-    )
-    if (!run.result.playMarkdown?.trim()) throw new Error(translate('scripts.noGeneratedContent'))
-    genProgress.value = translate('scripts.savingLocally')
-    const title = (run.result.topic || topic || translate('scripts.aiScript')).trim()
-    const doc = await scripts.create({
-      title,
-      markdown: run.result.playMarkdown,
-      source: 'ai-generated'
+    const resp = await callLLM({
+      model: llmModel.value,
+      disableThinking: true,
+      useProviderOutputLimit: true,
+      timeoutMs: 300_000,
+      temperature: 0.7,
+      signal: episodeAbort.signal,
+      messages: [
+        {
+          role: 'system',
+          content:
+            `${importedDirectorPrefix()}${SHORT_DRAMA_WRITING_RULES}\nWrite only the requested episode script in natural Korean. Preserve supplied dialogue unless the user asks to revise it. Omit commentary and introductory notes.\n${SCREENPLAY_FORMAT_RULES}\n${scriptReferenceBrief(settings.config.scriptReferenceType, activeDoc.value?.title, draft.value.title, existing, hint)}`
+        },
+        {
+          role: 'user',
+          content: `剧本：${activeDoc.value?.title || '未命名剧本'}\n这一集：${draft.value.title}\n此前本集的用户写作要求（仅供上下文参考，当前要求优先）：\n${conversation.map((item) => item.content).join('\n') || '（无）'}\n已有正文：\n${existing || '（空）'}\n\n当前要求：${hint || '把这一集写完整，保留已有情节。'}`
+        }
+      ]
     })
-    activeId.value = doc.id
-    titleEditing.value = doc.title
-    await loadContent(doc.id, true)
-    activeTab.value = 'episodes'
-    genOpen.value = false
-    genTopic.value = ''
-    genBrief.value = ''
-    toast.success(translate('scripts.generated', { p0: doc.title }))
+    assertScriptCompletion(resp)
+    const text = normalizeScreenplayBody(String(resp.content || ''))
+    if (!text) throw new Error('模型没有返回内容')
+    if (episodeAbort.signal.aborted) throw new Error('已取消')
+    if (activeDoc.value?.id !== targetDocId || draft.value !== targetDraft) {
+      toast.warn('写作期间切换了剧本或集数，结果未覆盖当前正文，请回到原集重试。')
+      return
+    }
+    draft.value.content = text
+    if (targetDocId) addWritingMessage(targetDocId, { role: 'assistant', content: '已完成本集正文，内容已写入中间编辑区。可以继续提出修改要求。', episode: targetDraft.index, time: Date.now() })
+    episodeHint.value = ''
+    scheduleFlush()
+    toast.success('这一集写好了')
   } catch (e: any) {
     const msg = e?.message ?? String(e)
-    if (genAbort?.signal.aborted) toast.warn(translate('scripts.cancelled'))
-    else toast.error(msg.startsWith(translate('common.writeScript')) ? msg : translate('scripts.writeFailed', { p0: msg }))
+    if (episodeAbort?.signal.aborted) toast.warn('已取消')
+    else toast.error(msg || '写这一集失败')
+    if (targetDocId && activeId.value === targetDocId) addWritingMessage(targetDocId, { role: 'assistant', content: episodeAbort?.signal.aborted ? '本次写作已取消，正文未更改。' : `本次写作未完成：${msg || '请重试'}`, episode: targetDraft.index, time: Date.now() })
   } finally {
-    generating.value = false
-    genAbort = null
+    if (episodeTimer) clearInterval(episodeTimer)
+    episodeTimer = undefined
+    episodeWriting.value = false
+    episodeAbort = null
   }
 }
 
-function cancelGenerate() {
-  genAbort?.abort()
+function cancelEpisodeWrite() {
+  episodeAbort?.abort()
 }
 
 async function importScript() {
-  const picked = await pickPlayMarkdownFile()
+  let picked: { text: string; filename: string } | null = null
+  try {
+    picked = await pickScriptFile()
+  } catch (e: any) {
+    toast.error(e?.message ?? '导入失败')
+    return
+  }
   if (!picked) return
   try {
     const doc = await scripts.importMarkdown(picked.text, picked.filename)
     activeId.value = doc.id
+    titleEditing.value = doc.title
+    detailOpen.value = true
     await loadContent(doc.id, true)
     toast.success(translate('scripts.imported', { p0: doc.title }))
   } catch (e: any) {
@@ -414,7 +833,9 @@ async function removeActive() {
   await scripts.remove(doc.id)
   activeId.value = ''
   markdown.value = ''
+  draft.value = null
   dirty.value = false
+  detailOpen.value = false
   toast.success(translate('common.deleted'))
 }
 
@@ -437,6 +858,8 @@ watch(activeTab, (tab) => {
 })
 
 onBeforeUnmount(() => {
+  episodeAbort?.abort()
+  if (episodeTimer) clearInterval(episodeTimer)
   if (saveTimer) clearTimeout(saveTimer)
   flushDraft()
 })
@@ -455,271 +878,242 @@ onMounted(async () => {
 </script>
 
 <template>
-  <div class="page">
-    <header class="page-head">
+  <div class="page" :class="{ detail: detailOpen, resizing: resizingPane }">
+    <header v-if="!detailOpen" class="page-head">
       <div>
-        <div class="kicker">{{ $t('scripts.manage') }}</div>
-        <h1>{{ $t('scripts.localLibrary') }}</h1>
-        <p>
-          {{ $t('scripts.libraryHint') }}
+        <div class="kicker">{{ $t('scriptDesk.writing') }}</div>
+        <h1>{{ detailOpen ? activeDoc?.title || $t('studioUpdate.scriptEntry') : $t('studioUpdate.scriptProjects') }}</h1>
+        <p v-if="!detailOpen">
+          {{ $t('scriptDesk.libraryHint') }}
         </p>
       </div>
       <div class="head-actions">
-        <GradientButton icon="✨" @click="openGenerate">{{ $t('scripts.aiWrite') }}</GradientButton>
-        <GradientButton type="ghost" @click="router.push('/drafts')">{{ $t('common.resourceLibrary') }}</GradientButton>
-        <GradientButton type="secondary" icon="📥" @click="importScript">{{ $t('common.importMarkdown') }}</GradientButton>
-        <GradientButton type="secondary" icon="＋" @click="createScript">{{ $t('common.newScript') }}</GradientButton>
+        <GradientButton type="ghost" @click="router.push('/')">{{ $t('drafts.home') }}</GradientButton>
+        <GradientButton v-if="detailOpen" type="ghost" @click="backToLibrary">{{ $t('scriptDesk.back') }}</GradientButton>
+        <GradientButton type="ghost" @click="router.push('/drafts')">{{ $t('studioUpdate.resources') }}</GradientButton>
+        <GradientButton type="secondary" :title="$t('scriptDesk.importFormats')" @click="importScript">
+          <template #icon>
+            <svg class="import-icon" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+              <path d="M3.25 10.25v1.5a1 1 0 0 0 1 1h7.5a1 1 0 0 0 1-1v-1.5" stroke="currentColor" stroke-width="1.35" stroke-linecap="round" stroke-linejoin="round" />
+              <path d="M8 2.75v6.1" stroke="currentColor" stroke-width="1.35" stroke-linecap="round" />
+              <path d="M5.35 6.55 8 9.2l2.65-2.65" stroke="currentColor" stroke-width="1.35" stroke-linecap="round" stroke-linejoin="round" />
+            </svg>
+          </template>
+          {{ $t('scriptDocNode.import') }}
+        </GradientButton>
+        <GradientButton icon="＋" @click="createScript">{{ $t('common.newScript') }}</GradientButton>
       </div>
     </header>
 
-    <div class="body">
-      <!-- 대본 목록 -->
-      <aside class="side">
-        <div class="side-head">
-          <input v-model="keyword" class="search" :placeholder="$t('scripts.search')" />
-          <span class="count">{{ filteredDocs.length }} {{ $t('scripts.count') }}</span>
+    <div v-if="!detailOpen" class="library-tools">
+      <input v-model="keyword" class="search" :placeholder="$t('scripts.search')" />
+    </div>
+    <div v-if="!detailOpen" class="library">
+      <div v-if="!filteredDocs.length" class="empty-mini">
+        {{ $t('scriptDesk.noScripts') }}
+      </div>
+      <button
+        v-for="d in filteredDocs"
+        :key="d.id"
+        class="script-card"
+        @click="openScript(d.id)"
+      >
+        <div class="si-title">{{ d.title }}</div>
+        <div class="si-meta">
+          <Tag size="sm">{{ sourceLabel(d.source) }}</Tag>
+          {{ $t('scriptDesk.counts', { episodes: d.episodeCount, words: d.totalWords }) }}
         </div>
-        <div class="list">
-          <div v-if="!filteredDocs.length" class="empty-mini">
-            {{ $t('scripts.emptyLibraryHint') }}
-          </div>
-          <button
-            v-for="d in filteredDocs"
-            :key="d.id"
-            class="script-item"
-            :class="{ active: d.id === activeId }"
-            @click="select(d.id)"
-          >
-            <div class="si-title">{{ d.title }}</div>
-            <div class="si-meta">
-              <Tag size="sm">{{ sourceLabel(d.source) }}</Tag>
-              {{ d.episodeCount }} {{ $t('common.chapterUnitSeparator') }} {{ d.totalWords }} {{ $t('common.characters') }}
-            </div>
-            <div class="si-time">{{ fmtTime(d.updatedAt) }}</div>
-          </button>
-        </div>
-        <button v-if="scripts.docs.length" class="side-foot" @click="scripts.openFolder()">
-          {{ $t('scripts.openFolder') }}
-        </button>
-      </aside>
-
-      <!-- 편집 영역 -->
-      <section class="editor">
-        <GlassCard v-if="activeDoc" padding="none" class="editor-card">
-          <div class="ed-head">
-            <input
-              v-model="titleEditing"
-              class="title-input"
-              @change="commitTitle"
-              @keydown.enter.prevent="commitTitle"
-            />
-            <div class="ed-meta">
-              <span>{{ episodes.length }} {{ $t('common.chapterUnit') }}</span>
-              <span>·</span>
-              <span>{{ totalWords }} {{ $t('common.characters') }}</span>
-              <span>·</span>
-              <span v-if="saving">{{ $t('common.saving') }}</span>
-              <span v-else-if="dirty" class="unsaved">{{ $t('common.unsaved') }}</span>
-              <span v-else>{{ $t('scripts.savedAt') }} {{ fmtTime(activeDoc.updatedAt) }}</span>
-            </div>
-            <div class="ed-actions">
-              <button class="mini-btn" @click="downloadActive">{{ $t('scripts.exportMd') }}</button>
-              <button class="mini-btn" @click="revealActive">{{ $t('scripts.openFile') }}</button>
-              <button v-if="dirty" class="mini-btn primary" @click="saveNow">{{ $t('common.save') }}</button>
-              <button class="mini-btn danger" @click="removeActive">{{ $t('common.delete') }}</button>
-            </div>
-          </div>
-
-          <div class="tabs">
-            <button :class="{ on: activeTab === 'episodes' }" @click="activeTab = 'episodes'">
-              {{ $t('scripts.editEpisodes') }}
-            </button>
-            <button :class="{ on: activeTab === 'markdown' }" @click="activeTab = 'markdown'">
-              {{ $t('scripts.markdownFull') }}
-            </button>
-            <button :class="{ on: activeTab === 'preview' }" @click="activeTab = 'preview'">
-              {{ $t('common.preview') }}
-            </button>
-          </div>
-
-          <div class="ed-body">
-            <!-- 회차 편집 -->
-            <div v-if="activeTab === 'episodes'" class="ep-list">
-              <div
-                v-for="(ep, i) in episodes"
-                :id="`ep-${i}`"
-                :key="ep.id"
-                class="ep-card"
-                :class="{ open: activeEpisodeIndex === i }"
-              >
-                <div class="ep-head" @click="openEpisode(i)">
-                  <span class="ep-no">{{ i + 1 }}</span>
-                  <input
-                    class="ep-title"
-                    :value="draft && draft.index === i ? draft.title : ep.title"
-                    @input="onTitleInput(i, $event)"
-                    @click.stop
-                  />
-                  <span class="ep-words">{{ ep.wordCount }} {{ $t('common.characters') }}</span>
-                  <div class="ep-tools" @click.stop>
-                    <button :title="$t('common.moveUp')" :disabled="i === 0" @click="moveEpisode(i, -1)">↑</button>
-                    <button
-                      :title="$t('common.moveDown')"
-                      :disabled="i === episodes.length - 1"
-                      @click="moveEpisode(i, 1)"
-                    >
-                      ↓
-                    </button>
-                    <button :title="$t('scripts.insertEpisode')" @click="insertEpisodeAfter(i)">＋</button>
-                    <button :title="$t('scripts.deleteEpisode')" class="danger" @click="removeEpisode(i)">✕</button>
-                  </div>
-                </div>
-                <textarea
-                  v-if="draft && draft.index === i"
-                  v-model="draft.content"
-                  class="ep-body"
-                  :placeholder="$t('scripts.episodePlaceholder')"
-                  @input="scheduleFlush"
-                />
-              </div>
-              <button class="add-ep" @click="addEpisode">{{ $t('scripts.newEpisode') }}</button>
-            </div>
-
-            <!-- 원문 -->
-            <div v-else-if="activeTab === 'markdown'" class="md-wrap">
-              <textarea
-                v-model="markdown"
-                class="md-editor"
-                spellcheck="false"
-                @input="markDirty"
-              />
-              <div class="md-foot">
-                <button class="mini-btn" @click="saveNow">{{ $t('scripts.saveChanges') }}</button>
-                <button class="mini-btn" @click="reloadFromDisk">{{ $t('scripts.reloadDisk') }}</button>
-                <button class="mini-btn" @click="copyMarkdown">{{ $t('scripts.copyFull') }}</button>
-              </div>
-            </div>
-
-            <!-- 미리보기 -->
-            <div v-else class="preview" v-html="previewHtml" />
-          </div>
-
-          <div class="ed-foot">
-            <span class="foot-tip">{{ $t('scripts.filePath') }}{{ activeDoc.filename }}</span>
-            <GradientButton size="sm" type="primary" icon="→" @click="applyToProject">
-              {{ $t('scripts.sendToProject') }}
-            </GradientButton>
-          </div>
-        </GlassCard>
-
-        <GlassCard v-else padding="lg" class="editor-card center">
-          <div class="blank">
-            <div class="blank-icon">📜</div>
-            <div class="blank-title">{{ $t('scripts.emptyLibrary') }}</div>
-            <div class="blank-desc">
-              {{ $t('scripts.startHint') }}
-            </div>
-            <div class="blank-actions">
-              <GradientButton icon="✨" @click="openGenerate">{{ $t('scripts.writeWithAi') }}</GradientButton>
-              <GradientButton type="secondary" @click="createScript">{{ $t('scripts.createBlank') }}</GradientButton>
-              <GradientButton type="ghost" @click="router.push('/studio')">{{ $t('scripts.openCanvas') }}</GradientButton>
-            </div>
-          </div>
-        </GlassCard>
-      </section>
+        <div class="si-time">{{ fmtTime(d.updatedAt) }}</div>
+      </button>
     </div>
 
-    <!-- AI 대본 작성 모달 -->
-    <teleport to="body">
-      <div v-if="genOpen" class="gen-mask" @click.self="closeGenerate">
-        <div class="gen-modal">
-          <div class="gen-head">
-            <strong>{{ $t('scripts.aiWriteIcon') }}</strong>
-            <button class="gen-close" :disabled="generating" :title="$t('common.close')" @click="closeGenerate">
-              ✕
+    <div v-else class="sc-page">
+      <header class="sc-head">
+        <div class="sc-head-copy">
+          <span class="sc-kicker">{{ $t('scriptDesk.workspace') }}</span>
+          <input class="sc-h1" :value="draft?.title || ''" :aria-label="$t('scriptDesk.episodeTitle')" @input="draft && onTitleInput(draft.index, $event)" />
+          <p>{{ $t('scriptDesk.formatHint') }}</p>
+        </div>
+        <div class="sc-head-actions">
+          <button type="button" class="nb-btn ghost" @click="backToLibrary">{{ $t('scriptDesk.backToLibrary') }}</button>
+          <span class="savechip" :class="{ dirty }"><i />{{ savedLabel }}</span>
+          <button type="button" class="nb-btn" @click="downloadActive">
+            <svg viewBox="0 0 24 24"><path d="M12 16V4M8 8l4-4 4 4"/><path d="M4 16v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"/></svg>
+            {{ $t('scriptDesk.exportMarkdown') }}
+          </button>
+          <button type="button" class="nb-btn primary" @click="applyToProject">
+            <svg viewBox="0 0 24 24"><path d="M12 3v5M12 16v5M3 12h5M16 12h5M6.3 6.3l3 3M14.7 14.7l3 3M17.7 6.3l-3 3M9.3 14.7l-3 3"/></svg>
+            {{ $t('scriptDesk.storyboard') }}
+          </button>
+        </div>
+      </header>
+      <div class="sc-cols">
+      <aside class="sc-lib">
+        <div class="sc-lib-head">
+          <span class="sc-panel-title"><i />{{ $t('common.scriptLibrary') }}</span>
+          <button type="button" class="sc-icon" :title="$t('common.newScript')" @click="createScript">
+            <svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>
+          </button>
+        </div>
+        <div class="sc-lib-search">
+          <input v-model="titleEditing" :aria-label="$t('scriptDesk.scriptName')" @change="commitTitle" @keydown.enter.prevent="commitTitle" />
+        </div>
+        <div class="sc-lib-body">
+          <div class="sc-sec-t">{{ $t('scriptDesk.currentSeries', { title: activeDoc?.title }) }}</div>
+          <template v-for="(ep, i) in episodes" :key="ep.id">
+            <button type="button" class="sc-ep" :class="{ on: activeEpisodeIndex === i }" @click="openEpisode(i)">
+              <svg viewBox="0 0 24 24"><path d="m9 5 7 7-7 7"/></svg>
+              <span>{{ ep.title }}</span>
+              <b>{{ ep.wordCount }}</b>
             </button>
-          </div>
-          <div class="gen-form">
-            <label class="gen-label">{{ $t('scripts.subject') }}</label>
-            <input
-              v-model="genTopic"
-              class="gen-input"
-              :placeholder="$t('scripts.topicExample')"
-              :disabled="generating"
-            />
-            <label class="gen-label">{{ $t('scripts.outline') }} <em>{{ $t('common.optional') }}</em></label>
-            <textarea
-              v-model="genBrief"
-              class="gen-textarea"
-              rows="5"
-              :placeholder="$t('scripts.outlinePlaceholder')"
-              :disabled="generating"
-            />
-            <div class="gen-row">
-              <div class="gen-field">
-                <label class="gen-label">{{ $t('common.targetDuration') }}</label>
-                <select v-model.number="genDuration" class="gen-input" :disabled="generating">
-                  <option :value="0">{{ $t('common.unlimitedDuration') }}</option>
-                  <option v-for="s in durationOptions" :key="s" :value="s">{{ s }} {{ $t('common.seconds') }}</option>
-                </select>
-                <p class="gen-hint">
-                  {{
-                    genDuration
-                      ? $t('scripts.budget', { p0: genDuration, p1: durationScenes(genDuration), p2: durationChars(genDuration), p3: durationShots(genDuration) })
-                      : $t('scripts.unlimitedHint')
-                  }}
-                </p>
-              </div>
-              <div class="gen-field">
-                <label class="gen-label">{{ $t('scripts.visualStyle') }}</label>
-                <select v-model="genStyle" class="gen-input" :disabled="generating">
-                  <option v-for="s in styleOptions" :key="s.value" :value="s.value">
-                    {{ s.label }}
-                  </option>
-                </select>
-              </div>
-              <div class="gen-field">
-                <label class="gen-label">{{ $t('common.model') }}</label>
-                <select v-model="genChoice" class="gen-input" :disabled="generating">
-                  <option v-if="!llmGroups.some((g) => g.models.length)" value="">
-                    {{ $t('common.noModel') }}
-                  </option>
-                  <optgroup v-for="g in llmGroups" :key="g.id" :label="g.name">
-                    <option v-for="m in g.models" :key="`${g.id}::${m}`" :value="`${g.id}::${m}`">
-                      {{ m }}
-                    </option>
-                  </optgroup>
-                </select>
-              </div>
-            </div>
-            <p v-if="generating" class="gen-progress">{{ genProgress }}</p>
-          </div>
-          <div class="gen-foot">
-            <button v-if="generating" class="mini-btn danger" @click="cancelGenerate">
-              {{ $t('scripts.cancelGeneration') }}
-            </button>
-            <button v-else class="mini-btn" @click="closeGenerate">{{ $t('scripts.deferWriting') }}</button>
-            <button
-              class="mini-btn primary"
-              :disabled="generating || !llmModel || (!genTopic.trim() && !genBrief.trim())"
-              @click="submitGenerate"
+              <button
+              v-for="scene in activeEpisodeIndex === i ? scenesIn(draft && draft.index === i ? draft.content : ep.content) : []"
+              :key="scene"
+              type="button"
+              class="sc-kid"
             >
-              {{ generating ? $t('scripts.writing') : $t('scripts.startWriting') }}
+              <span>{{ scene }}</span>
             </button>
+          </template>
+          <div v-if="otherDocs.length" class="sc-sec-t">{{ $t('scriptDesk.otherScripts') }}</div>
+          <button v-for="doc in otherDocs" :key="doc.id" type="button" class="sc-other" @click="openScript(doc.id)">
+            <span>{{ doc.title }}</span>
+            <b>{{ $t('scriptDesk.episodesOnly', { count: doc.episodeCount }) }}</b>
+          </button>
+        </div>
+        <div class="sc-lib-foot">
+          <button type="button" class="nb-btn block" @click="addEpisode">
+            <svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>
+            {{ $t('scriptDesk.newChapter') }}
+          </button>
+          <div class="sc-lib-meta">
+            <span>{{ $t('scriptDesk.seriesStats', { episodes: episodes.length, words: totalWords }) }}</span>
+            <button type="button" class="sc-danger-text" @click="removeActive">{{ $t('scriptDesk.deleteScript') }}</button>
           </div>
         </div>
+      </aside>
+      <section v-if="activeDoc && draft" class="sc-mid">
+        <div class="sc-toolbar">
+          <div class="sc-seg">
+            <button type="button" :class="{ on: scriptMode === 'source' }" @click="scriptMode = 'source'">{{ $t('scriptDesk.source') }}</button>
+            <button type="button" :class="{ on: scriptMode === 'preview' }" @click="scriptMode = 'preview'">{{ $t('scriptDesk.preview') }}</button>
+          </div>
+          <i class="sc-vdiv" />
+          <button type="button" class="sc-icon" :title="$t('scriptDesk.undo')" @click="editCommand('undo')">
+            <svg viewBox="0 0 24 24"><path d="M4 9h10a5 5 0 0 1 0 10h-3"/><path d="m4 9 4-4M4 9l4 4"/></svg>
+          </button>
+          <button type="button" class="sc-icon" :title="$t('scriptDesk.redo')" @click="editCommand('redo')">
+            <svg viewBox="0 0 24 24"><path d="M20 9H10a5 5 0 0 0 0 10h3"/><path d="m20 9-4-4M20 9l-4 4"/></svg>
+          </button>
+          <i class="sc-vdiv" />
+          <button type="button" class="nb-btn sm" @click="addEpisode">{{ $t('scriptDesk.insertEpisode') }}</button>
+          <button type="button" class="nb-btn sm" :disabled="draft.index === 0" @click="moveEpisode(draft.index, -1)">{{ $t('common.moveUp') }}</button>
+          <button type="button" class="nb-btn sm" :disabled="draft.index === episodes.length - 1" @click="moveEpisode(draft.index, 1)">{{ $t('common.moveDown') }}</button>
+          <button type="button" class="nb-btn sm danger" @click="removeEpisode(draft.index)">{{ $t('scriptDesk.deleteEpisode') }}</button>
+          <span class="sc-toolbar-meta">{{ $t('scriptDesk.sceneStats', { words: episodeChars, scenes: scenesIn(draft.content).length }) }}</span>
+        </div>
+        <div class="episode-editor">
+            <div class="episode-body-wrap" :class="{ preview: scriptMode === 'preview' }" :aria-busy="episodeWriting">
+              <pre
+                ref="scriptPaintEl"
+                class="script-paint"
+                :class="{ empty: !draft.content }"
+                aria-hidden="true"
+                v-html="draft.content ? scriptPaint : $t('scriptDesk.writingPlaceholder')"
+              />
+              <textarea
+                ref="scriptInputEl"
+                v-model="draft.content"
+                class="episode-body"
+                spellcheck="false"
+                :readonly="episodeWriting || scriptMode === 'preview'"
+                @input="scheduleFlush(); readCaret()"
+                @scroll="syncScriptScroll"
+                @click="readCaret"
+                @keyup="readCaret"
+              />
+              <div v-if="episodeWriting && writingPhase !== 'chat'" class="episode-writing-overlay" role="status" aria-live="polite">
+                <span class="episode-writing-spinner" aria-hidden="true" />
+                <strong>{{ writingPhase === 'outline' ? $t('scriptDesk.outlining') : $t('scriptDesk.writingEpisode') }}</strong>
+                <span>已等待 {{ episodeElapsed }} 秒 · {{ writingPhase === 'outline' ? $t('scriptDesk.reviewAfter') : $t('scriptDesk.insertAfter') }}</span>
+                <button type="button" class="mini-btn" @click="cancelEpisodeWrite">{{ $t('scripts.cancelGeneration') }}</button>
+              </div>
+            </div>
+          </div>
+          <div class="sc-status">
+            <span>{{ $t('scriptDesk.caret', { line: caret.line, column: caret.col }) }}</span>
+            <span>{{ $t('scriptDesk.characters', { count: episodeChars }) }}</span>
+            <span>Markdown · {{ activeDoc.filename }}</span>
+          </div>
+      </section>
+      <aside v-if="activeDoc && draft" class="sc-ai" :aria-label="$t('scriptDesk.writer')">
+        <header class="sc-ai-head">
+          <span class="sc-panel-title ai"><i />{{ $t('scriptDesk.writer') }}</span>
+          <span class="sc-badge">{{ llmModel || $t('studioSettings.noModel') }}</span>
+        </header>
+        <div ref="writingList" class="writing-history" aria-live="polite">
+          <div class="writing-message assistant"><span>{{ $t('scriptDesk.writerShort') }}</span><p>{{ $t('scriptDesk.writerIntro') }}</p></div>
+          <p v-if="writingHistoryLoading" class="writing-note">{{ $t('scriptDesk.loadingHistory') }}</p>
+          <p v-if="writingHistoryError" class="writing-note">{{ $t('scriptDesk.historyError') }}</p>
+          <div v-for="(message, i) in writingMessages" :key="`${message.time}-${i}`" class="writing-message" :class="message.role">
+            <span>{{ message.role === 'user' ? $t('scriptDesk.you') : $t('scriptDesk.writerShort') }} · 第 {{ message.episode + 1 }} 集</span>
+            <p>{{ message.content }}</p>
+          </div>
+          <div v-if="episodeWriting" class="writing-message assistant writing-pending" role="status">
+            <span>{{ $t('scriptDesk.writerShort') }}</span><p><i class="writing-pulse" /> {{ writingPhase === 'outline' ? $t('scriptDesk.outliningShort') : writingPhase === 'chat' ? $t('scriptDesk.replying') : $t('scriptDesk.writingShort') }}，已等待 {{ episodeElapsed }} 秒</p>
+          </div>
+          <section v-if="storyPlan" class="story-plan">
+            <div class="story-plan-heading"><strong>{{ $t('scriptDesk.outlineSize', { count: storyPlan.episodes.length }) }}</strong><button type="button" :disabled="episodeWriting" @click="planEditing = !planEditing">{{ planEditing ? $t('common.collapse') : $t('scriptDesk.viewOutline') }}</button></div>
+            <p class="story-plan-status">{{ storyPlan.stage === 'outline-review' ? '等待确认大纲' : storyPlan.stage === 'episode-review' ? `第 ${storyPlan.nextIndex + 1} 集等待确认` : storyPlan.stage === 'complete' ? '全部分集已确认' : `准备写第 ${storyPlan.nextIndex + 1} 集` }}</p>
+            <div v-if="planEditing" class="story-plan-content">
+              <label>{{ $t('scriptDesk.outlineAndCast') }}<textarea v-model="storyPlan.outline" :readonly="storyPlan.stage !== 'outline-review' || episodeWriting" rows="7" /></label>
+              <label v-for="(episode, index) in storyPlan.episodes" :key="index">第 {{ index + 1 }} 集<input v-model="episode.title" :readonly="storyPlan.stage !== 'outline-review' || episodeWriting" /><textarea v-model="episode.summary" :readonly="storyPlan.stage !== 'outline-review' || episodeWriting" rows="3" /></label>
+              <p v-if="storyPlan.stage === 'outline-review'">{{ $t('scriptDesk.editOutlineHint') }}</p>
+              <button v-if="storyPlan.stage === 'outline-review'" type="button" class="story-plan-save" :disabled="episodeWriting" @click="savePlanDraft">{{ $t('scriptDesk.saveOutlineDraft') }}</button>
+            </div>
+            <button v-if="storyPlan.stage === 'outline-review'" type="button" class="story-plan-confirm" :disabled="episodeWriting" @click="confirmStoryPlan">{{ $t('scriptDesk.confirmOutline') }}</button>
+            <button v-else-if="storyPlan.stage === 'episode-review'" type="button" class="story-plan-confirm" :disabled="episodeWriting" @click="confirmEpisodeAndContinue">{{ storyPlan.nextIndex + 1 >= storyPlan.episodes.length ? $t('scriptDesk.finishScript') : $t('scriptDesk.nextEpisode') }}</button>
+            <button v-else-if="storyPlan.stage === 'ready'" type="button" class="story-plan-confirm" :disabled="episodeWriting" @click="writePlannedEpisode">{{ $t('scriptDesk.continueWriting', { episode: storyPlan.nextIndex + 1 }) }}</button>
+          </section>
+        </div>
+        <div class="writing-compose">
+          <div class="sc-acts">
+            <button type="button" :disabled="episodeWriting" @click="askWriter($t('scriptDesk.continueRequest'))"><b>{{ $t('scriptDesk.continueScene') }}</b><span>{{ $t('scriptDesk.continueHint') }}</span></button>
+            <button type="button" :disabled="episodeWriting" @click="askWriter($t('scriptDesk.rewriteRequest'))"><b>{{ $t('scriptDesk.rewriteScene') }}</b><span>{{ $t('scriptDesk.rewriteHint') }}</span></button>
+            <button type="button" :disabled="episodeWriting" @click="askWriter($t('scriptDesk.polishRequest'))"><b>{{ $t('scriptDesk.polishDialogue') }}</b><span>{{ $t('scriptDesk.polishHint') }}</span></button>
+            <button type="button" :disabled="episodeWriting" @click="askWriter($t('scriptDesk.shortenRequest'))"><b>{{ $t('scriptDesk.shorten') }}</b><span>{{ $t('scriptDesk.shortenHint') }}</span></button>
+          </div>
+          <div class="writing-options">
+            <label><span>{{ $t('settings.nav.llm.label') }}</span><select v-model="genChoice" :disabled="episodeWriting" :aria-label="$t('settings.nav.llm.label')">
+              <option v-if="!llmGroups.some((g) => g.models.length)" value="">{{ $t('common.noModel') }}</option>
+              <optgroup v-for="g in llmGroups" :key="g.id" :label="g.name"><option v-for="m in g.models" :key="`${g.id}::${m}`" :value="`${g.id}::${m}`">{{ m }}</option></optgroup>
+            </select></label>
+            <label><span>{{ $t('scriptDesk.writingLibrary') }}</span><select v-model="scriptReferenceType" :disabled="episodeWriting" :aria-label="$t('scriptDesk.selectWritingLibrary')">
+              <option v-for="item in SCRIPT_REFERENCE_OPTIONS" :key="item.value" :value="item.value">{{ item.label }}</option>
+            </select></label>
+          </div>
+          <label class="writing-mode"><span>{{ $t('scriptDesk.writingMode') }}</span><select v-model="writingMode" :disabled="episodeWriting"><option value="auto">{{ $t('scriptDesk.auto') }}</option><option value="series">{{ $t('scriptDesk.series') }}</option><option value="episode">{{ $t('scriptDesk.singleEpisode') }}</option></select></label>
+          <textarea v-model="episodeHint" class="writing-input" :placeholder="$t('scriptDesk.askPlaceholder')" :disabled="episodeWriting" @keydown.ctrl.enter.prevent="writeCurrentEpisode" />
+          <div class="writing-actions"><span>{{ $t('scriptDesk.sendHint') }}</span><button v-if="episodeWriting" class="writing-send cancel" type="button" @click="cancelEpisodeWrite">{{ $t('scripts.cancelGeneration') }}</button><button v-else class="writing-send" type="button" :disabled="writingHistoryLoading" @click="writeCurrentEpisode">发送 ✦</button></div>
+        </div>
+      </aside>
       </div>
-    </teleport>
+    </div>
+
   </div>
 </template>
 
 <style scoped>
 .page {
-  padding: var(--space-6);
+  padding: 20px 24px;
   display: flex;
   flex-direction: column;
-  gap: var(--space-4);
-  min-height: 100%;
+  gap: 16px;
+  height: 100%;
+  min-height: 0;
+  overflow-y: auto;
+  background: var(--nb-bg-0);
+  color: var(--nb-t1);
 }
 .page-head {
   display: flex;
@@ -751,16 +1145,379 @@ onMounted(async () => {
 }
 .head-actions {
   display: flex;
-  gap: var(--space-2);
+  gap: 6px;
   flex-wrap: wrap;
 }
+.import-icon {
+  display: block;
+  width: 14px;
+  height: 14px;
+}
+.head-actions :deep(.grad-btn) {
+  border-radius: 4px;
+  box-shadow: none;
+  font-weight: 550;
+}
+.head-actions :deep(.type-primary) {
+  background: var(--nb-accent);
+  color: var(--nb-accent-ink);
+}
+.head-actions :deep(.type-primary:hover:not(:disabled)) {
+  background: #67e4fb;
+}
+.head-actions :deep(.type-secondary),
+.head-actions :deep(.type-ghost) {
+  background: transparent;
+  border-color: transparent;
+  color: #b7b7bc;
+}
+.head-actions :deep(.type-secondary:hover:not(:disabled)),
+.head-actions :deep(.type-ghost:hover:not(:disabled)) {
+  background: var(--nb-bg-4);
+  color: #eee;
+}
 
-.body {
-  display: grid;
-  grid-template-columns: 280px 1fr;
-  gap: var(--space-4);
-  align-items: start;
+.page.detail {
+  height: 100%;
   min-height: 0;
+  overflow: hidden;
+  padding: 0;
+  gap: 0;
+  background:
+    radial-gradient(900px 480px at 18% -8%, rgba(53, 214, 247, 0.07), transparent 62%),
+    var(--nb-bg-0);
+}
+.page.detail .page-head { align-items: center; gap: 8px; }
+.page.detail .page-head > div:first-child { display: flex; align-items: baseline; gap: 10px; min-width: 0; }
+.page.detail .kicker { margin: 0; white-space: nowrap; letter-spacing: 0; }
+.page.detail .page-head h1 { margin: 0; font-size: 16px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.page.detail .head-actions { gap: 6px; }
+.page.detail .head-actions :deep(button) { min-height: 32px; padding: 5px 11px; font-size: 12px; }
+.library-tools {
+  display: flex;
+}
+.library-tools .search {
+  width: min(360px, 100%);
+}
+.library {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: 12px;
+  align-content: start;
+}
+.script-card {
+  text-align: left;
+  padding: 14px 14px 12px;
+  border-radius: 4px;
+  border: none;
+  background: var(--nb-bg-2);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-height: 104px;
+  cursor: pointer;
+}
+.script-card:hover {
+  background: var(--nb-bg-3);
+}
+.script-card :deep(.tag) {
+  border-radius: 3px;
+  background: var(--nb-bg-4);
+  color: #b7b7bc;
+}
+.workspace {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  align-items: stretch;
+  gap: 0;
+}
+.pane-resizer {
+  flex: 0 0 8px;
+  margin: 0 -2px;
+  cursor: col-resize;
+  position: relative;
+  z-index: 2;
+  touch-action: none;
+}
+.pane-resizer::after {
+  content: '';
+  position: absolute;
+  top: 12px;
+  bottom: 12px;
+  left: 3px;
+  width: 1px;
+  background: transparent;
+}
+.pane-resizer:hover::after,
+.page.resizing .pane-resizer::after {
+  background: rgba(255, 255, 255, 0.16);
+}
+.page.resizing {
+  cursor: col-resize;
+  user-select: none;
+}
+.ep-side {
+  flex: none;
+  min-height: 0;
+  background: transparent;
+  border: none;
+  border-radius: 0;
+  padding: 0 8px 0 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.ep-item {
+  display: grid;
+  grid-template-columns: 22px minmax(0, 1fr);
+  grid-template-rows: auto auto;
+  column-gap: 8px;
+  width: 100%;
+  text-align: left;
+  padding: 7px 8px;
+  border-radius: 4px;
+  border: none;
+  background: transparent;
+  color: #d8d8dc;
+  cursor: pointer;
+}
+.ep-item:hover { background: var(--nb-bg-3); color: var(--nb-t1); }
+.ep-item.active {
+  background: var(--nb-accent-soft);
+  color: var(--nb-accent);
+}
+.writing-agent {
+  flex: none;
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border: none;
+  border-radius: 0;
+  background: transparent;
+  padding-left: 8px;
+}
+.writing-agent-head { display: flex; align-items: center; gap: 10px; padding: 4px 2px 12px; border-bottom: none; }
+.writing-agent-head strong { color: var(--nb-t1); font-size: 13px; font-weight: 600; }
+.writing-agent-head p { margin: 2px 0 0; color: var(--nb-t3); font-size: 11px; }
+.writing-agent-icon { display: grid; place-items: center; flex: 0 0 22px; height: 22px; border-radius: 4px; color: var(--nb-t2); background: var(--nb-bg-4); font-size: 13px; }
+.writing-history { flex: 1; min-height: 120px; overflow-y: auto; padding: 8px 2px 12px; display: flex; flex-direction: column; gap: 12px; }
+.writing-message { max-width: 96%; align-self: flex-start; min-width: 0; }
+.writing-message.user { align-self: flex-end; }
+.writing-message > span { display: block; margin: 0 2px 4px; color: var(--nb-t3); font-size: 11px; }
+.writing-message.user > span { text-align: right; }
+.writing-message p { margin: 0; padding: 8px 10px; border: 1px solid var(--nb-line-2); border-radius: 4px; background: var(--nb-bg-2); color: var(--nb-t1); font-size: 12px; line-height: 1.65; overflow-wrap: anywhere; white-space: pre-wrap; }
+.writing-message.user p { border: 1px solid var(--nb-line-accent); border-radius: 4px; background: var(--nb-accent-soft); color: var(--nb-t1); }
+.writing-note { margin: 0; color: var(--nb-t3); font-size: 12px; }
+.writing-compose { padding: 10px 0 0; border-top: none; }
+.story-plan { padding: 10px; border: 1px solid var(--nb-line-2); border-radius: 4px; background: var(--nb-bg-3); }
+.story-plan-heading { display: flex; justify-content: space-between; align-items: center; gap: 8px; color: var(--nb-t1); font-size: 12px; }
+.story-plan-heading button { border: 0; background: transparent; color: var(--nb-t2); cursor: pointer; font-size: 11px; }
+.story-plan-status { margin: 6px 0; color: var(--nb-t3); font-size: 11px; }
+.story-plan-content { display: flex; flex-direction: column; gap: 8px; max-height: 300px; overflow: auto; margin: 8px 0; }
+.story-plan-content label { display: flex; flex-direction: column; gap: 4px; color: var(--nb-t2); font-size: 11px; }
+.story-plan-content textarea, .story-plan-content input, .writing-mode select { width: 100%; box-sizing: border-box; padding: 7px 8px; border: 1px solid var(--nb-line-2); border-radius: 4px; background: var(--nb-bg-inset); color: var(--nb-t1); font: inherit; line-height: 1.5; }
+.story-plan-content textarea { resize: vertical; }
+.story-plan-content p { margin: 0; color: var(--nb-t3); font-size: 11px; line-height: 1.5; }
+.story-plan-confirm { width: 100%; padding: 8px; border: none; border-radius: 6px; background: var(--nb-accent); color: var(--nb-accent-ink); cursor: pointer; font-size: 12px; font-weight: 650; }
+.story-plan-confirm:hover:not(:disabled) { background: #67e4fb; }
+.story-plan-confirm:disabled { opacity: .5; cursor: default; }
+.story-plan-save { align-self: flex-start; padding: 5px 8px; border: 1px solid var(--nb-line-2); border-radius: 4px; background: var(--nb-bg-2); color: var(--nb-t1); cursor: pointer; font-size: 11px; }
+.writing-mode { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; color: var(--nb-t2); font-size: 11px; }
+.writing-mode span { flex-shrink: 0; }
+.writing-mode select { height: 32px; padding: 0 8px; background: var(--nb-bg-inset); color: var(--nb-t1); }
+.writing-options { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 8px; }
+.writing-options label { display: flex; min-width: 0; flex-direction: column; gap: 4px; color: var(--nb-t2); font-size: 11px; }
+.writing-options select { width: 100%; min-width: 0; height: 32px; padding: 0 8px; border: 1px solid var(--nb-line-2); border-radius: 4px; background: var(--nb-bg-inset); color: var(--nb-t1); font-size: 11px; }
+.writing-input { display: block; width: 100%; min-height: 78px; box-sizing: border-box; resize: vertical; padding: 8px 10px; border: 1px solid var(--nb-line-2); border-radius: 4px; outline: none; background: var(--nb-bg-inset); color: var(--nb-t1); font: inherit; font-size: 12px; line-height: 1.6; }
+.writing-input:focus { background: var(--nb-bg-2); }
+.writing-input::placeholder { color: var(--nb-t4); }
+.writing-actions { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: 8px; }
+.writing-actions > span { color: var(--nb-t3); font-size: 10px; }
+.writing-send { padding: 7px 12px; border: 0; border-radius: 6px; background: var(--nb-accent); color: var(--nb-accent-ink); font-size: 12px; font-weight: 650; cursor: pointer; }
+.writing-send:hover { background: #67e4fb; }
+.writing-send:disabled { opacity: .5; cursor: default; }
+.writing-send.cancel { background: var(--nb-bg-3); color: var(--nb-t1); border: 1px solid var(--nb-line-2); }
+.writing-pulse { display: inline-block; width: 6px; height: 6px; margin-right: 4px; border-radius: 50%; background: var(--nb-t2); animation: writing-pulse 1s ease-in-out infinite alternate; }
+@keyframes writing-pulse { to { opacity: .3; } }
+@media (prefers-reduced-motion: reduce) { .writing-pulse { animation: none; } }
+.ep-item-title {
+  font-size: 13px;
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.ep-main {
+  min-height: 0;
+  min-width: 0;
+  flex: 1;
+}
+.ep-main :deep(.glass-card-root) {
+  height: 100%;
+  min-height: 0;
+  border: none;
+  border-radius: 4px;
+  box-shadow: none;
+  background: var(--nb-bg-0);
+}
+.episode-editor {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 14px 16px;
+}
+.episode-tools {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+.ep-title-input {
+  flex: 1;
+  min-width: 0;
+  background: var(--nb-void);
+  border: none;
+  border-radius: 4px;
+  padding: 8px 10px;
+  color: var(--color-text-1);
+  font-size: 14px;
+}
+.episode-move {
+  display: flex;
+  gap: 4px;
+}
+.episode-move button {
+  height: 32px;
+  padding: 0 8px;
+  border: none;
+  border-radius: 4px;
+  background: var(--nb-void);
+  color: var(--color-text-2);
+  cursor: pointer;
+}
+.episode-move button.danger {
+  color: #c4a0a0;
+}
+.episode-body-wrap {
+  position: relative;
+  flex: 1;
+  min-height: 280px;
+  display: flex;
+  overflow: hidden;
+  border-radius: 10px;
+  background: var(--nb-void);
+  box-shadow: inset 0 0 0 1px var(--nb-line-2);
+}
+.script-paint,
+.episode-body {
+  position: absolute;
+  inset: 0;
+  margin: 0;
+  width: 100%;
+  height: 100%;
+  padding: 18px 22px 48px;
+  border: 0;
+  overflow: auto;
+  scrollbar-gutter: stable;
+  background: transparent;
+  font-family: var(--font-sans);
+  font-size: 14px;
+  line-height: 26px;
+  letter-spacing: 0;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+  tab-size: 2;
+}
+.script-paint {
+  color: var(--nb-t2);
+  pointer-events: none;
+  z-index: 0;
+}
+.script-paint.empty { color: var(--nb-t4); }
+.script-paint :deep(.sp-h1) { color: var(--nb-t1); font-weight: 650; }
+.script-paint :deep(.sp-h2) { color: var(--nb-accent); font-weight: 650; }
+.script-paint :deep(.sp-act) { color: var(--nb-t2); }
+.script-paint :deep(.sp-say) { color: var(--nb-t1); }
+.script-paint :deep(.sp-colon) { color: var(--nb-t3); }
+.script-paint :deep(.sp-paren) { color: var(--nb-t4); }
+.script-paint :deep(.sp-note),
+.script-paint :deep(.sp-cast) { color: var(--nb-t4); }
+.script-paint :deep(.sp-nar) { color: var(--nb-ai); font-style: italic; }
+.episode-body {
+  z-index: 1;
+  resize: none;
+  color: transparent;
+  caret-color: var(--nb-accent);
+  outline: none;
+}
+.episode-body:focus,
+.episode-body:focus-visible {
+  outline: none;
+}
+.episode-body::selection {
+  background: rgba(53, 214, 247, 0.28);
+  color: transparent;
+}
+.episode-writing-overlay {
+  position: absolute;
+  inset: 1px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  border-radius: 4px;
+  background: rgba(18, 18, 20, 0.9);
+  color: var(--color-text-1);
+  font-size: 13px;
+}
+.episode-writing-overlay > span:not(.episode-writing-spinner) { color: var(--color-text-3); font-size: 12px; }
+.episode-writing-spinner {
+  width: 30px;
+  height: 30px;
+  border: 2px solid rgba(255, 255, 255, 0.12);
+  border-top-color: #c8c8cc;
+  border-radius: 50%;
+  animation: episode-writing-spin 0.85s linear infinite;
+}
+@keyframes episode-writing-spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .episode-writing-spinner { animation: none; } }
+.ai-bar {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+.llm-select,
+.reference-select,
+.ai-hint {
+  background: var(--color-bg-2);
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  color: var(--color-text-1);
+  height: 34px;
+  padding: 0 10px;
+  font-size: 12px;
+}
+.llm-select {
+  max-width: 220px;
+}
+.reference-select-label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+  color: var(--color-text-3);
+  font-size: 12px;
+}
+.reference-select { max-width: 160px; }
+.ai-hint {
+  flex: 1;
+  min-width: 0;
 }
 
 .side {
@@ -782,27 +1539,29 @@ onMounted(async () => {
 .search {
   flex: 1;
   min-width: 0;
-  background: var(--color-bg-2);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-sm);
-  padding: 6px 10px;
+  background: var(--nb-bg-2);
+  border: none;
+  border-radius: 4px;
+  padding: 8px 10px;
   font-size: 12px;
   color: var(--color-text-1);
   outline: none;
 }
 .search:focus {
-  border-color: var(--color-accent);
+  background: var(--nb-bg-3);
 }
 .count {
   font-size: 11px;
   color: var(--color-text-4);
   flex-shrink: 0;
 }
-.list {
+.ep-side .list {
   display: flex;
   flex-direction: column;
-  gap: 4px;
-  max-height: calc(100vh - 260px);
+  gap: 2px;
+  flex: 1;
+  min-height: 0;
+  max-height: none;
   overflow-y: auto;
 }
 .script-item {
@@ -844,14 +1603,16 @@ onMounted(async () => {
 }
 .side-foot {
   font-size: 11px;
-  color: var(--color-text-3);
-  padding: 6px;
-  border-radius: var(--radius-sm);
-  border: 1px solid var(--color-border);
+  color: #9a9aa1;
+  padding: 7px 8px;
+  border-radius: 4px;
+  border: none;
+  background: transparent;
+  text-align: left;
 }
 .side-foot:hover {
-  color: var(--color-text-1);
-  background: var(--color-fill);
+  color: #eee;
+  background: var(--nb-bg-3);
 }
 
 .editor-card {
@@ -867,8 +1628,8 @@ onMounted(async () => {
   display: flex;
   align-items: center;
   gap: var(--space-3);
-  padding: var(--space-4) var(--space-5);
-  border-bottom: 1px solid var(--color-border);
+  padding: 12px 16px 8px;
+  border-bottom: none;
   flex-wrap: wrap;
 }
 .title-input {
@@ -887,8 +1648,8 @@ onMounted(async () => {
   background: var(--color-fill);
 }
 .title-input:focus {
-  border-color: var(--color-accent);
-  background: var(--color-bg-2);
+  border-color: transparent;
+  background: var(--nb-void);
 }
 .ed-meta {
   display: flex;
@@ -905,31 +1666,28 @@ onMounted(async () => {
 }
 .mini-btn {
   font-size: 11px;
-  padding: 4px 10px;
-  border-radius: var(--radius-sm);
-  border: 1px solid var(--color-border);
-  color: var(--color-text-2);
+  padding: 4px 8px;
+  border-radius: 4px;
+  border: none;
+  color: #b7b7bc;
   background: transparent;
-  transition: all var(--duration-fast);
+  transition: background var(--duration-fast);
 }
 .mini-btn:hover:not(:disabled) {
-  color: var(--color-text-1);
-  border-color: var(--color-border-strong);
-  background: var(--color-fill);
+  color: #f2f2f3;
+  background: var(--nb-bg-4);
 }
 .mini-btn:disabled {
   opacity: 0.35;
   cursor: not-allowed;
 }
 .mini-btn.primary {
-  border-color: rgba(126, 180, 255, 0.4);
-  background: var(--grad-primary-soft);
-  color: #b9cbff;
+  background: var(--nb-bg-4);
+  color: #f2f2f3;
 }
 .mini-btn.danger:hover {
-  color: var(--color-error);
-  border-color: rgba(248, 113, 113, 0.4);
-  background: rgba(248, 113, 113, 0.1);
+  color: #e4c4c4;
+  background: #2a2222;
 }
 
 .tabs {
@@ -983,14 +1741,16 @@ onMounted(async () => {
   cursor: pointer;
 }
 .ep-no {
-  width: 22px;
-  height: 22px;
+  grid-row: 1 / span 2;
+  align-self: center;
+  width: 18px;
+  height: 18px;
   flex-shrink: 0;
-  border-radius: 6px;
-  background: var(--grad-primary-soft);
-  color: var(--color-accent);
+  border-radius: 3px;
+  background: var(--nb-bg-4);
+  color: #c8c8cc;
   font-size: 11px;
-  font-weight: 700;
+  font-weight: 600;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -1015,9 +1775,11 @@ onMounted(async () => {
   background: var(--color-bg-1);
 }
 .ep-words {
+  grid-column: 2;
+  white-space: nowrap;
   font-size: 11px;
+  line-height: 1.2;
   color: var(--color-text-4);
-  flex-shrink: 0;
 }
 .ep-tools {
   display: flex;
@@ -1158,8 +1920,16 @@ onMounted(async () => {
   align-items: center;
   justify-content: space-between;
   gap: var(--space-3);
-  padding: var(--space-3) var(--space-5);
-  border-top: 1px solid var(--color-border);
+  padding: 8px 16px 12px;
+  border-top: none;
+}
+.ed-foot :deep(.grad-btn) {
+  border-radius: 4px;
+  box-shadow: none;
+  background: #3a3a40;
+}
+.ed-foot :deep(.grad-btn:hover:not(:disabled)) {
+  background: #48484f;
 }
 .foot-tip {
   font-family: var(--font-mono);
@@ -1168,12 +1938,13 @@ onMounted(async () => {
 }
 
 .empty-mini {
-  text-align: center;
-  color: var(--color-text-4);
-  font-size: 12px;
-  padding: var(--space-6) var(--space-3);
-  border: 1px dashed var(--color-border);
-  border-radius: var(--radius-md);
+  grid-column: 1 / -1;
+  text-align: left;
+  color: #8d8d93;
+  font-size: 13px;
+  padding: 8px 2px 0;
+  border: none;
+  background: transparent;
   line-height: 1.7;
 }
 
@@ -1206,134 +1977,125 @@ onMounted(async () => {
 }
 
 @media (max-width: 1080px) {
+  .ai-bar { flex-wrap: wrap; }
+  .ai-hint { flex: 1 1 220px; }
   .body {
     grid-template-columns: 1fr;
   }
   .side {
     position: static;
   }
-  .list {
-    max-height: 220px;
-  }
+}
+.sc-page { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+.sc-head {
+  display: flex; align-items: flex-end; justify-content: space-between; gap: 24px;
+  padding: 22px 28px 16px; border-bottom: 1px solid var(--nb-line-2);
+  background: linear-gradient(180deg, rgba(255,255,255,.02), transparent);
+}
+.sc-head-copy { flex: 1; min-width: 0; }
+.sc-kicker {
+  display: inline-flex; align-items: center; gap: 8px;
+  font-size: 10px; font-weight: 700; letter-spacing: 0.14em; text-transform: uppercase; color: var(--nb-t3);
+}
+.sc-kicker::before { content: ""; width: 14px; height: 1px; background: var(--nb-line-accent); }
+.sc-h1 {
+  display: block; width: min(640px, 100%); margin: 8px 0 6px; padding: 0;
+  border: 0; background: transparent; color: var(--nb-t1);
+  font-size: 26px; font-weight: 650; letter-spacing: -0.02em; line-height: 1.15;
+}
+.sc-head-copy p { margin: 0; max-width: 640px; color: var(--nb-t3); font-size: 12px; line-height: 1.6; }
+.sc-head-actions { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
+.savechip { display: inline-flex; align-items: center; gap: 6px; color: var(--nb-t3); font-size: 11px; }
+.savechip i { width: 5px; height: 5px; border-radius: 50%; background: var(--nb-success); box-shadow: 0 0 6px rgba(61,217,160,.7); }
+.savechip.dirty i { background: var(--nb-warning); box-shadow: 0 0 6px rgba(255,180,84,.7); }
+.nb-btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+  height: 32px; padding: 0 14px; border-radius: 10px; border: 1px solid var(--nb-line-2);
+  background: var(--nb-bg-3); color: var(--nb-t1); font-size: 12px; cursor: pointer;
+}
+.nb-btn svg { width: 14px; height: 14px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+.nb-btn:hover { background: var(--nb-bg-4); }
+.nb-btn.primary { background: var(--nb-accent); border-color: var(--nb-accent); color: var(--nb-accent-ink); font-weight: 650; }
+.nb-btn.primary:hover { background: #4ce0ff; box-shadow: 0 0 20px var(--nb-accent-glow); }
+.nb-btn.ghost { background: transparent; border-color: transparent; color: var(--nb-t2); }
+.nb-btn.sm { height: 26px; padding: 0 10px; border-radius: 6px; font-size: 11px; }
+.nb-btn.danger { background: var(--nb-danger-soft); border-color: rgba(255,92,108,.32); color: var(--nb-danger); }
+.nb-btn.block { width: 100%; }
+.nb-btn:disabled { opacity: .4; cursor: default; }
+.sc-cols { flex: 1; min-height: 0; display: grid; grid-template-columns: 248px minmax(0, 1fr) 330px; }
+.sc-lib, .sc-ai { min-height: 0; display: flex; flex-direction: column; background: var(--nb-bg-1); }
+.sc-lib { border-right: 1px solid var(--nb-line-2); }
+.sc-ai { border-left: 1px solid var(--nb-line-2); }
+.sc-lib-head, .sc-ai-head {
+  display: flex; align-items: center; justify-content: space-between; gap: 8px;
+  padding: 12px 14px; border-bottom: 1px solid var(--nb-line-1);
+}
+.sc-panel-title { display: flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 650; }
+.sc-panel-title i { width: 3px; height: 13px; border-radius: 2px; background: var(--nb-accent); }
+.sc-panel-title.ai i { background: var(--nb-ai); }
+.sc-badge { height: 20px; padding: 0 8px; border-radius: 6px; border: 1px solid var(--nb-ai-line); background: var(--nb-ai-soft); color: var(--nb-ai); font-size: 10px; display: inline-flex; align-items: center; }
+.sc-icon { width: 24px; height: 24px; display: grid; place-items: center; border-radius: 6px; color: var(--nb-t3); }
+.sc-icon svg { width: 14px; height: 14px; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
+.sc-icon:hover { background: var(--nb-bg-3); color: var(--nb-t1); }
+.sc-lib-search { padding: 10px 12px 4px; }
+.sc-lib-search input, .writing-options select, .writing-mode select, .writing-input, .story-plan-content textarea, .story-plan-content input {
+  width: 100%; box-sizing: border-box; border: 1px solid var(--nb-line-2); border-radius: 10px;
+  background: var(--nb-bg-inset); color: var(--nb-t1);
+}
+.sc-lib-search input { height: 32px; padding: 0 12px; }
+.sc-lib-search input:focus, .writing-input:focus { outline: none; border-color: var(--nb-accent); box-shadow: 0 0 0 3px var(--nb-accent-soft); }
+.sc-lib-body { flex: 1; overflow: auto; padding: 8px; }
+.sc-sec-t { padding: 12px 8px 6px; font-size: 10px; font-weight: 700; letter-spacing: 0.14em; text-transform: uppercase; color: var(--nb-t4); }
+.sc-ep, .sc-other, .sc-kid {
+  display: flex; align-items: center; gap: 8px; width: 100%; text-align: left;
+  border: 0; background: transparent; color: var(--nb-t2); cursor: pointer; border-radius: 6px;
+}
+.sc-ep, .sc-other { padding: 7px 8px; font-size: 12px; }
+.sc-ep svg { width: 12px; height: 12px; fill: none; stroke: var(--nb-t4); stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+.sc-ep span, .sc-other span, .sc-kid span { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sc-ep b, .sc-other b { font-weight: 500; font-family: var(--font-mono); font-size: 10px; color: var(--nb-t4); }
+.sc-ep:hover, .sc-other:hover, .sc-kid:hover { background: var(--nb-bg-2); color: var(--nb-t1); }
+.sc-ep.on { background: var(--nb-accent-soft); color: var(--nb-accent); }
+.sc-ep.on svg { stroke: var(--nb-accent); }
+.sc-kid { margin-left: 16px; width: calc(100% - 16px); padding: 6px 8px; border-left: 1px solid var(--nb-line-2); border-radius: 0 6px 6px 0; font-size: 11px; color: var(--nb-t3); }
+.sc-lib-foot { border-top: 1px solid var(--nb-line-1); padding: 12px; display: grid; gap: 8px; }
+.sc-lib-meta { display: flex; justify-content: space-between; color: var(--nb-t4); font-family: var(--font-mono); font-size: 10px; }
+.sc-danger-text { border: 0; background: transparent; color: var(--nb-danger); cursor: pointer; font-size: 10px; }
+.sc-mid { min-width: 0; min-height: 0; display: flex; flex-direction: column; background: var(--nb-bg-0); }
+.sc-toolbar { display: flex; align-items: center; gap: 6px; padding: 8px 16px; border-bottom: 1px solid var(--nb-line-2); background: var(--nb-bg-1); }
+.sc-seg { display: inline-flex; padding: 2px; gap: 2px; background: var(--nb-bg-inset); border: 1px solid var(--nb-line-2); border-radius: 10px; }
+.sc-seg button { height: 26px; padding: 0 12px; border: 0; border-radius: 6px; background: transparent; color: var(--nb-t3); font-size: 11px; cursor: pointer; }
+.sc-seg button.on { background: var(--nb-accent-soft); color: var(--nb-accent); }
+.sc-vdiv { width: 1px; height: 16px; background: var(--nb-line-2); }
+.sc-toolbar-meta { margin-left: auto; color: var(--nb-t4); font-family: var(--font-mono); font-size: 11px; }
+.sc-mid .episode-editor { padding: 0; gap: 0; }
+.sc-mid .episode-body-wrap { border-radius: 0; box-shadow: none; background: transparent; }
+.sc-mid .episode-body-wrap.preview .episode-body { pointer-events: none; }
+.sc-status {
+  display: flex; gap: 18px; padding: 8px 16px; border-top: 1px solid var(--nb-line-2);
+  background: var(--nb-bg-1); color: var(--nb-t4); font-family: var(--font-mono); font-size: 11px;
+}
+.sc-ai .writing-history { padding: 14px; }
+.sc-ai .writing-compose { padding: 12px; border-top: 1px solid var(--nb-line-1); }
+.sc-acts { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 10px; }
+.sc-acts button {
+  display: grid; gap: 3px; justify-items: start; text-align: left; padding: 8px 10px;
+  border: 1px solid var(--nb-line-2); border-radius: 10px; background: var(--nb-bg-2); color: var(--nb-t1); cursor: pointer;
+}
+.sc-acts button:hover { border-color: var(--nb-ai-line); background: var(--nb-ai-soft); }
+.sc-acts b { font-size: 12px; }
+.sc-acts span { font-size: 10px; color: var(--nb-t4); }
+.sc-ai .writing-send { border-radius: 8px; }
+
+@media (max-width: 760px) {
+  .page.detail { height: auto; overflow: visible; }
+  .workspace { display: flex; flex-direction: column; }
+  .pane-resizer { display: none; }
+  .ep-side,
+  .writing-agent { width: auto !important; max-height: none; padding: 0; }
+  .ep-side { max-height: 200px; }
+  .ep-main :deep(.glass-card-root) { min-height: 500px; }
+  .writing-agent { min-height: 440px; }
 }
 
-/* AI 대본 작성 모달 */
-.gen-mask {
-  position: fixed;
-  inset: 0;
-  z-index: 80;
-  background: rgba(8, 10, 18, 0.55);
-  backdrop-filter: blur(3px);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: var(--space-4);
-}
-.gen-modal {
-  width: min(600px, 94vw);
-  max-height: 88vh;
-  overflow-y: auto;
-  background: var(--color-bg-card);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-lg);
-  box-shadow: 0 24px 70px rgba(0, 0, 0, 0.45);
-  display: flex;
-  flex-direction: column;
-}
-.gen-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 14px 18px;
-  border-bottom: 1px solid var(--color-border);
-}
-.gen-head strong {
-  font-size: 15px;
-  color: var(--color-text-1);
-}
-.gen-close {
-  width: 26px;
-  height: 26px;
-  border: none;
-  border-radius: var(--radius-sm);
-  background: transparent;
-  color: var(--color-text-3);
-  cursor: pointer;
-  font-size: 13px;
-}
-.gen-close:hover:not(:disabled) {
-  background: var(--color-bg-2);
-  color: var(--color-text-1);
-}
-.gen-close:disabled {
-  opacity: 0.4;
-  cursor: not-allowed;
-}
-.gen-form {
-  padding: 16px 18px;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-.gen-label {
-  font-size: 12px;
-  color: var(--color-text-2);
-  display: block;
-}
-.gen-label em {
-  font-style: normal;
-  color: var(--color-text-4);
-}
-.gen-input,
-.gen-textarea {
-  width: 100%;
-  background: var(--color-bg-2);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-sm);
-  padding: 8px 10px;
-  font-size: 13px;
-  color: var(--color-text-1);
-  outline: none;
-  font-family: inherit;
-  resize: vertical;
-}
-.gen-input:focus,
-.gen-textarea:focus {
-  border-color: var(--color-accent);
-}
-.gen-row {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: var(--space-3);
-  margin-top: 4px;
-}
-.gen-field {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-.gen-hint {
-  margin: 0;
-  font-size: 11px;
-  color: var(--color-text-3, #8a93a6);
-  line-height: 1.45;
-}
-.gen-progress {
-  margin: 6px 0 0;
-  font-size: 12px;
-  color: var(--color-accent, #7eb4ff);
-  line-height: 1.5;
-}
-.gen-foot {
-  display: flex;
-  justify-content: flex-end;
-  gap: var(--space-2);
-  padding: 12px 18px;
-  border-top: 1px solid var(--color-border);
-}
-@media (max-width: 640px) {
-  .gen-row {
-    grid-template-columns: 1fr;
-  }
-}
 </style>

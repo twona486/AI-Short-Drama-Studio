@@ -238,6 +238,8 @@ export interface Script {
   keywords: string[]
   /** 화풍. */
   style: VisualStyle
+  /** 用户后续明确修改的项目画风，优先于原剧本中的旧画风，不改正文。 */
+  visualStyleOverride?: string
   /** 영상 화면 비율. */
   aspectRatio: AspectRatio
   /** 샷별 목표 길이. */
@@ -354,6 +356,8 @@ export interface ProjectSettings {
    * fl2va는 둘째 샷부터 이전 영상의 끝 프레임과 다음 샷의 참조 이미지를 연결한다.
    */
   h3ShotChainMode?: 'auto' | 'fl2va'
+  /** 创作偏好里的默认视频分辨率。1080p 仅 H3 v5 会真正出到 1080p。万相节点各自选择 480P / 720P / 1080P。 */
+  defaultVideoResolution?: import('./canvas').VideoResolution
 }
 
 /** 전환 유형. */
@@ -388,6 +392,12 @@ export interface TimelineClip {
   speed: number
   /** 음량. 범위는 0~1이다. */
   volume: number
+  /** 这段画面上的配音。有值时导出优先叠这段，不再只用分镜口播。 */
+  voiceAssetId?: ID
+  /** 配音从音频的哪一秒开始 */
+  voiceSourceIn?: number
+  /** 配音音量 0-1 */
+  voiceVolume?: number
   enabled: boolean
 }
 
@@ -540,6 +550,13 @@ export interface Project {
   playApproved?: boolean
   /** 에이전트 대화, 실행 내역, 자동 진행 선호도를 프로젝트에 저장한다. */
   agentState?: AgentWorkspaceState
+  /** 独立连续拍模式，不写入普通分镜流水线。 */
+  continuousCaptureEnabled?: boolean
+  /** 用户明确选择的画风，独立于模型生成的美学描述。 */
+  visualStylePreference?: string
+  /** 连续拍等待用户确认画风时保留本次剧本。 */
+  continuousPendingScript?: string
+  continuousCapture?: import('@/services/continuous/model').CaptureState
   /**
    * standard: 주제 또는 대본에서 시작.
    * remake: 참조 영상을 재현하면서 원본 제품을 사용자 이미지로 교체.
