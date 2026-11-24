@@ -13,7 +13,7 @@ import {
 import path from 'node:path'
 import os from 'node:os'
 import fs from 'node:fs/promises'
-import { createReadStream, createWriteStream, existsSync, statSync } from 'node:fs'
+import { createReadStream, createWriteStream, existsSync, mkdirSync, statSync } from 'node:fs'
 import { Readable } from 'node:stream'
 import { pipeline } from 'node:stream/promises'
 import { spawn } from 'node:child_process'
@@ -23,6 +23,7 @@ import { isIP } from 'node:net'
 import https from 'node:https'
 import ko from '../src/locales/ko'
 import zh from '../src/locales/zh'
+import { migrateUserData, ROOT_PREF_FILE, USER_DATA_NAME, readStorageRootPreference } from './user-data'
 import { closeAppDb, getDbPath, kvGet, kvSet, openAppDb } from './sqlite'
 
 let nativeLocale: 'ko' | 'zh' = 'ko'
@@ -313,10 +314,6 @@ function appAssetResponse(request: Request) {
 }
 
 const ROOT_NAME = 'AI-Cut'
-const ROOT_PREF_FILE = 'storage-root.json'
-// 앱 표시 이름을 바꾸기 전에 설치한 사용자도 기존 저장 폴더를 읽을 수 있다.
-const LEGACY_PRODUCT_NAME = '剧流 Studio'
-
 let activeRoot = ''
 
 function defaultRoot() {
@@ -325,23 +322,6 @@ function defaultRoot() {
 
 function rootPreferencePath() {
   return path.join(app.getPath('userData'), ROOT_PREF_FILE)
-}
-
-async function loadStorageRoot() {
-  const preferences = new Set([
-    rootPreferencePath(),
-    path.join(app.getPath('appData'), LEGACY_PRODUCT_NAME, ROOT_PREF_FILE)
-  ])
-  for (const file of preferences) {
-    try {
-      const raw = await fs.readFile(file, 'utf8')
-      const saved = String(JSON.parse(raw)?.root || '').trim()
-      if (saved && path.isAbsolute(saved)) return path.normalize(saved)
-    } catch {
-      // 다음 후보를 확인한다.
-    }
-  }
-  return defaultRoot()
 }
 
 async function saveStorageRoot(root: string) {
@@ -488,9 +468,26 @@ function createWindow() {
   })
 }
 
+if (app.isPackaged && !app.commandLine.hasSwitch('user-data-dir')) {
+  const appData = app.getPath('appData')
+  // electron-builder는 패키지에서 build.productName을 제거하므로 프로필 경로를 지정한다.
+  const userData = path.join(appData, USER_DATA_NAME)
+  try {
+    migrateUserData(appData, userData)
+  } catch (error) {
+    console.error('[userData] 이전 버전의 설정을 복사하지 못했습니다.', error)
+  }
+  try {
+    mkdirSync(userData, { recursive: true })
+    app.setPath('userData', userData)
+  } catch (error) {
+    console.error('[userData] 새 프로필 경로를 설정하지 못했습니다.', error)
+  }
+}
+
 app.whenReady().then(async () => {
   Menu.setApplicationMenu(null)
-  const root = await loadStorageRoot()
+  const root = readStorageRootPreference(rootPreferencePath()) ?? defaultRoot()
   activeRoot = root
   await ensureDir(root)
   await openAppDb(root)

@@ -123,6 +123,8 @@ npm run web
 
 ## Windows 설치 파일 빌드
 
+이전 버전 설정은 첫 실행 때 자동으로 옮겨집니다.
+
 ```bash
 npm run electron:build
 ```
