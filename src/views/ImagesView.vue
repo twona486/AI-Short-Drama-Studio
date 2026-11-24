@@ -213,7 +213,7 @@ async function generateSubjectSheet(sub: Subject) {
       prompt,
       projectId: project.current.id
     })
-    await library.addCategorized(result.blob, '角色', 'ai-generated', {
+    await library.addCategorized(result.blob, 'character', 'ai-generated', {
       filename: asset.filename,
       prompt
     })
@@ -255,7 +255,7 @@ async function generateScenePlate(scn: Scene) {
       prompt,
       projectId: project.current.id
     })
-    await library.addCategorized(result.blob, '场景', 'ai-generated', {
+    await library.addCategorized(result.blob, 'scene', 'ai-generated', {
       filename: asset.filename,
       prompt
     })
@@ -324,7 +324,7 @@ async function generateOne(shot: Shot) {
       projectId: project.current.id,
       shotId: shot.id
     })
-    await library.addCategorized(result.blob, '其他', 'ai-generated', {
+    await library.addCategorized(result.blob, 'other', 'ai-generated', {
       filename: asset.filename,
       prompt
     })

@@ -195,7 +195,7 @@ function mockRemakeRaw(topic: string): any {
         videoPrompt: 'The lead holds the user’s product up to the camera while speaking the opening line. The packaging and logo remain clear throughout.',
         voiceover: '아직도 평범한 제품을 쓰세요?',
         audioDescription: '옷감이 스치는 소리와 약한 배경음',
-        purpose: '钩子'
+        purpose: '도입'
       },
       {
         title: '기능 시연',
@@ -206,7 +206,7 @@ function mockRemakeRaw(topic: string): any {
         videoPrompt: 'The lead demonstrates the user’s product with clear movements, completes the step, and finishes the line about the feature.',
         voiceover: '이 단계가 핵심이에요.',
         audioDescription: '제품을 조작하는 소리와 배경음',
-        purpose: '说明'
+        purpose: '설명'
       },
       {
         title: '마무리 클로즈업',
@@ -217,7 +217,7 @@ function mockRemakeRaw(topic: string): any {
         videoPrompt: 'The camera pushes in for a close-up of the user’s product packaging with the logo in sharp focus as the closing line finishes.',
         voiceover: '이 제품으로 바꿔 보세요.',
         audioDescription: '테이블 위에 가볍게 내려놓는 소리',
-        purpose: '收口'
+        purpose: '마무리'
       }
     ]
   }
@@ -263,7 +263,7 @@ Write titles and user-facing descriptions in Korean (한국어). Write image and
     "duration": 5,
     "shotSize": "",
     "cameraMovement": "push|pull|pan|tilt|static|orbit",
-    "purpose": "钩子|说明|反应|揭示|收口",
+    "purpose": "도입|설명|반응|공개|마무리",
     "visualPrompt": "<Filmable English description using the user's product>",
     "videoPrompt": "<English direction with character expressions, action, environmental reactions, original dialogue, and camera motion. Do not repeat visualPrompt.>",
     "voiceover": "<verbatim narration audible in this shot, or an empty string>",

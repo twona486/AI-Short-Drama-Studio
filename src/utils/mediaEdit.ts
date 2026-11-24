@@ -13,7 +13,7 @@ export interface NormRect {
   h: number
 }
 
-/** 把 object-fit:contain 的裁剪框（相对容器 0–1）映射到原图像素并裁出 */
+/** object-fit: contain의 상대 자르기 좌표를 원본 픽셀에 대응시킨다. */
 export async function cropContainedImage(
   blob: Blob,
   box: { width: number; height: number },

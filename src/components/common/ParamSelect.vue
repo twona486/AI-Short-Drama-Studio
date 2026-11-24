@@ -1,13 +1,13 @@
 <script setup lang="ts">
 /**
- * 节点面板 / 列表里的参数下拉：比例、出图模型、视频模型统一用这一套外观，
- * 避免三个控件各写一份 CSS 导致圆角、箭头、字号对不齐。
+ * 노드 패널과 목록의 비율, 이미지 모델, 영상 모델 선택에 같은 스타일을 사용한다.
+ * 모서리, 화살표, 글자 크기를 일관되게 유지한다.
  */
 withDefaults(
   defineProps<{
     label?: string
     modelValue?: string
-    /** 固定宽度的下拉（如比例）传窄一点，自适应传 'auto' */
+    /** 비율처럼 좁은 목록은 고정 너비를 지정하고 콘텐츠에 맞추려면 'auto'를 쓴다. */
     width?: string
     maxWidth?: string
     title?: string
@@ -88,7 +88,7 @@ function onPick(event: Event) {
   opacity: 0.55;
   cursor: default;
 }
-/* Windows 下 option 跟随系统配色，深色界面里会白底黑字，这里强制跟随界面 */
+/* Windows의 option에 화면 테마를 적용한다. 기본 시스템 스타일은 어두운 UI에서도 밝게 표시될 수 있다. */
 .psel select option,
 .psel select optgroup {
   background: var(--color-bg-2);

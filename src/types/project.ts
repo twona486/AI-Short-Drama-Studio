@@ -1,12 +1,12 @@
 /**
- * 项目核心数据类型
+ * 프로젝트 핵심 데이터 타입
  *
- * 一个 AI 混剪项目的完整数据模型。
- * - script       : 原始文案
- * - shots        : 分镜列表（每个分镜对应一个画面/视频片段/字幕）
- * - assets       : 素材库（图片、视频、音频）
- * - timeline     : 时间线（剪辑后的最终顺序）
- * - settings     : 项目级设置（分辨率、帧率、转场、字幕样式等）
+ * AI 영상 프로젝트의 전체 데이터 모델이다.
+ * - script: 대본 원문
+ * - shots: 각 화면, 영상 클립, 자막에 해당하는 샷 목록
+ * - assets: 이미지, 영상, 오디오 에셋
+ * - timeline: 편집 결과의 재생 순서
+ * - settings: 해상도, 프레임률, 전환, 자막 등 프로젝트 설정
  */
 
 import type { CanvasGraph, H3VideoGenMode } from './canvas'
@@ -28,9 +28,9 @@ export interface AgentTaskRecord {
   status: 'planned' | 'running' | 'success' | 'failed' | 'cancelled'
   currentStep?: string
   completedTools: string[]
-  /** 自动补依赖或失败重规划的累计次数，随项目持久化。 */
+  /** 의존성 보완이나 실패 후 재계획을 수행한 누적 횟수. 프로젝트에 저장한다. */
   repairCount?: number
-  /** 最近一次自动恢复的诊断，供恢复任务和界面解释。 */
+  /** 최근 자동 복구 진단. 작업 재개와 화면 안내에 사용한다. */
   lastRecovery?: string
   failedTool?: string
   error?: string
@@ -44,11 +44,11 @@ export interface AgentWorkspaceState {
   autonomy: AgentAutonomy
   messages: AgentChatMessage[]
   tasks: AgentTaskRecord[]
-  /** 单次自动任务最多允许的外部生成调用数，0 表示不额外限制 */
+  /** 한 번의 자동 작업에서 허용하는 외부 생성 호출 수. 0이면 제한을 두지 않는다. */
   callBudget: number
 }
 
-/** 画面风格 */
+/** 화면 화풍. */
 export type VisualStyle =
   | 'cinematic'
   | 'anime'
@@ -59,122 +59,122 @@ export type VisualStyle =
   | 'pixel-art'
   | 'ink-wash'
 
-/** 视频宽高比 */
+/** 영상 화면 비율. */
 export type AspectRatio = '16:9' | '9:16' | '1:1' | '4:3' | '21:9'
 
-/** 单个分镜 */
+/** 스토리보드의 단일 샷. */
 export interface Shot {
   id: ID
   index: number
-  /** 分镜标题（3-8 字） */
+  /** 샷 제목. */
   title: string
   /**
-   * 详细视觉描述（中文，5-8 句）
-   * 喂给后续配图/视频生成，必须包含：
-   * 场景/环境、主体（人物+衣着/状态）、动作、镜头/景别、灯光+色彩+气氛
+   * 상세 화면 묘사.
+   * 후속 이미지와 영상 생성에 사용할 수 있도록 다음 정보를 포함한다.
+   * 배경, 캐릭터와 의상 및 상태, 동작, 카메라 및 샷 크기, 조명과 색상 및 분위기.
    */
   visualPrompt: string
-  /** 整体氛围/美学描述（项目级，所有分镜共享，中文） */
+  /** 프로젝트 전체 샷에 적용되는 분위기와 미학. */
   aesthetic?: string
-  /** 音效描述（中文短句，如"雨声、木船摇晃声、灯火燃烧声"） */
+  /** 빗소리, 배가 흔들리는 소리, 불이 타는 소리 등 효과음 묘사. */
   audioDescription: string
-  /** 口播文案 / 字幕文本（中文） */
+  /** 내레이션 원고 또는 자막 텍스트. */
   voiceover: string
-  /** H3 内生对白/画外音、后期 TTS，或完全无口播 */
+  /** H3 자체 대사나 화면 밖 음성, 후반 TTS 또는 음성 없음. */
   audioMode?: ShotAudioMode
-  /** H3 说话人音色与表达方式，例如“年轻女声 / 温柔自然” */
+  /** H3 화자의 음색과 말하는 방식. 예를 들어 자연스럽고 차분한 젊은 여성 목소리. */
   speakerHint?: string
   /**
-   * 本镜说话角色的音色描述。拆分镜时从人物节点（Subject.voicePrompt）自动绑定，
-   * 生成视频与后期配音都会带上；手改人物卡音色后重跑生成会自动更新。
+   * 현재 샷의 화자 음색. 스토리보드를 나눌 때 Subject.voicePrompt에서 연결한다.
+   * 영상과 더빙 생성에 사용한다. 캐릭터 카드에서 수정한 음색은 생성 작업을 다시 실행하면 반영된다.
    */
   speakerVoice?: string
-  /** 时长（秒，5-10 之间） */
+  /** 샷 길이(초). */
   duration: number
-  /** 镜头运动：推/拉/摇/移/固定/环绕 */
+  /** 카메라 움직임. 밀기, 당기기, 팬, 틸트, 고정, 회전. */
   cameraMovement: 'push' | 'pull' | 'pan' | 'tilt' | 'static' | 'orbit'
-  /** 本镜戏剧功能：建立 / 对峙 / 反应 / 揭示 / 转场… */
+  /** 상황 설정, 대치, 반응, 공개, 전환 등 샷의 극적 기능. */
   purpose?: string
-  /** 景别：大远景 / 全景 / 中景 / 近景 / 特写 */
+  /** 원경, 풀 샷, 미디엄 샷, 클로즈업, 익스트림 클로즈업 등 샷 크기. */
   shotSize?: string
-  /** 相对场景主锚的站位与朝向（禁屏幕左右量化坐标） */
+  /** 배경 기준점을 중심으로 한 위치와 방향. 화면 좌우의 절대 좌표는 쓰지 않는다. */
   blocking?: string
-  /** 视线 / 面向关系 */
+  /** 시선과 몸이 향하는 방향. */
   eyeline?: string
-  /** 跨镜承接：起始快照 → 本镜可见变化 → 末态 */
+  /** 샷 간 연결. 시작 모습, 보이는 변화, 종료 상태를 기록한다. */
   continuity?: string
-  /** 本镜道具焦点与状态 */
+  /** 현재 샷의 주요 소품과 상태. */
   propFocus?: string
   /**
-   * 故事看板图：同一镜头的六格黑白动作草图，用来锁起始状态、动作过程、
-   * 反应与结束状态。配图时锁构图，视频时作为动作时间线参考。
+   * 동일한 샷의 시작, 동작, 반응, 종료를 담은 흑백 6컷 스토리 개요판.
+   * 이미지에서는 구도를, 영상에서는 동작 순서를 참조한다.
    */
   boardAssetId?: ID
   boardHistoryIds?: ID[]
-  /** 看板专用提示词。为空时用 visualPrompt */
+  /** 스토리 개요판 프롬프트. 비어 있으면 visualPrompt를 사용한다. */
   boardPrompt?: string
-  /** 关联的素材 */
+  /** 연결된 에셋. */
   imageAssetId?: ID
   videoAssetId?: ID
-  /** 当前分镜锁定的视频接入 profile。 */
+  /** 현재 샷에 지정한 영상 모델 프로필. */
   videoProfileId?: string
-  /** AutoDL / 万相未完成下载时的任务 ID，重试时先拿这个查结果，避免再交一遍 */
+  /** AutoDL 또는 완샹에서 미완료 다운로드의 작업 ID. 재시도 시 재제출 전에 결과를 조회한다. */
   videoTaskId?: string
-  /** 口播 TTS 音频 */
+  /** 내레이션 TTS 오디오. */
   audioAssetId?: ID
-  /** 该分镜历史生成过的图片（不含当前），保留在资源库可回看/回用 */
+  /** 현재 이미지를 제외한 이전 생성 이미지. 리소스 라이브러리에서 재사용할 수 있다. */
   imageHistoryIds?: ID[]
-  /** 该分镜历史生成过的视频（不含当前） */
+  /** 현재 영상을 제외한 이전 생성 영상. */
   videoHistoryIds?: ID[]
-  /** 该分镜历史生成过的口播 */
+  /** 이전에 생성한 내레이션. */
   audioHistoryIds?: ID[]
   /**
-   * 配图专用提示词。为空时回退 visualPrompt。
-   * 在「AI 配图」页可独立修改，不影响分镜原文。
+   * 이미지 생성 프롬프트. 비어 있으면 visualPrompt를 사용한다.
+   * 이미지 생성 페이지에서 원래 화면 묘사와 별도로 편집할 수 있다.
    */
   imagePrompt?: string
   /**
-   * 视频内容表现：这一镜里谁做什么、说什么、镜头怎么走。
-   * 不能复用 visualPrompt（那是静帧配图词）。为空时按场记动作/台词重写。
+   * 영상 연기 지침. 인물 동작, 대사, 카메라 움직임을 지정한다.
+   * 정지 화면 묘사인 visualPrompt는 재사용하지 않는다. 비어 있으면 샷의 동작과 대사로 구성한다.
    */
   videoPrompt?: string
-  /** 实际发给出视频接口的全文。有字就原样发送，不再背后编译。 */
+  /** 영상 생성 API에 전송할 전체 프롬프트. 입력 내용을 그대로 사용한다. */
   compiledVideoPrompt?: string
-  /** H3：参考图生成（默认）或首尾帧。仅 H3 生效。 */
+  /** H3 전용 모드. 참조 이미지 기반 또는 시작·끝 프레임 기반. */
   h3GenMode?: H3VideoGenMode
-  /** 首尾帧模式的首帧。空则用本镜配图 */
+  /** 시작·끝 프레임 모드의 시작 프레임. 없으면 이 샷의 이미지를 사용한다. */
   firstFrameAssetId?: ID
-  /** 首尾帧模式的尾帧 */
+  /** 시작·끝 프레임 모드의 종료 프레임. */
   lastFrameAssetId?: ID
   /**
-   * 首帧专用画面词：这一镜开场那一瞬的画面（构图、人物起始状态、光线）。
-   * 为空时按分镜描述与连续性自动拼，可在节点上改。
+   * 시작 프레임의 구도, 캐릭터의 시작 상태, 조명을 묘사한다.
+   * 비어 있으면 샷 묘사와 연속성 정보에서 만들며 노드에서 편집할 수 있다.
    */
   startFramePrompt?: string
   /**
-   * 尾帧专用画面词：这一镜结束那一瞬的画面（动作完成后的末态）。
-   * 为空时按连续性里的「末态」自动拼，可在节点上改。
+   * 동작이 완료된 시점의 종료 프레임을 묘사한다.
+   * 비어 있으면 연속성의 종료 상태를 사용하며 노드에서 편집할 수 있다.
    */
   endFramePrompt?: string
-  /** 分镜级参考图（图生图/图像编辑用，0-N 张素材 ID） */
+  /** 이 샷의 이미지 생성 및 편집에 쓰는 참조 에셋 ID 목록. */
   referenceAssetIds?: ID[]
-  /** 本镜生成时不要再用的参考图（含自动带上的人设/场景/看板） */
+  /** 캐릭터, 배경, 개요판 등 이 샷을 생성할 때 제외할 참조 이미지. */
   omittedRefAssetIds?: ID[]
-  /** 本镜出场的主体（人物/动物），对应 Project.subjects */
+  /** 샷에 등장하는 인물과 동물. Project.subjects에 대응한다. */
   subjectIds?: ID[]
-  /** 本镜所在场景，对应 Project.scenes */
+  /** 샷의 배경. Project.scenes에 대응한다. */
   sceneId?: ID
-  /** 字幕样式覆盖 */
+  /** 기본값보다 우선 적용할 자막 스타일. */
   captionOverride?: Partial<CaptionStyle>
-  /** 状态 */
+  /** 샷 상태. */
   status: 'draft' | 'image-generated' | 'video-generated' | 'ready'
-  /** 备注 */
+  /** 메모. */
   notes?: string
 }
 
 export type ShotAudioMode = 'h3-dialogue' | 'h3-voiceover' | 'tts' | 'none'
 
-/** 智能口播的三类生产模式 */
+/** 스마트 내레이션의 세 가지 제작 모드. */
 export type SpeechWorkflowMode = 'digital-human' | 'human-edit' | 'human-aigc'
 
 export type SpeechWorkflowStage =
@@ -197,26 +197,26 @@ export interface SpeechWorkflowOptions {
   aigcInserts: boolean
 }
 
-/** 智能口播项目的原始输入与流程状态；生成产物仍复用 Shot / Timeline / Asset。 */
+/** 스마트 내레이션의 입력과 진행 상태. 결과는 Shot, Timeline, Asset으로 기록한다. */
 export interface SpeechWorkflow {
   mode: SpeechWorkflowMode
   stage: SpeechWorkflowStage
   imageAssetId?: ID
-  /** 数字人声音样本，只用于声音复刻，不是成片口播音轨。 */
+  /** 음성 복제용 디지털 휴먼 샘플. 완성 영상의 내레이션 트랙과 구분한다. */
   voiceSampleAssetId?: ID
-  /** @deprecated 早期项目把声音样本误记为 audioAssetId，读取时兼容。 */
+  /** @deprecated 이전 프로젝트가 음성 샘플을 저장한 키. 읽기 호환용이다. */
   audioAssetId?: ID
   clonedVoiceId?: string
   clonedVoiceModel?: string
   generatedVideoAssetIds?: ID[]
   generatedSpeechAssetIds?: ID[]
-  /** 当前未完成段的语音已落库，重试时直接复用。 */
+  /** 미완료 구간의 저장된 오디오. 재시도 시 재사용한다. */
   pendingSegmentIndex?: number
   pendingSpeechAssetId?: ID
-  /** 已提交到 H3 的远端任务，暂停/超时/重启后继续轮询，不重复提交。 */
+  /** H3에 제출한 작업. 일시 정지, 시간 초과, 재시작 후 다시 제출하지 않고 조회한다. */
   activeVideoTaskId?: string
   activeVideoTaskSegmentIndex?: number
-  /** 并发提交中的任务，按下标恢复轮询。 */
+  /** 동시에 제출 중인 작업. 구간 인덱스로 조회를 재개한다. */
   activeVideoTasks?: Array<{ index: number; taskId: string }>
   videoAssetIds: ID[]
   referenceAssetIds: ID[]
@@ -227,67 +227,67 @@ export interface SpeechWorkflow {
   updatedAt: number
 }
 
-/** 项目文案 */
+/** 프로젝트 대본. */
 export interface Script {
   id: ID
-  /** 文案主题 / 标题 */
+  /** 대본 주제 또는 제목. */
   topic: string
-  /** 完整文案 */
+  /** 대본 본문. */
   content: string
-  /** 关键词 */
+  /** 키워드. */
   keywords: string[]
-  /** 画面风格 */
+  /** 화풍. */
   style: VisualStyle
-  /** 视频比例 */
+  /** 영상 화면 비율. */
   aspectRatio: AspectRatio
-  /** 每个分镜目标时长 */
+  /** 샷별 목표 길이. */
   shotDuration: number
   /**
-   * 用户要的成片总时长（秒）。是剧本规模与分镜数量的硬预算；
-   * 0 / undefined 表示没指定，按内容自然长度走。
+   * 사용자가 요청한 완성 영상 길이(초). 대본과 샷 수에 적용한다.
+   * 0 또는 미지정이면 내용에 맞춰 길이를 정한다.
    */
   targetDurationSec?: number
-  /** 独立制作手册；电影章节与普通短视频、视频复刻互不串线 */
+  /** 영화 챕터, 일반 숏드라마, 영상 재현 각각의 제작 방식. */
   workflowMode?: 'film-chapter'
   /**
-   * 项目级整体氛围（中文，1-2 段）
-   * 例如：「武侠电影感，典雅东方气质，暖黄灯笼光切开冷雨薄雾……」
-   * 生成视频时和每个分镜的 videoPrompt（内容表现）一起组装
+   * 프로젝트 전체의 분위기.
+   * 예를 들어 따뜻한 등불 빛이 차가운 비와 안개를 가르는 무협 영화 풍경.
+   * 영상 생성 시 각 샷의 videoPrompt와 함께 사용한다.
    */
   aesthetic?: string
-  /** H3 专用英文美学行，直接写入 Aesthetic 段 */
+  /** H3 Aesthetic 항목에 전달할 영어 문장. */
   h3Aesthetic?: string
-  /** 风格简报（题材、冲突感、爽点等） */
+  /** 소재, 갈등, 극적 포인트 등을 담은 화풍 요약. */
   styleBrief?: string
-  /** 色彩锚点 */
+  /** 기준 색상. */
   colorPalette?: string
-  /** 整体光线 / 时辰说明 */
+  /** 전체 조명과 시간대. */
   lightingNote?: string
-  /** 项目级参考图（主题页产品图 / 全局风格参考，所有分镜都会用到，最多建议 5 张） */
+  /** 전체 샷에서 사용할 제품 또는 화풍 참조 이미지. 최대 5장 권장. */
   referenceAssetIds?: ID[]
   /**
-   * 是否已写成「完整剧本」（相对用户一句话 brief）。
-   * false/缺省：content 还是草稿；true：可再提炼人物/场景/分镜节点。
+   * 짧은 창작 요약이 완성된 대본으로 확장되었는지 나타낸다.
+   * true일 때 인물, 배경, 스토리보드 노드를 추출할 수 있다.
    */
   playReady?: boolean
   /**
-   * imported：用户导入的成稿。拆分镜只按原文切，禁止智能体重写正文。
-   * generated：由「写剧本」生成。未标记的旧项目保持原行为。
+   * imported는 사용자가 가져온 대본이다. 원문을 편집하지 않고 스토리보드를 나눈다.
+   * generated는 대본 작성으로 생성한 대본이다. 값이 없는 이전 프로젝트는 기존 방식으로 처리한다.
    */
   origin?: 'imported' | 'generated'
   /**
-   * 拆分镜的断点标记：按剧情工作包记录已完成的小组结果。
-   * playKey 与剧本正文对应；重跑「拆分镜」时同文本可直接跳过已完成的小组，不再从头消费 token。
+   * 스토리보드 생성 중 완료한 작업 묶음을 저장한다.
+   * playKey가 같은 대본이면 이전 묶음을 재사용한다.
    */
   shotBatches?: {
     playKey: string
     batches: Record<string, Array<Record<string, unknown>>>
   }
-  /** 创建时间 */
+  /** 생성 시각. */
   createdAt: number
 }
 
-/** AI 短剧项目中可独立创作、选择并投入制作的剧本章节。 */
+/** 독립적으로 작성하거나 제작에 투입할 수 있는 대본 챕터. */
 export interface ScriptChapter {
   id: ID
   title: string
@@ -298,30 +298,30 @@ export interface ScriptChapter {
   updatedAt: number
 }
 
-/** 字幕样式 */
+/** 자막 스타일. */
 export interface CaptionStyle {
-  /** 字体 */
+  /** 글꼴. */
   fontFamily: string
-  /** 字号（视频高度的比例，如 0.03 = 3%） */
+  /** 영상 높이에 대한 글자 크기 비율. 예를 들어 0.03은 3퍼센트다. */
   fontSizeRatio: number
-  /** 颜色 */
+  /** 글자색. */
   color: string
-  /** 描边 */
+  /** 외곽선. */
   strokeColor: string
   strokeWidth: number
-  /** 背景 */
+  /** 배경. */
   bgColor: string
   bgOpacity: number
-  /** 位置：bottom / center / top */
+  /** 위치. bottom, center, top 중 하나다. */
   position: 'top' | 'center' | 'bottom'
-  /** 自由定位中心点（相对画面宽高，0–1）。 */
+  /** 자유 배치의 중심점. 화면 너비와 높이에 대한 0~1 좌표다. */
   xRatio?: number
   yRatio?: number
-  /** 是否加粗 */
+  /** 굵게 표시할지 여부. */
   bold: boolean
 }
 
-/** 项目设置 */
+/** 프로젝트 설정. */
 export interface ProjectSettings {
   aspectRatio: AspectRatio
   width: number
@@ -329,34 +329,34 @@ export interface ProjectSettings {
   fps: number
   defaultShotDuration: number
   captionStyle: CaptionStyle
-  /** 默认转场 */
+  /** 기본 전환. */
   defaultTransition: TransitionType
-  /** 背景音乐音量 */
+  /** 배경 음악 음량. */
   bgmVolume: number
-  /** 原声音量（分镜环境音） */
+  /** 원본 영상의 현장음 음량. */
   originalVolume: number
-  /** 是否保留 TTS/无口播镜头的环境音；H3 自带对白或口播始终保留 */
+  /** TTS 또는 무음 샷의 현장음을 보존할지 여부. H3 내장 대사와 내레이션은 항상 보존한다. */
   keepAmbientAudio?: boolean
-  /** 是否给字幕加底色 */
+  /** 자막에 배경색을 적용할지 여부. */
   captionBg: boolean
-  /** 导出时是否把字幕烧进画面 */
+  /** 내보낼 때 영상에 자막을 합성할지 여부. */
   burnCaptions: boolean
-  /** 自动识别字幕重点词并在同一行内变色、放大 */
+  /** 자막에서 강조할 단어를 자동으로 찾아 같은 줄에서 색상과 크기를 바꾼다. */
   captionHighlight?: boolean
-  /** 重点词颜色 */
+  /** 강조 단어의 색상. */
   captionHighlightColor?: string
-  /** 重点词字号倍数 */
+  /** 강조 단어의 글자 크기 배율. */
   captionHighlightScale?: number
-  /** 口播音色（百炼 qwen-audio-3.0-tts-flash / SpeechSynthesizer） */
+  /** 내레이션 음색. Model Studio의 qwen-audio-3.0-tts-flash 또는 SpeechSynthesizer를 사용한다. */
   ttsVoice?: string
   /**
-   * H3 出片生成模式。auto：按每镜自己的参考图/关键帧（默认）；
-   * fl2va：首尾帧链——第 2 镜起自动取上一镜视频末帧作首帧、下一镜配图作尾帧，保证镜头间连续。
+   * H3 영상 생성 모드. auto는 샷별 참조 이미지나 키프레임을 사용한다.
+   * fl2va는 둘째 샷부터 이전 영상의 끝 프레임과 다음 샷의 참조 이미지를 연결한다.
    */
   h3ShotChainMode?: 'auto' | 'fl2va'
 }
 
-/** 转场类型 */
+/** 전환 유형. */
 export type TransitionType =
   | 'none'
   | 'fade'
@@ -366,27 +366,27 @@ export type TransitionType =
   | 'zoom-in'
   | 'zoom-out'
 
-/** 时间线片段 */
+/** 타임라인 클립. */
 export interface TimelineClip {
   id: ID
   shotId: ID
-  /** 自由剪辑片段可直接引用视频/图片资产，不要求先创建分镜。 */
+  /** 자유 편집 클립은 영상이나 이미지 에셋을 직접 참조할 수 있다. */
   assetId?: ID
-  /** 自由剪辑时间线上显示的素材名称。 */
+  /** 자유 편집 타임라인에 표시하는 에셋 이름. */
   label?: string
-  /** 在时间线上的起始时间（秒） */
+  /** 타임라인에서의 시작 시각(초). */
   startTime: number
-  /** 时长（秒） */
+  /** 클립 길이(초). */
   duration: number
-  /** 入点偏移（从素材哪里开始裁） */
+  /** 원본 에셋에서 재생을 시작하는 위치. */
   sourceIn: number
-  /** 转场（进入） */
+  /** 진입 전환. */
   transitionIn: TransitionType
-  /** 转场时长 */
+  /** 전환 길이. */
   transitionDuration: number
-  /** 速度倍率（1 = 正常，2 = 2x 快进） */
+  /** 재생 속도 배율. 1은 정상 속도, 2는 두 배속이다. */
   speed: number
-  /** 音量 0-1 */
+  /** 음량. 범위는 0~1이다. */
   volume: number
   enabled: boolean
 }
@@ -408,147 +408,147 @@ export interface TextOverlay {
   fontSizeRatio: number
   color: string
   position: 'top' | 'center' | 'bottom'
-  /** 文字块中心点在画面中的相对坐标（0–1）。 */
+  /** 화면에 놓인 텍스트 블록 중심의 상대 좌표. 범위는 0~1이다. */
   xRatio?: number
   yRatio?: number
   bold: boolean
 }
 
-/** 整片锁定的主体（人物 / 动物 / 关键物体），先出多角度人设图再配分镜 */
+/** 작품에 걸쳐 외형을 유지할 인물, 동물, 주요 사물. 이미지 생성에 다각도 참조를 사용한다. */
 export interface Subject {
   id: ID
   name: string
   kind: 'person' | 'animal' | 'other'
-  /** 外貌锁定（中文），所有分镜必须沿用同一套描述 */
+  /** 전체 샷에서 유지할 외형 묘사. */
   description: string
-  /** 戏剧功能：主角 / 反派 / 旁观见证… */
+  /** 주인공, 반대자, 목격자 등 극 중 역할. */
   role?: string
-  /** 本片状态变体，如「外卖外套 / 西装揭示」 */
+  /** 배달 재킷 차림이나 정장 차림 등 캐릭터 상태 변화. */
   stateVariants?: string
-  /** 四视图：头像特写 + 全身正/侧/背，锁脸和体型 */
+  /** 얼굴 클로즈업과 전신 정면, 측면, 후면을 담은 사면도. */
   designSheetAssetId?: ID
-  /** 历史四视图（不含当前） */
+  /** 현재 사면도를 제외한 이전 사면도. */
   designSheetHistoryIds?: ID[]
-  /** 身上穿戴/随身物件清单，供资产图使用 */
+  /** 에셋 이미지에 사용할 착용물과 휴대품 목록. */
   props?: string
-  /** 资产图：这个角色身上有哪些东西（包、证件、平板、鞋等） */
+  /** 가방, 신분증, 태블릿, 신발 등 캐릭터가 착용하거나 들고 다니는 물건을 보여 주는 이미지. */
   propSheetAssetId?: ID
   propSheetHistoryIds?: ID[]
-  /** 是否从用户参考图里识别出来 */
+  /** 사용자 참조 이미지에서 식별했는지 여부. */
   fromReference?: boolean
-  /** 四视图额外参考图 */
+  /** 사면도 생성용 추가 참조 이미지. */
   referenceAssetIds?: ID[]
-  /** 资产图额外参考图 */
+  /** 에셋 이미지 생성용 추가 참조 이미지. */
   propReferenceAssetIds?: ID[]
-  /** 实际发给出图接口的四视图全文。框里有字就原样发送。 */
+  /** 이미지 API에 그대로 전송할 사면도 프롬프트. */
   sheetPrompt?: string
-  /** 角色音色描述（可选，自然语言）：TTS 语气指令与支持文字描述人声的模型会用 */
+  /** TTS와 음성 묘사를 지원하는 모델에 전달할 캐릭터 음색 설명. */
   voicePrompt?: string
-  /** 参考音频资产（可选）。仅支持声音复刻的模型（百炼 Qwen3-TTS-VC）会使用 */
+  /** Model Studio Qwen3-TTS-VC 등 음성 복제를 지원하는 모델에서 쓸 참조 오디오 에셋. */
   voiceRefAssetId?: ID
-  /** 由参考音频复刻出的音色 ID，首次生成口播时自动复刻并回填 */
+  /** 참조 오디오를 처음 사용해 내레이션을 생성할 때 얻은 복제 음성 ID. */
   clonedVoiceId?: string
   clonedVoiceModel?: string
 }
 
-/** 剧本里会反复入镜的同一件道具。只收出现至少两次的物件，并出多角度图。 */
+/** 대본에 두 번 이상 등장하며 다각도 참조를 만드는 반복 소품. */
 export interface StoryProp {
   id: ID
   name: string
-  /** 形状、材质、颜色、新旧，不含所在房间 */
+  /** 소품의 모양, 재질, 색상, 사용감. 위치 정보는 제외한다. */
   description: string
-  /** 剧本正文里这个名字出现的次数 */
+  /** 대본 본문에서 이 이름이 나오는 횟수. */
   mentions?: number
-  /** 正面 / 侧面 / 背面 / 细节，纯白底 */
+  /** 흰 배경에 정면, 측면, 후면, 디테일을 보여 주는 이미지. */
   designSheetAssetId?: ID
   designSheetHistoryIds?: ID[]
   referenceAssetIds?: ID[]
-  /** 实际发给出图接口的多角度全文 */
+  /** 이미지 API에 전달할 다각도 프롬프트. */
   sheetPrompt?: string
 }
 
-/** 整片锁定的场景锚点图（四宫格：全景 / 主锚 / 地面 / 光线） */
+/** 작품 전체가 참조할 4컷 배경 이미지. 전경, 기준점, 지면, 조명을 담는다. */
 export interface Scene {
   id: ID
   name: string
-  /** 环境锁定（中文）：地点、时间、天气、光线、材质 */
+  /** 장소, 시간, 날씨, 조명, 재질을 지정하는 배경 묘사. */
   description: string
-  /** 场景主锚（前台接待台 / 电梯门…），站位相对它描述 */
+  /** 로비 안내대나 엘리베이터 문 등 인물의 위치를 설명할 기준점. */
   mainAnchor?: string
-  /** 四宫格锚点清单，分号分隔，如「大厅全景；电梯门；大理石地面；天窗」 */
+  /** 4컷 기준점 목록. 각 항목은 세미콜론으로 구분한다. */
   anchors?: string
-  /** 时辰与光源 */
+  /** 시간대와 광원. */
   lighting?: string
-  /** 当前场景中真正影响剧情或被人物使用的少量关键道具，分号分隔 */
+  /** 현재 배경에서 줄거리에 영향을 주거나 인물이 사용하는 주요 소품. 세미콜론으로 구분한다. */
   props?: string
-  /** 场景四宫格锚点图 */
+  /** 4컷 배경 기준 이미지. */
   plateAssetId?: ID
-  /** 历史锚点图（不含当前） */
+  /** 현재 이미지를 제외한 이전 배경 기준 이미지. */
   plateHistoryIds?: ID[]
-  /** 场景锚点图额外参考图 */
+  /** 배경 기준 이미지 생성에 사용할 추가 참조. */
   referenceAssetIds?: ID[]
-  /** 当前场景关键道具设计图 */
+  /** 현재 배경의 주요 소품 설정 이미지. */
   propSheetAssetId?: ID
   propSheetHistoryIds?: ID[]
   propReferenceAssetIds?: ID[]
-  /** 实际发给出图接口的场景锚点图全文。 */
+  /** 이미지 API에 그대로 전달할 배경 기준 이미지 프롬프트. */
   platePrompt?: string
-  /** 实际发给出图接口的关键道具图全文。 */
+  /** 이미지 API에 그대로 전달할 주요 소품 프롬프트. */
   propSheetPrompt?: string
 }
 
-/** 完整项目 */
+/** 전체 프로젝트. */
 export interface Project {
   id: ID
   name: string
   script: Script | null
-  /** AI 短剧的章节库。写作阶段与视频生产阶段彼此独立。 */
+  /** 숏드라마 챕터 라이브러리. 대본 작성과 영상 제작을 별도로 진행한다. */
   chapters?: ScriptChapter[]
-  /** 剧本工作台中勾选、准备进入分镜制作的章节。 */
+  /** 스토리보드 제작을 위해 대본 워크스페이스에서 선택한 챕터. */
   selectedChapterIds?: ID[]
-  /** 最近一次组装为制作剧本的章节，用于提示当前生产范围。 */
+  /** 현재 제작 범위를 안내하기 위해 최근 대본에 조립한 챕터. */
   productionChapterIds?: ID[]
   shots: Shot[]
-  /** 整片主体（人设），配图/视频前先生成多角度设计图 */
+  /** 작품의 캐릭터. 영상이나 이미지를 생성하기 전에 다각도 참조 이미지를 생성한다. */
   subjects?: Subject[]
-  /** 剧本中反复出现的道具，配图/视频前先生成多角度设计图 */
+  /** 대본의 반복 소품. 영상이나 이미지를 생성하기 전에 다각도 참조 이미지를 생성한다. */
   props?: StoryProp[]
-  /** 整片场景底板 */
+  /** 작품의 배경 이미지. */
   scenes?: Scene[]
   timeline: TimelineClip[]
   settings: ProjectSettings
-  /** 字幕页编辑过的 SRT，导出时优先用这份 */
+  /** 자막 페이지에서 편집한 SRT. 내보낼 때 우선 사용한다. */
   captionSrt?: string
-  /** 整片背景音乐（资源库音频 ID） */
+  /** 작품의 배경 음악 에셋 ID. */
   bgmAssetId?: ID
-  /** 简易剪辑器中的音乐轨片段。 */
+  /** 간편 편집기의 음악 트랙 클립. */
   bgmClip?: AudioTimelineClip
-  /** 简易剪辑器中可独立设置样式和时段的文字块。 */
+  /** 간편 편집기에서 스타일과 구간을 따로 지정할 수 있는 텍스트 블록. */
   textOverlays?: TextOverlay[]
-  /** 生成 BGM 用的提示词 */
+  /** 배경 음악 생성 프롬프트. */
   bgmPrompt?: string
-  /** 画布/导出合成的最终视频 */
+  /** 캔버스 또는 내보내기에서 합성한 최종 영상. */
   finalVideoAssetId?: ID
-  /** 桌面端项目文件夹绝对路径 */
+  /** 데스크톱 프로젝트 폴더의 절대 경로. */
   folderPath?: string
-  /** 无限画布图（节点 / 连线 / 分组） */
+  /** 캔버스의 노드, 연결선, 그룹. */
   canvas?: CanvasGraph
   /**
-   * 剧本是否已验收。拆分镜后为 false，确认通过后才做人设/配图/视频。
-   * 用户明确要求全流程时会自动视为通过。
+   * 대본 승인 여부. 스토리보드를 나눈 뒤에는 false이며 승인 후 캐릭터 이미지와 영상 제작을 진행한다.
+   * 사용자가 전체 과정을 명시적으로 요청하면 승인한 것으로 처리한다.
    */
   playApproved?: boolean
-  /** 智能体会话、运行记录与用户自主度偏好，随项目持久化 */
+  /** 에이전트 대화, 실행 내역, 자동 진행 선호도를 프로젝트에 저장한다. */
   agentState?: AgentWorkspaceState
   /**
-   * standard：主题/文案创作
-   * remake：上传参考视频复刻镜头，产品必须换成用户图
-   * img2video：自由模式，自由画布（图片节点 + 视频节点 + 剧本）
+   * standard: 주제 또는 대본에서 시작.
+   * remake: 참조 영상을 재현하면서 원본 제품을 사용자 이미지로 교체.
+   * img2video: 이미지, 영상, 대본 노드를 배치하는 자유 캔버스.
    */
   pipelineMode?: 'standard' | 'drama' | 'remake' | 'img2video' | 'smart-speech'
-  /** 智能口播入口创建的专用流程配置 */
+  /** 스마트 내레이션에서 만든 프로젝트의 전용 워크플로 설정. */
   speechWorkflow?: SpeechWorkflow
-  /** 视频复刻的参考视频 */
+  /** 영상 재현의 참조 영상. */
   sourceVideoAssetId?: ID
   createdAt: number
   updatedAt: number

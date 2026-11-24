@@ -129,7 +129,7 @@ const videoResolution = computed({
 })
 const isH3Video = computed(() => isVideo.value && videoModel.value !== 'wan-prime')
 
-/* ── 实际出视频的接入线路：节点自己选的优先，没选就用全局当前视频接入 ── */
+/* 노드에 선택한 영상 연결이 우선한다. 선택하지 않았으면 현재 전역 연결을 쓴다. */
 const settings = useSettingsStore()
 const VIDEO_PROFILES = computed(() => settings.config.videos ?? [])
 const effectiveVideoProfile = computed(() => {
@@ -166,16 +166,16 @@ function profileDisplayName(p?: { name?: string; provider?: string; adapter?: { 
   const zealman = p.provider === 'zealman' || p.adapter?.type === 'zealman-workflow'
   return zealman ? `Zealman · ${p.name}` : p.name || ''
 }
-/** 节点副标题：跟着实际用的那条线路走，别再一律写 H3 */
+/** 노드 부제에 실제로 사용하는 연결을 표시한다. */
 const videoKindLabel = computed(() => {
   if (!isVideo.value) return translate('freeformGenNode.imageGeneration')
   if (videoModel.value === 'wan-prime') return translate('freeformGenNode.wanVideo', { p0: duration.value })
   const p = effectiveVideoProfile.value
-  // 非 AutoDL 接入（Zealman、自建 ComfyUI 等）跑的不是 H3，直接显示接入名
+  // Zealman이나 자체 ComfyUI 등은 실제 연결 이름을 표시한다.
   if (p && !profileIsAutodl(p)) {
     return translate('freeformGenNode.profileVideo', { p0: profileDisplayName(p) || translate('freeformGenNode.customProfile') })
   }
-  // 只有 AutoDL 线路才是 H3，时长跟随节点的实际设置，不再写死 15s
+  // AutoDL H3의 길이는 노드에서 지정한 값을 사용한다.
   return videoModel.value === 'h3-v5'
     ? translate('freeformGenNode.h3VideoResolution', { p0: duration.value, p1: videoResolution.value === '1080p' ? ' 1080p' : '' })
     : translate('freeformGenNode.h3Video', { p0: duration.value })
@@ -696,7 +696,7 @@ async function removeSelf() {
             :profile-id="node?.data.videoProfileId"
             @select-profile="(id) => applyShotVideoProfile(props.id, id)"
           />
-          <!-- 比例和模型同排：一眼看到「用什么模型、出什么画幅」 -->
+          <!-- 비율과 모델을 한 줄에 표시한다. -->
           <AspectRatioSeg v-model="aspectRatio" compact />
           <ImageResolutionSeg
             v-if="!isVideo && imageResolutionChoices.length"

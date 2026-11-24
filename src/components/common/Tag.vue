@@ -1,8 +1,8 @@
 <script setup lang="ts">
 defineProps<{
-  /** 标签类型 */
+  /** 태그 유형. */
   type?: 'default' | 'success' | 'warning' | 'error' | 'info' | 'accent'
-  /** 尺寸 */
+  /** 태그 크기. */
   size?: 'sm' | 'md'
 }>()
 </script>

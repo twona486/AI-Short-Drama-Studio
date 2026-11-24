@@ -87,7 +87,7 @@ defineProps<{ rows: TraceRow[] }>()
   min-width: 0;
 }
 
-/* ── 意图标签 ── */
+/* 의도 라벨 */
 .intent-tag {
   display: inline-flex;
   align-items: center;
@@ -117,7 +117,7 @@ defineProps<{ rows: TraceRow[] }>()
   color: #ddd6fe;
 }
 
-/* ── 计划卡片 ── */
+/* 계획 카드 */
 .plan-card {
   padding: 10px 12px;
   border: 1px solid var(--color-border);
@@ -187,7 +187,7 @@ defineProps<{ rows: TraceRow[] }>()
   color: var(--color-error);
 }
 
-/* ── 状态图标 ── */
+/* 상태 아이콘 */
 .st {
   width: 14px;
   height: 14px;
@@ -236,7 +236,7 @@ defineProps<{ rows: TraceRow[] }>()
   color: var(--color-accent);
 }
 
-/* ── 执行行 ── */
+/* 실행 항목 */
 .row {
   display: grid;
   grid-template-columns: 14px minmax(0, 1fr);

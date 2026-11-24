@@ -1,55 +1,55 @@
 /**
- * 剧本库
+ * 대본 라이브러리.
  *
- * 每一份生成 / 导入的剧本都会：
- * 1. 落成一份本地 Markdown 文件（桌面端在保存目录/_scripts/<id>.md）
- * 2. 在 index.json 里登记元数据，供「剧本管理」和资源库读取
+ * 생성하거나 가져온 대본은 다음 두 곳에 저장된다.
+ * 1. 로컬 Markdown 파일. 데스크톱에서는 저장 폴더의 _scripts/<id>.md에 둔다.
+ * 2. 대본 관리와 리소스 라이브러리에서 참조하는 index.json 메타데이터.
  *
- * 剧本正文以 Markdown 为唯一事实来源；「集数」由正文里的二级标题切分而来。
+ * 본문은 Markdown에 저장한다. 각 회차는 본문의 2단계 제목으로 나눈다.
  */
 
 import type { ID } from './project'
 
 export type ScriptSource = 'ai-generated' | 'imported' | 'manual'
 
-/** 从剧本正文切出来的一个「集」/「章节」 */
+/** 대본 본문에서 분리한 회차 또는 챕터. */
 export interface ScriptEpisode {
   id: ID
-  /** 从 0 开始的序号 */
+  /** 0부터 시작하는 인덱스. */
   index: number
   title: string
-  /** 该集正文（不含标题行） */
+  /** 제목 줄을 제외한 회차 본문. */
   content: string
-  /** 正文字数（不含空白） */
+  /** 공백을 제외한 본문 글자 수. */
   wordCount: number
 }
 
-/** 剧本库里的一份完整剧本 */
+/** 라이브러리의 전체 대본. */
 export interface ScriptDoc {
   id: ID
   title: string
-  /** Markdown 文件名，如「长安夜雨.md」 */
+  /** Markdown 파일 이름. 예를 들어 여름밤.md. */
   filename: string
-  /** 来源：AI 生成 / 外部导入 / 手动新建 */
+  /** 출처. AI 생성, 외부 가져오기 또는 직접 작성. */
   source: ScriptSource
-  /** 归属项目（可能为空：导入或手动创建的剧本不属于任何项目） */
+  /** 소속 프로젝트. 가져오거나 직접 작성한 대본은 프로젝트가 없을 수 있다. */
   projectId?: ID
-  /** 关联的项目剧本 ID，用于回写 */
+  /** 프로젝트에 다시 반영할 대본 ID. */
   scriptId?: ID
-  /** 生成时的原始需求描述 */
+  /** 생성 시 입력한 원래 요청. */
   prompt?: string
-  /** 集数（正文中二级标题的数量，至少 1） */
+  /** 회차 수. 본문의 2단계 제목 수를 사용하며 최소 1이다. */
   episodeCount: number
   totalWords: number
-  /** 桌面端相对 _scripts 目录的文件名；Web 端不用 */
+  /** 데스크톱에서 _scripts 폴더를 기준으로 한 파일 이름. 웹에서는 쓰지 않는다. */
   fileRelPath?: string
-  /** 用户自建分类文件夹 */
+  /** 사용자 지정 분류 폴더. */
   folderId?: string
   createdAt: number
   updatedAt: number
 }
 
-export const EMPTY_EPISODE_TEMPLATE = `场景：
-人物：
-剧情：
+export const EMPTY_EPISODE_TEMPLATE = `장면:
+캐릭터:
+줄거리:
 `

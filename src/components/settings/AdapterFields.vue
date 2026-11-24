@@ -9,10 +9,10 @@ import ComfyWorkflowPanel from '@/components/settings/ComfyWorkflowPanel.vue'
 const props = defineProps<{
   kind: 'llm' | 'vision' | 'image' | 'tts' | 'video'
   adapter?: AdapterConfig
-  /** 当前接入地址，供 Comfy 列举/拉取工作流 */
+  /** 워크플로 목록을 읽거나 가져올 현재 Comfy 연결 주소. */
   baseUrl?: string
   apiKey?: string
-  /** 视频工作流 ID，与 adapter 并列编辑 */
+  /** 어댑터와 함께 편집할 영상 워크플로 ID. */
   workflowId?: string
   showWorkflowId?: boolean
 }>()
@@ -85,7 +85,7 @@ function patchAdapter(partial: Partial<AdapterConfig>, clearType = false) {
   const next: AdapterConfig = { ...(props.adapter || {}) }
   Object.assign(next, partial)
   if (clearType) delete next.type
-  // 清理空字符串
+  // 비어 있는 문자열을 제거한다.
   for (const key of Object.keys(next) as (keyof AdapterConfig)[]) {
     const val = next[key]
     if (val === '' || val === undefined) delete next[key]
@@ -98,16 +98,16 @@ function onPasteWorkflow(ev: ClipboardEvent) {
   if (!text.trim().startsWith('{')) return
   try {
     const obj = JSON.parse(text)
-    // Comfy export 常为 {prompt: {...}} 或纯 nodes；API 提交体也可能含 client_id
+    // Comfy 내보내기 형식은 prompt 속성이나 노드 목록을 포함한다. 제출 데이터에는 client_id가 있을 수 있다.
     if (obj && typeof obj === 'object') {
       ev.preventDefault()
       const pretty = JSON.stringify(obj, null, 2)
       patchAdapter({ type: 'comfyui-prompt', workflowTemplate: pretty })
-      // 粘贴完就让助手读完节点图，把提示词 / 参考图接到正确的节点上
+      // 연결 도우미로 노드 구성을 분석해 프롬프트와 참조 이미지 위치를 찾는다.
       void analyzeMap(pretty)
     }
   } catch {
-    /* 交给 textarea 正常粘贴 */
+    /* 입력란의 기본 붙여넣기 동작을 사용한다. */
   }
 }
 
@@ -119,7 +119,7 @@ async function analyzeMap(template: string) {
     if (!checked.bindings.length) return
     patchAdapter({ inputMap: checked })
   } catch {
-    /* 分析失败不打断粘贴；可在下方工作流面板里重新分析 */
+    /* 분석이 실패해도 붙여넣기는 유지한다. 워크플로 패널에서 다시 분석할 수 있다. */
   }
 }
 </script>

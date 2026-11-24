@@ -92,9 +92,9 @@ for (const file of files) {
 }
 
 if (leaks.length) {
-  const lines = [...new Map(leaks.map((l) => [`${l.key} ${l.file}`, `  ${l.key}（来自 ${l.from}）出现在 ${l.file}`])).values()]
-  console.error('[assert-pack-clean] 安装包里出现了本机密钥，已中止打包：\n' + lines.join('\n'))
+  const lines = [...new Map(leaks.map((l) => [`${l.key} ${l.file}`, `  ${l.key} from ${l.from} found in ${l.file}`])).values()]
+  console.error('[assert-pack-clean] Packaging stopped because local credentials were found in the build:\n' + lines.join('\n'))
   process.exit(1)
 }
 
-console.log('[assert-pack-clean] dist 未发现本机 .env 密钥')
+console.log('[assert-pack-clean] No local .env credentials found in dist')

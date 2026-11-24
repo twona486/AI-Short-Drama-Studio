@@ -28,6 +28,7 @@ export default {
     "workflowPlaceholder": "AutoDL 워크플로 이름 또는 사용자 지정 이름"
   },
   "agentChat": {
+    "attachmentTruncated": "파일이 길어서 처음 200,000자만 첨부했어요.",
     "attachmentHint": "로컬 텍스트 파일(txt, md, 대본 등)을 첨부하거나 메시지에 파일 경로를 입력하세요.",
     "attachments": "첨부 파일",
     "autoDLQuality": "AutoDL · 향상된 화질",
@@ -36,11 +37,13 @@ export default {
     "autoModeHint": "샷마다 참조 이미지나 키프레임으로 영상을 만들어요. 샷 사이를 자연스럽게 이으려면 시작·끝 프레임 모드를 골라 주세요.",
     "autonomous": "전자동",
     "autonomousHint": "요청한 작업을 가능한 한 끝까지 이어가고, 실패한 단계에서 멈춰요. 영상까지 만들려면 '전체 과정'이라고 입력해 주세요.",
+    "breakDownScriptCommand": "대본에서 스토리보드 샷을 추출해 주세요.",
     "breakDownScript": "대본 분석",
     "canvasRunCompleted": "캔버스에서 '{label}' 작업을 마쳤어요.",
     "canvasRunFailed": "캔버스에서 '{label}' 작업에 실패했어요.\n({error})\n오른쪽 패널에서 프롬프트를 고쳐 다시 시도하거나 에이전트에게 맡겨 보세요.",
     "canvasRunFollowUp": "이어서 할 작업을 알려 주세요.",
     "canvasRunNext": "다음 단계는 '{label}'이에요. '계속'이라고 입력하면 이 단계만 실행해요.",
+    "clearActionsCommand": "형식을 유지하면서 프롬프트의 표정과 손, 몸의 움직임을 구체화해 주세요.",
     "clearActions": "동작과 표정을 명확하게 작성",
     "confirmKeyActions": "주요 작업 확인",
     "continue": "이어서 작업 ({p0})",
@@ -48,6 +51,7 @@ export default {
     "copyReply": "이 답변 복사",
     "deliberating": "작업 계획을 세우는 중…",
     "desktopRequired": "로컬 파일을 읽으려면 데스크톱 앱이 필요해요.",
+    "drawImageCommand": "새 이미지 노드를 만든 뒤 생성해 주세요: ",
     "drawImage": "이미지 그리기",
     "estimated": "예상",
     "fileSelectionFailed": "파일 선택 실패",
@@ -65,9 +69,11 @@ export default {
     "imagePreferences": "이미지 설정",
     "landscape": "가로 16:9",
     "localMemory": "로컬 메모리",
+    "matchStoryCommand": "형식을 유지하면서 프롬프트를 다듬어 주세요. 대본에서 이 샷에 해당하는 내용만 적어 주세요.",
     "matchStory": "스토리에 맞추기",
     "mode": "생성 모드 ·",
     "modelSelection": "모델 선택",
+    "moreVisualCommand": "형식을 유지하면서 프롬프트의 구도, 빛과 그림자, 재질, 공간의 분위기를 구체화해 주세요.",
     "moreVisual": "화면 묘사 강화",
     "noImageModel": "이미지 모델이 없어요. 설정에서 추가하세요.",
     "noSelectedNode": "프롬프트를 바꾸려면 캔버스에서 이미지나 영상 노드를 골라 주세요.",
@@ -77,6 +83,7 @@ export default {
     "preferenceHint": "선택한 설정으로 바로 이미지와 영상을 만들어요. 노드마다 다른 모델을 골라도 돼요.",
     "preferences": "제작 환경설정",
     "preferencesSummary": "제작 환경설정 · 비율 {p0} · 이미지 {p1} · 영상 {p2}",
+    "quickPeekCommand": "먼저 보여 줘",
     "quickPeek": "먼저 확인",
     "readFailed": "읽기 실패 ({p0})",
     "readingAttachments": "첨부 파일 읽는 중 ({p0})…",
@@ -105,6 +112,7 @@ export default {
     "videoGeneration": "이미지→영상",
     "videoModel": "영상 모델",
     "videoPreferences": "영상 설정",
+    "viewProgressCommand": "캔버스의 진행 상황을 보여 주세요.",
     "viewProgress": "진행 상황 보기",
     "wan": "Wan 3.0 Prime",
     "welcome": "안녕하세요! 캔버스에서 함께 만들어 봐요.\n\n- **한 문장으로 시작**: '선협 판타지 숏드라마와 스토리보드 8개를 만들어 줘' 또는 '해 질 녘 바닷가를 그려 줘'라고 말해 보세요. 제가 노드와 프롬프트를 만들어 생성을 시작해요.\n- **직접 구성**: 캔버스 빈 곳을 오른쪽 클릭해 노드를 추가하세요. 대본·캐릭터·소품·장면·스토리보드·이미지·영상 중에서 고르고, 노드를 선택해 프롬프트 수정이나 다시 생성을 요청해 보세요.\n\n'어두운 색조를 선호한다고 기억해 줘'라고 말하면 이 기기에 환경설정을 저장해요. 끝까지 한 번에 작업하려면 '전체 과정'이라고 입력해 주세요. 기본으로는 단계마다 확인해요.",
@@ -367,9 +375,9 @@ export default {
     "addVideo": "영상 추가",
     "agent": "에이전트",
     "ambientSound": "환경음",
-    "appDescription": "드라마 플로우 Studio — 대본부터 영상까지, 캔버스에서 스토리보드와 이미지 제작 및 합성",
+    "appDescription": "Drama Flow Studio — 대본부터 영상까지, 캔버스에서 스토리보드와 이미지 제작 및 합성",
     "applyConfig": "설정 적용",
-    "appName": "드라마 플로우 Studio",
+    "appName": "Drama Flow Studio",
     "aspectRatio": "비율",
     "assetLibrary": "에셋 라이브러리",
     "assetPickerShort": "라이브러리",
@@ -664,6 +672,7 @@ export default {
     "required": "데스크톱 앱에서 사용할 수 있어요."
   },
   "directorSkill": {
+    "defaultName": "감독 매뉴얼",
     "empty": "매뉴얼 본문이 비어 있어요.",
     "missingFile": "이 폴더에 SKILL.md 또는 README.md가 없어요.",
     "requiresMarkdown": "Markdown 또는 README 파일을 가져오세요.",
@@ -997,7 +1006,7 @@ export default {
     "dramaMode": "AI 숏드라마 ·",
     "freeEdit": "자유 편집",
     "freeEditName": "자유 편집 {p0}",
-    "heroBadge": "드라마 플로우 Studio · AI 숏드라마 워크스페이스",
+    "heroBadge": "Drama Flow Studio · AI 숏드라마 워크스페이스",
     "heroDescription": "데스크톱의 무한 캔버스에서 에이전트와 캐릭터 설정부터 스토리보드, 이미지, 영상까지 만들어 보세요. 리소스는 이 기기의 폴더에 저장해요.",
     "heroIntro": "한 문장이",
     "heroPipeline": "AI 제작 과정을 거쳐",
@@ -1625,6 +1634,7 @@ export default {
     "writing": "작성 중…"
   },
   "settings": {
+    "languageChinese": "중국어",
     "aiGroup": "AI 기능",
     "appGroup": "앱",
     "backup": {
@@ -1741,10 +1751,10 @@ export default {
     },
     "permissions": {
       "description": "참조 이미지와 영상 소스를 선택할 때 시스템 파일 선택기를 사용해요. 시스템에서 접근을 차단한 경우 아래에서 권한을 허용하세요.",
-      "exclude": "권한을 허용하면 Windows 보안 센터의 제외 항목에 '드라마 플로우 Studio'와 소스 폴더를 추가해 주세요. 360이나 화룽을 쓴다면 신뢰 목록에 추가해 주세요.",
+      "exclude": "권한을 허용하면 Windows 보안 센터의 제외 항목에 앱 실행 파일과 소스 폴더를 추가해 주세요. 360이나 화룽을 쓴다면 신뢰 목록에 추가해 주세요.",
       "failed": "권한을 허용하지 못했어요. 360이나 화룽을 쓴다면 신뢰 목록에 이 앱을 추가해 보세요.",
       "grant": "로컬 파일 접근 허용",
-      "granted": "권한을 허용했어요. '드라마 플로우 Studio'를 완전히 닫았다가 다시 열고 참조 이미지를 올려 주세요.",
+      "granted": "권한을 허용했어요. 'Drama Flow Studio'를 완전히 닫았다가 다시 열고 참조 이미지를 올려 주세요.",
       "openFailed": "Windows 보안 센터를 열 수 없어요.",
       "openSecurity": "Windows 보안 센터 열기",
       "title": "로컬 파일 권한",
@@ -1773,10 +1783,39 @@ export default {
       "used": "사용량"
     }
   },
+  "referenceSlots": {
+    "character": "4면 설정 이미지 · {name}",
+    "prop": "주요 소품 · {name}",
+    "anchor": "장면 기준 이미지 · {name}",
+    "numberedBoard": "스토리 개요판 · {number}",
+    "board": "스토리 개요판",
+    "product": "제품",
+    "video": {
+      "character": "이미지 {number} · 캐릭터 설정 · {name}",
+      "scene": "이미지 {number} · 장면 · {name}",
+      "prop": "이미지 {number} · 주요 소품 · {name}",
+      "extra": "이미지 {number} · 추가 참조",
+      "keyframe": "이미지 {number} · 4컷 키프레임",
+      "board": "이미지 {number} · 이 샷의 스토리 개요판"
+    }
+  },
+  "shotPrompt": {
+    "missing": "영상의 동작 설명이 비어 있어요.",
+    "generic": "영상에 등장하는 인물의 위치와 시선 대상을 구체적으로 적어 주세요.",
+    "tooShort": "동작을 일으킨 계기, 연속 동작, 소품의 변화, 카메라 움직임과 현장음을 적어 주세요.",
+    "missingBeats": "0초부터 샷이 끝날 때까지 구간을 나누고, 구간마다 인물의 동작과 대사를 적어 주세요.",
+    "missingBlocking": "여러 인물이 등장해요. 각 인물의 위치와 시선 대상을 적어 주세요.",
+    "missingAction": "장면에서 보이는 동작이나 반응을 설명해 주세요."
+  },
   "setupAgent": {
     "configureLlm": "언어 모델 설정",
     "defaultModel": "기본 언어 모델:",
     "delegate": "도우미로 설정",
+    "fromDocsCommand": "아래 API 문서에 맞춰 사용자 지정 연결을 설정해 주세요. 중계 서버도 사용할 수 있어요:\\n",
+    "setupVisionCommand": "이미지 이해 모델을 연결해 주세요.",
+    "setupImageCommand": "이미지 생성 모델을 연결해 주세요.",
+    "setupTtsCommand": "더빙용 TTS 모델을 연결해 주세요.",
+    "setupVideoCommand": "영상 생성 모델을 연결해 주세요.",
     "fromDocs": "문서로 연결",
     "hint": "현재 언어 모델로 연결을 설정해요. 제공업체와 키를 입력하거나 API 문서를 붙여 넣으세요.",
     "imageHint": "캐릭터, 장면, 스토리보드용 이미지",

@@ -25,11 +25,11 @@ export function aspectToSize(ar: AspectRatio): { width: number; height: number }
 }
 
 export function aspectFrameHint(ar?: string): string {
-  if (ar === '9:16') return '竖版 9:16 手机全屏，宽小于高，禁止输出横图'
-  if (ar === '1:1') return '方形 1:1，宽高相等'
-  if (ar === '4:3') return '横版 4:3'
-  if (ar === '21:9') return '超宽影院 21:9'
-  return '横版 16:9 宽屏，宽大于高，禁止输出竖图'
+  if (ar === '9:16') return 'Portrait 9:16, full-screen mobile framing. Height must exceed width.'
+  if (ar === '1:1') return 'Square 1:1, with equal width and height.'
+  if (ar === '4:3') return 'Landscape 4:3.'
+  if (ar === '21:9') return 'Ultrawide cinema framing, 21:9.'
+  return 'Widescreen landscape 16:9. Width must exceed height.'
 }
 
 export function isLandscapeAspect(ar?: string): boolean {

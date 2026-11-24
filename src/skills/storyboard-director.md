@@ -62,7 +62,7 @@ When a script exists on the left and the user asks to continue or extract, use `
 ## Shot fields
 
 - **title**: distinct 3–8-character Korean (한국어) title suitable for a slate.
-- **purpose**: retain the existing category values `钩子 / 说明 / 反应 / 揭示 / 收口`.
+- **purpose**: write a short dramatic function in Korean, such as `도입 / 설명 / 반응 / 공개 / 마무리`.
 - **shotSize**: state framing and its reason.
 - **blocking / eyeline**: locate every person and give body direction and eyeline. A speaker can be behind others; foreground characters can look back or sideways.
 - **voiceover**: use "Character name: line". Keep 2–4 consecutive short phrases with the same intent together. H3 strips the speaker prefix. Leave empty if there is no dialogue.

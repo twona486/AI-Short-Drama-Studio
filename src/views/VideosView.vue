@@ -75,10 +75,10 @@ const videoPromptPlaceholder = computed(() =>
     : translate('videos.sceneHint')
 )
 
-/** 首尾帧模式：项目开了首尾帧链，或有镜头自己选了首尾帧。批量出片只能串行，且要先画帧 */
+/** 시작·끝 프레임 모드는 프로젝트 연결 방식 또는 개별 샷 설정에서 적용된다. 프레임을 먼저 만들고 영상을 순서대로 생성한다. */
 const fl2vaChain = computed(() => needsShotFrames(project.current))
 
-/** 还没画首尾帧的镜头（只算走首尾帧的镜头，混合模式下普通镜头不算缺） */
+/** 시작·끝 프레임 모드를 사용하는 샷 중 프레임이 없는 항목. */
 const shotsWithoutFrames = computed(() =>
   shots.value.filter(
     (s) => project.current && shotUsesFrames(s, project.current) && (!s.firstFrameAssetId || !s.lastFrameAssetId)
@@ -86,7 +86,7 @@ const shotsWithoutFrames = computed(() =>
 )
 const drawingFrames = ref(false)
 
-/** 按顺序把每一镜的起始帧和结束帧画出来：这一镜起始帧接着上一镜结束帧 */
+/** 이전 샷의 종료 프레임을 이어 받아 각 샷의 시작과 종료 프레임을 순서대로 만든다. */
 async function generateAllFrames() {
   const targets = [...shotsWithoutFrames.value].sort((a, b) => a.index - b.index)
   if (!targets.length || drawingFrames.value) return
@@ -109,7 +109,7 @@ async function generateAllFrames() {
   if (done) toast.success(translate('videos.framesReady', { p0: done }))
 }
 
-/** 链模式卡住时的逃生开关：一键回到每镜按自己参考图出片的自动模式 */
+/** 프레임 연결을 해제하고 샷별 참조 이미지를 쓰는 자동 모드로 돌아간다. */
 function turnOffChain() {
   const p = project.current
   if (!p) return
@@ -118,7 +118,7 @@ function turnOffChain() {
   toast.success(translate('videos.switchedAuto'))
 }
 
-/** 真正的第 1 镜：删过镜头后 index 不一定连续，按排序后的位置认 */
+/** 샷을 삭제하면 index가 연속되지 않을 수 있으므로 정렬 후 첫 샷을 찾는다. */
 const firstShotId = computed(
   () => [...shots.value].sort((a, b) => a.index - b.index)[0]?.id ?? ''
 )
@@ -282,11 +282,11 @@ async function generateOne(shot: Shot) {
 }
 
 async function generateAll() {
-  // 首尾帧模式：视频吃的就是这两张帧。先按镜号补齐，不能整列跳过直接出片。
+  // 시작과 종료 프레임이 영상 입력이므로 샷 순서대로 누락된 프레임을 보완한다.
   if (fl2vaChain.value && shotsWithoutFrames.value.length) {
     await generateAllFrames()
   }
-  // 首尾帧链：第 N 镜首帧 = 第 N-1 镜视频末帧，必须按镜号一镜一镜来，并发会把链打断
+  // 현재 샷의 시작 프레임은 이전 영상의 끝 프레임이다. 프레임 연결을 유지하려면 영상을 차례로 생성한다.
   const chain = isFl2vaChainActive(project.current)
   const targets = shots.value
     .filter((shot) => !shot.videoAssetId && !generating.value.has(shot.id))

@@ -294,7 +294,7 @@ async function extraRefBlobs(ids: string[] | undefined, label: string) {
   return { blobs, labels }
 }
 
-type SharedImageCategory = '角色' | '场景' | '道具' | '其他'
+type SharedImageCategory = 'character' | 'scene' | 'prop' | 'other'
 
 async function saveGeneratedImageToSharedLibrary(
   blob: Blob,
@@ -352,7 +352,7 @@ export async function generateSubjectSheet(sub: Subject, onProgress?: (msg: stri
   onProgress?.(translate('canvasRunner.checkCharacter'))
   const quality = await reviewImageQuality(result.blob, prompt, signal)
   if (!quality.passed) throw new Error(`4면 설정 이미지 파일이 유효하지 않습니다. ${quality.issues.join('；')}`)
-  await saveGeneratedImageToSharedLibrary(result.blob, '角色', asset.filename, prompt, onProgress)
+  await saveGeneratedImageToSharedLibrary(result.blob, 'character', asset.filename, prompt, onProgress)
   project.updateSubject(latest.id, {
     designSheetAssetId: asset.id,
     designSheetHistoryIds: pushHistory(
@@ -402,7 +402,7 @@ export async function generatePropSheet(prop: StoryProp, onProgress?: (msg: stri
   onProgress?.(translate('canvasRunner.checkProp'))
   const quality = await reviewImageQuality(result.blob, prompt, signal)
   if (!quality.passed) throw new Error(`소품의 다각도 이미지 파일이 유효하지 않습니다. ${quality.issues.join('；')}`)
-  await saveGeneratedImageToSharedLibrary(result.blob, '道具', asset.filename, prompt, onProgress)
+  await saveGeneratedImageToSharedLibrary(result.blob, 'prop', asset.filename, prompt, onProgress)
   project.updateProp(latest.id, {
     designSheetAssetId: asset.id,
     designSheetHistoryIds: pushHistory(latest.designSheetAssetId, asset.id, latest.designSheetHistoryIds)
@@ -469,7 +469,7 @@ export async function generateScenePropSheet(
   onProgress?.(translate('canvasRunner.checkKeyProp'))
   const quality = await reviewImageQuality(result.blob, prompt, signal)
   if (!quality.passed) throw new Error(`주요 소품 이미지 파일이 유효하지 않습니다. ${quality.issues.join('；')}`)
-  await saveGeneratedImageToSharedLibrary(result.blob, '道具', asset.filename, prompt, onProgress)
+  await saveGeneratedImageToSharedLibrary(result.blob, 'prop', asset.filename, prompt, onProgress)
   project.updateScene(latest.id, {
     propSheetAssetId: asset.id,
     propSheetHistoryIds: pushHistory(latest.propSheetAssetId, asset.id, latest.propSheetHistoryIds)
@@ -516,7 +516,7 @@ export async function generateScenePlate(scn: Scene, onProgress?: (msg: string) 
   onProgress?.(translate('canvasRunner.checkScene'))
   const quality = await reviewImageQuality(result.blob, prompt, signal)
   if (!quality.passed) throw new Error(`장면 기준 이미지 파일이 유효하지 않습니다. ${quality.issues.join('；')}`)
-  await saveGeneratedImageToSharedLibrary(result.blob, '场景', asset.filename, prompt, onProgress)
+  await saveGeneratedImageToSharedLibrary(result.blob, 'scene', asset.filename, prompt, onProgress)
   project.updateScene(latest.id, {
     plateAssetId: asset.id,
     plateHistoryIds: pushHistory(latest.plateAssetId, asset.id, latest.plateHistoryIds)
@@ -580,7 +580,7 @@ export async function generateShotBoard(shot: Shot, onProgress?: (msg: string) =
   onProgress?.('스토리 개요판 파일을 확인하는 중…')
   const quality = await reviewImageQuality(result.blob, prompt, signal)
   if (!quality.passed) throw new Error(`스토리 개요판 파일이 유효하지 않습니다. ${quality.issues.join('；')}`)
-  await saveGeneratedImageToSharedLibrary(result.blob, '其他', asset.filename, prompt, onProgress)
+  await saveGeneratedImageToSharedLibrary(result.blob, 'other', asset.filename, prompt, onProgress)
   project.assignShotBoard(shot.id, asset.id)
   await project.save()
   return asset
@@ -661,7 +661,7 @@ export async function generateShotImage(shot: Shot, onProgress?: (msg: string) =
   onProgress?.('키프레임 파일을 확인하는 중…')
   const quality = await reviewImageQuality(result.blob, prompt, signal)
   if (!quality.passed) throw new Error(`키프레임 파일이 유효하지 않습니다. ${quality.issues.join('；')}`)
-  await saveGeneratedImageToSharedLibrary(result.blob, '其他', asset.filename, prompt, onProgress)
+  await saveGeneratedImageToSharedLibrary(result.blob, 'other', asset.filename, prompt, onProgress)
   project.assignShotImage(shot.id, asset.id)
   await project.save()
   return asset
@@ -2538,7 +2538,7 @@ export async function generateFreeformImage(
     prompt,
     projectId: p.id
   })
-  await saveGeneratedImageToSharedLibrary(result.blob, '其他', asset.filename, prompt, onProgress)
+  await saveGeneratedImageToSharedLibrary(result.blob, 'other', asset.filename, prompt, onProgress)
   project.patchCanvasNode(nodeId, { outputAssetId: asset.id })
   await project.save()
   return asset

@@ -110,7 +110,7 @@ function normalizeSpokenNumbers(text: string): string {
  * 1688이나 12306 같은 플랫폼 번호는 한 자리씩 읽는다.
  */
 export function normalizeForSpeech(text: string): string {
-  const branded = normalizeSpokenNumbers(text)
+  const branded = /\p{Script=Han}/u.test(text) && !/[가-힣]/.test(text) ? normalizeSpokenNumbers(text) : text
   return branded.replace(/[A-Za-z][A-Za-z0-9]*/g, (word) => {
     if (!/^[A-Z0-9]+$/.test(word)) return word
     if (SPELL_ACRONYMS.has(word)) return word

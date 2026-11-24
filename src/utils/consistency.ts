@@ -1,3 +1,4 @@
+import { t } from '@/i18n'
 import type { ID, Project, Scene, Shot, StoryProp, Subject } from '@/types'
 import { sceneForShotPlace, shotMentionsScene } from '@/utils/shotPlace'
 import { lookFromScript, mediumLockText } from '@/utils/visualStyle'
@@ -13,7 +14,7 @@ export interface ShotRefBundle {
 
 export function sceneHasKeyProps(scene: Pick<Scene, 'props'>): boolean {
   const value = scene.props?.trim()
-  return Boolean(value && !/^(无|没有|暂无|none|no)$/i.test(value))
+  return Boolean(value && !/^(无|没有|暂无|없음|none|no)$/i.test(value))
 }
 
 function uniqueIds(ids: ID[]): ID[] {
@@ -24,7 +25,7 @@ function uniqueIds(ids: ID[]): ID[] {
   return out
 }
 
-/** 用来对上人物：id、名字、身份称呼 */
+/** ID, 이름, 역할명으로 캐릭터를 서로 연결한다. */
 export function subjectMatchKeys(sub: Subject): string[] {
   return uniqueIds(
     [sub.id, sub.name, sub.role]
@@ -54,8 +55,8 @@ export function shotCastText(shot: Pick<Shot, 'title' | 'visualPrompt' | 'videoP
     .join('\n')
 }
 
-/** 这一镜真正该用的人物：既认 id，也认名字/称呼，并从文案里补漏绑 */
-/** 这一镜正文里点名的反复道具。没写到的道具不塞进这一镜。 */
+/** ID나 이름으로 이 샷에 출연하는 캐릭터를 찾고, 본문에만 있는 캐릭터도 추가한다. */
+/** 이 샷의 본문에 명시된 반복 소품만 참조에 포함한다. */
 export function propsForShot(shot: Shot, project: Project): StoryProp[] {
   const text = [shot.title, shot.visualPrompt, shot.videoPrompt, shot.propFocus, shot.blocking, shot.purpose]
     .map((item) => String(item ?? ''))
@@ -97,7 +98,7 @@ function castRefEntries(
 }
 
 /**
- * 看板参考：四视图 + 资产图 + 场景底板（还没有看板自己）
+ * 스토리 개요판을 만들 때 캐릭터 사면도, 에셋 이미지, 배경 이미지를 참조한다.
  */
 export function collectShotBoardRefIds(shot: Shot, project: Project): ShotRefBundle {
   return packShotRefs(shot, project, { includeBoard: false, includeProps: true, max: 6 })
@@ -112,7 +113,7 @@ export interface VideoRefEntry {
   name?: string
 }
 
-/** 视频参考：按该镜视频模型的 stillMode 打包。H3 identity 只人设+场景，不传看板/四宫格。 */
+/** 영상 모델의 stillMode에 맞춰 참조를 구성한다. H3 identity에는 캐릭터와 배경만 전달한다. */
 export function collectShotVideoEntries(shot: Shot, project: Project): VideoRefEntry[] {
   const omitted = new Set(shot.omittedRefAssetIds ?? [])
   const stillMode = stillModeForShot(shot, project)
@@ -191,7 +192,7 @@ export function collectShotVideoRefIds(shot: Shot, project: Project): ShotRefBun
   }
 }
 
-/** 最多 9 张。普通创作关键帧作为成片第一帧排在最前。 */
+/** 최대 9장. 일반 제작의 키프레임을 영상의 첫 프레임으로 맨 앞에 배치한다. */
 export function packVideoRefEntries(entries: VideoRefEntry[], max = 9): VideoRefEntry[] {
   const chars = entries.filter((entry) => entry.kind === 'character')
   const props = entries.filter((entry) => entry.kind === 'prop')
@@ -216,8 +217,8 @@ export function packVideoRefEntries(entries: VideoRefEntry[], max = 9): VideoRef
 }
 
 /**
- * 配图参考：故事看板 + 四视图 + 资产图 + 场景底板
- * 视频复刻必须带上用户产品图（GPT 编辑最多 4 张）
+ * 이미지 생성에 스토리 개요판, 사면도, 에셋 이미지, 배경 이미지를 참조한다.
+ * 영상 재현에는 사용자 제품 이미지를 포함한다. GPT 편집은 최대 4장을 받는다.
  */
 export function collectShotRefIds(shot: Shot, project: Project): ShotRefBundle {
   return packShotRefs(shot, project, {
@@ -227,7 +228,7 @@ export function collectShotRefIds(shot: Shot, project: Project): ShotRefBundle {
   })
 }
 
-/** 普通创作关键帧：只用人设、场景、道具，不带故事看板。 */
+/** 일반 제작의 키프레임에는 캐릭터, 배경, 소품만 참조한다. */
 export function collectShotKeyframeRefIds(shot: Shot, project: Project): ShotRefBundle {
   return packShotRefs(shot, project, { includeBoard: false, includeProps: true, max: 8 })
 }
@@ -369,8 +370,8 @@ function sceneFromVideoEdges(shot: Shot, project: Project): Scene | undefined {
 }
 
 /**
- * 出图/出视频用的场景底板。提示词仍走 sceneForShot（冲突时空不灌词），
- * 图必须跟画布连线一致：已绑定的场景、连到本镜视频节点的场景、名字对得上的场景，最后才退回第一张场景卡。
+ * 이미지와 영상에는 배경 이미지를 쓴다. 프롬프트는 sceneForShot으로 생성하며 시공간이 충돌하면 생략한다.
+ * 연결된 배경, 현재 영상 노드와 연결된 배경, 이름이 일치하는 배경, 첫 배경 카드 순으로 찾는다.
  */
 export function sceneAssetForShot(shot: Shot, project: Project): Scene | undefined {
   const all = project.scenes ?? []
@@ -388,18 +389,18 @@ export type ShotRefSlot = {
 
 export function refSlotLabel(id: ID, project: Project): string {
   const four = (project.subjects ?? []).find((s) => s.designSheetAssetId === id)
-  if (four) return `四视图·${four.name}`
+  if (four) return t('referenceSlots.character', { name: four.name })
   const prop = (project.scenes ?? []).find((s) => s.propSheetAssetId === id)
-  if (prop) return `关键道具·${prop.name}`
+  if (prop) return t('referenceSlots.prop', { name: prop.name })
   const scn = (project.scenes ?? []).find((s) => s.plateAssetId === id)
-  if (scn) return `锚点·${scn.name}`
+  if (scn) return t('referenceSlots.anchor', { name: scn.name })
   const board = (project.shots ?? []).find((s) => s.boardAssetId === id)
-  if (board) return `看板·${board.index + 1}`
-  if ((project.script?.referenceAssetIds ?? []).includes(id)) return '产品'
-  return '参考'
+  if (board) return t('referenceSlots.numberedBoard', { number: board.index + 1 })
+  if ((project.script?.referenceAssetIds ?? []).includes(id)) return t('referenceSlots.product')
+  return t('common.referenceImage')
 }
 
-/** 配图节点上展示：人设/空镜/产品锁定，额外参考可删 */
+/** 이미지 생성 노드에서는 캐릭터, 배경, 제품 참조를 고정한다. 추가 참조는 삭제할 수 있다. */
 export function imageRefSlots(shot: Shot, project: Project): ShotRefSlot[] {
   const seen = new Set<ID>()
   const omitted = new Set(shot.omittedRefAssetIds ?? [])
@@ -409,16 +410,18 @@ export function imageRefSlots(shot: Shot, project: Project): ShotRefSlot[] {
     seen.add(id)
     slots.push({ id, label, locked })
   }
-  push(videoRequiresStoryboard(project) ? shot.boardAssetId : undefined, '故事看板', true)
+  push(videoRequiresStoryboard(project) ? shot.boardAssetId : undefined, t('referenceSlots.board'), true)
   for (const sub of subjectsForShot(shot, project)) {
-    push(sub.designSheetAssetId, `四视图·${sub.name}`, true)
+    push(sub.designSheetAssetId, t('referenceSlots.character', { name: sub.name }), true)
   }
   const scene = sceneAssetForShot(shot, project)
-  push(scene?.plateAssetId, scene ? `锚点·${scene.name}` : '锚点图', true)
-  push(scene?.propSheetAssetId, scene ? `关键道具·${scene.name}` : '关键道具图', true)
+  if (scene) {
+    push(scene.plateAssetId, t('referenceSlots.anchor', { name: scene.name }), true)
+    push(scene.propSheetAssetId, t('referenceSlots.prop', { name: scene.name }), true)
+  }
   if (project.pipelineMode === 'remake') {
     for (const id of project.script?.referenceAssetIds ?? []) {
-      push(id, '产品', true)
+      push(id, t('referenceSlots.product'), true)
     }
   }
   for (const id of uniqueIds(shot.referenceAssetIds ?? [])) {
@@ -427,25 +430,16 @@ export function imageRefSlots(shot: Shot, project: Project): ShotRefSlot[] {
   return slots
 }
 
-/** 看板节点：四视图 + 资产 + 空镜，不含看板自己 */
+/** 스토리 개요판 노드는 사면도, 에셋, 배경을 참조한다. 개요판 자체는 제외한다. */
 export function boardRefSlots(shot: Shot, project: Project): ShotRefSlot[] {
   return imageRefSlots(shot, project).filter((s) => s.id !== shot.boardAssetId)
 }
 
-/** 视频节点展示实际提交 H3 的图：角色设计图、场景图、故事看板。 */
+/** 영상 노드에 H3에 전달하는 캐릭터 설정 이미지, 배경, 스토리 개요판을 표시한다. */
 export function videoRefSlots(shot: Shot, project: Project): ShotRefSlot[] {
   return packVideoRefEntries(collectShotVideoEntries(shot, project)).map((entry, index) => ({
     id: entry.id,
-    label:
-      entry.kind === 'character'
-        ? `图${index + 1}：角色设计·${entry.name}`
-        : entry.kind === 'scene'
-          ? `图${index + 1}：场景·${entry.name}`
-          : entry.kind === 'extra'
-            ? `图${index + 1}：补充参考`
-            : entry.kind === 'keyframe'
-              ? `图${index + 1}：四宫格关键帧`
-              : `图${index + 1}：本镜故事看板`,
+    label: t(`referenceSlots.video.${entry.kind}`, { number: index + 1, name: entry.name }),
     locked: false
   }))
 }
@@ -463,22 +457,23 @@ export function videoExtraRefLead(shot: Shot, project: Project): string {
   const parts = [
     shot.boardAssetId
       ? filmChapter
-        ? '图一是本镜彩色四/八宫格电影故事看板，不是视频首帧。按左上到右下执行动作时间线，禁止复制宫格、边框或拼贴。'
-        : '图一是本镜六格黑白动作看板，不是视频首帧。按左上到右下执行动作时间线，禁止复制分格、边框、线稿或拼贴。'
-      : '图一是本镜主参考图。'
+        ? 'Image 1 is the color storyboard for this shot, with four or eight panels. Follow its action from top left to bottom right. Do not use it as the opening frame or reproduce the panels, borders, or collage.'
+        : 'Image 1 is the six-panel monochrome action storyboard. Follow its action from top left to bottom right. Do not use it as the opening frame or reproduce the panels, borders, line art, or collage.'
+      : 'Image 1 is the main reference for this shot.'
   ]
   extras.forEach((id, i) => {
     if (id === shot.boardAssetId) {
       parts.push(
         filmChapter
-          ? `图${i + 2}是本镜彩色电影故事看板，只参考从左上到右下的动作顺序、构图、道具状态和结束姿势；不要复制宫格边框、拼贴版式或同时出现多个画面。`
-          : `图${i + 2}是本镜六格黑白动作看板，只参考从左上到右下的动作顺序、道具状态和结束姿势；不要复制分格边框、线稿、拼贴版式或同时出现六个画面。`
+          ? `Image ${i + 2} is the color storyboard for this shot. Read from top left to bottom right for action order, composition, prop state, and final pose. Do not reproduce the grid borders, collage layout, or simultaneous panels.`
+          : `Image ${i + 2} is the six-panel monochrome action storyboard. Read from top left to bottom right for action order, prop state, and final pose. Do not reproduce the panel borders, line art, collage layout, or simultaneous panels.`
       )
     } else {
-      parts.push(`图${i + 2}是${refSlotLabel(id, project)}，用来锁人物或道具，不要当成新出场的人。`)
+      const owner = shotRefOwner(id, shot, project)
+      parts.push(`Image ${i + 2}: ${REF_OWNER_JOB[owner.kind](owner.name)} Use this as an identity or prop reference. Do not introduce a new character.`)
     }
   })
-  return parts.join('')
+  return parts.join('\n')
 }
 
 export function missingCastAssets(project: Project): {
@@ -493,7 +488,7 @@ export function missingCastAssets(project: Project): {
 
 export type ShotRefOwnerKind = 'character' | 'scene' | 'prop' | 'board' | 'keyframe' | 'extra'
 
-/** 这张参考图到底是谁的：按资源 id 反查人物 / 场景 / 道具 / 看板 / 关键帧。 */
+/** 에셋 ID로 캐릭터, 배경, 소품, 스토리 개요판 또는 키프레임을 찾는다. */
 export function shotRefOwner(
   id: ID,
   shot: Shot,
@@ -510,28 +505,28 @@ export function shotRefOwner(
       : { kind: 'prop', name: scene.name }
   }
   if (shot.boardAssetId && shot.boardAssetId === id) {
-    return { kind: 'board', name: `第 ${shot.index + 1} 镜故事看板` }
+    return { kind: 'board', name: `Shot ${shot.index + 1} storyboard` }
   }
   if (shot.imageAssetId && shot.imageAssetId === id) {
-    return { kind: 'keyframe', name: `第 ${shot.index + 1} 镜四宫格关键帧` }
+    return { kind: 'keyframe', name: `Shot ${shot.index + 1} four-panel keyframes` }
   }
-  return { kind: 'extra', name: '额外参考图' }
+  return { kind: 'extra', name: 'Additional reference image' }
 }
 
 const REF_OWNER_JOB: Record<ShotRefOwnerKind, (name: string) => string> = {
   character: (name) =>
-    `「${name}」的人物设定图：锁住这个人的脸、发型、体型、年龄和服装；只做身份参考，不是成片首帧，不要把四宫格画进画面。`,
+    `Character sheet for "${name}". Match the face, hair, build, age, and outfit. Use it for character identity only. Do not copy the layout or use it as the opening frame.`,
   scene: (name) =>
-    `「${name}」的场景锚点图：锁住空间、材质、天气和光线；全片只用这一个地方，不要把四宫格画进画面。`,
-  prop: (name) => `「${name}」的关键道具设定图：只锁住剧情里真正用到的那几件道具。`,
-  board: (name) => `${name}：只用来确定构图、站位和动作顺序；绝对不要把格子、线稿或编号画进画面。`,
-  keyframe: (name) => `${name}：只用来确定动作顺序；绝对不要把宫格和编号画进画面。`,
-  extra: () => `额外参考图：对齐里面的人物、服装、产品或画面风格。`
+    `Scene reference for "${name}". Preserve the space, materials, weather, and lighting. Stay in this location and do not reproduce the reference grid.`,
+  prop: (name) => `Prop reference for "${name}". Preserve only the props used in the story.`,
+  board: (name) => `${name}: Follow the composition, blocking, and action order. Do not reproduce grids, line art, or numbers.`,
+  keyframe: (name) => `${name}: Use it only for the action order. Do not reproduce grids or numbers.`,
+  extra: () => 'Additional reference image: Match the character, wardrobe, product, or visual style shown.'
 }
 
 /**
- * 参考图编号对照：图1是谁、图2是哪里。
- * 编号严格按真正发出去的图顺序排，模型才知道哪张图对应哪个人。
+ * 실제로 전송하는 순서대로 참조 이미지 번호를 붙인다.
+ * 번호별로 해당 캐릭터나 위치를 설명한다.
  */
 export function shotRefRoster(
   shot: Shot,
@@ -543,11 +538,11 @@ export function shotRefRoster(
   if (!usable.length && !tail) return ''
   const lines = usable.map((id, i) => {
     const owner = shotRefOwner(id, shot, project)
-    return `图${i + 1}：${REF_OWNER_JOB[owner.kind](owner.name)}`
+    return `Image ${i + 1}: ${REF_OWNER_JOB[owner.kind](owner.name)}`
   })
   if (tail) lines.push(tail)
   return [
-    '参考图对照（严格按这个编号理解；这些图只做身份和空间锁定，不是要照抄的成片）：',
+    'Reference image guide (follow the numbering exactly and use the images to preserve identity and space):',
     ...lines
   ].join('\n')
 }
@@ -563,29 +558,29 @@ export function composeShotImagePrompt(
   const roster = shotRefRoster(shot, project, collectShotRefIds(shot, project).ids)
   const parts = [roster, basePrompt.trim()]
   const ar = project.settings?.aspectRatio || '16:9'
-  parts.push(`画面比例必须是 ${ar}，整张图按这个画幅输出，禁止另一种比例。`)
+  parts.push(`Use exactly a ${ar} aspect ratio for the entire image.`)
   const dialogueSpeaker = (shot.voiceover || '').match(/^([^：:\n]{1,12})[：:]/)?.[1]?.trim()
   const filmChapter =
     project.pipelineMode !== 'remake' && project.script?.workflowMode === 'film-chapter'
   if ((shot.audioMode || 'h3-dialogue') === 'h3-dialogue' && dialogueSpeaker) {
     parts.push(
-      `这是「${dialogueSpeaker}」的出镜对白镜头。单画面起始构图必须已经明确落在${dialogueSpeaker}身上，让${dialogueSpeaker}成为唯一、无歧义的主视觉，脸和嘴清楚可见；可以用中近景、近景、过肩构图或以${dialogueSpeaker}为主体的双人构图，但其他人只能作为闭嘴倾听或反应者，不能与${dialogueSpeaker}争夺视觉中心。`
+      `Show "${dialogueSpeaker}" speaking on camera. In the opening composition, clearly show their face and mouth and make them the sole visual focus. A medium close-up, close-up, over-the-shoulder shot, or two-shot is acceptable. Other characters may listen or react silently without competing for attention.`
     )
   }
   if (shot.boardAssetId && videoRequiresStoryboard(project)) {
     parts.push(
       filmChapter
-        ? '附件中的彩色四/八宫格电影故事看板按左上到右下展示动作过程。视频起始帧采用第一格的开场构图、站位、朝向、天气和道具状态，后续动作顺序由文字提示承接；只生成一张完整的单画面起始帧，绝对不要复制宫格边框、编号或拼贴版式。'
-        : '附件中的六格故事看板按左上到右下展示同一镜头的动作过程。视频起始帧采用第一格的开场构图、站位、朝向和道具状态，后续动作顺序由文字提示承接；只生成一张完整上色的单画面起始帧，绝对不要复制六格边框、线稿、编号或拼贴版式。'
+        ? 'Read the attached four- or eight-panel color storyboard from top left to bottom right. Match the first panel\'s opening composition, blocking, orientation, weather, and props. Use the text for subsequent action. Output a single opening frame without borders, numbering, or a collage.'
+        : 'Read the attached six-panel storyboard from top left to bottom right. Match the first panel\'s opening composition, blocking, orientation, and prop state. Use the text for subsequent action. Output one fully colored opening frame without borders, line art, numbering, or a collage.'
     )
   } else if (!videoRequiresStoryboard(project)) {
     parts.push(
-      '这是这一镜的四宫格关键帧：2 列 × 2 行，正好 4 格，不能超过 4 格，也不能少格留白。左上到右下依次是初态、准备、核心事件、结束。用人设图锁脸和服装，用场景图锁地点和光线。禁止 6 格、8 格、空白格或把格子画成四张无关海报。'
+      'Create exactly four keyframe panels in a 2×2 grid. From top left to bottom right, show the initial state, preparation, central event, and final state. Match the character reference\'s face and outfit and the scene reference\'s location and lighting. Avoid blank panels or unrelated posters.'
     )
   }
   if (chars.length) {
     parts.push(
-      '人物必须与四视图完全一致（同一张脸、发型、体型、服装、配色）：' +
+      'Match the character turnaround exactly, including face, hair, build, clothing, and palette:' +
         chars
           .map((c) => `${c.name} — ${c.description}`)
           .join('；')
@@ -593,12 +588,12 @@ export function composeShotImagePrompt(
   }
   if (scene) {
     parts.push(
-      `地点必须与场景锚点图「${scene.name}」一致：${scene.description}${scene.mainAnchor ? `；主锚是${scene.mainAnchor}` : ''}。锚点图是四宫格设定，成片只要同一个地方，不要把四格画进画面。场景里没有人；把上述人物按四视图放进去，禁止另造场景，也禁止再添路人。`
+      `Match the location in the scene reference "${scene.name}": ${scene.description}${scene.mainAnchor ? `. Main anchor: ${scene.mainAnchor}` : ''}. Use the location shown in the four-panel reference without reproducing its panels. Populate the empty scene only with the characters from the turnaround references. Do not add locations or bystanders.`
     )
   }
   if (project.pipelineMode === 'remake') {
     parts.push(
-      '画面中出现的商品必须换成用户上传的产品参考图：外观、包装、logo、配色完全一致，禁止沿用参考视频里的原品牌商品。'
+      'Replace any product shown with the uploaded product reference, matching its appearance, packaging, logo, and colors exactly. Do not reuse the original branded product from the source video.'
     )
   }
   if (aesthetic) parts.push(aesthetic)

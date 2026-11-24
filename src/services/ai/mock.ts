@@ -129,7 +129,7 @@ export function mockStoryboardFromPrompt(userMsg: string) {
         visual = opts[hashCode(s) % opts.length]
       }
 
-      const purposes = ['建立', '推进', '反应', '揭示'] as const
+      const purposes = ['상황 설정', '진행', '반응', '공개'] as const
       const styleGuide =
         style === 'anime'
           ? 'Japanese cel animation with clear lines and bright eye highlights'
@@ -187,7 +187,7 @@ export function mockStoryboardFromPrompt(userMsg: string) {
         cameraMovement: 'static' as const,
         subjectIds: ['sub_1'],
         sceneId: 'scn_1',
-        purpose: i === 1 ? '建立' : i === 4 ? '揭示' : '推进',
+        purpose: i === 1 ? '상황 설정' : i === 4 ? '공개' : '진행',
         shotSize: sizes[(i - 1) % sizes.length],
         blocking: '주요 기준물을 기준으로 서서 이야기의 중심을 향한다.',
         eyeline: '이야기의 중심을 본다.',

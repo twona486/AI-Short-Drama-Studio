@@ -5,17 +5,17 @@ import { openLightbox } from '@/composables/useLightbox'
 const props = defineProps<{
   src: string
   type: 'image' | 'video' | 'audio'
-  /** 是否自动播放 */
+  /** 자동 재생 여부. */
   autoplay?: boolean
-  /** 是否循环 */
+  /** 반복 재생 여부. */
   loop?: boolean
-  /** 是否静音 */
+  /** 음소거 여부. */
   muted?: boolean
-  /** 是否显示控制条 */
+  /** 재생 제어 표시 여부. */
   controls?: boolean
-  /** 视频封面 */
+  /** 영상 포스터 이미지. */
   poster?: string
-  /** 圆角大小 */
+  /** 모서리 반경. */
   rounded?: boolean
 }>()
 

@@ -29,7 +29,7 @@ const content = ref('')
 const style = ref<VisualStyle>('cinematic')
 const aspectRatio = ref<AspectRatio>('16:9')
 const shotDuration = ref(5)
-/** 目标成片总时长（秒）。0 = 不限。决定剧本规模和后面拆多少镜。 */
+/** 완성 영상의 목표 길이(초). 0이면 제한을 두지 않는다. 대본과 샷 수에 적용한다. */
 const targetDurationSec = ref(0)
 const durationOptions = [30, 40, 60, 90, 120, 180]
 const durationShots = (sec: number) => Math.max(1, Math.ceil(sec / 8))

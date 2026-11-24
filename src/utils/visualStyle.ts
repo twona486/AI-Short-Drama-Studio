@@ -1,22 +1,22 @@
 /**
- * 画面风格词库：给 LLM 分镜 / 配图 / 人设共用
- * 避免只传英文枚举（cinematic）导致模型写成空泛提示。
+ * 스토리보드, 이미지 생성, 캐릭터 설정에 공통으로 적용하는 화풍 지침이다.
+ * 모델에 열거형 값과 함께 구체적인 매체와 기법을 전달한다.
  */
 
 import type { VisualStyle } from '@/types'
 
 export const VISUAL_STYLE_LABEL: Record<VisualStyle, string> = {
-  cinematic: '电影感',
-  anime: '日系动画',
-  photorealistic: '写实摄影',
-  '3d-render': '三维渲染',
-  'oil-painting': '古典油画',
-  watercolor: '水彩画',
-  'pixel-art': '复古像素',
-  'ink-wash': '中国水墨'
+  cinematic: 'Cinematic',
+  anime: 'Japanese animation',
+  photorealistic: 'Photorealistic photography',
+  '3d-render': '3D rendering',
+  'oil-painting': 'Classical oil painting',
+  watercolor: 'Watercolor',
+  'pixel-art': 'Retro pixel art',
+  'ink-wash': 'Chinese ink wash'
 }
 
-/** 用户口语别名。更长短语在前，便于从原文抽出「水墨风」而不是只命中「墨」 */
+/** 파서 호환. 사용자 표현에서 가장 구체적인 화풍을 먼저 찾는다. */
 export const STYLE_ALIASES: Record<VisualStyle, string[]> = {
   'ink-wash': [
     '中国水墨画',
@@ -26,6 +26,8 @@ export const STYLE_ALIASES: Record<VisualStyle, string[]> = {
     '水墨风',
     '水墨画',
     '写意画',
+    '수묵화',
+    '수묵',
     'ink-wash',
     'ink wash',
     'inkwash',
@@ -35,13 +37,13 @@ export const STYLE_ALIASES: Record<VisualStyle, string[]> = {
     '工笔',
     '宣纸'
   ],
-  watercolor: ['水彩画风', '水彩画', '水彩风', 'watercolor', '水彩'],
-  'oil-painting': ['古典油画', '油画风', 'oil painting', 'oil-painting', '厚涂', '油画'],
-  'pixel-art': ['像素风格', '像素风', 'pixel-art', 'pixel art', '像素画', '像素'],
-  '3d-render': ['三维渲染', '3d渲染', '3d-render', 'blender', 'octane', 'c4d'],
-  anime: ['日系动画', '二次元', '赛璐璐', '动漫风', '动画风', 'anime', '动漫', '动画'],
-  photorealistic: ['写实摄影', '超写实', 'photorealistic', '纪实摄影', '真人实拍'],
-  cinematic: ['电影剧照', '院线电影', '胶片摄影', '电影感', 'cinematic', '胶片颗粒']
+  watercolor: ['수채화', 'watercolor', 'watercolour', '水彩画风', '水彩画', '水彩风', '水彩'],
+  'oil-painting': ['고전 유화', '유화', '古典油画', '油画风', 'oil painting', 'oil-painting', '厚涂', '油画'],
+  'pixel-art': ['픽셀 아트', '도트 그래픽', '像素风格', '像素风', 'pixel-art', 'pixel art', '像素画', '像素'],
+  '3d-render': ['3D 렌더링', '3D render', '三维渲染', '3d渲染', '3d-render', 'blender', 'octane', 'c4d'],
+  anime: ['일본 애니메이션', '애니메이션', '셀 채색', '日系动画', '二次元', '赛璐璐', '动漫风', '动画风', 'anime', '动漫', '动画'],
+  photorealistic: ['사실적 사진', '실사 사진', '写实摄影', '超写实', 'photorealistic', '纪实摄影', '真人实拍'],
+  cinematic: ['영화 스틸', '영화풍', '필름 사진', '电影剧照', '院线电影', '胶片摄影', '电影感', 'cinematic', '胶片颗粒']
 }
 
 const INFER_ORDER: VisualStyle[] = [
@@ -56,17 +58,17 @@ const INFER_ORDER: VisualStyle[] = [
 ]
 
 const TECHNIQUE_HINT: Record<VisualStyle, RegExp> = {
-  'ink-wash': /宣纸|墨色|墨分|焦浓|浓淡|留白|飞白|晕染|笔锋|화선지|먹의 농담|xuan|ink tones|flying white/i,
-  watercolor: /晕染|水渍|纸纹|渗化|透明叠色|종이 질감|물 번짐|paper grain|pigment blooms|transparent (?:layers|washes)/i,
-  'oil-painting': /厚涂|笔触|布面|伦勃朗|붓 자국|캔버스 질감|impasto|brushstrokes|chiaroscuro|rembrandt/i,
-  'pixel-art': /像素格|色板|抖动|픽셀 격자|디더링|pixel grid|limited palette|dithering/i,
-  '3d-render': /pbr|全局光|octane|blender|전역 조명|global illumination/i,
-  anime: /赛璐璐|线稿|分阶|眼睛高光|셀 셰이딩|선화|cel shading|line art|eye highlights/i,
-  photorealistic: /毛孔|浅景深|纪实|织物纹理|얕은 피사계 심도|직물 질감|skin pores|shallow depth of field|fabric weave/i,
-  cinematic: /胶片|剧照|景深|焦段|光比|颗粒|필름 그레인|피사계 심도|film grain|depth of field|lens perspective|lighting contrast/i
+  'ink-wash': /宣纸|墨色|墨分|焦浓|浓淡|留白|飞白|晕染|笔锋|화선지|먹의 농담|여백|ink tones|rice paper|negative space|dry brush/i,
+  watercolor: /晕染|水渍|纸纹|渗化|透明叠色|물 번짐|종이 결|투명한 겹칠|transparent washes|paper grain|soft bleeding/i,
+  'oil-painting': /厚涂|笔触|布面|伦勃朗|임파스토|붓 자국|캔버스 결|impasto|canvas texture|Rembrandt/i,
+  'pixel-art': /像素格|色板|抖动|픽셀 격자|제한 팔레트|디더링|pixel grid|limited palette|dithering/i,
+  '3d-render': /pbr|全局光|전역 조명|global illumination|octane|blender/i,
+  anime: /赛璐璐|线稿|分阶|眼睛高光|셀 채색|선화|눈 하이라이트|cel shading|line art|eye highlights/i,
+  photorealistic: /毛孔|浅景深|纪实|织物纹理|모공|얕은 심도|직물 결|pores|shallow depth of field|fabric texture/i,
+  cinematic: /胶片|剧照|景深|焦段|光比|颗粒|필름|심도|초점 거리|조명 대비|film grain|depth of field|focal length|lighting ratio/i
 }
 
-/** 每种风格必须写进 visualPrompt 的媒介/技法锚点 */
+/** visualPrompt에 포함할 화풍별 매체와 기법이다. */
 export const VISUAL_STYLE_GUIDE: Record<
   VisualStyle,
   {
@@ -76,53 +78,70 @@ export const VISUAL_STYLE_GUIDE: Record<
     sampleTail: string
   }
 > = {
-  "cinematic": {
-    medium: "Film still / film photography",
-    mustInclude: "cinematic color grading, shallow or layered depth of field, dramatic lighting ratios, a clear lens perspective such as 35mm/50mm/85mm, film grain or cinematic contrast, negative space, and leading lines",
-    avoid: "Avoid flat illustration, oversized anime eyes, and cartoon outlines.",
-    sampleTail: "Use warm/cool or teal/orange contrast, soft film grain, controlled highlights, open shadows, and feature-film framing."
+  cinematic: {
+    medium: 'Cinematic still / film photography',
+    mustInclude:
+      'Cinematic grading, shallow or layered depth of field, dramatic lighting ratios, an identifiable focal-length feel (such as 35mm, 50mm, or 85mm), film grain or cinematic contrast, negative space, and leading lines.',
+    avoid: 'Avoid flat illustration, exaggerated anime eyes, and cartoon outlines.',
+    sampleTail:
+      'Frame it like a theatrical film still, with teal-orange or warm-cool grading, soft film grain, restrained highlights, and detailed shadows.'
   },
-  "anime": {
-    medium: "Japanese cel animation / animated feature frame",
-    mustInclude: "clean line art or color shapes, cel shading, stepped lighting, highlights in hair and eyes, expressive anime proportions, and clear spatial relationships even in simplified backgrounds",
-    avoid: "Avoid live-action photography, visible skin pores, and oil brushwork.",
-    sampleTail: "Use clean line art, cel shading, visible eye highlights, and atmospheric perspective in a bright animated feature frame."
+  anime: {
+    medium: 'Japanese cel animation / animated feature frame',
+    mustInclude:
+      'Clean line art or color blocks, cel shading, stepped light and shadow, hair and eye highlights, stylized proportions and expressions, and legible space even in simplified backgrounds.',
+    avoid: 'Avoid photographic realism, visible skin pores, and oil paint brushwork.',
+    sampleTail:
+      'Use feature-animation styling with clean line art, cel shading, bright eye highlights, and atmospheric perspective.'
   },
-  "photorealistic": {
-    medium: "Commercial photography / documentary photography",
-    mustInclude: "plausible materials and microtexture, such as pores and fabric weave, natural light, photographic depth of field, optional slight lens distortion, and credible reflections",
-    avoid: "Avoid anime faces, visible brushstrokes, and cartoon outlines.",
-    sampleTail: "Use natural light, realistic surface details, shallow depth of field, and commercial photographic sharpness without illustration strokes."
+  photorealistic: {
+    medium: 'Commercial / documentary photography',
+    mustInclude:
+      'Realistic materials and microdetail such as pores and fabric texture, physically plausible light and reflections, optical depth of field, and optional mild lens distortion.',
+    avoid: 'Avoid anime faces, visible brushstrokes, and cartoon outlines.',
+    sampleTail:
+      'Show photorealistic material details, natural light, shallow depth of field, and commercial photography clarity without painterly marks.'
   },
-  "3d-render": {
-    medium: "3D render / C4D, Blender, or Octane",
-    mustInclude: "PBR materials, global illumination, soft area light or HDRI, clean modeled edges, skin subsurface scattering, and product-grade highlights",
-    avoid: "Avoid hand-painted brushwork, pixel blocks, and ink bleeding.",
-    sampleTail: "Use clean 3D models with PBR materials, global illumination, and soft reflections as in Octane or Blender."
+  '3d-render': {
+    medium: '3D rendering / C4D, Blender, or Octane',
+    mustInclude:
+      'PBR materials, global illumination, soft area lights or HDRI, clean model edges, subsurface scattering for skin, and product-quality specular reflections.',
+    avoid: 'Avoid hand-painted brush marks, pixel blocks, and ink bleeding.',
+    sampleTail:
+      'Render with clean geometry, PBR materials, global illumination, and soft reflections in the style of Octane or Blender.'
   },
-  "oil-painting": {
-    medium: "Classical oil painting",
-    mustInclude: "visible strokes and impasto, canvas texture, classical chiaroscuro such as Rembrandt lighting, layered and mixed pigments, and museum-quality composition",
-    avoid: "Avoid digital photographic sharpness, flat cel shading, and pixel art.",
-    sampleTail: "Use impasto, canvas texture, dramatic light and dark, and restrained colors suited to a classical oil painting."
+  'oil-painting': {
+    medium: 'Classical oil painting',
+    mustInclude:
+      'Visible brushwork and impasto, canvas texture, classical lighting such as Rembrandt lighting, layered pigments, blended color masses, and a gallery-quality composition.',
+    avoid: 'Avoid digitally sharp photographic rendering, flat cel color, and pixel art.',
+    sampleTail:
+      'Show classical oil painting with impasto, canvas texture, dramatic light and shade, and a restrained museum-painting palette.'
   },
-  "watercolor": {
-    medium: "Watercolor painting",
-    mustInclude: "pigment blooms and watermarks, visible paper grain, transparent layers, intermittent soft bleeding edges, and negative space",
-    avoid: "Avoid heavy oil impasto, hyperreal photography, and hard-edged vector shapes.",
-    sampleTail: "Use transparent washes with natural blooms, visible paper grain, soft bleeding edges, and a luminous, clear palette."
+  watercolor: {
+    medium: 'Watercolor painting',
+    mustInclude:
+      'Watercolor blooms, visible paper grain, transparent washes, controlled soft bleeding at the edges, and open negative space.',
+    avoid: 'Avoid thick oil paint, hyperreal photography, and hard-edged vector art.',
+    sampleTail:
+      'Use transparent washes and natural watercolor blooms over subtle paper grain with soft edges.'
   },
-  "pixel-art": {
-    medium: "Retro pixel art",
-    mustInclude: "visible pixel grids, a limited palette, no anti-aliasing or controlled dithering, 16-bit or 32-bit game aesthetics, and readable silhouettes",
-    avoid: "Avoid high-definition photography, smooth vector gradients, and realistic pores.",
-    sampleTail: "Use a clear pixel grid, a limited palette, and subtle dithering as in classic console games."
+  'pixel-art': {
+    medium: 'Retro pixel art',
+    mustInclude:
+      'A distinct pixel grid, limited palette, crisp edges or controlled dithering, 16- or 32-bit game styling, and readable silhouettes.',
+    avoid: 'Avoid high-resolution photography, smooth vector gradients, and realistic skin pores.',
+    sampleTail:
+      'Render a crisp pixel grid, limited palette, and light dithering like a classic console game.'
   },
-  "ink-wash": {
-    medium: "Chinese ink wash / freehand ink on xuan paper",
-    mustInclude: "five ink tones from burnt black to pale wash, dry and wet strokes with flying white, centered and side brush techniques with pressure variation, ample negative space, xuan-paper fibers and watermarks, and freehand garment folds or distant landscapes",
-    avoid: "Avoid live-action photos and visible pores, gray studio character sheets, plastic 3D, flat cel shading, thick Western oil paint, and generic film color-grading language.",
-    sampleTail: "Use layered ink tones on xuan paper, controlled dry-brush texture and negative space, centered brush strokes for folds, and soft distant washes with visible paper grain."
+  'ink-wash': {
+    medium: 'Chinese ink wash / freehand ink on xuan paper',
+    mustInclude:
+      'Five tonal grades from scorched dark to clear pale ink, wet and dry brush techniques, broken strokes, variable brush pressure, generous negative space, visible xuan paper fibers and blooms, and freehand drapery or pale distant landscapes.',
+    avoid:
+      'Avoid photographic skin pores, gray studio turnarounds, glossy 3D, flat cel shading, Western oil impasto, and generic film grading.',
+    sampleTail:
+      'Paint freehand in ink on xuan paper. Use clearly separated tonal grades, dry brush and negative space, centered brushwork for drapery, and pale washes for the distance.'
   }
 }
 
@@ -138,7 +157,7 @@ function flattenTexts(...texts: Array<string | string[] | undefined>): string[] 
   return texts.flatMap((t) => (Array.isArray(t) ? t : t ? [t] : []))
 }
 
-/** 不是画风的「X风」 */
+/** 파서 호환. 중국어의 화풍 접미사와 모양이 같은 일반 단어를 제외한다. */
 const MEDIUM_STOP = new Set([
   '台风',
   '作风',
@@ -172,11 +191,11 @@ const MEDIUM_STOP = new Set([
 ])
 
 const OPEN_MEDIUM_CUE =
-  /风格|画风|质感|电影感|动画|动漫|二次元|写实|摄影|渲染|油画|水彩|像素|水墨|赛博|蒸汽朋克|复古|胶片|手绘|插画|国风|赛璐璐|厚涂|扁平|3d|黏土|粘土|剪纸|皮影|浮世绘|波普|定格|卡通|q版|cel-shad/
+  /风格|画风|质感|电影感|动画|动漫|二次元|写实|摄影|渲染|油画|水彩|像素|水墨|赛博|蒸汽朋克|复古|胶片|手绘|插画|国风|赛璐璐|厚涂|扁平|3d|黏土|粘土|剪纸|皮影|浮世绘|波普|定格|卡通|q版|cel-shad|화풍|그림체|점토|종이 공예|스톱모션|일러스트|clay|papercut|stop.?motion|illustration/i
 
-/** 卡通渲染 / Q 版 / Cel-shading：词库里没有独立枚举，不能落到「像素」或写实 PBR 3D */
+/** 셀 셰이딩이나 카툰 렌더링에는 별도 열거형이 없다. */
 const CEL_SHADE_PHRASE =
-  /卡通渲染(?:（Cel-shading）)?(?:\s*3D)?(?:\s*[+＋]\s*)?(?:Q\s*版(?:人物)?)?|Cel-shading(?:\s*3D)?|Q\s*版人物|卡通\s*3D|3D\s*卡通/i
+  /卡通渲染(?:（Cel-shading）)?(?:\s*3D)?(?:\s*[+＋]\s*)?(?:Q\s*版(?:人物)?)?|cel[- ]shad(?:ing|ed)(?:\s*3D)?|Q\s*版人物|卡通\s*3D|3D\s*卡通|셀\s*셰이딩|카툰\s*렌더링/i
 
 function extractCelShadePhrase(blob: string): string {
   const hit = blob.match(CEL_SHADE_PHRASE)
@@ -184,7 +203,7 @@ function extractCelShadePhrase(blob: string): string {
   return hit[0].replace(/\s+/g, ' ').trim()
 }
 
-/** 从用户原话抽出画风词：先抓「X风/X风格」，再匹配已知画种。剧名不算画风。 */
+/** 사용자가 표현한 화풍이나, 명시한 매체를 찾는다. */
 export function extractUserMediumPhrase(...texts: Array<string | undefined>): string {
   const blob = joinedText(...texts)
   if (!blob.trim()) return ''
@@ -193,7 +212,7 @@ export function extractUserMediumPhrase(...texts: Array<string | undefined>): st
   if (cel) return cel
 
   const open: string[] = []
-  for (const m of blob.matchAll(/([\u4e00-\u9fffA-Za-z0-9]{1,12}(?:风格|画风))/g)) {
+  for (const m of blob.matchAll(/([\u4e00-\u9fffA-Za-z0-9]{1,12}(?:风格|画风)|[가-힣A-Za-z0-9][가-힣A-Za-z0-9 -]{0,18}\s(?:화풍|그림체|style))/gi)) {
     if (m[1]) open.push(m[1])
   }
   for (const m of blob.matchAll(/([\u4e00-\u9fffA-Za-z]{2,8}风)/g)) {
@@ -221,11 +240,11 @@ export function extractUserMediumPhrase(...texts: Array<string | undefined>): st
   return ''
 }
 
-/** 主题/文案里点名了哪种画风。未点名返回 null，不要默认电影感。 */
+/** 주제나 본문에서 화풍을 찾는다. 명시한 화풍이 없으면 null을 반환한다. */
 export function inferVisualStyleFromText(...texts: Array<string | undefined>): VisualStyle | null {
   const blob = joinedText(...texts)
   if (!blob.trim()) return null
-  // 点了卡通渲染 / Q 版就不要对成词库里的像素或写实三维
+  // 카툰 렌더링은 픽셀 아트나 실사 3D로 분류하지 않는다.
   if (extractCelShadePhrase(blob)) return null
   const lower = blob.toLowerCase()
   for (const style of INFER_ORDER) {
@@ -247,13 +266,13 @@ export function resolveVisualStyle(
 }
 
 export interface VisualLook {
-  /** 接口仍要枚举：仅当原文能对上已知画种时才改，否则保持下拉值 */
+  /** API용 열거형. 입력이 알려진 화풍과 일치할 때만 기본 선택을 바꾼다. */
   style: VisualStyle
-  /** 展示用：用户原词，或下拉风格中文名 */
+  /** 사용자의 원문 표현 또는 선택한 화풍 이름. */
   medium: string
-  /** 原文对上的已知画种，对不上则为 null（黏土风、剪纸等） */
+  /** 입력과 일치하는 화풍. 일치하지 않으면 null. */
   matched: VisualStyle | null
-  /** 用户原文里点名了画风（X风/X风格/已知画种），不是我们拿下拉名填的 */
+  /** 사용자가 화풍을 직접 언급했는지 나타낸다. */
   userNamed: boolean
 }
 
@@ -272,12 +291,12 @@ export function lookFromTexts(
   }
 }
 
-/** 只取正文里点名画风的行，避免把对白里的「电影」「风格」误当成全片画风。 */
+/** 대사 속 표현을 피하기 위해 화풍을 명시한 줄만 추린다. */
 export function styleLinesFromPlay(content?: string): string {
   return (content || '')
     .split('\n')
     .map((line) => line.trim())
-    .filter((line) => /画风|视觉风格|画面风格|美术风格|绘制风格|风格要求|整体风格|画面质感/.test(line))
+    .filter((line) => /画风|视觉风格|画面风格|美术风格|绘制风格|风格要求|整体风格|画面质感|화풍|그림체|시각 스타일|visual style|rendering medium/i.test(line))
     .join('\n')
 }
 
@@ -304,28 +323,28 @@ export function lookFromScript(
   )
 }
 
-/** 用户点了非实拍媒介时，人设不要走摄影棚三视图 */
+/** 실사 매체인지 확인해 캐릭터 설정 이미지 방식을 결정한다. */
 export function isPhotographicLook(look: VisualLook): boolean {
   if (look.matched) {
     return look.matched === 'cinematic' || look.matched === 'photorealistic'
   }
   if (look.userNamed) {
-    return /电影|摄影|写实|实拍|纪实|胶片|剧照|真人/.test(look.medium)
+    return /电影|摄影|写实|实拍|纪实|胶片|剧照|真人|영화|실사|사진|cinematic|photograph|film still|live.action/i.test(look.medium)
   }
   return look.style === 'cinematic' || look.style === 'photorealistic'
 }
 
-/** 分镜/人设/配图共用的画风锁。有用户原词就锁原词；对得上词库才补该画种技法。 */
+/** 사용자 지정 화풍을 적용하고 알려진 화풍이면 매체별 기법을 추가한다. */
 export function mediumLockText(look: VisualLook): string {
   if (look.userNamed && look.matched) {
     const userBit =
       look.medium !== styleLabel(look.matched)
-        ? `Use the user's exact requested medium: ${look.medium}. `
-        : `Use ${VISUAL_STYLE_GUIDE[look.matched].medium}. `
+        ? `Follow the user's visual style "${look.medium}". `
+        : `Render in "${styleLabel(look.matched)}". `
     return `${userBit}${styleLockSuffix(look.matched)} ${professionalQualityLock(look.matched)}`
   }
   if (look.userNamed) {
-    return `Use the medium the user requested: ${look.medium}. Match its materials, techniques, and texture to production quality. Do not substitute a different style.`
+    return `Render in the user's specified medium "${look.medium}". Use its materials, techniques, and textures at a professional finish. Preserve the requested style.`
   }
   return `${styleLockSuffix(look.style)} ${professionalQualityLock(look.style)}`
 }
@@ -334,54 +353,55 @@ export function promptHasTechnique(prompt: string, style: VisualStyle): boolean 
   return TECHNIQUE_HINT[style]?.test(prompt) ?? false
 }
 
-/** 该媒介的专业完成度句子，配图时强制追加 */
+/** 이미지 생성에 적용할 매체별 품질 기준이다. */
 export function professionalQualityLock(style: VisualStyle): string {
   const locks: Record<VisualStyle, string> = {
     'ink-wash':
-      'Use five ink tones, varied brush pressure and flying white, visible xuan-paper fibers and watermarks, and broad negative space. Exclude live-action photography, modern studios, smooth CG, and colored oil impasto.',
+      'Professional finish: Use five ink tones, variable brush pressure, broken strokes, visible xuan paper fibers and blooms, and generous negative space. Avoid studio photography, glossy CGI, and oil impasto.',
     watercolor:
-      'Use transparent layers, natural grain and watermarks, and controlled edge bleeding. Avoid photo realism and heavy oil impasto.',
+      'Professional finish: Use transparent washes, natural paper grain and water marks, and controlled edge bleeding. Avoid hyperreal photos and thick oil paint.',
     'oil-painting':
-      'Use visible impasto and canvas grain, with classical chiaroscuro. Avoid digital photographic sharpness.',
+      'Professional finish: Show impasto, canvas grain, and classical chiaroscuro. Avoid digital photo sharpness.',
     'pixel-art':
-      'Use a clear pixel grid, limited palette, and readable silhouettes. Avoid smooth high-definition photo texture.',
+      'Professional finish: Use a clear pixel grid, limited colors, and readable silhouettes. Avoid smooth high-resolution photographic rendering.',
     '3d-render':
-      'Use PBR materials, global illumination, and clean models. Avoid hand-painted smears.',
+      'Professional finish: Use PBR materials, global illumination, and clean modeling. Avoid painted smears.',
     anime:
-      'Use clear line art, stepped cel shading, and distinct eye highlights. Avoid realistic skin pores.',
+      'Professional finish: Use clean lines, stepped cel shading, and distinct eye highlights. Avoid photographic skin pores.',
     photorealistic:
-      'Use realistic materials, natural light, and photographic clarity. Avoid illustration brushwork.',
+      'Professional finish: Use realistic material detail, natural light, and photographic clarity. Avoid illustrative brush marks.',
     cinematic:
-      'Use film color grading, intentional lighting contrast, and layered depth of field. Avoid flat illustration.'
+      'Professional finish: Apply cinematic grading, strong lighting ratios, and layered depth of field. Avoid flat illustration.'
   }
   return locks[style]
 }
 
-/** 写进 LLM system/user 的完整风格说明块 */
+/** LLM에 전달할 화풍 지침을 작성한다. */
 export function buildStyleBriefForLLM(style: VisualStyle): string {
   const label = styleLabel(style)
   const g = VISUAL_STYLE_GUIDE[style]
   if (!g) {
-    return `The user selected ${style}. State the medium and its techniques in each visualPrompt.`
+    return `Selected visual style: ${style}. Name its medium and techniques in each visualPrompt.`
   }
-  return `Follow the user's selected visual style. Do not substitute another style:
-- Enum: ${style}
-- Display name: ${label}
+  return `Use the selected visual style consistently throughout:
+- Style ID: ${style}
+- Style name: ${label}
 - Medium: ${g.medium}
-- Include in each visualPrompt: ${g.mustInclude}
+- Each visualPrompt must include: ${g.mustInclude}
 - ${g.avoid}
-- End each shot with an appropriate style lock, for example: ${g.sampleTail}
-- Keep aesthetic, colorPalette, and lightingNote consistent with the selected style. Avoid generic cinematic wording unless the user selected cinematic. Write user-facing descriptions in Korean (한국어) and generation prompts in English.`
+- Close each visualPrompt with a style reminder like this: "${g.sampleTail}"
+- Keep aesthetic, colorPalette, and lightingNote consistent with the selected style. Avoid generic cinematic phrasing unless cinematic is selected. Write user-facing descriptions in Korean and generation prompts in English.`
 }
 
-/** 配图 API 追加的短风格锁（中文，不用英文枚举） */
+/** 이미지 생성 API에 전달할 짧은 화풍 지침이다. */
 export function styleLockSuffix(style: VisualStyle): string {
+  const label = styleLabel(style)
   const g = VISUAL_STYLE_GUIDE[style]
-  if (!g) return `Use the ${style} style with high-definition detail.`
-  return `Use ${g.medium}. ${g.sampleTail}`
+  if (!g) return `${label} style, high detail.`
+  return `${label} style (${g.medium}). ${g.sampleTail}`
 }
 
-/** 判断画面描述是否已体现该风格关键词（含口语别名，如「水墨风」） */
+/** 구체적인 기법이나 별칭으로 프롬프트의 화풍을 확인한다. */
 export function promptMentionsStyle(prompt: string, style: VisualStyle): boolean {
   const p = prompt.toLowerCase()
   const label = styleLabel(style)

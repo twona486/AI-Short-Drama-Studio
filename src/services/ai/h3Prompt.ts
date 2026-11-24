@@ -1196,12 +1196,12 @@ function mapAmbience(text?: string): string {
 
 function purposeEn(raw?: string): string {
   const t = String(raw || '')
-  if (/钩子|开场|建立/.test(t)) return 'This beat establishes the space and the first visible tension.'
-  if (/对峙|冲突/.test(t)) return 'This beat holds a confrontation; bodies stay charged, not idle.'
-  if (/反应/.test(t)) return 'This beat is a reaction: face and breath change with what just happened.'
-  if (/揭示/.test(t)) return 'This beat reveals new information through look and body, not exposition.'
-  if (/转场/.test(t)) return 'This beat bridges the moment; motion and eyeline carry us forward.'
-  if (/收口|结束/.test(t)) return 'This beat lands the scene; hold the last expression and let the frame breathe.'
+  if (/钩子|开场|建立|도입|상황 설정|hook|opening/.test(t)) return 'This beat establishes the space and the first visible tension.'
+  if (/对峙|冲突|대치|갈등|conflict/.test(t)) return 'This beat holds a confrontation; bodies stay charged, not idle.'
+  if (/反应|반응|reaction/.test(t)) return 'This beat is a reaction: face and breath change with what just happened.'
+  if (/揭示|공개|드러남|reveal/.test(t)) return 'This beat reveals new information through look and body, not exposition.'
+  if (/转场|전환|transition/.test(t)) return 'This beat bridges the moment; motion and eyeline carry us forward.'
+  if (/收口|结束|마무리|ending/.test(t)) return 'This beat lands the scene; hold the last expression and let the frame breathe.'
   return ''
 }
 

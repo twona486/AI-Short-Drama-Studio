@@ -4,16 +4,16 @@
   "version": "0.1.22",
   "type": "module",
   "main": "dist-electron/main.js",
-  "description": "剧流 Studio：开源 AI短剧生成、AI短剧工作台与 AI video workflow studio",
+  "description": "Drama Flow Studio는 AI 숏드라마와 영상 워크플로를 제작하는 오픈소스 워크스페이스입니다.",
   "homepage": "https://github.com/JerrIsTheBesta/AI-Short-Drama-Studio",
   "repository": {
     "type": "git",
     "url": "https://github.com/JerrIsTheBesta/AI-Short-Drama-Studio.git"
   },
   "keywords": [
-    "AI短剧生成",
-    "AI短剧工作台",
-    "AI视频生成",
+    "korean-localization",
+    "ai-workspace",
+    "video-production",
     "ai-short-drama",
     "ai-video-generator",
     "video-workflow",
@@ -32,7 +32,7 @@
   },
   "build": {
     "appId": "com.aicuts.desktop",
-    "productName": "剧流 Studio",
+    "productName": "드라마 플로우 Studio",
     "icon": "logo.ico",
     "directories": {
       "output": "release"

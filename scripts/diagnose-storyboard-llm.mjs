@@ -1,10 +1,10 @@
 /**
- * 独立验证“剧本 -> 单个分镜”是否能通过当前 AI-Cut LLM 接口完成。
+ * 현재 LLM 연결에서 대본 일부를 단일 샷으로 만들 수 있는지 확인한다.
  *
- * 用法：
+ * 실행 방법
  *   node scripts/diagnose-storyboard-llm.mjs [project.json]
  *
- * 读取 Documents/AI-Cut/app.db 中当前启用的 LLM。不会输出或保存 API Key。
+ * Documents/AI-Cut/app.db에서 활성 LLM 설정을 읽는다. API 키는 출력하거나 저장하지 않는다.
  */
 import { DatabaseSync } from 'node:sqlite'
 import { readFile, writeFile, mkdir } from 'node:fs/promises'
@@ -17,39 +17,39 @@ const defaultProject = path.join(root, '333_p_mtivvuw3', 'project.json')
 const projectPath = path.resolve(process.argv[2] || defaultProject)
 const dbPath = path.join(root, 'app.db')
 
-if (!existsSync(projectPath)) throw new Error(`项目不存在：${projectPath}`)
-if (!existsSync(dbPath)) throw new Error(`配置数据库不存在：${dbPath}`)
+if (!existsSync(projectPath)) throw new Error(`Project not found: ${projectPath}`)
+if (!existsSync(dbPath)) throw new Error(`Settings database not found: ${dbPath}`)
 
 const db = new DatabaseSync(dbPath, { readOnly: true })
 const row = db.prepare('SELECT value FROM kv WHERE key = ?').get('settings')
 db.close()
-if (!row?.value) throw new Error('app.db 中没有 settings')
+if (!row?.value) throw new Error('No settings record in app.db')
 
 const settings = JSON.parse(row.value)
 const profiles = Array.isArray(settings.llms) ? settings.llms : []
 const active = profiles.find((item) => item.id === settings.activeLlmId) || settings.llm || profiles[0]
 if (!active?.baseUrl || !active?.apiKey || !active?.model) {
-  throw new Error('当前 LLM 的地址、密钥或模型名不完整')
+  throw new Error('The active LLM is missing its endpoint, API key, or model name')
 }
 
 const project = JSON.parse(await readFile(projectPath, 'utf8'))
 const script = String(project?.script?.content || '').trim()
-if (!script) throw new Error('项目没有剧本正文')
+if (!script) throw new Error('The project has no script body')
 const looksLikeBrief =
   script.length < 300 &&
-  /(?:类型|主题|主角|要求|时长|画幅)[：:]/.test(script) &&
-  !/(?:^|\n)#{1,4}\s+|(?:内景|外景)[｜|]/m.test(script)
+  /(?:类型|主题|主角|要求|时长|画幅|장르|주제|주인공|요구 사항|길이|화면 비율|Genre|Theme|Protagonist|Requirements|Duration|Aspect ratio)[：:]/i.test(script) &&
+  !/(?:^|\n)#{1,4}\s+|(?:内景|外景|실내|실외|INT[.]?|EXT[.]?)\s*[｜|]/im.test(script)
 
-// 故意只要一个镜头，验证模型和接口的最低能力，不经过 Vue、Pinia、画布或业务解析器。
+// 화면과 제작 파서를 거치지 않고 샷 하나를 생성해 모델과 API 연결을 검증한다.
 const messages = [
   {
     role: 'system',
     content:
-      '你是电影分镜导演。根据给出的剧本片段，只设计一个可拍摄、会动的镜头。画面必须包含起幅、事件触发、人物连续动作与反应、运镜和落幅。不要解释，不要套用固定镜头模板。'
+      'You are a film storyboard director. Design one filmable, dynamic shot from the supplied script excerpt. Include opening framing, a trigger, continuous action and reactions, camera movement, and closing framing. Return only the shot, with no template or commentary.'
   },
   {
     role: 'user',
-    content: `请把下面内容拆成第一个镜头。直接用中文自然语言返回，包含：镜头标题、景别与运镜、画面动作、声音/台词、建议时长。\n\n${script.slice(0, 5000)}`
+    content: `Design the first shot from the following script. Write the shot title, framing and camera movement, visual action, audio or dialogue, and suggested duration in Korean.\n\n${script.slice(0, 5000)}`
   }
 ]
 
@@ -86,7 +86,7 @@ if (!response.ok) {
 const data = JSON.parse(responseText)
 const message = data?.choices?.[0]?.message || {}
 const content = String(message.content || message.reasoning_content || '').trim()
-if (!content) throw new Error(`LLM ${elapsedMs}ms 返回成功，但正文为空`)
+if (!content) throw new Error(`LLM responded successfully in ${elapsedMs} ms but returned an empty body`)
 
 const reportDir = path.join(process.cwd(), 'diagnostics')
 await mkdir(reportDir, { recursive: true })
@@ -102,10 +102,10 @@ const report = [
 ].join('\n')
 await writeFile(reportPath, report, 'utf8')
 
-console.log(`成功：${data.model || active.model} 在 ${elapsedMs}ms 返回 ${content.length} 字。`)
+console.log(`${data.model || active.model} returned ${content.length} characters in ${elapsedMs} ms.`)
 if (looksLikeBrief) {
-  console.log('警告：输入只有创作简报，不是完整剧本；能拆镜，但模型只能补写/猜测缺失剧情。')
+  console.log('The input appears to be a creative brief. The model had to infer missing story details.')
 }
-console.log(`原始结果：${reportPath}`)
+console.log(`Raw result: ${reportPath}`)
 console.log('---')
 console.log(content)

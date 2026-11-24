@@ -1,4 +1,12 @@
 const NAME_EN: Record<string, string> = {
+  할머니: 'Grandmother',
+  할아버지: 'Grandfather',
+  아버지: 'Father',
+  아빠: 'Father',
+  어머니: 'Mother',
+  엄마: 'Mother',
+  아들: 'the son',
+  딸: 'the daughter',
   阿诚: 'Ah Cheng',
   奶奶: 'Grandmother',
   爷爷: 'Grandfather',
@@ -17,7 +25,7 @@ function hasCjk(text: string): boolean {
   return /[㐀-鿿]/.test(text)
 }
 
-/** H3 提示词里的人名/地名：能译就译，中文原词不要进英文正文。 */
+/** H3 영어 프롬프트에서 사용할 이름을 정규화한다. */
 export function h3RefName(name?: string, fallback = 'the character'): string {
   const value = String(name || '').trim()
   if (!value) return fallback
@@ -26,7 +34,7 @@ export function h3RefName(name?: string, fallback = 'the character'): string {
   return value
 }
 
-/** 中文人名不能都塌成 the character，否则图一图二无法区分。 */
+/** 참조 이미지별 캐릭터를 구별할 수 있도록 이름을 유지하거나 고유한 호칭을 붙인다. */
 export function h3UniqueName(
   name: string | undefined,
   index: number,
@@ -37,7 +45,7 @@ export function h3UniqueName(
   return role === 'place' ? `Place ${index}` : `Person ${index}`
 }
 
-/** 按出场顺序给每个人一个不重复的英文称呼。 */
+/** 등장 순서대로 중복 없는 영어 호칭을 만든다. */
 export function h3NameMap(names: Array<string | undefined>): Record<string, string> {
   const out: Record<string, string> = {}
   const used = new Set<string>()

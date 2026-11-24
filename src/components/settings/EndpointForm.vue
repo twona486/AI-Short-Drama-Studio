@@ -37,7 +37,7 @@ const providerId = computed({
   },
   set(id: string) {
     const preset = findProvider(id, props.presets)
-    // 换官方来源时只留下该来源的默认模型名。其余目录名要点「加入」才算配置。
+    // 공급업체를 바꿀 때 새 공급업체의 기본 모델 이름만 유지한다. 다른 카탈로그 모델은 사용자가 직접 추가한다.
     const base =
       preset.id === 'custom' ? props : { ...props, model: '', models: [] as string[] }
     emit('patch', applyProviderPreset(base, preset))

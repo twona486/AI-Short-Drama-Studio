@@ -1,4 +1,4 @@
-/** 轻量 Markdown → HTML（标题 / 列表 / 加粗），输出已转义，可直接 v-html。 */
+/** Markdown 제목, 목록, 굵게를 이스케이프된 HTML로 변환한다. v-html에서 사용할 수 있다. */
 
 function escapeHtml(s: string) {
   return s

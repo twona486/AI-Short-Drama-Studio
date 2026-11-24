@@ -47,7 +47,7 @@ function apply() {
         (item.model === workflow.id || item.model === workflow.name || item.model === workflow.id.replace(/^API-/, ''))
     )
     const values = {
-      get name() { return translate('zealmanSettings.imageProfileName', { p0: workflow.name }) },
+      get name() { return translate('zealmanSettings.imageProfileName', { p0: workflow.displayName }) },
       baseUrl: normalized,
       apiKey: '',
       model: workflow.id,

@@ -1,10 +1,10 @@
 <script setup lang="ts">
 defineProps<{
-  /** 悬浮时高亮 */
+  /** 포인터를 올리면 강조한다. */
   hoverable?: boolean
-  /** 内边距大小 */
+  /** 내부 여백 크기. */
   padding?: 'sm' | 'md' | 'lg' | 'none'
-  /** 是否显示光晕 */
+  /** 빛 번짐 효과를 표시할지 여부. */
   glow?: boolean
 }>()
 </script>

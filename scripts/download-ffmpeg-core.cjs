@@ -1,15 +1,15 @@
 /**
- * 下载 FFmpeg core 到 public/ffmpeg/
+ * FFmpeg 코어 파일을 로컬로 내려받는다.
  *
- * 用法：
+ * 실행 방법
  *   node scripts/download-ffmpeg-core.cjs
- *   # 或指定源
+ *   # 다운로드 서버 지정
  *   node scripts/download-ffmpeg-core.cjs --source=jsdelivr
  *
- * 源：jsdelivr | unpkg | npmmirror
+ * 다운로드 서버는 jsdelivr, unpkg, npmmirror 중에서 선택한다.
  *
- * 首次加载失败时，最稳的修复方案就是跑这个脚本，
- * 把 core 放到 public 目录，完全离线用。
+ * 첫 로딩에 실패하면 이 스크립트로 코어를 미리 받아
+ * 오프라인에서 사용할 수 있다.
  */
 
 const fs = require('fs')
@@ -17,8 +17,8 @@ const path = require('path')
 const https = require('https')
 
 const CORE_VERSION = '0.12.10'
-// 文件放到 src/assets/ffmpeg/，因为 Vite 禁止从 source code 引用 public/ 下的文件
-// 用 ?url import 拿到 vite 处理过的 URL
+// Vite 소스에서 public의 파일을 직접 가져올 수 없으므로 src/assets/ffmpeg에 보관한다.
+// ?url import로 Vite가 처리한 URL을 얻는다.
 const OUT_DIR = path.join(__dirname, '..', 'src', 'assets', 'ffmpeg')
 
 const SOURCES = {
@@ -90,7 +90,7 @@ function download(url, dest) {
       reject(err)
     })
     req.setTimeout(120000, () => {
-      req.destroy(new Error('下载超时（120s）'))
+      req.destroy(new Error('Download timed out after 120 seconds'))
     })
   })
 }
@@ -99,25 +99,25 @@ async function main() {
   const args = parseArgs()
   if (args.help) {
     console.log(`
-下载 FFmpeg core 到 public/ffmpeg/
+Download FFmpeg core to public/ffmpeg/.
 
-用法：
+Usage:
   node scripts/download-ffmpeg-core.cjs
   node scripts/download-ffmpeg-core.cjs --source=jsdelivr
   node scripts/download-ffmpeg-core.cjs --source=unpkg
   node scripts/download-ffmpeg-core.cjs --source=npmmirror
 
-源：
-  - jsdelivr  (默认，cdn.jsdelivr.net)
+Sources:
+  - jsdelivr (default, cdn.jsdelivr.net)
   - unpkg     (unpkg.com)
-  - npmmirror (国内镜像，registry.npmmirror.com)
+  - npmmirror (registry.npmmirror.com)
 `)
     return
   }
 
   const src = SOURCES[args.source]
   if (!src) {
-    console.error(`❌ 未知源：${args.source}，可选：${Object.keys(SOURCES).join(', ')}`)
+    console.error(`Unknown source ${args.source}. Available sources: ${Object.keys(SOURCES).join(', ')}`)
     process.exit(1)
   }
 
@@ -125,25 +125,25 @@ async function main() {
     fs.mkdirSync(OUT_DIR, { recursive: true })
   }
 
-  console.log(`\n🎬 下载 FFmpeg core v${CORE_VERSION}`)
-  console.log(`📁 目标目录：${OUT_DIR}`)
-  console.log(`🌐 使用源：${args.source}\n`)
+  console.log(`\nDownloading FFmpeg core v${CORE_VERSION}`)
+  console.log(`Destination: ${OUT_DIR}`)
+  console.log(`Source: ${args.source}\n`)
 
   for (const file of src.files) {
     const url = `${src.base}/${file}`
     const dest = path.join(OUT_DIR, file)
-    process.stdout.write(`下载 ${file}...\n`)
+    process.stdout.write(`Downloading ${file}...\n`)
     try {
       await download(url, dest)
       const size = fs.statSync(dest).size
       console.log(`  ✓ ${file} (${(size / 1024 / 1024).toFixed(2)} MB)`)
     } catch (e) {
-      console.error(`  ✗ ${file} 下载失败：${e.message}`)
+      console.error(`  Could not download ${file}: ${e.message}`)
       process.exit(1)
     }
   }
 
-  // ESM 版 core 必须叫 .esm.js，否则 vite 会按 UMD 处理
+  // Vite가 ESM 코어를 UMD로 처리하지 않도록 .esm.js 확장자를 사용한다.
   const esmSrc = path.join(OUT_DIR, 'ffmpeg-core.js')
   const esmDest = path.join(OUT_DIR, 'ffmpeg-core.esm.js')
   if (fs.existsSync(esmSrc) && !fs.existsSync(esmDest)) {
@@ -151,8 +151,8 @@ async function main() {
     console.log(`  ↻ ffmpeg-core.js → ffmpeg-core.esm.js`)
   }
 
-  console.log(`\n✅ 完成！文件已放到 public/ffmpeg/`)
-  console.log(`\n下一步：重启 npm run dev，FFmpeg 会优先用本地文件。\n`)
+  console.log(`\nDownload complete: ${OUT_DIR}`)
+  console.log('\nRestart npm run dev to use the local FFmpeg core.\n')
 }
 
 main().catch((e) => {

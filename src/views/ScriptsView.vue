@@ -2,12 +2,12 @@
 import { confirmAction } from '@/utils/confirmAction'
 import { t as translate } from '@/i18n'
 /**
- * 剧本管理
+ * 대본 관리.
  *
- * 左侧剧本列表（本地 Markdown 档案），右侧编辑器：
- * - 按集编辑：改标题、改正文、增删排序
- * - Markdown 全文 / 预览：直接改整份 md
- * 每份剧本都会落到 保存目录/_scripts/<id>.md，可在资源库里复用。
+ * 왼쪽은 로컬 Markdown 대본 목록, 오른쪽은 대본 편집기다.
+ * - 회차 편집에서는 제목, 본문, 회차 순서를 수정한다.
+ * - Markdown 원문에서 전체를 수정하고 미리보기에서 결과를 확인한다.
+ * 대본은 저장 폴더의 _scripts/<id>.md에 보관하며 리소스 라이브러리에서 재사용할 수 있다.
  */
 
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
@@ -40,7 +40,7 @@ const dirty = ref(false)
 const saving = ref(false)
 const activeEpisodeIndex = ref(0)
 const titleEditing = ref('')
-/** 当前展开那一集的编辑草稿（避免边打字边被 Markdown 规范化打断） */
+/** 타이핑 중 Markdown 정리로 입력이 끊기지 않도록 현재 회차의 편집 초안을 유지한다. */
 const draft = ref<{ index: number; title: string; content: string } | null>(null)
 
 const activeDoc = computed(() => scripts.docs.find((d) => d.id === activeId.value) ?? null)
@@ -76,7 +76,7 @@ async function loadContent(id: string, force = false) {
   dirty.value = false
 }
 
-/** 把某一集读进草稿 */
+/** 회차를 편집 초안에 불러온다. */
 function syncDraft(index: number) {
   activeEpisodeIndex.value = index
   const ep = episodes.value[index]
@@ -107,7 +107,7 @@ function markDirty() {
 
 let saveTimer: ReturnType<typeof setTimeout> | null = null
 
-/** 草稿改动后 0.8 秒写回 Markdown 并落盘 */
+/** 초안이 바뀌면 0.8초 뒤에 Markdown으로 반영해 저장한다. */
 function scheduleFlush() {
   dirty.value = true
   if (saveTimer) clearTimeout(saveTimer)
@@ -161,7 +161,7 @@ async function saveNow() {
   toast.success(translate('scripts.savedLocally'))
 }
 
-/** 改某一集的标题：写草稿，延迟回流到 Markdown */
+/** 회차 제목은 초안에서 수정한 뒤 지연 저장한다. */
 function onTitleInput(index: number, ev: Event) {
   if (!draft.value || draft.value.index !== index) openEpisode(index)
   if (!draft.value) return
@@ -234,7 +234,7 @@ async function createScript() {
   toast.success(translate('scripts.created'))
 }
 
-/* ── AI 写剧本：直接在这里提要求，写完自动入库 ── */
+/* 대본 요청을 입력하면 AI로 작성한 뒤 라이브러리에 자동으로 저장한다. */
 const llmGroups = computed(() => llmModelGroups(settings.config.llms ?? []))
 const llmModel = computed(() => settings.config.llm.model)
 const genOpen = ref(false)
@@ -251,7 +251,7 @@ const styleOptions = (Object.keys(VISUAL_STYLE_LABEL) as VisualStyle[]).map((key
   label: VISUAL_STYLE_LABEL[key]
 }))
 
-/* 目标成片时长：直接决定剧本规模和后面拆多少镜 */
+/* 목표 영상 길이에 맞춰 대본 분량과 샷 수를 정한다. */
 const durationOptions = [30, 40, 60, 90, 120, 180]
 const durationScenes = (sec: number) => Math.max(2, Math.min(6, Math.round(sec / 15)))
 const durationChars = (sec: number) => Math.max(400, Math.round(sec * 18))
@@ -473,7 +473,7 @@ onMounted(async () => {
     </header>
 
     <div class="body">
-      <!-- 列表 -->
+      <!-- 대본 목록 -->
       <aside class="side">
         <div class="side-head">
           <input v-model="keyword" class="search" :placeholder="$t('scripts.search')" />
@@ -503,7 +503,7 @@ onMounted(async () => {
         </button>
       </aside>
 
-      <!-- 编辑区 -->
+      <!-- 편집 영역 -->
       <section class="editor">
         <GlassCard v-if="activeDoc" padding="none" class="editor-card">
           <div class="ed-head">
@@ -543,7 +543,7 @@ onMounted(async () => {
           </div>
 
           <div class="ed-body">
-            <!-- 按集编辑 -->
+            <!-- 회차 편집 -->
             <div v-if="activeTab === 'episodes'" class="ep-list">
               <div
                 v-for="(ep, i) in episodes"
@@ -585,7 +585,7 @@ onMounted(async () => {
               <button class="add-ep" @click="addEpisode">{{ $t('scripts.newEpisode') }}</button>
             </div>
 
-            <!-- 全文 -->
+            <!-- 원문 -->
             <div v-else-if="activeTab === 'markdown'" class="md-wrap">
               <textarea
                 v-model="markdown"
@@ -600,7 +600,7 @@ onMounted(async () => {
               </div>
             </div>
 
-            <!-- 预览 -->
+            <!-- 미리보기 -->
             <div v-else class="preview" v-html="previewHtml" />
           </div>
 
@@ -629,7 +629,7 @@ onMounted(async () => {
       </section>
     </div>
 
-    <!-- AI 写剧本弹窗 -->
+    <!-- AI 대본 작성 모달 -->
     <teleport to="body">
       <div v-if="genOpen" class="gen-mask" @click.self="closeGenerate">
         <div class="gen-modal">
@@ -1217,7 +1217,7 @@ onMounted(async () => {
   }
 }
 
-/* ── AI 写剧本弹窗 ── */
+/* AI 대본 작성 모달 */
 .gen-mask {
   position: fixed;
   inset: 0;

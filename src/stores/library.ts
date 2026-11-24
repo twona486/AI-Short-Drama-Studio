@@ -17,8 +17,12 @@ import { libraryAssetAbsPath } from '@/services/storage'
 import { probeMedia, ensurePlayableBlob } from '@/services/ffmpeg'
 import type { Asset, ID, LibraryFolder } from '@/types'
 
-/** 公共资产（未分类）在 UI 里用这个 id */
+/** 분류되지 않은 공용 에셋에 사용하는 화면 ID. */
 export const LIBRARY_PUBLIC_ID = 'public'
+
+type LibraryCategory = keyof typeof zh.library.category
+// 기존 자동 분류 폴더의 저장 값과 이전 호출자의 인자를 보존한다.
+type LegacyLibraryCategory = '角色' | '场景' | '道具' | '其他'
 
 export const useLibraryStore = defineStore('library', () => {
   const all = ref<Asset[]>([])
@@ -128,7 +132,7 @@ export const useLibraryStore = defineStore('library', () => {
   function assertFolderName(name: string, exceptId?: string) {
     const trimmed = name.trim()
     if (!trimmed) throw new Error(t('library.folderNameRequired'))
-    if (trimmed === '公共资产' || trimmed === '公共资产库') {
+    if ([t('common.publicAssets'), zh.common.publicAssets, '公共资产库'].includes(trimmed)) {
       throw new Error(t('library.reservedName'))
     }
     if (folders.value.some((f) => f.name === trimmed && f.id !== exceptId)) {
@@ -149,7 +153,7 @@ export const useLibraryStore = defineStore('library', () => {
     return folder
   }
 
-  /** 给节点自动归档使用；并发生成时同一分类只会创建一次。 */
+  /** 노드 결과 자동 보관용이다. 동시 생성 중에도 분류별 폴더를 한 번만 만든다. */
   async function ensureFolder(name: string): Promise<LibraryFolder> {
     const trimmed = name.trim()
     const current = folders.value.find((folder) => folder.name === trimmed)
@@ -170,11 +174,12 @@ export const useLibraryStore = defineStore('library', () => {
 
   async function addCategorized(
     blob: Blob,
-    category: '角色' | '场景' | '道具' | '其他',
+    category: LibraryCategory | LegacyLibraryCategory,
     source: Asset['source'],
     options: { filename?: string; prompt?: string } = {}
   ): Promise<Asset> {
-    const folder = await ensureFolder(category)
+    const legacyName = zh.library.category[category as LibraryCategory] ?? category
+    const folder = await ensureFolder(legacyName)
     return add(blob, source, { ...options, folderId: folder.id })
   }
 

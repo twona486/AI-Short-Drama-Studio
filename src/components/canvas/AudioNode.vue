@@ -119,7 +119,7 @@ async function generateThis(ev?: Event) {
   try {
     await runCanvasNode(props.id)
   } catch {
-    /* 节点上会显示失败 */
+    /* 노드에서 오류를 표시한다. */
   }
 }
 

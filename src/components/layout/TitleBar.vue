@@ -2,7 +2,7 @@
 import { onMounted, onUnmounted, ref } from 'vue'
 import { desktop, isDesktop } from '@/services/desktop'
 
-/** 无边框窗口里必须画出顶栏；不依赖 preload 是否已经挂上 */
+/** 프레임 없는 창은 preload의 준비 여부와 관계없이 제목 표시줄을 표시한다. */
 const show = /electron/i.test(navigator.userAgent) || isDesktop()
 const maximized = ref(false)
 let off: (() => void) | undefined
@@ -136,7 +136,7 @@ function run(fn: () => void) {
 </style>
 
 <style>
-/* 不走 scoped：Electron 对带 data-v 的 -webkit-app-region 经常不生效 */
+/* Electron에서 data-v가 붙은 -webkit-app-region이 무시될 수 있어 전역 스타일을 쓴다. */
 .win-titlebar {
   -webkit-app-region: drag !important;
   app-region: drag !important;

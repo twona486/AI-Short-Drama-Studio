@@ -3,7 +3,7 @@ type ProjectGate = {
   script?: { workflowMode?: string } | null
 } | null | undefined
 
-/** 只有 AI 短剧 / 电影章节才走故事看板。普通创作用人设+场景出关键帧，再出视频。 */
+/** 숏드라마와 영화 챕터는 스토리 개요판을 사용한다. 일반 제작은 캐릭터와 배경 참조로 키프레임을 만든 뒤 영상을 생성한다. */
 export function videoRequiresStoryboard(project?: ProjectGate): boolean {
   if (!project) return false
   if (project.pipelineMode === 'drama') return true
@@ -12,7 +12,7 @@ export function videoRequiresStoryboard(project?: ProjectGate): boolean {
   return project.script?.workflowMode === 'film-chapter'
 }
 
-/** 画布上铺看板节点；普通创作铺关键帧节点，不铺空白看板。 */
+/** 캔버스에 제작 방식에 맞는 개요판 또는 키프레임 노드를 배치한다. */
 export function usesStoryboardCanvas(project?: ProjectGate): boolean {
   return videoRequiresStoryboard(project)
 }

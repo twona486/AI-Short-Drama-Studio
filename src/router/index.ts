@@ -94,7 +94,7 @@ export const router = createRouter({
   }
 })
 
-/** 进入工作流页之前先恢复 IndexedDB 项目，避免视图把「尚未加载」当成「没有产物」 */
+/** 워크플로 페이지에 들어가기 전에 IndexedDB에서 프로젝트를 복원한다. 로딩 중에는 결과가 없다고 판단하지 않는다. */
 router.beforeEach(async (to) => {
   const project = useProjectStore()
   const assets = useAssetsStore()
@@ -121,7 +121,7 @@ router.beforeEach(async (to) => {
   }
 })
 
-/** 工作流步骤定义（顺序，用于侧栏） */
+/** 사이드바에 표시할 워크플로 단계 순서. */
 export const workflowSteps = [
   { id: 'script', label: 'workflow.script.label', icon: '📝', route: '/script', desc: 'workflow.script.description' },
   { id: 'storyboard', label: 'workflow.storyboard.label', icon: '🎬', route: '/storyboard', desc: 'workflow.storyboard.description' },

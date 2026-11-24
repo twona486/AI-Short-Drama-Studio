@@ -1,10 +1,10 @@
 /**
- * 剧本 Markdown ⇄ 集数（章节）的结构化互转。
+ * 대본 Markdown과 회차 목록을 양방향으로 변환한다.
  *
- * 约定：
- * - `# 标题` 是整份剧本的名字（最多一个）
- * - `## 标题` 是一集的开始；两集之间的内容属于上一集
- * - 第一个 `##` 之前的内容算「前言」，保留但不属于任何一集
+ * 제목 구조는 다음과 같다.
+ * - # 제목은 전체 대본의 제목이다. 최대 하나를 사용한다.
+ * - ## 제목마다 새 회차가 시작된다. 다음 2단계 제목 직전까지 앞 회차에 포함한다.
+ * - 첫 번째 2단계 제목 앞의 내용은 회차에 속하지 않는 머리말로 보존한다.
  */
 
 import { t as translate } from '@/i18n'
@@ -24,7 +24,7 @@ export function countWords(text: string): number {
   return (text || '').replace(/\s/g, '').length
 }
 
-/** 正文 → 结构（标题 / 前言 / 每一集的标题与正文） */
+/** 본문을 대본 제목, 머리말, 회차별 제목과 본문으로 분리한다. */
 export function parseScriptDoc(md: string): ParsedScriptDoc {
   const lines = normalizeScriptText(md).split('\n')
   let title = ''
@@ -57,7 +57,7 @@ export function parseScriptDoc(md: string): ParsedScriptDoc {
     content: ep.content.join('\n').trim()
   }))
 
-  // 没有任何二级标题：整篇当成第一集
+  // 2단계 제목이 없으면 전체를 첫 회차로 처리한다.
   if (!cleaned.length) {
     return {
       title,
@@ -80,7 +80,7 @@ export function serializeScriptDoc(parsed: ParsedScriptDoc): string {
   return chunks.join('\n').replace(/\n{3,}/g, '\n\n').trim() + '\n'
 }
 
-/** 结构 → 带 id/字数的集列表，供界面渲染 */
+/** 화면에 표시할 ID와 글자 수를 회차에 붙인다. */
 export function toEpisodes(parsed: ParsedScriptDoc, docId: string): ScriptEpisode[] {
   return parsed.episodes.map((ep, index) => ({
     id: `${docId}#${index}`,
@@ -91,13 +91,13 @@ export function toEpisodes(parsed: ParsedScriptDoc, docId: string): ScriptEpisod
   }))
 }
 
-/** 生成下一集的默认标题 */
+/** 다음 회차의 기본 제목을 만든다. */
 export function nextEpisodeTitle(parsed: ParsedScriptDoc): string {
   const n = parsed.episodes.length + 1
   return translate('scripts.defaultEpisodeTitle', { p0: n })
 }
 
-/** 追加一集，返回新的 Markdown 与这一集的下标 */
+/** 회차를 추가하고 갱신된 Markdown과 회차 인덱스를 반환한다. */
 export function appendEpisode(md: string, title?: string): { markdown: string; index: number } {
   const parsed = parseScriptDoc(md)
   parsed.episodes.push({
@@ -107,7 +107,7 @@ export function appendEpisode(md: string, title?: string): { markdown: string; i
   return { markdown: serializeScriptDoc(parsed), index: parsed.episodes.length - 1 }
 }
 
-/** 在指定位置插入一集 */
+/** 지정한 위치에 새 회차를 삽입한다. */
 export function insertEpisode(
   md: string,
   at: number,
@@ -122,7 +122,7 @@ export function insertEpisode(
   return { markdown: serializeScriptDoc(parsed), index: pos }
 }
 
-/** 删除一集；至少保留一集 */
+/** 최소 한 회차를 남기고 지정한 회차를 삭제한다. */
 export function removeEpisode(md: string, index: number): { markdown: string; removed: boolean } {
   const parsed = parseScriptDoc(md)
   if (parsed.episodes.length <= 1) return { markdown: md, removed: false }
@@ -131,7 +131,7 @@ export function removeEpisode(md: string, index: number): { markdown: string; re
   return { markdown: serializeScriptDoc(parsed), removed: true }
 }
 
-/** 改某一集的标题和/或正文 */
+/** 회차의 제목이나 본문을 수정한다. */
 export function updateEpisode(
   md: string,
   index: number,
@@ -145,7 +145,7 @@ export function updateEpisode(
   return serializeScriptDoc(parsed)
 }
 
-/** 上下移动某一集 */
+/** 회차를 위나 아래로 이동한다. */
 export function moveEpisode(md: string, from: number, to: number): string {
   const parsed = parseScriptDoc(md)
   if (from === to) return md
@@ -156,7 +156,7 @@ export function moveEpisode(md: string, from: number, to: number): string {
   return serializeScriptDoc(parsed)
 }
 
-/** 按一集一份 Markdown 导出（文件名安全） */
+/** 각 회차를 유효한 파일명의 Markdown으로 내보낸다. */
 export function episodeMarkdown(title: string, content: string): string {
   const heading = title.trim() || translate('scripts.untitledEpisode')
   const body = (content || '').trim()

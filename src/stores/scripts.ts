@@ -1,10 +1,10 @@
 import { t } from '@/i18n'
 /**
- * 剧本库 store
+ * 대본 라이브러리 스토어.
  *
- * 职责：
- * - 每次 AI 生成 / 导入的剧本，落成一份本地 Markdown 并登记到剧本库
- * - 提供列表、读取正文、改名、增删集数、删除、导出
+ * 대본의 저장과 관리를 담당한다.
+ * - AI로 생성하거나 가져온 대본을 로컬 Markdown으로 저장하고 라이브러리에 등록한다.
+ * - 목록 조회, 본문 읽기, 이름과 회차 편집, 삭제, 내보내기를 제공한다.
  */
 
 import { defineStore } from 'pinia'
@@ -56,7 +56,7 @@ function statsOf(markdown: string) {
 export const useScriptsStore = defineStore('scripts', () => {
   const docs = ref<ScriptDoc[]>([])
   const loading = ref(false)
-  /** 正文缓存：id → markdown */
+  /** ID별 Markdown 본문 캐시. */
   const cache = new Map<ID, string>()
   let loadPromise: Promise<void> | null = null
 
@@ -74,7 +74,7 @@ export const useScriptsStore = defineStore('scripts', () => {
     }
   }
 
-  /** 首次访问时加载一次 */
+  /** 처음 접근할 때 한 번 불러온다. */
   function ensureLoaded() {
     if (docs.value.length) return Promise.resolve()
     if (loadPromise) return loadPromise
@@ -108,7 +108,7 @@ export const useScriptsStore = defineStore('scripts', () => {
     else docs.value.unshift(stored)
   }
 
-  /** 新建一份空剧本 */
+  /** 빈 대본을 만든다. */
   async function create(options: {
     title?: string
     markdown?: string
@@ -142,7 +142,7 @@ export const useScriptsStore = defineStore('scripts', () => {
     return stored
   }
 
-  /** 导入一份 Markdown 剧本文件 */
+  /** Markdown 대본을 가져온다. */
   async function importMarkdown(text: string, filename = '', options: { projectId?: ID } = {}) {
     const raw = normalizeImportedMarkdown(text)
     if (!raw.trim()) throw new Error(t('common.emptyScript'))
@@ -151,9 +151,9 @@ export const useScriptsStore = defineStore('scripts', () => {
   }
 
   /**
-   * 把项目里的剧本存成一份 Markdown。
-   * - 同一次续写（同一项目 + 同一剧本标题）更新原档，不刷屏
-   * - 换了题目就另存一份新剧本
+   * 프로젝트의 대본을 Markdown 파일로 저장한다.
+   * - 같은 프로젝트와 제목에서 이어 쓴 대본은 기존 파일을 갱신한다.
+   * - 주제가 바뀌면 새 대본으로 저장한다.
    */
   async function saveFromProject(
     project: Project,
@@ -243,7 +243,7 @@ export const useScriptsStore = defineStore('scripts', () => {
     await write(id, markdown)
   }
 
-  // ===== 集数操作 =====
+  // 회차 관리
 
   async function addEpisode(id: ID, title?: string) {
     const md = await readContent(id)
@@ -280,7 +280,7 @@ export const useScriptsStore = defineStore('scripts', () => {
     await write(id, moveEpisode(md, from, to))
   }
 
-  // ===== 其它 =====
+  // 기타 작업
 
   async function remove(id: ID) {
     await deleteScriptDoc(id)
@@ -325,7 +325,7 @@ export const useScriptsStore = defineStore('scripts', () => {
     return true
   }
 
-  /** 磁盘上的正文被手改过后同步回来 */
+  /** 디스크에서 직접 편집한 본문을 동기화한다. */
   async function reloadFromDisk(id: ID) {
     const text = await readContent(id, true)
     await write(id, text)

@@ -28,6 +28,7 @@ export default {
     "workflowPlaceholder": "AutoDL 工作流名，或自建占位名"
   },
   "agentChat": {
+    "attachmentTruncated": "文件较长，只附上前 200,000 个字符。",
     "attachmentHint": "附加本地文件（txt / md / 剧本等文本），或直接在消息里写文件路径",
     "attachments": "附件",
     "autoDLQuality": "AutoDL · 画质升级版",
@@ -36,11 +37,13 @@ export default {
     "autoModeHint": "每镜按自己的参考图 / 关键帧出片（默认）。想要镜头之间画面连续就选首尾帧模式。",
     "autonomous": "全自动",
     "autonomousHint": "按你这句话尽量一路做完，中途失败才停。要出片仍需说「全流程」。",
+    "breakDownScriptCommand": "拆剧本",
     "breakDownScript": "拆剧本",
     "canvasRunCompleted": "画布上的「{label}」已完成。",
     "canvasRunFailed": "画布上的「{label}」失败了。\n原因：{error}\n可以改提示词后在右侧重试，或让我来处理。",
     "canvasRunFollowUp": "需要继续就直接说下一步。",
     "canvasRunNext": "下一步是「{label}」。回「继续」只做这一步。",
+    "clearActionsCommand": "把眉眼嘴、手和身体怎么动写具体，不改原文格式",
     "clearActions": "写清动作表情",
     "confirmKeyActions": "关键确认",
     "continue": "继续：{p0}",
@@ -48,6 +51,7 @@ export default {
     "copyReply": "复制这条回复",
     "deliberating": "在想怎么做…",
     "desktopRequired": "读取本地文件需要桌面端（已安装的应用）",
+    "drawImageCommand": "帮我创建一个图片节点并生成：",
     "drawImage": "帮我画一张图",
     "estimated": "预计",
     "fileSelectionFailed": "选择文件失败",
@@ -65,9 +69,11 @@ export default {
     "imagePreferences": "图片偏好",
     "landscape": "横版 16:9",
     "localMemory": "本地记忆",
+    "matchStoryCommand": "对照剧本，只写这一镜该发生的事，不改原文格式",
     "matchStory": "按剧情对齐",
     "mode": "生成模式 ·",
     "modelSelection": "模型选择",
+    "moreVisualCommand": "更有画面感：补构图、光影、材质和空气感，不改原文格式",
     "moreVisual": "更有画面感",
     "noImageModel": "还没有图像模型，去「设置」里添加一个",
     "noSelectedNode": "还没选节点。点画布上的图片或视频节点，我来改它的提示词。",
@@ -77,6 +83,7 @@ export default {
     "preferenceHint": "选好即生效，智能体生成图片和视频都会照此执行；单个节点仍可单独指定模型。",
     "preferences": "创作偏好",
     "preferencesSummary": "创作偏好：比例 {p0} · 图像 {p1} · 视频 {p2}",
+    "quickPeekCommand": "先看看",
     "quickPeek": "先看看",
     "readFailed": "读取失败：{p0}",
     "readingAttachments": "读取附件 {p0}…",
@@ -105,6 +112,7 @@ export default {
     "videoGeneration": "图生视频",
     "videoModel": "视频模型",
     "videoPreferences": "视频偏好",
+    "viewProgressCommand": "现在画布什么情况",
     "viewProgress": "看看进度",
     "wan": "万相 3.0 Prime",
     "welcome": "我是这张画布的创作搭档，两种用法都行：\n\n- **一句话开工**：说「写一个修仙短剧，8 个分镜」或「画一张黄昏的海边」，我直接建节点、写提示词、跑生成\n- **自己拼**：在画布空白处右键添加图片 / 视频 / 剧本 / 角色 / 道具 / 场景 / 分镜，点选节点后让我改提示词、重跑\n\n我也带本地记忆——说「记住…」以后一直生效。想一次做到底就说「全流程」，否则我做一步停一步等你确认。",
@@ -664,6 +672,7 @@ export default {
     "required": "当前不是桌面端"
   },
   "directorSkill": {
+    "defaultName": "导演手册",
     "empty": "这份手册正文是空的",
     "missingFile": "这个文件夹里没有 SKILL.md 或 README.md",
     "requiresMarkdown": "请导入 Markdown 或 README，不是网页",
@@ -1625,6 +1634,7 @@ export default {
     "writing": "写作中…"
   },
   "settings": {
+    "languageChinese": "中文",
     "aiGroup": "AI 能力",
     "appGroup": "应用",
     "backup": {
@@ -1773,10 +1783,39 @@ export default {
       "used": "已用"
     }
   },
+  "referenceSlots": {
+    "character": "四视图 · {name}",
+    "prop": "关键道具 · {name}",
+    "anchor": "场景锚点图 · {name}",
+    "numberedBoard": "故事看板 · {number}",
+    "board": "故事看板",
+    "product": "产品",
+    "video": {
+      "character": "图 {number} · 角色设计 · {name}",
+      "scene": "图 {number} · 场景 · {name}",
+      "prop": "图 {number} · 关键道具 · {name}",
+      "extra": "图 {number} · 补充参考",
+      "keyframe": "图 {number} · 四宫格关键帧",
+      "board": "图 {number} · 本镜故事看板"
+    }
+  },
+  "shotPrompt": {
+    "missing": "缺少视频内容表现。",
+    "generic": "请写明每个人的位置和视线。",
+    "tooShort": "请写明触发、连续动作、道具变化、运镜落点和同步声音。",
+    "missingBeats": "请从零秒到镜头结束分段，写明每段的动作和对白。",
+    "missingBlocking": "请写明多位演员各自的位置和视线。",
+    "missingAction": "请说明可见的动作或反应。"
+  },
   "setupAgent": {
     "configureLlm": "去配置语言模型",
     "defaultModel": "默认使用已配置的语言模型：",
     "delegate": "让助手配置",
+    "fromDocsCommand": "下面是我的 API 文档，请按文档写成自定义接入（可以是中转站）：\n",
+    "setupVisionCommand": "帮我配视觉理解",
+    "setupImageCommand": "帮我配图像生成",
+    "setupTtsCommand": "帮我配 TTS 配音",
+    "setupVideoCommand": "帮我配视频生成",
     "fromDocs": "从文档接入",
     "hint": "用当前语言模型帮你接入。可以说厂家 + Key，也可以把 API 文档贴进来。",
     "imageHint": "人设、场景与分镜配图",

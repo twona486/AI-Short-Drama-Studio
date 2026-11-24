@@ -86,7 +86,7 @@ function commitTemplate(template: string, detail: string, map?: ComfyInputMap | 
   toast.success(translate('comfyWorkflowPanel.templateSaved'))
 }
 
-/** 让助手读懂节点图，产出「提示词 / 参考图写到哪个节点」的映射 */
+/** 노드 구성을 분석해 프롬프트와 참조 이미지를 넣을 노드를 찾는다. */
 async function analyzeWithAssistant(payload: any, template: string, silent = false) {
   analyzing.value = true
   try {
@@ -118,7 +118,7 @@ async function onValidateAndSave() {
     toast.error(parsed.detail)
     return
   }
-  // 先落盘模板，再让助手分析映射（分析失败也至少保住了工作流本身）
+  // 분석이 실패해도 워크플로를 보존할 수 있도록 템플릿을 먼저 저장한다.
   commitTemplate(parsed.template, translate('comfyWorkflowPanel.parsedApi'))
   await analyzeWithAssistant(parsed.payload || JSON.parse(parsed.template), parsed.template)
 }
@@ -153,7 +153,7 @@ function onSaveMapJson() {
 function onPaste(ev: ClipboardEvent) {
   const text = ev.clipboardData?.getData('text') || ''
   if (!text.trim().startsWith('{')) return
-  // 让浏览器先写入，再在 next tick 校验提示
+  // 브라우저 저장이 끝난 뒤 다음 틱에서 유효성을 확인한다.
   setTimeout(() => {
     const parsed = parseComfyWorkflowJson(draft.value || text)
     status.value = parsed.detail

@@ -37,9 +37,9 @@ function nativeText(key: keyof typeof ko.electron, fields: Record<string, string
 const mainDir = path.dirname(fileURLToPath(import.meta.url))
 
 /**
- * 开源版允许用户接入任意视频工作流，结果往往落在各家临时 CDN，
- * 不能再用固定域名白名单。这里改为拦截本机/内网地址，避免下载 IPC
- * 被滥用于 SSRF，同时允许正常的公网 HTTPS 视频地址。
+ * 사용자 지정 영상 워크플로는 여러 제공업체의 임시 CDN에서 결과를 가져온다.
+ * 고정 도메인 목록 대신 로컬 및 사설망 주소를 차단해 다운로드 IPC의 SSRF를 막는다.
+ * 공용 HTTPS 영상 주소는 허용한다.
  */
 function isPrivateIp(address: string): boolean {
   const normalized = address.toLowerCase().replace(/^\[|\]$/g, '')
@@ -48,7 +48,7 @@ function isPrivateIp(address: string): boolean {
   }
   if (normalized.startsWith('fc') || normalized.startsWith('fd')) return true
 
-  // IPv4-mapped IPv6，例如 ::ffff:127.0.0.1
+  // IPv4 매핑 IPv6의 예는 ::ffff:127.0.0.1이다.
   const mapped = /^::ffff:(\d+\.\d+\.\d+\.\d+)$/.exec(normalized)
   const ipv4 = mapped?.[1] ?? (isIP(normalized) === 4 ? normalized : '')
   if (!ipv4) return false
@@ -97,10 +97,10 @@ async function assertPublicHttpsUrl(raw: string): Promise<URL> {
 }
 
 /**
- * Electron net.fetch 会把响应头转换成 Web Headers；部分 CDN 在
- * Content-Disposition 中直接返回中文文件名时，会触发 undici 的
- * ByteString TypeError 并造成主进程未捕获异常。使用 Node HTTPS 原始流
- * 下载可避开该转换，同时每一跳重定向仍做公网地址校验。
+ * Electron net.fetch는 응답 헤더를 Web Headers로 변환한다.
+ * 일부 CDN이 Content-Disposition에 비 ASCII 파일명을 직접 넣으면
+ * undici의 ByteString TypeError가 발생해 메인 프로세스에서 처리되지 않을 수 있다.
+ * Node HTTPS 스트림으로 이 변환을 피하고 리디렉션마다 공용 주소를 확인한다.
  */
 async function downloadPublicVideo(
   rawUrl: string,
@@ -208,7 +208,7 @@ function mimeOf(filePath: string) {
   }
 }
 
-/** <video> 需要 206 + Range，否则自定义协议往往只播前半段就停 */
+/** 영상의 전 구간을 재생할 수 있도록 Range 요청에 206으로 응답한다. */
 function fileRangeResponse(filePath: string, request: Request) {
   if (!existsSync(filePath)) return new Response('not found', { status: 404 })
   const size = statSync(filePath).size
@@ -314,6 +314,8 @@ function appAssetResponse(request: Request) {
 
 const ROOT_NAME = 'AI-Cut'
 const ROOT_PREF_FILE = 'storage-root.json'
+// 앱 표시 이름을 바꾸기 전에 설치한 사용자도 기존 저장 폴더를 읽을 수 있다.
+const LEGACY_PRODUCT_NAME = '剧流 Studio'
 
 let activeRoot = ''
 
@@ -326,12 +328,18 @@ function rootPreferencePath() {
 }
 
 async function loadStorageRoot() {
-  try {
-    const raw = await fs.readFile(rootPreferencePath(), 'utf8')
-    const saved = String(JSON.parse(raw)?.root || '').trim()
-    if (saved && path.isAbsolute(saved)) return path.normalize(saved)
-  } catch {
-    /* first launch or invalid preference: use default */
+  const preferences = new Set([
+    rootPreferencePath(),
+    path.join(app.getPath('appData'), LEGACY_PRODUCT_NAME, ROOT_PREF_FILE)
+  ])
+  for (const file of preferences) {
+    try {
+      const raw = await fs.readFile(file, 'utf8')
+      const saved = String(JSON.parse(raw)?.root || '').trim()
+      if (saved && path.isAbsolute(saved)) return path.normalize(saved)
+    } catch {
+      // 다음 후보를 확인한다.
+    }
   }
   return defaultRoot()
 }
@@ -553,7 +561,7 @@ app.whenReady().then(async () => {
     await ensureDir(nextRoot)
     closeAppDb()
     try {
-      // 目标已有资料时不覆盖；否则将当前数据库、项目和素材完整带过去。
+      // 대상에 기존 데이터가 있으면 덮어쓰지 않는다. 비어 있으면 현재 데이터베이스, 프로젝트, 에셋을 옮긴다.
       await copyMissingRootContents(previousRoot, nextRoot)
       await openAppDb(nextRoot)
       activeRoot = nextRoot
@@ -768,8 +776,8 @@ app.whenReady().then(async () => {
   })
 
   function isAllowedProviderFetch(parsed: URL) {
-    // 地址来自用户明确保存的模型接入配置。桌面主进程只负责绕过 CORS，
-    // 不应再把云端自建 ComfyUI 写死成 AutoDL / localhost 白名单。
+    // 사용자가 저장한 모델 주소에 CORS 제한 없이 접근할 수 있도록 메인 프로세스에서 요청한다.
+    // 사용자가 운영하는 클라우드 ComfyUI도 연결할 수 있도록 공급업체나 localhost로 제한하지 않는다.
     return (
       (parsed.protocol === 'http:' || parsed.protocol === 'https:') &&
       Boolean(parsed.hostname) &&

@@ -1,8 +1,8 @@
-/** 剧本续写：保留已有分场，只往后加。 */
+/** 대본 이어 쓰기는 기존 장면을 보존하고 새 장면을 추가한다. */
 import { t } from '@/i18n'
 
-function fenChangBlock(md: string): string {
-  const m = md.match(/^##\s*(?:分场|장면 구성|Scene breakdown)\s*$/im)
+function sceneBreakdownBlock(md: string): string {
+  const m = md.match(/^##[ \t]*(?:分场|장면 목록|장면 구성|Scenes|Scene breakdown)[ \t]*$/im)
   if (!m || m.index == null) return ''
   const from = m.index
   const rest = md.slice(from + m[0].length)
@@ -10,14 +10,14 @@ function fenChangBlock(md: string): string {
   return next >= 0 ? md.slice(from, from + m[0].length + next) : md.slice(from)
 }
 
-/** 戏剧场次标题：章节「场景一｜…」或旧稿「第 N 场」。不含人物/环境设定节。 */
+/** 번호가 붙은 장면 제목을 찾는다. 인물과 배경 설정은 제외한다. */
 export function playSceneHeadings(md: string): string[] {
   const text = md || ''
-  const chapter = [...text.matchAll(/^##[ \t]+((?:场景[一二三四五六七八九十百0-9]|(?:장면|Scene)[ \t]+\d+)[^\n]*)$/gim)].map((m) =>
+  const chapter = [...text.matchAll(/^##\s+((?:场景\s*[一二三四五六七八九十百0-9]|장면\s*\d+|scene\s+\d+)[^\n]*)\s*$/gim)].map((m) =>
     m[1].trim()
   )
-  const numbered = [...fenChangBlock(text).matchAll(/^###\s+(.+)\s*$/gm)].map((m) => m[1].trim())
-  const loose = [...text.matchAll(/^###[ \t]+((?:第\s*\d+\s*场|(?:장면|Scene)[ \t]+\d+)[^\n]*)$/gim)].map((m) => m[1].trim())
+  const numbered = [...sceneBreakdownBlock(text).matchAll(/^###[ \t]+([^\n]+)$/gm)].map((m) => m[1].trim())
+  const loose = [...text.matchAll(/^###\s+((?:第\s*\d+\s*场|장면\s*\d+|scene\s+\d+)[^\n]*)\s*$/gim)].map((m) => m[1].trim())
   return [...new Set([...chapter, ...numbered, ...loose])]
 }
 
@@ -27,8 +27,8 @@ export function countAddedPlayScenes(before: string, after: string): number {
 }
 
 /**
- * 把模型续写结果和原稿合成完整剧本。
- * 优先用「保留旧场 + 新增场」的完整稿；若模型只吐了新场，则接到原文后面。
+ * 원본 대본에 이어 쓰기 결과를 반영한다.
+ * 기존 장면을 보존한 전체 결과를 우선한다. 새 장면만 있으면 원본 뒤에 붙인다.
  */
 export function mergeContinuedPlay(original: string, generated: string): string {
   const orig = (original || '').trim()

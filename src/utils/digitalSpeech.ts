@@ -1,4 +1,4 @@
-/** 口播语速：大约每秒 4.2 个汉字，用来按台词长度拆镜。 */
+/** 대사 글자 수로 샷을 나눌 때 초당 약 4.2자를 기준으로 삼는다. */
 export const DIGITAL_HUMAN_CONCURRENCY = 10
 const CHARS_PER_SEC = 4.2
 const MIN_SHOT_SEC = 5
@@ -40,7 +40,7 @@ export function speechCharWeight(text: string): number {
   return Math.max(1, String(text || '').replace(/[，。！？；：、\s]/g, '').length)
 }
 
-/** 这一段台词对应的镜头时长（秒），夹在音画同步工作流 5–15 秒。 */
+/** 음성 동기화 워크플로에 맞춰 샷 길이를 5~15초로 제한한다. */
 export function durationFromSpeechText(text: string): number {
   const seconds = speechCharWeight(text) / CHARS_PER_SEC + 0.4
   return Math.min(MAX_SHOT_SEC, Math.max(MIN_SHOT_SEC, Math.round(seconds)))
@@ -57,7 +57,7 @@ export function estimatedSpeechSeconds(text: string): number {
   return planDigitalSpeechShots(text).reduce((sum, item) => sum + item.duration, 0)
 }
 
-/** 按台词字数，把整段上传口播切到这一镜。始终切原音频，不按文案重念。 */
+/** 대사 글자 수에 따라 업로드한 원본 오디오에서 이 샷을 자른다. */
 export function speechSliceRange(
   index: number,
   parts: string[],
@@ -87,7 +87,7 @@ export async function runPool<T>(
   await Promise.all(
     Array.from({ length: n }, async () => {
       while (cursor < items.length) {
-        if (signal?.aborted) throw new DOMException('生成已取消', 'AbortError')
+        if (signal?.aborted) throw new DOMException('생성을 취소했어요.', 'AbortError')
         const item = items[cursor++]
         await worker(item)
       }

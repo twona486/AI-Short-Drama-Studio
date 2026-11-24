@@ -418,7 +418,7 @@ function navReady(id: SettingsSection) {
         {{ $t('settings.language') }}
         <select :value="locale" @change="setLocale(($event.target as HTMLSelectElement).value === 'zh' ? 'zh' : 'ko')">
           <option value="ko">한국어</option>
-          <option value="zh">中文</option>
+          <option value="zh">{{ $t('settings.languageChinese') }}</option>
         </select>
       </label>
     </header>

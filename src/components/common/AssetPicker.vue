@@ -2,7 +2,7 @@
 import { t as translate } from '@/i18n'
 
 /**
- * 从资源库挑选已有图片 / 视频
+ * 리소스 라이브러리의 이미지와 영상을 선택한다.
  */
 import { ref, computed, watch } from 'vue'
 import { useAssetsStore, useLibraryStore, useProjectStore, LIBRARY_PUBLIC_ID } from '@/stores'
@@ -19,10 +19,10 @@ const props = defineProps<{
   multiple?: boolean
   title?: string
   selectedIds?: ID[]
-  /** 本页可用的图片 ID（一图生视频） */
+  /** 현재 페이지에서 이미지→영상에 사용할 수 있는 이미지 ID. */
   pageIds?: ID[]
   showLibrary?: boolean
-  /** 打开时默认页签。不传则：有本页图片时看本页，否则看资产库。 */
+  /** 처음 표시할 탭. 지정하지 않으면 현재 페이지 이미지가 있을 때 해당 탭을, 없으면 에셋 라이브러리를 연다. */
   defaultTab?: 'page' | 'library'
 }>()
 
