@@ -2,6 +2,8 @@
 
 [원본 저장소](https://github.com/JerrIsTheBesta/AI-Short-Drama-Studio)의 한국어 포크입니다.
 
+![드라마 플로우 Studio — AI 숏드라마 원클릭 생성](docs/images/github-hero-2026.png)
+
 [![License: MIT](https://img.shields.io/badge/License-MIT-22c55e.svg)](LICENSE)
 [![Vue 3](https://img.shields.io/badge/Vue-3-42b883.svg)](https://vuejs.org/)
 [![Electron](https://img.shields.io/badge/Electron-Windows-47848f.svg)](https://www.electronjs.org/)
