@@ -48,8 +48,17 @@ export function formatBeatRangeEn(start: number, end: number): string {
   return `From ${start.toFixed(2)}s to ${end.toFixed(2)}s`
 }
 
-/** 편집기용 연기 지침과 H3에 전송할 프롬프트를 별도로 작성한다. */
-export const SCENE_NARRATIVE_SPEC = `Direct the actors and camera crew in English. Describe only what happens during this shot, excluding events from adjacent shots. Preserve the supplied dialogue, narration, and any requested Korean on-screen text verbatim.
+export const DIRECTOR_TIMELINE_SPEC = `The runtime assigns image numbers and identity locks separately. In English, start each beat on a new line, such as "Beat 1 (0–4s): ...". Cover zero through duration without gaps or overlaps. Two beats can work for 4–6 seconds, and three or four often work for 10–15 seconds. Keep continuous camera movement within a shot across beat boundaries. Give each beat enough detail to film it.
+
+For every beat, specify shot size, camera angle or subject placement, how the camera holds or moves, direction and speed, starting and ending composition, focus target, and what the motion reveals. Describe the initial pose, continuous visible action and reaction, and final visible result. Add light, depth of field, materials, environmental reactions and synchronized sound where they matter. Distinguish a true cut from continuous movement without introducing gratuitous cuts, extra props or sounds.
+
+Concrete example: "A ground-level side view begins on a foot between blurred wet leaves. It curls, extends and slips. Focus holds on the toes as the camera pulls straight back to a medium-wide view, revealing the leaves pressed against the subject's body. It comes to rest with the rim and the subject in frame. The leaves rustle as the foot catches." Use the level of detail without copying the example's story.
+
+Treat system panels and visible text as on-screen action. Specify when each cue appears, its on-screen position and visual hierarchy, and when it fades. Preserve literal text, numbers, format and order, and keep it clear of key action. Use each nonhuman subject's actual reference anatomy.`
+
+export const SCENE_NARRATIVE_SPEC = `Direct actors and camera for this shot only, keeping adjacent story events out of it.
+
+${DIRECTOR_TIMELINE_SPEC}
 
 Establish opening positions. Give each character a sentence that specifies depth, body orientation, and gaze target. A speaker may stand farther back or to the side. Foreground characters should turn toward the speaker or the object indicated. Avoid front-facing group poses and staring into the lens. Use turnaround images for identity only.
 
@@ -72,7 +81,7 @@ export function videoPerformanceSpec(style: VideoPromptStyle = 'scene-narrative'
 }
 
 export function videoPromptJsonHint(_style: VideoPromptStyle = 'scene-narrative'): string {
-  return '<Write an actionable timeline in English. Preserve supplied dialogue verbatim and write newly authored lines in Korean. Cover 0s through the end in 2–5 consecutive story beats. In each beat identify the actor and expression, exact dialogue and speaker, other actors’ positions and gazes, motivated camera movement and endpoint, and synchronized sound and environmental reaction.>'
+  return '<English timed direction. On each line write Beat N (start–ends): then specify framing, camera position, movement and focus, visible action and its end state, sound, and exact on-screen text. Cover the entire duration without gaps.>'
 }
 
 /** 편집기와 영상 생성 지침에 쓰는 연기 설명을 정리한다. */
@@ -154,6 +163,53 @@ export function isVideoPerformanceTemplate(text: string): boolean {
 
 export function timedBeatCount(text: string): number {
   return ((text || '').match(/\d+(?:\.\d+)?\s*(?:秒|초|s)?\s*[–\-~到至]\s*\d+(?:\.\d+)?\s*(?:秒|초|s)/gi) || []).length
+}
+
+/** 시간 구간 본문을 검증한다. 참조 이미지 목록과 등장인물 정보는 묘사 분량에 포함하지 않는다. */
+export function directorTimelineIssue(text: string, duration?: number): string | null {
+  const body = text.split(/\n\s*(?:出场|转场|등장|장면 전환|cast|transition)\s*[:：]/i)[0]
+  const ranges = [...body.matchAll(/(?:^|[^\d.])([0-9]+(?:\.[0-9]+)?)\s*(?:秒|초|s)?\s*[-–—~～到至]\s*([0-9]+(?:\.[0-9]+)?)\s*(?:秒|초|s)(?=\s*[）)】：:]|\s|$)/gi)]
+  if (ranges.length < 2) return '연출 시간 구간을 두 개 이상 적어 주세요.'
+  let end = 0
+  for (const range of ranges) {
+    const start = Number(range[1])
+    const next = Number(range[2])
+    if (Math.abs(start - end) > 0.001 || next <= start) return '0초부터 샷이 끝날 때까지 시간 구간을 겹치거나 비우지 않고 순서대로 적어 주세요.'
+    end = next
+  }
+  if (duration && Math.abs(end - duration) > 0.001) return `시간 구간이 ${end}초에서 끝나요. 샷 길이인 ${duration}초에 맞춰 주세요.`
+  const camera = /景别|特写|近景|中景|全景|远景|微距|机位|俯拍|仰拍|侧拍|过肩|构图|固定|跟拍|跟移|拉远|后撤|推近|焦点|景深|连续拉|沿原轴|镜头(?:慢|缓|匀|向|从|沿|停|不动|保持)|클로즈업|구도|카메라|앵글|초점|트래킹|\b(?:shot|framing|angle|macro|camera|focus|pans?|track(?:s|ing)?|locked.off|wide|close.up|foreground)\b/i
+  const beats = ranges.map((range, i) => body.slice(range.index! + range[0].length, ranges[i + 1]?.index ?? body.length)
+    .replace(/(?:镜头|샷|beat|shot)\s*\d+\s*[（(【]?/giu, '').trim())
+  const length = (beat: string) => beat.replace(/[\s\p{P}]/gu, '').length
+  if (beats.some(beat => length(beat) < 36 || !camera.test(beat))) return '각 구간에 카메라의 위치나 구도, 움직임의 시작과 끝, 이어지는 동작을 적어 주세요.'
+  const min = end >= 10 ? 210 : end >= 7 ? 150 : 105
+  if (beats.reduce((sum, beat) => sum + length(beat), 0) < min) return '샷 크기, 초점, 동작 과정, 주변 변화와 마지막 자세를 구체적으로 적어 주세요.'
+  return null
+}
+
+/** 자동 보완 때 명시된 화면 속 문구를 줄이거나 순서를 바꾸지 않고 보존한다. */
+export function preservesScreenText(previous: string, next: string): boolean {
+  let from = 0
+  for (const [, literal] of previous.matchAll(/【([^】\n]+)】/g)) {
+    if (/^(?:\s*\d+:\d+\s*(?:[｜|].*)?$|.*(?:参考图对应|画面风格|镜头\s*\d+|画幅|首尾帧).*$)/.test(literal)) continue
+    const found = next.indexOf(literal, from)
+    if (found < 0) return false
+    from = found + literal.length
+  }
+  return true
+}
+
+/** H3는 영어 본문과 전용 샷 형식을 사용하므로 기존 중국어 시간 구간 검증을 적용하지 않는다. */
+export function h3DirectorBodyIssue(body: string, duration: number): string | null {
+  const prose = body
+    .replace(/<d>[\s\S]*?<\/d>/gi, ' ')
+    .replace(/Speaker lock \(these labels are the pictures\):[\s\S]*?(?=\d+[:.]\d+|\b(?:at|from)\s+\d+|$)/i, ' ')
+  const words = prose.match(/[a-z]+(?:[-'][a-z]+)*/gi)?.length || 0
+  if (words < (duration >= 10 ? 105 : duration >= 7 ? 75 : 45)) return '연출 설명이 너무 짧아요. 인물 소개와 대사 외에 이어지는 연기와 카메라 동선을 구체적으로 적어 주세요.'
+  if (!/\b(?:close[- ]?up|wide shot|medium shot|low[- ]angle|over[- ]the[- ]shoulder|eye[- ]level|framing|foreground|macro|profile)\b/i.test(prose) ||
+      !/\b(?:camera|lens|focus|dolly|tracks?|pans?|tilts?|push(?:es)?|pulls?|locked[- ]off)\b/i.test(prose)) return '연출 설명에 샷 크기, 카메라 위치 또는 초점을 구체적으로 적어 주세요.'
+  return null
 }
 
 /** 이전 샷의 종료와 다음 샷의 시작 사이에서 현재 샷의 변화만 가져온다. */

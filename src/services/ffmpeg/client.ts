@@ -100,18 +100,24 @@ async function pickBestSource(onLog?: (msg: string) => void): Promise<typeof CDN
   return null
 }
 
+/** 현재 합성의 진행 콜백이다. 다음 요청에서 바꿔 이전 UI의 콜백으로 로그가 계속 전달되지 않게 한다. */
+let progressSink: ((msg: string) => void) | undefined
+
+function reportFfmpeg(msg: string) {
+  console.log('[FFmpeg]', msg)
+  progressSink?.(msg)
+}
+
 /** FFmpeg 싱글턴을 반환하거나 초기화한다. */
 export async function getFFmpeg(
   onProgress?: (msg: string) => void
 ): Promise<FFmpeg> {
+  if (onProgress) progressSink = onProgress
   if (_ffmpeg) return _ffmpeg
   if (_loading) return _loading
 
   _loading = (async () => {
-    const log = (msg: string) => {
-      console.log('[FFmpeg]', msg)
-      onProgress?.(msg)
-    }
+    const log = (msg: string) => reportFfmpeg(msg)
 
     // 브라우저 지원 여부를 확인한다.
     if (typeof SharedArrayBuffer === 'undefined') {
@@ -138,8 +144,8 @@ export async function getFFmpeg(
     const ffmpeg = new FFmpeg()
 
     ffmpeg.on('log', ({ message }) => {
+      if (!message || message.includes('frame=')) return
       if (
-        message.includes('frame=') ||
         message.includes('error') ||
         message.includes('Error') ||
         message.includes('Conversion')
@@ -149,7 +155,7 @@ export async function getFFmpeg(
     })
     ffmpeg.on('progress', ({ progress }) => {
       if (progress > 0) {
-        log(t('ffmpegClient.progress', { percent: Math.round(progress * 100) }))
+        log(`처리 중 ${Math.min(100, Math.round(progress * 100))}%`)
       }
     })
 

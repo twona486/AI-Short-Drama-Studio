@@ -9,10 +9,15 @@
  */
 
 import { callLLM, getAIMode, type LLMMessage, type LLMContentPart } from './client'
+import { assertScriptCompletion } from './scriptCompletion'
+import { dialogueVerbatimIssues } from '@/utils/dialogueVerbatim'
 import { PLAY_LLM_TIMEOUT_MS, isAbortError, isTimeoutAbort, throwIfAborted } from './abort'
 import { mockStoryboardFromPrompt } from './mock'
 import type { Scene, Script, Shot, ShotAudioMode, StoryProp, Subject, VisualStyle } from '@/types'
 import { directorPlaybookText, importedDirectorPrefix } from '@/services/settings/directorSkill'
+import { scriptReferenceBrief } from './scriptReference'
+import { SHORT_DRAMA_SHOT_RULES, SHORT_DRAMA_WRITING_RULES } from './shortDramaRhythm'
+import { useSettingsStore } from '@/stores/settings'
 import { getLlmConfig, getVideoPromptStyle } from './runtime'
 import {
   buildStyleBriefForLLM,
@@ -23,7 +28,7 @@ import {
   styleLabel,
   VISUAL_STYLE_GUIDE
 } from '@/utils/visualStyle'
-import { normalizeCameraMovement, synthesizeVideoPerformance, isVideoPerformanceTemplate, videoPerformanceIssue, videoPerformanceSpec, videoPromptJsonHint } from '@/utils/shotPrompt'
+import { DIRECTOR_TIMELINE_SPEC, directorTimelineIssue, preservesScreenText, normalizeCameraMovement, synthesizeVideoPerformance, isVideoPerformanceTemplate, videoPerformanceIssue, videoPerformanceSpec, videoPromptJsonHint } from '@/utils/shotPrompt'
 import { extractJsonText, parseJsonRobust } from '@/utils/jsonRepair'
 import { boundSubjectIds, inferSubjectsFromText, shotCastText, subjectMatchKeys } from '@/utils/consistency'
 import { sceneConflictsWithShot, shotMentionsScene } from '@/utils/shotPlace'
@@ -33,6 +38,7 @@ import {
   extractPlayDirectives,
   extractSceneSlice,
   extractLocationsFromPlay,
+  containsSceneDramaText,
   extractPlayForSceneStage,
   extractSubjectsFromPlay,
   keepRecurringProps,
@@ -506,7 +512,12 @@ Narrative continuity requirements:
 8. Do not replace important visible processes with narration or invent facts to bridge gaps.`
 
 // 화자와 화면 속 인물의 배치·시선·반응 규칙.
+const SYSTEM_CUE_RULES = `Treat source-script notifications, HUDs, panels, identities, countdowns, and survival rules as narrative information. Preserve their exact text and order. In videoPrompt, specify each cue's timing, its visible text and the characters' reactions. Keep nonspeakers' mouths still. Show screen-only cues without speech. An unassigned system notice can use a separate off-screen system voice, copied exactly into voiceover as "System: original line" with h3-voiceover. Never assign it to the protagonist. Exclude ordinary action, production notes and parentheticals from dialogue. Split shots when all required information will not fit.`
+
 const SPEAKER_STAGING_RULES = `
+${SYSTEM_CUE_RULES}
+${SHORT_DRAMA_SHOT_RULES}
+Take existing dialogue only from the supplied script. Preserve the original words, speaker, and order in voiceover. Do not polish, abbreviate, add, or reassign it. Add or split shots when needed. In videoPrompt, describe the performance without writing an alternative line.
 On-screen dialogue and blocking:
 1. Make the speaker's lips legible. They can stand to the side or in the background, or kneel; they need not face the lens or stand at the center.
 2. Include every visible person's foreground or background position, body orientation, and eyeline in blocking / eyeline / videoPrompt. Missing blocking can make the generator pose the cast toward the lens.
@@ -548,7 +559,7 @@ Determine the narrative boundary from the original request, then check adjacent 
       jsonMode: true,
       maxTokens: 2400,
       signal: input.signal,
-      timeoutMs: 30_000
+      timeoutMs: 300_000
     })
     const raw = parseJsonRobust(response.content)
     return (Array.isArray(raw?.issues) ? raw.issues : [])
@@ -699,6 +710,8 @@ const SHOT_EXPAND_TIMEOUT_MS = 45_000
 const SHOT_EXPAND_CONCURRENCY = 5
 const SHOT_BATCH_CONCURRENCY = 3
 const SHOTS_PER_BATCH = 3
+const SHORT_PLAY_MAX_CHARS = 4000
+const SHORT_PLAY_MAX_SHOTS = 6
 const SHOT_BATCH_MAX_CHARS = 1100
 const SHOT_BATCH_MAX_PARAGRAPHS = 4
 
@@ -908,7 +921,7 @@ function buildShotWorkBatches(play: string, targetBatches?: number): ShotWorkBat
 }
 
 function verbatimSplitRule(verbatim?: boolean): string {
-  if (!verbatim) return ''
+  if (!verbatim) return 'Split into shots while keeping every line, speaker and order verbatim. Split a shot if the dialogue does not fit. Use videoPrompt for performance and voiceover for the actual dialogue.\n'
   return `[Imported script: break down without rewriting] This is the user's complete script. Do not polish, rephrase, extend, or alter lines. Do not turn dialogue into narration or narration into dialogue. Copy the original spoken words verbatim into voiceover. Use only specified people, actions, and locations in visualPrompt and videoPrompt. Do not add events, props, reactions, or outcomes. Preserve shot order from the script.\n`
 }
 
@@ -930,11 +943,11 @@ async function generateShotWorkBatch(
 ): Promise<{ shots: Record<string, unknown>[]; model?: string }> {
   const limit = Math.max(
     1,
-    Math.min(SHOTS_PER_BATCH, Math.round(Number(shotBudget) || SHOTS_PER_BATCH))
+    Math.min(SHORT_PLAY_MAX_SHOTS, Math.round(Number(shotBudget) || SHOTS_PER_BATCH))
   )
   const budgetLine =
     totalShotBudget && totalShotBudget > 0
-      ? `\n[Shot and duration limits] Target ${targetDurationSec || '?'} seconds with tolerance ±${DURATION_TOLERANCE_SEC} seconds. The full film has ${totalShotBudget} work groups. This group contains exactly ${limit} shots and must add to ${durationCap || targetDurationSec || '?'} seconds. Fit action and dialogue into those shots using movement and blocking. Do not split the group further.`
+      ? `\nTarget runtime: ${targetDurationSec || '?'}s with tolerance of ${DURATION_TOLERANCE_SEC}s. Aim for ${totalShotBudget} shots total and at most ${limit} in this excerpt. Combine continuous action and dialogue in the same setting where possible. Do not add silent shots to reach the count.${durationCap ? `Excerpt runtime: about ${durationCap}s.` : ''}`
       : ''
   const parseBatch = (content: string): Record<string, unknown>[] => {
     try {
@@ -945,16 +958,12 @@ async function generateShotWorkBatch(
           ? raw
           : []
       if (rows.length) {
-        return rows
-          .slice(0, limit)
-          .filter((item: unknown) => item && typeof item === 'object') as Record<string, unknown>[]
+        return rows.filter((item: unknown) => item && typeof item === 'object') as Record<string, unknown>[]
       }
     } catch {
       /* 일반 대화 모델이 반환한 자연어 스토리보드도 처리한다. */
     }
-    return parseOutlineText(content)
-      .slice(0, limit)
-      .map((outline) => outlineToRawShot(outline))
+    return parseOutlineText(content).map((outline) => outlineToRawShot(outline))
   }
   const ask = async () =>
     callLLM({
@@ -963,21 +972,24 @@ async function generateShotWorkBatch(
           role: 'system',
           content: `${importedDirectorPrefix()}${verbatimSplitRule(input.verbatim)}You are the film storyboard team for this excerpt only. Break it into 1–${limit} consecutive filmable shots. Never exceed ${limit} shots.${budgetLine}
 
-Make the image live. Establish the physical states of people and key objects, the event that triggers action, the continuous action and reaction, and why and where the camera moves. Do not fill with generic static-camera, slight wobble, held-expression, or frame-breathing instructions. Use static only if stillness serves the story. Motivate movement by a spatial reveal, changing relationship, or emotional turn.
-Cover every visible action and line of dialogue in the excerpt without inventing plot. Put original words verbatim in voiceover as "Character name: original line." Use h3-voiceover only for explicitly off-screen speech, h3-dialogue for visible speaking, and none with an empty string only when there is no dialogue.
-visualPrompt describes the representative still keyframe. videoPrompt is an actionable image-to-video timeline from zero to the end, split into 2–5 actual beats. State actor and speaker, other people's blocking and reactions, facial changes, and a motivated camera move. Give a visible response to wind, rain, smoke, clothes, light, or props where relevant. Do not repeat visualPrompt or divide into equal slots.
-Give each shot a framing and the spatial relations. Eyelines stay in the scene. Write titles, shot descriptions for the user, and sound notes in Korean (한국어). Write visualPrompt and videoPrompt in English for generation, preserving original dialogue and requested Korean on-screen text.
-Prefer JSON: {"shots":[{"title":"3–8 character title","purpose":"Dramatic function","shotSize":"Framing change","visualPrompt":"Representative still frame","videoPrompt":"English cinematic timeline in 2–5 beats from zero to the end","duration":6,"audioDescription":"Synchronized scene sound","voiceover":"Character name: original lines or empty","audioMode":"h3-dialogue|h3-voiceover|none","cameraMovement":"push|pull|pan|tilt|static|orbit","subjectNames":["Short character name"],"sceneName":"Existing location name"}]}. Include only 1–${limit} entries in shots. If JSON is unavailable, use "Shot N: title" followed by "Image:", "Action:", "Duration:", "Sound:", and optional "Dialogue:". ${retry ? 'The previous response did not contain parseable shots. Return the result now without reasoning.' : ''}`
+Give each shot a visible opening state, trigger, action, reaction, camera motivation and final frame. Use static framing only when motivated. Preserve the excerpt's actions and verbatim dialogue. Put speaker and original line in voiceover. Use h3-voiceover for explicitly off-screen narration, h3-dialogue for on-screen delivery, and an empty line with none when silent.
+${SHORT_DRAMA_SHOT_RULES}
+${SYSTEM_CUE_RULES}
+When the source contains dialogue, let most shots carry it. Keep necessary silent transitions near two to four seconds. Avoid consecutive nearly ten-second silent shots. Combine nearby reactions and movement into a dialogue shot when appropriate. Add shots rather than dropping source lines. Preserve genuinely silent source passages. Every shot needs new action, information or emotion.
+Use visualPrompt for a representative still. Write videoPrompt as two to five timed, executable English beats from zero to the end. Include the active speaker, listeners' position and response, expression, camera motion and meaningful environment reactions such as cloth, rain or light. Avoid repeating the still or dividing time evenly by default.
+${DIRECTOR_TIMELINE_SPEC}
+Write titles, purpose, labels and sound notes in polite conversational Korean, with English visual and video prompts. Keep every actor's eyeline inside the scene.
+Return JSON: {"shots":[{"title":"short Korean title","purpose":"dramatic function","shotSize":"framing","visualPrompt":"still-frame prompt","videoPrompt":"timed English motion prompt","duration":6,"audioDescription":"synchronized physical sound","voiceover":"speaker: exact source line, or empty","audioMode":"h3-dialogue|h3-voiceover|none","cameraMovement":"push|pull|pan|tilt|static|orbit","subjectNames":["source name"],"sceneName":"established location"}]}. Return 1–${limit} shots. If plain text is necessary, use Shot N, Image, Action, Duration, Sound and Dialogue. ${retry ? 'The previous reply could not be parsed. Return the shots directly.' : ''}`
         },
         {
           role: 'user',
-          content: `작업 묶음 ${batch.label}
-기존 캐릭터 ${subjectNames.join('、') || '（원문에서 식별）'}
-기존 장소 ${sceneNames.join('、') || '（원문에서 식별）'}
-현재 영상 모델의 샷당 최대 길이는 ${shotDurationLimit(input)}초입니다. ${durationCap ? `이 작업 묶음의 결과 길이는 ${durationCap}초입니다. 샷 ${limit}개만 생성하고 duration은 ${durationCap}으로 쓰세요.` : `샷마다 duration을 ${MIN_SHOT_SEC}–${shotDurationLimit(input)}초로 지정하세요.`} 같은 장소와 캐릭터의 연속 행동을 제한 시간 안에 촬영할 수 있으면 하나의 완전한 롱테이크로 구성하세요.${budgetLine}
-${directives ? `\n전체 영상 제약(원문 보존에만 사용)\n${directives}\n` : ''}
-${batch.previousHint ? `이전 작업 묶음의 끝(연결에만 사용하고 다시 촬영하지 않음)\n${batch.previousHint}\n` : ''}
-현재 작업 묶음의 대본 원문
+          content: `Work batch: ${batch.label}
+Established cast: ${subjectNames.join('、') || '(use source text)'}
+Established locations: ${sceneNames.join('、') || '(use source text)'}
+Use ${MIN_SHOT_SEC}–${shotDurationLimit(input)}s per shot, depending on action and dialogue.${durationCap ? `Excerpt runtime: about ${durationCap}s.` : ''}Keep continuous action by the same cast in one location together when it fits the model limit.${budgetLine}
+${directives ? `\nFilm-wide continuity constraints:\n${directives}\n` : ''}
+${batch.previousHint ? `Previous batch ending for continuity only; do not repeat it:\n${batch.previousHint}\n` : ''}
+Script excerpt:
 ${batch.excerpt}
 ${batch.nextHint ? `\n다음 작업 묶음의 시작(끝 상태를 정하는 데만 사용하고 미리 촬영하지 않음)\n${batch.nextHint}` : ''}`
         }
@@ -987,14 +999,14 @@ ${batch.nextHint ? `\n다음 작업 묶음의 시작(끝 상태를 정하는 데
       // 일부 호환 API가 동시 JSON 형식 요청에서 시간 초과될 수 있다.
       // 프롬프트는 JSON을 우선 요청하고 파서는 일반 텍스트도 받는다.
       jsonMode: false,
-      maxTokens: 3200,
+      maxTokens: Math.max(3200, limit * 1300),
       signal: input.signal,
       timeoutMs: retry ? FILM_SHOT_OUTLINE_TIMEOUT_MS : 90_000
     })
   try {
     const response = await ask()
     const rows = parseBatch(response.content)
-    const shots = rows.map((item: Record<string, unknown>) => {
+    const shots = rows.map((item: Record<string, unknown>): Record<string, unknown> => {
       const text = `${item.title || ''}\n${item.visualPrompt || ''}\n${item.videoPrompt || ''}\n${item.voiceover || ''}`
       const inferredSubjects = subjectNames.filter((name) => name && text.includes(name))
       const inferredScene = sceneNames.find((name) => name && text.includes(name))
@@ -1008,6 +1020,34 @@ ${batch.nextHint ? `\n다음 작업 묶음의 시작(끝 상태를 정하는 데
       }
     })
     if (!shots.length) throw new Error('모델 응답에 해석할 수 있는 스토리보드가 없습니다.')
+    const weak = shots.flatMap((shot, index) => {
+      const duration = Number(shot.duration) || 6
+      const issue = directorTimelineIssue(String(shot.videoPrompt || ''), duration)
+      return issue ? [{ index, shot, issue, duration }] : []
+    })
+    if (weak.length) {
+      try {
+        const revision = await callLLM({
+          messages: [
+            { role: 'system', content: `Expand only videoPrompt for the supplied shots. ${DIRECTOR_TIMELINE_SPEC}\nStay within each shot and preserve the shot count, cast, settings, duration, dialogue and literal on-screen text. Return JSON only: {"shots":[{"index":0,"videoPrompt":"…"}]}. Keep each original index.` },
+            { role: 'user', content: `Script excerpt:\n${batch.excerpt}\nVisual constraints:\n${directives}\nShots to revise:\n${JSON.stringify(weak)}` }
+          ],
+          model, temperature: 0.2, maxTokens: Math.max(1600, weak.length * 1000),
+          signal: input.signal, timeoutMs: SHOT_EXPAND_TIMEOUT_MS
+        })
+        const patches = parseBatch(revision.content)
+        for (const row of weak) {
+          const candidate = patches.find(patch => patch.index === row.index)?.videoPrompt
+          if (typeof candidate === 'string' && !directorTimelineIssue(candidate, row.duration) &&
+              preservesScreenText(String(row.shot.videoPrompt || ''), candidate)) {
+            row.shot.videoPrompt = candidate.trim()
+          }
+        }
+      } catch (error) {
+        if (input.signal?.aborted) throw error
+        log(`⚠ 스토리보드 묶음 ${batch.index + 1}의 연출을 보완하지 못해 초안을 보관했어요.`)
+      }
+    }
     return { shots, model: response.model }
   } catch (error) {
     if (isAbortError(error) && !isTimeoutAbort(error)) throw error
@@ -1215,13 +1255,9 @@ async function extractShotOutline(
       ? '대본에 맞춰 스토리보드의 동작, 대사, 촬영 제외 항목을 정리하고 있어요…'
       : '대본을 바탕으로 스토리보드의 화면, 길이, 소리를 먼저 정리하고 있어요…'
   )
-  // 일반·영화 제작 스토리보드의 출력 필드와 대사 보존 규칙.
-  const shortSystem = `${importedDirectorPrefix()}You are a storyboard director. Write concise production notes that describe shots a team can film.
-Split the script in story order. Consecutive dialogue in one space may remain in one shot, as may a series of short lines from the same person.
-For each shot, write its title (shot size or camera movement in parentheses), image (2–4 sentences of visible action), action (what happens in the shot), duration, and sound.
-If the shot contains dialogue, add a line in the form "Dialogue: Character name: Original line". Preserve every line from the script verbatim. Omit Dialogue only for shots without speech, such as empty establishing shots or travel shots.
-Do not turn the story background into narration by an older version of a character. Do not output JSON, reasoning, continuity, blocking, or aesthetic sections.
-Follow the format below exactly, with a blank line between shots. Write shot titles, shot sizes, sound notes, and user-facing descriptions in Korean (한국어). Write the Image and Action fields in English for the generation models. Preserve dialogue in its original language.
+  const shortSystem = `${importedDirectorPrefix()}Write concise shootable notes in script order. One framing can cover a single-space exchange or several short lines by the same speaker.
+${SHORT_DRAMA_SHOT_RULES}
+Give each shot a short Korean title, framing and sound notes, then English Image and Action fields with concrete visible movement. Include exact duration and a Dialogue: Speaker: original line when the script contains speech. Omit the field for genuinely silent shots. Do not use an older narrator to retell the background. Do not include JSON, reasoning or extra continuity, blocking or aesthetic fields. Leave one blank line between shots and follow this example.
 
 Shot 1: 한밤중의 질주 (원경→중경)
 Image: At 11 p.m., a silvery band of light crosses the shallows by the village entrance. Niulang rushes out of the brush carrying a bamboo basket on a shoulder pole. Two children jolt and grip the rim.
@@ -1230,6 +1266,8 @@ Duration: 6 seconds
 Sound: 풀을 밟는 소리, 가쁜 숨, 물이 흐르고 튀는 소리`
 
   const filmSystem = `${importedDirectorPrefix()}You are a film storyboard director. The input is a complete chapter script. Break it into filmable shots in script order. Cover every scene and montage beat without inventing plot.
+${SHORT_DRAMA_SHOT_RULES}
+${SYSTEM_CUE_RULES}
 
 Shot breakdown rules:
 - Split each scene by its dramatic beats: entering, noticing, hesitating, speaking, reacting, and leaving. Do not compress the entire scene into one shot or stretch one line into three shots of blank expressions.
@@ -1308,12 +1346,10 @@ async function expandOneShot(
       messages: [
         {
           role: 'system',
-          content: `${importedDirectorPrefix()}You fill storyboard nodes. Expand only the production note supplied below, leaving the story, duration, and intended image intact.
-Use the note's original spoken words in voiceover. An empty string is invalid when the note contains dialogue. A conversation within one space may remain in one shot. Use audioMode=h3-voiceover only for off-screen speech or explicitly marked narration.
-videoPrompt is required. Divide the shot from zero through the end into 2–5 story beats. In each beat identify the acting person, concrete motion, expression, speaker and original words, the foreground or background placement and orientation of other people, their eyelines and nonverbal reactions, the motivated camera move, and its final position. A speaker can be behind others. Foreground listeners should turn sideways or look back. Avoid posing as a group portrait or only saying that nobody looks at the camera.
-${film ? 'Find the corresponding beat in the original script. Treat montage as visible continuous action. Put script exclusions in the final sentence of videoPrompt. Show kindness through ordinary small actions.' : ''}
-Write titles and user-facing descriptions in Korean (한국어). Preserve existing category values and the cast and place names. Write visualPrompt and videoPrompt in English for the generation models. Keep dialogue, narration, and explicitly requested Korean on-screen text verbatim.
-Return one JSON object only. {"title":"3–8 character title","purpose":"도입/설명/반응/공개/전환/마무리","shotSize":"Framing","blocking":"Each person's foreground or background position, orientation, and relation to others","eyeline":"What or whom each person looks at; keep eyes off the lens","continuity":"Previous shot ending → Current visible change → Next shot opening","propFocus":"Prop or none","visualPrompt":"English still frame description","videoPrompt":"Filmable timeline in English, split into 2–5 beats from the opening to the end. Include action, expression, speaker and verbatim lines, positions and reactions, camera movement and endpoint, and synchronized sound","audioDescription":"Actual scene sound","voiceover":"Character name: original line, or empty","audioMode":"h3-dialogue|h3-voiceover|tts|none","speakerHint":"Voice and emotion","duration":6,"cameraMovement":"push|pull|pan|tilt|static|orbit","subjectNames":["Short name"],"sceneName":"Original place name"}`
+          content: `${importedDirectorPrefix()}Expand only this shot note into canvas fields. Preserve the story, duration and intended visual action. Copy the exact dialogue into voiceover, with h3-voiceover only for explicit off-screen delivery. Describe the action and staging in two to five timed beats, including each current actor, original speaker, nonverbal reactions, orientation, depth, eyeline and motivated camera motion. Foreground listeners may turn sideways or look back toward a speaker. Avoid posed frontal groups.
+${DIRECTOR_TIMELINE_SPEC}
+${film ? 'Use only beats in the source. Describe montage as visible action. Preserve explicit visual exclusions. Show kindness through ordinary actions.' : ''}
+Write user-facing descriptions in natural Korean and generation prompts in English. Return one JSON object: {"title":"short Korean title","purpose":"dramatic function","shotSize":"framing","blocking":"each character's position, depth and orientation","eyeline":"where each character looks","continuity":"prior ending → this visible change → next opening","propFocus":"prop or none","visualPrompt":"English still prompt","videoPrompt":"English time-coded direction from zero to end","audioDescription":"physical sound","voiceover":"speaker: verbatim line or empty","audioMode":"h3-dialogue|h3-voiceover|tts|none","speakerHint":"voice and mood","duration":6,"cameraMovement":"push|pull|pan|tilt|static|orbit","subjectNames":["source name"],"sceneName":"source location"}`
         },
         {
           role: 'user',
@@ -1510,11 +1546,8 @@ ${productNote}
 Write one voicePrompt in English for every person, covering age and gender, timbre (raspy, bright, slow, nasal, or similar), speed and intensity, emotional tone, and an appropriate accent or speaking habit. Use one consistent voice in the entire film. For animal and other, use an empty string.
 Output JSON only: {"subjects":[{"name":"Short name","kind":"person|animal|other","description":"Specific physical identity, excluding location","role":"Identity, dramatic function, and aliases","stateVariants":"Changes in this episode, or none","voicePrompt":"English vocal qualities and delivery, empty for non-person subjects","fromReference":false}]}. Before returning, verify a record for every ###, separate people who speak, act, or are seen, and a voicePrompt for every person.`
 
-    // 촬영 장소만 추출하고 장면 설명과 생성용 스타일의 언어를 지정한다.
-    const sceneSystem = `You extract locations and visual settings. Include only places actually filmed in this episode. Do not write characters or shots.
-Prefer locations under "## 환경과 장면" or its equivalent in an imported script, then scene lines such as "실내｜장소｜날씨". Deduplicate places; do not create a new record for every scene.
-Use a short existing location name, such as the old warehouse or charity kitchen yard. Do not use a generic scene number.
-Describe an unoccupied space, including the ground, building, weather, light, and period objects. Write user-facing descriptions in Korean (한국어), and write h3Aesthetic in English for the video model.
+    const sceneSystem = `Extract only physical filming locations used in this episode. First use the script's environment and locations section, then explicit interior or exterior scene headings, then details in the body. Mark an unspecified interior or exterior as pending confirmation. Do not treat an event title as a place. Deduplicate locations and use a short location name, not a scene number.
+Describe unoccupied space, ground, architecture, weather, light and period objects supported by the script. Keep people, plot, action and dialogue out of the description, anchors and lighting. Mark unknown materials, furnishings or day/night state for confirmation. Use an actual fixed object or structure as the main anchor, or mark it pending. Write user-facing descriptions in natural Korean.
 ${productNote}
 ${stylePriority}
 Return JSON only: {"aesthetic":"Overall tone of the film","h3Aesthetic":"English production aesthetic with concrete lighting, material, color and camera qualities","styleBrief":"Conflict and visual hook for this episode","colorPalette":"Visible colors","lightingNote":"Time and light source","scenes":[{"name":"Short location name","description":"At least 80 characters about the unoccupied space, ground, architecture, weather, movement, and lighting","mainAnchor":"Primary visual anchor","anchors":"Wide view; main anchor; ground and blocking area; light source or secondary anchor","lighting":"Time and light source"}]}
@@ -1591,11 +1624,7 @@ Return a top-level object with a nonempty scenes array. Do not nest inside data 
     if (stageOrder[startAt] <= stageOrder.scenes) {
       onProgress?.('2/3단계 — 장면의 기준 정보를 추출하는 중…')
       const playScenes = extractLocationsFromPlay(play)
-      if (playScenes.length) {
-        log(`✓ 대본에서 장소 ${playScenes.length}곳을 바로 추출했어요.`)
-        onProgress?.(`대본에 장소가 있어 장면 ${playScenes.length}개를 바로 저장했습니다.`)
-        scenePart = { raw: { scenes: playScenes }, model: parallelModel }
-      } else {
+      {
         const sceneUser = `Topic: ${input.topic || '(unspecified)'}
 Aspect ratio: ${input.aspectRatio}
 
@@ -1607,13 +1636,21 @@ ${extractPlayForSceneStage(play)}`
             sceneSystem,
             8000,
             PLAY_LLM_TIMEOUT_MS,
-            (raw) => extractSceneRows(raw).length > 0,
-            'The prior response omitted or misplaced scenes. Return one object with a nonempty top-level scenes array. Do not wrap it in data or result, and do not include reasoning.',
+            (raw) => {
+              const scenes = extractSceneRows(raw)
+              return scenes.length > 0 && scenes.every((scene: any) =>
+                String(scene?.name || '').trim() && String(scene?.description || '').trim() &&
+                !containsSceneDramaText([scene.name, scene.description, scene.mainAnchor, scene.anchors, scene.lighting].filter(Boolean).join('\n'))
+              )
+            },
+            'Return a nonempty scenes array. Describe unoccupied locations without shot directions, action or dialogue. Mark unknown locations for confirmation and do not substitute episode titles.',
             sceneUser
           )
         } catch (error) {
           if (isAbortError(error) && !isTimeoutAbort(error)) throw error
-          throw error
+          if (!playScenes.length) throw error
+          onProgress?.('장면 추출을 완료하지 못했어요. 대본에 명시된 장소를 보관했으니 배경의 세부 사항을 입력해 주세요.')
+          scenePart = { raw: { scenes: playScenes }, model: parallelModel }
         }
       }
       let rows = extractSceneRows(scenePart.raw)
@@ -1636,7 +1673,7 @@ ${extractPlayForSceneStage(play)}`
       onProgress?.(`✓ 저장된 장면 ${input.existingScenes?.length || 0}개에서 이어서 작업합니다.`)
     }
 
-    onProgress?.('3/3단계 — 장면을 작업 묶음으로 나누고 스토리보드를 병렬 작성하는 중…')
+    onProgress?.('3/3단계 · 대본과 영상 모델을 바탕으로 스토리보드를 작성하는 중…')
     const subjectNames = (Array.isArray(subjectPart.raw?.subjects) ? subjectPart.raw.subjects : [])
       .map((item: { name?: unknown }) => String(item?.name || '').trim())
       .filter(Boolean)
@@ -1649,10 +1686,15 @@ ${extractPlayForSceneStage(play)}`
     const maxShotSec = shotDurationLimit(input)
     const slices = durationSlices(targetDurationSec, maxShotSec)
     const totalShotBudget = slices.length
-    const workBatches = buildShotWorkBatches(play, totalShotBudget || undefined)
+    const wholePlay = play.length <= SHORT_PLAY_MAX_CHARS && (!totalShotBudget || totalShotBudget <= SHORT_PLAY_MAX_SHOTS)
+    const workBatches = wholePlay
+      ? [{ index: 0, label: '전체 이야기', excerpt: play }]
+      : buildShotWorkBatches(play, totalShotBudget || undefined)
     if (!workBatches.length) throw new Error('대본 본문이 비어 있어 샷을 나눌 수 없습니다.')
     onProgress?.(
-      slices.length
+      wholePlay
+        ? '대사 원문을 보존하고 이어지는 동작을 한 샷에 담아 전체 스토리보드를 작성하는 중…'
+        : slices.length
         ? `목표 길이 ${targetDurationSec}초, 샷당 최대 ${maxShotSec}초 → 작업 그룹 ${workBatches.length}개(${slices.join(' + ')}초)`
         : `${workBatches.length}개 그룹으로 나눴어요. 그룹당 최대 ${SHOTS_PER_BATCH}개 샷을 배정해 ${Math.min(SHOT_BATCH_CONCURRENCY, workBatches.length)}개 그룹을 동시에 처리해요…`
     )
@@ -1661,10 +1703,11 @@ ${extractPlayForSceneStage(play)}`
     const batchModels: Array<string | undefined> = new Array(workBatches.length)
     // 길이를 배정한 경우 그룹당 샷 하나를 만들고 해당 그룹의 길이를 사용한다.
     const perBatchBudget = (index: number) => {
+      if (wholePlay) return totalShotBudget ? Math.min(SHORT_PLAY_MAX_SHOTS, Math.max(totalShotBudget, 1)) : SHORT_PLAY_MAX_SHOTS
       if (slices.length) return 1
       return undefined
     }
-    const perBatchSeconds = (index: number) => slices[index]
+    const perBatchSeconds = (index: number) => wholePlay ? targetDurationSec || undefined : slices[index]
     const failed: Array<{ index: number; label: string; error: string }> = []
     let completed = 0
     let persistedPrefix = 0
@@ -1783,12 +1826,11 @@ ${extractPlayForSceneStage(play)}`
     }
 
     let rawShots = batchShots.flatMap((rows) => rows || [])
-    // 모델이 샷 한도를 넘으면 목표 길이를 지키기 위해 초과분을 잘라낸다.
+    // 뒷부분의 대사나 사건을 누락하지 않도록 모델이 반환한 샷을 모두 보관한다.
     if (totalShotBudget && rawShots.length > totalShotBudget) {
       onProgress?.(
-        `⚠ 모델이 반환한 샷 ${rawShots.length}개가 목표 ${targetDurationSec}초의 한도(${totalShotBudget}개)를 초과해 대본 순서대로 처음 ${totalShotBudget}개를 유지해요.`
+        `⚠ 모델이 샷 ${rawShots.length}개를 보내 권장 수 ${totalShotBudget}개를 넘었어요. 확인할 수 있도록 모두 보관했어요.`
       )
-      rawShots = rawShots.slice(0, totalShotBudget)
     }
     if (!rawShots.length) {
       throw new Error(`모든 스토리보드 작업 묶음이 실패했습니다. 캐릭터와 장면은 저장됐습니다. 스토리보드 추출을 다시 시도하세요.${failed[0]?.error ? `첫 번째 오류 ${failed[0].error}` : ''}`)
@@ -1843,7 +1885,7 @@ ${extractPlayForSceneStage(play)}`
       scenes: sceneRows,
       shots: rawShots
     }
-    const parsed = await ensureShotDuration(
+    let parsed = await ensureShotDuration(
       normalizeStoryboard(merged, {
         style: input.style,
         topic: input.topic,
@@ -1855,10 +1897,23 @@ ${extractPlayForSceneStage(play)}`
       parallelModel,
       onProgress
     )
+    const pacingIssues = storyboardQualityIssues(parsed, input).filter(issue => issue.startsWith('긴 무대사 구간') || issue.startsWith('필수 수정 · 시스템 패널'))
+    if (pacingIssues.length) {
+      onProgress?.('시스템 패널의 원문과 대사가 없는 구간을 확인하는 중…')
+      try {
+        const repairInput = { ...input, targetDurationSec: targetDurationSec || input.targetDurationSec }
+        const repaired = await repairStoryboardOnce(parsed, repairInput, parallelModel, pacingIssues)
+        const issues = storyboardQualityIssues(repaired, repairInput)
+        if (repaired.shots.length && !issues.some(issue => issue.startsWith('필수 수정') || issue.startsWith('긴 무대사 구간'))) parsed = repaired
+      } catch (error) {
+        if (input.signal?.aborted) throw error
+        log(`⚠ 대사가 없는 구간을 조정하지 못해 초안을 보관했어요. ${(error as Error).message}`)
+      }
+    }
     const warnings = storyboardQualityIssues(parsed, input)
     if (warnings.length) {
-      log(`⚠ 동시 추출을 마쳤어요. 편집 가능한 초안을 유지했고 확인할 항목은 ${warnings.length}개예요. ${warnings.join('；')}`)
-      onProgress?.(`단계별 추출을 완료했습니다. 캔버스에서 ${warnings.length}개 항목을 더 조정할 수 있습니다.`)
+      log(`⚠ 스토리보드 초안을 보관했어요. 확인할 항목 ${warnings.length}개 · ${warnings.join(' · ')}`)
+      onProgress?.(`스토리보드를 만들었어요. 검토할 항목 ${warnings.length}개 · ${warnings.slice(0, 3).join(' · ')}${warnings.length > 3 ? ' · 나머지는 로그에서 확인하세요.' : ''}`)
     } else {
       onProgress?.('캐릭터, 장면, 스토리보드를 추출하고 연결했습니다.')
     }
@@ -2252,6 +2307,18 @@ export function storyboardQualityIssues(
   input: Pick<StoryboardInput, 'content' | 'topic' | 'targetDurationSec' | 'maxShotDuration'>
 ): string[] {
   const issues: string[] = []
+  const compact = (value: string) => value.replace(/\s+/g, '')
+  const screenText = compact(result.shots.map(shot => shot.videoPrompt || '').join('\n'))
+  const systemCues = [...(input.content || '').matchAll(/【([^】]+)】/g)]
+    .map(match => compact(match[1]))
+    .filter(line => /^(?:系统(?:提示|通知|播报)?[：:]|检测到|身份[：:]|危机警报[：:]|生存法则[：:]|任务(?:提示|发布)[：:]|倒计时[：:]|시스템(?: 알림| 안내| 방송)?[：:]|신원[：:]|생존 규칙[：:]|카운트다운[：:]|system(?: notice| notification)?[：:]|countdown[：:])/i.test(line))
+  let offset = 0
+  for (const cue of systemCues) {
+    const found = screenText.indexOf(cue, offset)
+    if (found < 0) issues.push(`필수 수정 · 시스템 패널의 화면 문구가 빠졌거나 순서가 달라요. ‘${cue}’와 표시 시점을 videoPrompt에 적어 주세요.`)
+    else offset = found + cue.length
+  }
+  issues.push(...dialogueVerbatimIssues(input.content || '', result.shots, (result.subjects || []).map((subject) => subject.name)))
   if (!result.shots.length) issues.push('Critical: No storyboard shots were generated.')
   const targetSec = Number(input.targetDurationSec) || extractTargetDurationSec(input.topic, input.content)
   const shotCap = shotBudgetFromDuration(targetSec, input.maxShotDuration) || 12
@@ -2295,6 +2362,38 @@ export function storyboardQualityIssues(
   }
   const people = (result.subjects ?? []).filter((s) => s.kind !== 'other')
   const voicedShots = result.shots.filter((shot) => (shot.voiceover || '').trim())
+  const sourceHasDialogue = (input.content || '').split('\n').some((line, index, lines) => {
+    const match = line.trim().match(/^(?:\*\*)?([^：:\n]{1,16})[：:](?:\*\*)?\s*(.*)$/)
+    const label = match?.[1]?.replace(/\*\*/g, '').trim() || ''
+    return Boolean(match && (match[2].trim() || /^[「“『]/.test(lines.slice(index + 1).find(l => l.trim())?.trim() || '')) &&
+      !/^(?:场景|场次|人物|地点|时间|画面|动作|音效|环境|剧情|背景|标题|风格|时长|镜头|道具|备注|旁白说明|类型|目标|关键词)$/.test(label))
+  })
+  if (sourceHasDialogue) {
+    for (let i = 1; i < result.shots.length; i++) {
+      const [a, b] = [result.shots[i - 1], result.shots[i]]
+      if (!a.voiceover?.trim() && !b.voiceover?.trim() && a.duration >= 8 && b.duration >= 8) {
+        issues.push(`긴 무대사 구간 · ${i}번과 ${i + 1}번 샷은 각각 ${a.duration}초, ${b.duration}초예요. 빠진 대사가 있는지 확인하고 화자와 원문을 보존하세요. 말 없는 동작은 이웃한 대사 샷에 합치거나 줄이고, 새 대사를 쓰거나 사건을 삭제하지 마세요.`)
+      }
+    }
+  }
+  if (sourceHasDialogue && result.shots.length >= 3 && voicedShots.length < Math.ceil(result.shots.length * 0.7)) {
+    issues.push('대사가 없는 샷이 많아요. 빠진 대사가 있는지 확인하고 이어지는 동작과 대화를 한 샷에 담아 주세요.')
+  }
+  if (sourceHasDialogue && result.shots.some((shot, index) => index > 0 && !shot.voiceover?.trim() && !result.shots[index - 1].voiceover?.trim())) {
+    issues.push('대사가 없는 샷이 이어져요. 앞뒤의 대사 샷과 합칠 수 있는지 확인하고 대본 원문을 보존하세요.')
+  }
+  const compactShot = (text: string) => text.replace(/\s|[，。！？、,.!?；;：:]/g, '').toLowerCase()
+  for (let index = 1; index < result.shots.length; index++) {
+    const previous = result.shots[index - 1]
+    const current = result.shots[index]
+    const visual = compactShot(current.visualPrompt || '')
+    const priorVisual = compactShot(previous.visualPrompt || '')
+    const dialogue = compactShot(current.voiceover || '')
+    const priorDialogue = compactShot(previous.voiceover || '')
+    if ((visual.length >= 20 && visual === priorVisual) || (dialogue.length >= 8 && dialogue === priorDialogue)) {
+      issues.push(`${index}번과 ${index + 1}번 샷의 화면이나 대사가 겹쳐요. 대본을 확인하고 합치거나 고쳐 주세요.`)
+    }
+  }
   const looksLikeAd = AD_COPY.test(`${input.topic || ''}\n${input.content || ''}`)
   if (
     !looksLikeAd &&
@@ -2340,7 +2439,7 @@ export function storyboardQualityIssues(
       const names = (result.subjects || [])
         .filter((s) => (shot.subjectIds || []).includes(s.id) || performance.includes(s.name))
         .map((s) => s.name)
-      const perfIssue = videoPerformanceIssue(performance, names)
+      const perfIssue = directorTimelineIssue(performance, shot.duration) || videoPerformanceIssue(performance, names)
       if (perfIssue) issues.push(`${label} ${perfIssue}`)
     }
     if (!shot.sceneId) issues.push(`${label} has no linked location.`)
@@ -2477,8 +2576,8 @@ function pickBoundScene(
 function stampCastNames(prompt: string, chars: Subject[]): string {
   const body = (prompt || '').trim()
   if (!chars.length) return body
-  const line = `Cast: ${chars.map((c) => c.name).join('、')}. Use only these characters. Match their faces, hairstyles, and clothing to the reference and add no bystanders.`
-  if (/(?:出场[：:]|등장[：:]|\bCast:)/i.test(body) && chars.every((c) => body.includes(c.name))) return body
+  const line = `Cast: ${chars.map((c) => c.name).join(', ')}. Match stable appearance to each reference. Include only this cast.`
+  if (/(?:出场|등장|Cast)\s*[:：]/i.test(body) && chars.every((c) => body.includes(c.name))) return body
   return body ? `${body}\n${line}` : line
 }
 
@@ -3106,7 +3205,7 @@ async function ensurePlayNarrativeContinuity(
       jsonMode: true,
       maxTokens: 2400,
       signal: input.signal,
-      timeoutMs: 30_000
+      timeoutMs: 300_000
     })
     const audited = parseJsonRobust(audit.content)
     const issues = (Array.isArray(audited?.issues) ? audited.issues : [])
@@ -3234,7 +3333,7 @@ async function realGeneratePlay(input: StoryboardInput): Promise<{ result: PlayD
   const hint = (input.continueHint || '').trim()
   const targetSec =
     Number(input.targetDurationSec) || extractTargetDurationSec(input.topic, input.content, hint)
-  const scaleBrief = playScaleBrief(targetSec)
+  const scaleBrief = playScaleBrief(targetSec) || 'Without a specified duration, plan an episode of up to two minutes.'
   const { model: cfgModel } = getLlmConfig()
   const model = resolvePlayModel(input) || cfgModel
   log(`→ ${continueMode ? '대본 이어 쓰기' : '대본 작성'} LLM: ${model}`)
@@ -3243,10 +3342,11 @@ async function realGeneratePlay(input: StoryboardInput): Promise<{ result: PlayD
     messages: [
       {
         role: 'system',
-        content: `You are a screenwriter. Write the script directly from the user's request and the existing material.
-Return only the Markdown body. Do not output JSON, explanations, or self-review.
-Write the title, script, character descriptions, and dialogue in Korean (한국어). Start with the title, story background, characters, and environment and locations, then write each scene. Use the exact section headings "## 이야기 배경", "## 캐릭터", and "## 환경과 장면". Use "## 장면 N｜제목" for scene headings and "**실내｜장소｜날씨와 시간대**" or "**실외｜장소｜날씨와 시간대**" for the scene line. For dialogue, write "**캐릭터 이름：**" followed by 「대사 원문」 on the next line.
-Match the requested running time if supplied. Write speakable lines when characters interact. Do not add prices or efficacy claims that the user did not mention.`
+        content: `${importedDirectorPrefix()}Write the screenplay from the user request and supplied material. Output only the Markdown script, without JSON, explanation, or QA notes.
+${SHORT_DRAMA_WRITING_RULES}
+Write in natural Korean. Start with the title, premise, characters, and settings, followed by scenes. Use "## 장면 N | 제목" and "**인물명:**" for dialogue. Preserve supplied dialogue verbatim.
+Honor the requested duration. Write speakable dialogue where characters interact. Do not invent prices or product claims.
+${scriptReferenceBrief(useSettingsStore().config.scriptReferenceType, input.topic, input.content, input.continueHint, ...(input.keywords || []))}`
       },
       {
         role: 'user',
@@ -3273,10 +3373,11 @@ ${scaleBrief}`
     ],
     model,
     temperature: 0.5,
-    maxTokens: 4000,
-    timeoutMs: 90_000,
+    useProviderOutputLimit: true,
+    timeoutMs: 300_000,
     signal: input.signal
   })
+  assertScriptCompletion(resp)
   let playMarkdown = String(resp.content || '')
     .replace(/^```(?:markdown|md|text)?\s*/i, '')
     .replace(/\s*```$/, '')

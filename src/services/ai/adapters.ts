@@ -7,8 +7,9 @@ import { t as translate } from '@/i18n'
 import { desktop, isDesktop } from '@/services/desktop'
 import {
   applyComfyInputs,
-  COMFY_ROLE_LABEL,
+  comfyRoleLabel,
   guessInputMap,
+  fitComfyReferenceImages,
   isMediaRole,
   missingRoles,
   sanitizeInputMap,
@@ -18,6 +19,7 @@ import {
   type ComfyInputRole
 } from './comfyInputMap'
 import { zealmanWorkflowById } from './zealman'
+import { providerVideoResolution } from './modelOptions'
 
 function timeoutSignal(ms: number): AbortSignal {
   const c = new AbortController()
@@ -499,8 +501,7 @@ function requestBodyForProvider(
     body.aspect_ratio = ratio
     const seconds = Math.round(Number(source.duration) || 6)
     body.duration = /grok-imagine-1\.5/i.test(model) ? Math.min(15, Math.max(6, seconds || 6)) : seconds
-    const quality = String(source.resolution || '')
-    body.resolution = /480/.test(quality) ? '480p' : '720p'
+    body.resolution = providerVideoResolution(model, String(source.resolution || ''))
     if (images.length) body.image_urls = images.slice(0, 7)
     for (const [key, value] of Object.entries(source)) {
       if (typeof value === 'boolean' && /audio/i.test(key) && /^[A-Za-z_][A-Za-z0-9_]*$/.test(key)) {
@@ -551,7 +552,7 @@ export async function httpCustomMediaGenerate(opts: {
     headers,
     body: JSON.stringify(body),
     signal: opts.signal,
-    timeoutMs: kind === 'video' ? 180_000 : 180_000
+    timeoutMs: kind === 'video' ? 10 * 60_000 : 180_000
   })
   if (!res.ok) {
     const text = await res.text()
@@ -721,10 +722,11 @@ async function uploadComfyMedia(opts: {
   onProgress?: (msg: string) => void
 }): Promise<string> {
   const { bytes, mime } = dataUrlToBytes(opts.dataUrl)
-  const name = `aicust-${Date.now().toString(36)}.${extOfMime(mime)}`
-  const { bodyBase64, contentType } = buildMultipart({ overwrite: 'true' }, { name, mime, bytes }, 'image')
+  const name = `aicust-${crypto.randomUUID()}.${extOfMime(mime)}`
+  const { bodyBase64, contentType } = buildMultipart({ type: 'input', overwrite: 'false' }, { name, mime, bytes }, 'image')
   opts.onProgress?.('ComfyUI에 참조 이미지를 업로드하는 중…')
-  const res = await providerHttp(joinUrl(trimSlash(opts.baseUrl), '/upload/image'), {
+  const base = trimSlash(opts.baseUrl).replace(/\/upload\/image$/i, '')
+  const upload = (path: string) => providerHttp(joinUrl(base, path), {
     method: 'POST',
     headers: buildAuthHeader(opts.apiKey || '', {
       ...opts.adapter,
@@ -735,17 +737,28 @@ async function uploadComfyMedia(opts: {
     signal: opts.signal,
     timeoutMs: 120_000
   })
+  let path = '/upload/image'
+  let res = await upload(path)
+  if ((res.status === 404 || res.status === 405) && !/\/api$/i.test(base)) {
+    path = '/api/upload/image'
+    opts.onProgress?.(translate('comfyMapping.uploadRetry'))
+    res = await upload(path)
+  }
   const text = await res.text()
-  if (!res.ok) throw new Error(`[comfyui] 자료 업로드에 실패했습니다. ${res.status} ${text.slice(0, 160)}`)
+  if (!res.ok) {
+    const target = new URL(joinUrl(base, path))
+    throw new Error(translate('comfyMapping.uploadFailed', { url: target.origin + target.pathname, status: res.status }))
+  }
   let json: any = {}
   try {
     json = JSON.parse(text || '{}')
   } catch {
     /* 일부 게이트웨이는 파일명을 일반 텍스트로 반환한다. */
   }
-  const filename = String(json.name || json.filename || text.trim().split('\n')[0] || '').replace(/^"|"$/g, '')
+  const plain = text.trim()
+  const filename = String(json.name || json.filename || (/^[^<>\r\n{}]+\.[a-z0-9]{2,8}$/i.test(plain) ? plain : '')).trim()
   if (!filename) throw new Error(`[comfyui] 업로드는 완료됐지만 파일 이름을 반환하지 않았습니다. ${text.slice(0, 160)}`)
-  return filename
+  return [String(json.subfolder || '').trim(), filename].filter(Boolean).join('/')
 }
 
 /** 이전 템플릿의 플레이스홀더를 지원한다. 없으면 입력 매핑을 사용한다. */
@@ -764,6 +777,7 @@ export async function comfyPromptGenerate(opts: {
   prompt: string
   negative?: string
   imageDataUrl?: string
+  referenceImageDataUrls?: string[]
   /** 시작·끝 프레임 워크플로의 끝 이미지 */
   imageEndDataUrl?: string
   /** 부분 다시 그리기용 마스크 */
@@ -780,8 +794,11 @@ export async function comfyPromptGenerate(opts: {
   signal?: AbortSignal
   kind?: 'image' | 'video'
   onProgress?: (msg: string) => void
+  /** Optional checkpoint: resume polling without uploading/submitting again. */
+  resumeTaskId?: string
+  onTaskSubmitted?: (id: string) => void | Promise<void>
 }): Promise<{ blob: Blob; mimeType: string }> {
-  const base = trimSlash(opts.baseUrl)
+  const base = trimSlash(opts.baseUrl).replace(/\/upload\/image$/i, '')
   const adapter = opts.adapter || {}
   const submitPath = adapter.path || '/prompt'
   const pollPath = adapter.pollPath || '/history/{id}'
@@ -796,6 +813,8 @@ export async function comfyPromptGenerate(opts: {
     ...(adapter.headers || {})
   }
 
+  let promptId = opts.resumeTaskId?.trim() || ''
+  if (!promptId) {
   if (!adapter.workflowTemplate?.trim()) {
     throw new Error(
       '[comfyui] adapter.workflowTemplate이 없습니다. 설정의 ‘어댑터’에 Comfy API 형식의 워크플로 JSON을 붙여 넣고 도우미로 입력 매핑을 분석하세요.'
@@ -842,6 +861,17 @@ export async function comfyPromptGenerate(opts: {
     inputMap = guessInputMap(payload)
   }
   inputMap = validateInputMap(payload, inputMap)
+  const outputRates = [...new Set(Object.values(payload.prompt || {}).flatMap((node: any) =>
+    /VideoCombine|SaveVideo/i.test(node?.class_type || '') && typeof node.inputs?.frame_rate === 'number' && node.inputs.frame_rate > 0 ? [node.inputs.frame_rate as number] : []
+  ))]
+  const fps = opts.fps || (outputRates.length === 1 ? outputRates[0] : undefined)
+  const knownDuration = guessInputMap(payload).bindings.find((b) => b.role === 'length')
+  if (knownDuration && !inputMap.bindings.some((b) => b.role === 'length' && b.durationUnit)) {
+    inputMap = { ...inputMap, bindings: [...inputMap.bindings.filter((b) => b.role !== 'length'), knownDuration] }
+  }
+  if (opts.kind === 'video' && opts.duration && !inputMap.bindings.some((b) => b.role === 'length' && (b.durationUnit === 'seconds' || (b.durationUnit === 'frames' && fps)))) {
+    throw new Error(translate('comfyMapping.durationMappingMissing'))
+  }
   const mediaSources: Partial<Record<ComfyInputRole, string>> = {
     image: opts.imageDataUrl,
     imageEnd: opts.imageEndDataUrl,
@@ -849,15 +879,31 @@ export async function comfyPromptGenerate(opts: {
     audio: opts.audioDataUrl
   }
   const uploaded: Partial<Record<ComfyInputRole, string>> = {}
+  const uploadedImages: Record<string, string> = {}
+  const imageSources = [opts.imageDataUrl, ...(opts.referenceImageDataUrls || [])].filter(Boolean) as string[]
+  if (opts.kind === 'video') inputMap = fitComfyReferenceImages(payload, inputMap, imageSources.length)
+  const imageBindings = inputMap.bindings.filter(b => b.role === 'image')
+  if (opts.kind === 'video' && imageSources.length > imageBindings.length) {
+    throw new Error(translate('comfyMapping.referenceCapacity', { count: imageSources.length, slots: imageBindings.length }))
+  }
+  // Replace supplied slots in order and leave defaults in the remaining slots.
+  const suppliedImageBindings = imageBindings.slice(0, imageSources.length)
+  const imageInputs = inputMap.bindings.filter(b => b.role === 'image' || b.role === 'imageEnd' || b.role === 'mask')
+  if (new Set(imageInputs.map(b => JSON.stringify([b.nodeId, b.field]))).size !== imageInputs.length) {
+    throw new Error(translate('comfyMapping.duplicateImageBinding'))
+  }
   for (const b of inputMap.bindings) {
     if (!isMediaRole(b.role)) continue
-    const src = mediaSources[b.role]
+    const src = b.role === 'image' ? imageSources[imageBindings.indexOf(b)] : mediaSources[b.role]
     if (!src) continue
     const mode = b.mediaMode || 'upload'
-    if (mode !== 'upload') continue
-    if (uploaded[b.role]) continue
+    if (mode !== 'upload') {
+      if (b.role === 'image') uploadedImages[`${b.nodeId}:${b.field}`] = src
+      continue
+    }
+    if (b.role !== 'image' && uploaded[b.role]) continue
     try {
-      uploaded[b.role] = await uploadComfyMedia({
+      const file = await uploadComfyMedia({
         baseUrl: base,
         dataUrl: src,
         apiKey: opts.apiKey,
@@ -865,9 +911,11 @@ export async function comfyPromptGenerate(opts: {
         signal: opts.signal,
         onProgress: opts.onProgress
       })
+      if (b.role === 'image') uploadedImages[`${b.nodeId}:${b.field}`] = file
+      else uploaded[b.role] = file
     } catch (e: any) {
       throw new Error(
-        `[comfyui] ${COMFY_ROLE_LABEL[b.role]} 업로드에 실패했습니다. ${e?.message || e} 이 워크플로는 먼저 ComfyUI의 input 디렉터리에 자료를 업로드해야 합니다.`
+        `[comfyui] ${comfyRoleLabel(b.role)} 업로드에 실패했습니다. ${e?.message || e} 이 워크플로는 먼저 ComfyUI의 input 디렉터리에 자료를 업로드해야 합니다.`
       )
     }
   }
@@ -881,11 +929,20 @@ export async function comfyPromptGenerate(opts: {
     ...(opts.seed != null ? { seed: opts.seed } : {}),
     ...(opts.width ? { width: opts.width } : {}),
     ...(opts.height ? { height: opts.height } : {}),
+    ...(opts.width && opts.height ? { megapixels: opts.width * opts.height / 1_000_000 } : {}),
     ...(opts.duration ? { length: opts.duration } : {}),
-    ...(opts.fps ? { fps: opts.fps } : {}),
-    uploaded
+    ...(fps ? { fps } : {}),
+    uploaded,
+    uploadedImages
   }
   const { writes, skipped } = applyComfyInputs(payload, inputMap, values)
+  if (suppliedImageBindings.some(b => {
+    const expected = uploadedImages[`${b.nodeId}:${b.field}`]
+    return !expected || payload.prompt?.[b.nodeId]?.inputs?.[b.field] !== expected
+  })) throw new Error(translate('comfyMapping.incompleteImageBindings'))
+  if (suppliedImageBindings.length) opts.onProgress?.(translate('comfyMapping.checkedReferences', { count: suppliedImageBindings.length }))
+  const retainedImageCount = imageBindings.length - suppliedImageBindings.length
+  if (retainedImageCount) opts.onProgress?.(translate('comfyMapping.keptDefaultImages', { count: retainedImageCount }))
   if (!writes.length) {
     const miss = missingRoles(inputMap)
     throw new Error(
@@ -903,7 +960,7 @@ export async function comfyPromptGenerate(opts: {
     headers,
     body: JSON.stringify(payload),
     signal: opts.signal,
-    timeoutMs: 120_000
+    timeoutMs: opts.kind === 'video' ? 10 * 60_000 : 120_000
   })
   if (!submit.ok) {
     throw new Error(
@@ -911,14 +968,17 @@ export async function comfyPromptGenerate(opts: {
     )
   }
   const submitJson = await submit.json()
-  const promptId =
+  promptId =
     String(submitJson.prompt_id || submitJson.promptId || submitJson.task_id || getByJsonPath(submitJson, 'data.prompt_id') || '').trim()
   if (!promptId) {
     throw new Error(`[comfyui] 제출은 완료됐지만 prompt_id가 없습니다. ${JSON.stringify(submitJson).slice(0, 200)}`)
   }
+  await opts.onTaskSubmitted?.(promptId)
+  }
 
   const started = Date.now()
-  const timeoutMs = opts.kind === 'video' ? 15 * 60_000 : 6 * 60_000
+  // Allow up to 30 minutes for local video generation.
+  const timeoutMs = opts.kind === 'video' ? 30 * 60_000 : 6 * 60_000
   while (Date.now() - started < timeoutMs) {
     if (opts.signal?.aborted) throw new DOMException('작업을 취소했어요.', 'AbortError')
     await new Promise((r) => setTimeout(r, 1500))
@@ -1011,7 +1071,7 @@ export async function comfyPromptGenerate(opts: {
     }
     opts.onProgress?.('ComfyUI에서 생성하는 중…')
   }
-  throw new Error('[comfyui] 결과를 기다리는 시간이 초과됐습니다.')
+  throw new Error(opts.kind === 'video' ? translate('comfyMapping.videoWaitTimeout') : translate('comfyMapping.waitTimeout'))
 }
 
 export interface ConnectionTestResult {

@@ -1,8 +1,11 @@
+import { t } from '@/i18n'
 import type { Scene, Shot, Subject } from '@/types'
 import { callLLM, getAIMode } from './client'
 import { getVideoPromptStyle } from './runtime'
 import {
   composeVideoPerformance,
+  directorTimelineIssue,
+  preservesScreenText,
   isVideoPerformanceTemplate,
   isVideoPerformanceThin,
   lacksEnsembleBlocking,
@@ -113,10 +116,14 @@ ${(opts.shot.visualPrompt || '').slice(0, 400)}`
     })
     const parsed = parseJsonRobust(resp.content) as { videoPrompt?: string }
     const rich = stripFrameLead(String(parsed.videoPrompt || ''))
-    if (!rich || rich === (opts.shot.visualPrompt || '').trim()) return current
-    if (isVideoPerformanceTemplate(rich)) return current
+    if (!rich || rich === (opts.shot.visualPrompt || '').trim() || isVideoPerformanceTemplate(rich) ||
+        directorTimelineIssue(rich, opts.shot.duration) || !preservesScreenText(own, rich)) {
+      if (opts.force) throw new Error(t('aiError.invalidRewrite'))
+      return own || current
+    }
     return rich
-  } catch {
-    return current
+  } catch (error) {
+    if (opts.force || opts.signal?.aborted) throw error
+    return own || current
   }
 }

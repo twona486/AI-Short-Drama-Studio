@@ -238,6 +238,8 @@ export interface Script {
   keywords: string[]
   /** 화풍. */
   style: VisualStyle
+  /** 사용자가 나중에 바꾼 프로젝트 스타일은 원래 대본의 스타일보다 우선한다. 대본은 보존한다. */
+  visualStyleOverride?: string
   /** 영상 화면 비율. */
   aspectRatio: AspectRatio
   /** 샷별 목표 길이. */
@@ -354,6 +356,8 @@ export interface ProjectSettings {
    * fl2va는 둘째 샷부터 이전 영상의 끝 프레임과 다음 샷의 참조 이미지를 연결한다.
    */
   h3ShotChainMode?: 'auto' | 'fl2va'
+  /** 제작 환경설정의 기본 영상 해상도다. H3에서 1080p 출력은 v5가 지원하며, Wan 노드는 480P, 720P, 1080P를 개별 선택한다. */
+  defaultVideoResolution?: import('./canvas').VideoResolution
 }
 
 /** 전환 유형. */
@@ -388,6 +392,12 @@ export interface TimelineClip {
   speed: number
   /** 음량. 범위는 0~1이다. */
   volume: number
+  /** 이 클립의 더빙이다. 설정돼 있으면 내보낼 때 스토리보드의 음성보다 먼저 사용한다. */
+  voiceAssetId?: ID
+  /** 더빙의 시작 위치를 초 단위로 나타낸다. */
+  voiceSourceIn?: number
+  /** 더빙 음량 범위는 0~1이다. */
+  voiceVolume?: number
   enabled: boolean
 }
 
@@ -540,6 +550,13 @@ export interface Project {
   playApproved?: boolean
   /** 에이전트 대화, 실행 내역, 자동 진행 선호도를 프로젝트에 저장한다. */
   agentState?: AgentWorkspaceState
+  /** 연속 촬영 모드는 기존 스토리보드 제작과 독립적으로 진행한다. */
+  continuousCaptureEnabled?: boolean
+  /** 모델이 작성한 미술 설명과 별개로 사용자가 명시한 스타일이다. */
+  visualStylePreference?: string
+  /** 연속 촬영에서 스타일 확인을 기다리는 동안 현재 대본을 보관한다. */
+  continuousPendingScript?: string
+  continuousCapture?: import('@/services/continuous/model').CaptureState
   /**
    * standard: 주제 또는 대본에서 시작.
    * remake: 참조 영상을 재현하면서 원본 제품을 사용자 이미지로 교체.

@@ -117,8 +117,8 @@ function formatRules(input: OptimizeNodePromptInput, current: string): string {
 
   const shotBlock =
     input.kind === 'video'
-      ? `This is one continuous ${duration}-second shot. Expand only the opening image, onset of action, and ending. Do not cut or add new time ranges. Preserve the original timing marks.`
-      : 'This is a still frame. Add only visible details, with no passage of time.'
+      ? `Target a total of ${duration} seconds. Preserve every existing cut, timestamp, and model-specific marker. For each beat, specify shot size, camera position, opening framing, focus, the direction and speed of camera movement, and final framing. Add continuous actions, prop or environmental reactions, synchronized sound, and the ending pose. Preserve continuous moves and existing hard cuts. Keep on-screen text verbatim and specify its position, timing, duration, and how it stays clear of the subject. Do not compress concrete shots into a plot summary.`
+      : 'This is a still frame. Enrich the visible details without describing the passage of time.'
 
   return `Improve the visual details already present in the prompt. Preserve its format.
 Task type: ${kindLabel}.
@@ -133,7 +133,7 @@ ${shotBlock}
 Required content rules
 - Do not invent plot details absent from the source.
 - Avoid boilerplate and reasoning. The prompt field must contain only the complete prompt for the generation model.
-Return JSON only: {"prompt":"Complete refined generation prompt in English","note":"One or two sentences in Korean (한국어) explaining what changed"}.`
+Return JSON only: {"prompt":"Complete refined generation prompt in English","note":"One or two sentences in Korean (한국어) explaining what changed in a polite conversational tone"}.`
 }
 
 async function askOnce(

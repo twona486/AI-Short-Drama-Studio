@@ -3,6 +3,7 @@ export type DesktopAPI = {
   isDesktop: true
   setLocale: (locale: 'ko' | 'zh') => Promise<void>
   confirmAction: (message: string, locale: 'ko' | 'zh') => Promise<boolean>
+  platform: string
   getRoot: () => Promise<string>
   setRoot: (root: string) => Promise<string>
   getVersion: () => Promise<string>

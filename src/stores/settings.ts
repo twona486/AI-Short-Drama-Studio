@@ -7,6 +7,7 @@ import { t } from '@/i18n'
 
 import { defineStore } from 'pinia'
 import { ref, watch } from 'vue'
+import { AUTODL_BASE_URL, AUTODL_WORKFLOWS } from '@/services/ai/autodl'
 import { envDefaults, migrateVideoBaseUrl, migrateVideoWorkflowId } from '@/services/ai/env'
 import { desktop, isDesktop } from '@/services/desktop'
 import { stillModeForVideoModel, type VideoGenModel, type VideoStillMode } from '@/types/canvas'
@@ -14,6 +15,7 @@ import type { VideoPromptStyle } from '@/utils/shotPrompt'
 import { isAutodlHost, normalizeStoredVideoEndpoint, type AdapterConfig } from '@/services/ai/adapters'
 import { normalizeModelNodeOptions, type ModelNodeOptions } from '@/services/ai/modelOptions'
 import { LLM_PROVIDERS } from '@/services/ai/providers'
+import { GENERAL_STORY_SKILL_ID, normalizeStorySkillId, storySkillById } from '@/skills/storyStyles'
 
 export type { AdapterConfig }
 
@@ -96,6 +98,8 @@ export interface AppSettings {
   vision: ServiceEndpoint
   visions: NamedEndpoint[]
   activeVisionId: string
+  /** 끄면 주소와 키가 있어도 이미지 이해 모델에 이미지를 보내지 않는다. */
+  visionEnabled: boolean
   image: ServiceEndpoint
   images: NamedEndpoint[]
   activeImageId: string
@@ -117,8 +121,17 @@ export interface AppSettings {
   music: ServiceEndpoint
   musics: NamedEndpoint[]
   activeMusicId: string
-  /** 사용자가 가져온 감독 지침. 샷 분할과 프롬프트 생성에 우선 사용한다. */
+  /** 사용자가 가져온 연출 매뉴얼이다. 스킬 메뉴에서 내 스킬을 선택하면 사용한다. */
   directorSkill: DirectorSkillDoc | null
+  /**
+   * 캔버스 에이전트가 현재 사용하는 스토리보드 스킬이다.
+   * storyboard-director는 기본, custom은 directorSkill을 사용한다. 나머지는 내장 방식이나 장르다.
+   */
+  activeStorySkillId: string
+  storyStyleId: string
+  storyGenreId: string
+  /** 내장 숏드라마 대사 참고 유형 */
+  scriptReferenceType: string
 }
 
 export interface DirectorSkillDoc {
@@ -348,6 +361,34 @@ function hydrateTts(
   return { list, activeId: active.id, active: asTts(active) }
 }
 
+/** AutoDL 토큰이 있으면 추가된 기본 워크플로를 연결 목록에 보완한다. */
+function ensureBuiltinAutodlWorkflows(list: VideoProfile[]): VideoProfile[] {
+  const donor = list.find((profile) => isAutodlVideoProfile(profile) && String(profile.apiKey || '').trim())
+  const token = String(donor?.apiKey || '').trim()
+  if (!token) return list
+  const missing = AUTODL_WORKFLOWS.filter(
+    (workflow) => !list.some((profile) => isAutodlVideoProfile(profile) && profile.workflowId === workflow.id)
+  )
+  if (!missing.length) return list
+  return [
+    ...list,
+    ...missing.map((workflow) =>
+      videoFromEndpoint(
+        {
+          baseUrl: donor?.baseUrl || AUTODL_BASE_URL,
+          apiKey: token,
+          workflowId: workflow.id,
+          promptStyle: 'scene-narrative',
+          provider: 'autodl',
+          stillMode: 'identity',
+          adapter: { type: 'comfyui-workflow' }
+        },
+        workflow.name
+      )
+    )
+  ]
+}
+
 function isAutodlVideoProfile(profile: { provider?: string; baseUrl?: string; adapter?: AdapterConfig; workflowId?: string }): boolean {
   const normalized = normalizeStoredVideoEndpoint(profile)
   return normalized.provider === 'autodl' || isAutodlHost(normalized.baseUrl || '')
@@ -399,7 +440,7 @@ function hydrateVideo(
         )
       })
     : [videoFromEndpoint(normalizeStoredVideoEndpoint(fallback), t('settings.defaults.video'))]
-  const isolated = isolateVideoKeys(list)
+  const isolated = ensureBuiltinAutodlWorkflows(isolateVideoKeys(list))
   const activeId = isolated.some((p) => p.id === savedActiveId) ? (savedActiveId as string) : isolated[0].id
   const active = isolated.find((p) => p.id === activeId) || isolated[0]
   return { list: isolated, activeId: active.id, active: asVideo(active) }
@@ -452,6 +493,7 @@ function buildDefaults(): AppSettings {
     vision: asEndpoint(visionFirst),
     visions: [visionFirst],
     activeVisionId: visionFirst.id,
+    visionEnabled: false,
     image: asEndpoint(imageFirst),
     images: [imageFirst],
     activeImageId: imageFirst.id,
@@ -467,8 +509,18 @@ function buildDefaults(): AppSettings {
     music: asEndpoint(musicFirst),
     musics: [musicFirst],
     activeMusicId: musicFirst.id,
-    directorSkill: null
+    directorSkill: null,
+    activeStorySkillId: GENERAL_STORY_SKILL_ID,
+    storyStyleId: GENERAL_STORY_SKILL_ID,
+    storyGenreId: GENERAL_STORY_SKILL_ID,
+    scriptReferenceType: 'auto'
   }
+}
+
+function resolveStoryPreference(value: unknown, legacy: unknown, group: 'style' | 'genre', hasCustom: boolean): string {
+  const id = typeof value === 'string' && value ? value : typeof legacy === 'string' ? legacy : ''
+  if (group === 'style' && id === 'custom' && hasCustom) return id
+  return storySkillById(id)?.group === group ? id : GENERAL_STORY_SKILL_ID
 }
 
 function parseSettings(raw: string | null): AppSettings {
@@ -531,9 +583,13 @@ function parseSettings(raw: string | null): AppSettings {
       {
         ...defaults.video,
         ...parsed.video,
-        baseUrl: migrateVideoBaseUrl(parsed.video?.baseUrl || defaults.video.baseUrl),
-        apiKey: parsed.video?.apiKey || defaults.video.apiKey,
-        workflowId: migrateVideoWorkflowId(parsed.video?.workflowId || defaults.video.workflowId),
+        baseUrl: parsed.video?.adapter?.type === 'comfyui-prompt'
+          ? (parsed.video.baseUrl || '').trim()
+          : migrateVideoBaseUrl(parsed.video?.baseUrl || defaults.video.baseUrl),
+        apiKey: parsed.video?.adapter?.type === 'comfyui-prompt' ? (parsed.video.apiKey || '') : (parsed.video?.apiKey || defaults.video.apiKey),
+        workflowId: parsed.video?.adapter?.type === 'comfyui-prompt'
+          ? (parsed.video.workflowId || 'comfyui-local')
+          : migrateVideoWorkflowId(parsed.video?.workflowId || defaults.video.workflowId),
         promptStyle:
           parsed.video?.promptStyle === 'formatted' ? 'formatted' : 'scene-narrative',
         stillMode: stillModeForVideoModel('h3', {
@@ -577,6 +633,7 @@ function parseSettings(raw: string | null): AppSettings {
       vision: vision.active,
       visions: vision.list,
       activeVisionId: vision.activeId,
+      visionEnabled: parsed.visionEnabled === true,
       image: image.active,
       images: image.list,
       activeImageId: image.activeId,
@@ -597,7 +654,14 @@ function parseSettings(raw: string | null): AppSettings {
       music: music.active,
       musics: music.list,
       activeMusicId: music.activeId,
-      directorSkill: normalizeDirectorSkill(parsed.directorSkill)
+      directorSkill: normalizeDirectorSkill(parsed.directorSkill),
+      storyStyleId: resolveStoryPreference(parsed.storyStyleId, parsed.activeStorySkillId, 'style', Boolean(normalizeDirectorSkill(parsed.directorSkill))),
+      storyGenreId: resolveStoryPreference(parsed.storyGenreId, parsed.activeStorySkillId, 'genre', Boolean(normalizeDirectorSkill(parsed.directorSkill))),
+      scriptReferenceType: typeof parsed.scriptReferenceType === 'string' ? parsed.scriptReferenceType : 'auto',
+      activeStorySkillId: normalizeStorySkillId(
+        parsed.activeStorySkillId,
+        Boolean(normalizeDirectorSkill(parsed.directorSkill))
+      )
     }
   } catch {
     return defaults
@@ -962,9 +1026,10 @@ export const useSettingsStore = defineStore('settings', () => {
     })
   }
 
-  function removeImage(id: string) {
-    if (config.value.images.length <= 1) return
+  function removeImage(id: string, allowLast = false) {
+    if (config.value.images.length <= 1 && !allowLast) return
     const images = config.value.images.filter((p) => p.id !== id)
+    if (!images.length) images.push(buildDefaults().images[0])
     const next = images.find((p) => p.id === config.value.activeImageId) || images[0]
     syncImage(next, images)
   }
@@ -1100,14 +1165,23 @@ export const useSettingsStore = defineStore('settings', () => {
   }
 
   /** 기본 영상 모델로 내장 워크플로를 선택한다. undefined면 구성된 연결을 따른다. */
+  function selectStorySkill(id: string) {
+    const next = normalizeStorySkillId(id, Boolean(config.value.directorSkill))
+    const group = storySkillById(next)?.group
+    touch()
+    if (group === 'genre') config.value = { ...config.value, activeStorySkillId: next, storyGenreId: next }
+    else config.value = { ...config.value, activeStorySkillId: next, storyStyleId: next }
+  }
+
   function selectVideoModelDefault(model?: VideoGenModel) {
     if (config.value.defaultVideoModel === model) return
     config.value = { ...config.value, defaultVideoModel: model }
   }
 
-  function removeVideo(id: string) {
-    if (config.value.videos.length <= 1) return
+  function removeVideo(id: string, allowLast = false) {
+    if (config.value.videos.length <= 1 && !allowLast) return
     const videos = config.value.videos.filter((p) => p.id !== id)
+    if (!videos.length) videos.push(buildDefaults().videos[0])
     const next = videos.find((p) => p.id === config.value.activeVideoId) || videos[0]
     syncVideo(next, videos)
   }
@@ -1268,6 +1342,7 @@ export const useSettingsStore = defineStore('settings', () => {
     setAutodlToken,
     addVideo,
     selectVideo,
+    selectStorySkill,
     selectVideoModelDefault,
     removeVideo,
     renameVideo,

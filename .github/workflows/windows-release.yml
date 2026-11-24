@@ -66,7 +66,14 @@ jobs:
         run: |
           $tag = '${{ github.ref_name }}'
           $files = @(Get-ChildItem -Path release -Recurse -Filter *Setup*.exe | ForEach-Object { $_.FullName })
+          $version = $tag -replace '^v', ''
+          $changelog = Get-Content CHANGELOG.md -Raw -Encoding UTF8
+          $pattern = '(?ms)^##\s+' + [regex]::Escape($version) + '[^\r\n]*\r?\n(.*?)(?=^##\s|\z)'
+          $match = [regex]::Match($changelog, $pattern)
+          if (-not $match.Success) { throw "변경 기록에 버전 $version 항목이 없어요." }
+          $notes = $match.Groups[1].Value.Trim()
           gh release create $tag @files `
             --repo '${{ github.repository }}' `
             --title "Drama Flow Studio $tag" `
-            --generate-notes
+            --notes "$notes"
+          if ($LASTEXITCODE -ne 0) { throw 'GitHub 릴리스를 게시하지 못했어요.' }

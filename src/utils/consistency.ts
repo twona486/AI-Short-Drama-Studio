@@ -3,7 +3,7 @@ import type { ID, Project, Scene, Shot, StoryProp, Subject } from '@/types'
 import { sceneForShotPlace, shotMentionsScene } from '@/utils/shotPlace'
 import { lookFromScript, mediumLockText } from '@/utils/visualStyle'
 import { videoRequiresStoryboard } from '@/utils/storyboardGate'
-import { shotVideoNode, stillModeForShot } from '@/utils/videoStill'
+import { shotVideoNode, shotUsesFrames, stillModeForShot } from '@/utils/videoStill'
 
 export interface ShotRefBundle {
   ids: ID[]
@@ -113,7 +113,7 @@ export interface VideoRefEntry {
   name?: string
 }
 
-/** 영상 모델의 stillMode에 맞춰 참조를 구성한다. H3 identity에는 캐릭터와 배경만 전달한다. */
+/** identity 모드에서는 키프레임을 새로 만들 필요가 없다. 기존 키프레임이 있으면 다중 참조에 사용할 수 있다. */
 export function collectShotVideoEntries(shot: Shot, project: Project): VideoRefEntry[] {
   const omitted = new Set(shot.omittedRefAssetIds ?? [])
   const stillMode = stillModeForShot(shot, project)
@@ -159,7 +159,8 @@ export function collectShotVideoEntries(shot: Shot, project: Project): VideoRefE
       label: `six-panel STORYBOARD for [Shot 1]; action plan only; one continuous full-frame take; never copy panels or play them as a slideshow`
     })
   }
-  if (stillMode === 'keyframe' && shot.imageAssetId && !omitted.has(shot.imageAssetId)) {
+  if ((stillMode === 'keyframe' || (stillMode === 'identity' && !shotUsesFrames(shot, project))) &&
+    shot.imageAssetId && !omitted.has(shot.imageAssetId)) {
     out.unshift({
       id: shot.imageAssetId,
       kind: 'keyframe',

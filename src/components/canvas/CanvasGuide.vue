@@ -43,8 +43,8 @@ const steps = [
     get title() { return translate('canvasGuide.tips') },
     get sub() { return translate('canvasGuide.combineIntro') },
     items: [
-      'canvasGuide.combine',
-      'canvasGuide.classic'
+      translate('canvasContext.mixedWorkflow'),
+      translate('canvasContext.railHint')
     ]
   }
 ]
@@ -55,13 +55,13 @@ const step = computed(() => steps[index.value])
 const highlight = computed(() => {
   const area = step.value.area
   if (!area) return null
-  const left = area === 'agent' ? 0 : props.agentOpen ? props.agentWidth : 0
-  const right = area === 'agent' ? 'auto' : props.rightWidth
+  const rail = 46
+  const agentWidth = props.agentOpen ? props.agentWidth : 0
   if (area === 'agent') {
     if (!props.agentOpen) return null
-    return { left: '0px', right: 'auto', width: `${props.agentWidth}px` }
+    return { left: `${rail}px`, right: 'auto', width: `${props.agentWidth}px` }
   }
-  return { left: `${left}px`, right: `${right}px`, width: 'auto' }
+  return { left: `${rail + agentWidth}px`, right: `${props.rightWidth}px`, width: 'auto' }
 })
 
 function next() {

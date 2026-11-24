@@ -13,7 +13,7 @@ const existing = computed(() =>
 )
 function profileDisplayName(profile: (typeof existing.value)[number]) {
   const workflow = autodlWorkflowById(profile.workflowId || '')
-  return workflow && profile.name === workflow.name ? workflow.displayName : profile.name
+  return workflow && (profile.name === workflow.name || profile.name === workflow.legacyName) ? workflow.displayName || workflow.name : profile.name
 }
 
 const configured = computed(() => Boolean(settings.config.autodlToken) && existing.value.length > 0)
@@ -88,9 +88,9 @@ function apply() {
       <h2>{{ $t('autodlSettings.builtIn') }}</h2>
       <div class="workflow-list">
         <article v-for="workflow in AUTODL_WORKFLOWS" :key="workflow.id">
-          <strong>{{ workflow.displayName }}</strong>
-          <span>{{ workflow.mode === 'fl2va' ? $t('common.firstLastFrame') : workflow.mode === 'audio-sync' ? $t('common.narration') : $t('common.imageToVideo') }}</span>
-          <small>{{ workflow.note }} {{ $t('autodlSettings.maximum') }} {{ workflow.maxDuration }} {{ $t('common.seconds') }}</small>
+          <strong>{{ workflow.displayName || workflow.name }}</strong>
+          <span>{{ workflow.mode === 'fl2va' ? $t('mediaNodes.startFrame') + ' / ' + $t('mediaNodes.endFrame') : workflow.mode === 'audio-sync' ? $t('mediaNodes.autoDlAudioSync') : workflow.mode === 'multi-audio' ? $t('mediaNodes.autoDlMultiAudio') : $t('agentWorkspace.imageToVideo') }}</span>
+          <small>{{ workflow.note }} · {{ $t('mediaNodes.autoDlDuration', { seconds: workflow.maxDuration }) }}</small>
         </article>
       </div>
     </section>

@@ -130,14 +130,29 @@ function firstImg2VideoCoverId(p: Project): string | undefined {
   return nodes.find((n) => n.data.outputAssetId)?.data.outputAssetId
 }
 
-/** 첫 자유 노드의 참조 이미지, 장면 기준 이미지, 캐릭터 이미지, 샷 이미지 순으로 표지를 찾는다. */
+function canvasCoverId(p: Project): string | undefined {
+  const nodes = p.canvas?.nodes ?? []
+  const capture = p.continuousCapture
+  if (capture) {
+    const output = (id?: string) => id ? nodes.find(n => n.id === id)?.data.outputAssetId : undefined
+    const scene = capture.plan.assets.find(asset => asset.kind === 'scene' && output(capture.assetNodes[asset.id]))
+    if (scene) return output(capture.assetNodes[scene.id])
+    const character = capture.plan.assets.find(asset => asset.kind === 'character' && output(capture.assetNodes[asset.id]))
+    if (character) return output(capture.assetNodes[character.id])
+    const opening = Object.values(capture.openingNodes).map(id => output(id)).find(Boolean)
+    if (opening) return opening
+  }
+  return nodes.find(n => (n.type === 'imageGen' || n.type === 'shotImage') && n.data.outputAssetId)?.data.outputAssetId
+}
+
+/** 이미지 기반 영상의 표지는 첫 노드의 첫 참조 이미지다. 그 외에는 장면 배경, 인물 시트, 스토리보드 이미지, 캔버스에서 만든 이미지 순으로 찾는다. */
 export function pickCoverAssetId(p: Project): string | undefined {
   if (p.pipelineMode === 'img2video') return firstImg2VideoCoverId(p)
   const plate = (p.scenes ?? []).find((s) => s.plateAssetId)?.plateAssetId
   if (plate) return plate
   const sheet = (p.subjects ?? []).find((s) => s.designSheetAssetId)?.designSheetAssetId
   if (sheet) return sheet
-  return p.shots.find((s) => s.imageAssetId)?.imageAssetId
+  return p.shots.find((s) => s.imageAssetId)?.imageAssetId || canvasCoverId(p)
 }
 
 export async function projectCoverUrl(p: Project): Promise<string | undefined> {

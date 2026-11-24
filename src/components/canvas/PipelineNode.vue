@@ -11,22 +11,21 @@ import { cssAspectRatio } from '@/services/canvas/layout'
 import { applyShotVideoModel, applyShotVideoProfile } from '@/services/canvas/videoModel'
 import { videoRequiresStoryboard } from '@/utils/storyboardGate'
 import { stillModeFromNode } from '@/utils/videoStill'
-import { inspectCanvasNode } from '@/services/canvas/canvasBridge'
+import { inspectCanvasNode, selectCanvasNode } from '@/services/canvas/canvasBridge'
 import { openLightbox } from '@/composables/useLightbox'
 import ShotRefStrip from '@/components/canvas/ShotRefStrip.vue'
 import NodeBusyOverlay from '@/components/canvas/NodeBusyOverlay.vue'
 import AssetPicker from '@/components/common/AssetPicker.vue'
-import ParamSelect from '@/components/common/ParamSelect.vue'
 import ImageModelSelect from '@/components/settings/ImageModelSelect.vue'
 import VideoModelSelect from '@/components/settings/VideoModelSelect.vue'
 import H3GenModeSelect from '@/components/settings/H3GenModeSelect.vue'
 import FramePairSlots from '@/components/canvas/FramePairSlots.vue'
 import AspectRatioSeg from '@/components/common/AspectRatioSeg.vue'
-import VideoResolutionSeg from '@/components/common/VideoResolutionSeg.vue'
 import ImageResolutionSeg from '@/components/common/ImageResolutionSeg.vue'
-import DocAudioToggle from '@/components/common/DocAudioToggle.vue'
-import { pickDocImageResolution, type DocImageResolution } from '@/services/ai/modelOptions'
+import VideoSettingsPopover from '@/components/canvas/VideoSettingsPopover.vue'
+import { pickDocImageResolution, pickDocVideoResolution, videoResolutionChoices, type DocImageResolution } from '@/services/ai/modelOptions'
 import CanvasToolbarIcon from '@/components/canvas/CanvasToolbarIcon.vue'
+import NodeLinkPlus from '@/components/canvas/NodeLinkPlus.vue'
 import { canBuildExport } from '@/utils/timeline'
 import { effectiveShotAudioMode, needsExternalTts } from '@/utils/shot'
 import { defaultPropSheetPrompt, fillEmptyGeneratePrompt, shotFrameSendPrompt } from '@/utils/nodePrompt'
@@ -35,8 +34,6 @@ import { clampRect, cropContainedImage, trimVideoBlob, type NormRect } from '@/u
 import {
   normalizeH3GenMode,
   normalizeVideoGenModel,
-  normalizeVideoResolution,
-  videoAllows1080p,
   videoDurationOptions,
   videoMaxSeconds,
   videoMinSeconds,
@@ -274,6 +271,10 @@ const assetId = computed(() => {
 })
 
 const mediaAspect = computed(() => {
+  const meta = assetId.value ? assets.getMeta(assetId.value) : undefined
+  if (type.value !== 'shotFrames' && meta && (meta.kind === 'image' || meta.kind === 'video') && meta.width > 0 && meta.height > 0) {
+    return `${meta.width} / ${meta.height}`
+  }
   if (type.value === 'subject' || type.value === 'prop' || type.value === 'sceneProps' || type.value === 'scene') {
     return cssAspectRatio('16:9')
   }
@@ -311,8 +312,18 @@ const videoModel = computed({
   get: () => normalizeVideoGenModel(nodeMeta.value?.data.videoModel),
   set: (v: VideoGenModel) => applyShotVideoModel(props.id, v)
 })
+const resolutionChoices = computed(() =>
+  videoResolutionChoices({
+    model: videoModel.value,
+    profile: videoModel.value === 'wan-prime' ? null : docVideoProfile.value
+  })
+)
 const videoResolution = computed({
-  get: () => normalizeVideoResolution(nodeMeta.value?.data.videoResolution, videoModel.value),
+  get: () => {
+    const choices = resolutionChoices.value
+    if (choices.length) return pickDocVideoResolution(nodeMeta.value?.data.videoResolution ?? project.current?.settings.defaultVideoResolution, choices) || choices[0]
+    return '768p' as VideoResolution
+  },
   set: (v: VideoResolution) => project.patchCanvasNode(props.id, { videoResolution: v })
 })
 const docVideoProfile = computed(() => {
@@ -711,6 +722,7 @@ function currentMedia(): HTMLMediaElement | null {
 
 async function togglePlay(ev: Event) {
   ev.stopPropagation()
+  selectCanvasNode(props.id)
   const v = currentMedia()
   if (!v) return
   if (v.paused) {
@@ -1019,6 +1031,7 @@ const cropStyle = computed(() => ({
 
 <template>
   <div class="pnode" :class="[`kind-${type}`, `st-${status}`, { on: selected && panelOpen, empty: !hasAsset, busy: generating || !!toolBusy }]">
+    <NodeLinkPlus :node-id="id" />
     <Handle v-if="type !== 'script'" id="in" type="target" :position="Position.Left" class="hndl" />
     <Handle v-if="type === 'shotBoard' || type === 'shotImage' || type === 'shotFrames'" id="char1" type="target" :position="Position.Left" :style="{ top: '28%' }" class="hndl" />
     <Handle v-if="type === 'shotBoard' || type === 'shotImage' || type === 'shotFrames'" id="char2" type="target" :position="Position.Left" :style="{ top: '50%' }" class="hndl" />
@@ -1112,7 +1125,9 @@ const cropStyle = computed(() => ({
       <template v-else-if="isVideoNode && videoUrl">
         <video
           ref="videoEl"
-          class="nodrag nowheel"
+          class="nowheel"
+          :draggable="false"
+          @dragstart.prevent
           :src="videoUrl"
           :poster="mediaUrl && mediaUrl !== videoUrl ? mediaUrl : undefined"
           playsinline
@@ -1122,15 +1137,14 @@ const cropStyle = computed(() => ({
           @play="onVideoPlay"
           @pause="onVideoPause"
           @ended="onVideoEnded"
-          @click.stop="togglePlay"
         />
-        <button v-if="!playing" class="play-btn nodrag" type="button" :title="$t('common.play')" @click.stop="togglePlay" @mousedown.stop>
-          ▶
+        <button class="play-btn nodrag" :class="{ playing }" type="button" :title="playing ? $t('common.pause') : $t('common.play')" @click.stop="togglePlay" @mousedown.stop>
+          {{ playing ? 'Ⅱ' : '▶' }}
         </button>
       </template>
       <div v-else-if="type === 'shotFrames'" class="frame-pair">
         <div class="fp-cell">
-          <img v-if="frameUrls.start" :src="frameUrls.start" :alt="$t('common.startFrame')" />
+          <img v-if="frameUrls.start" :src="frameUrls.start" :alt="$t('mediaNodes.startFrame')" :draggable="false" @dragstart.prevent />
           <div v-else class="fp-ph">＋</div>
           <span class="fp-tag">{{ $t('pipelineNode.start') }}</span>
           <button
@@ -1142,7 +1156,7 @@ const cropStyle = computed(() => ({
         </div>
         <span class="fp-arrow">→</span>
         <div class="fp-cell">
-          <img v-if="frameUrls.end" :src="frameUrls.end" :alt="$t('common.endFrame')" />
+          <img v-if="frameUrls.end" :src="frameUrls.end" :alt="$t('mediaNodes.endFrame')" :draggable="false" @dragstart.prevent />
           <div v-else class="fp-ph">＋</div>
           <span class="fp-tag">{{ $t('pipelineNode.end') }}</span>
           <button
@@ -1153,7 +1167,7 @@ const cropStyle = computed(() => ({
           >↺</button>
         </div>
       </div>
-      <img v-else-if="mediaUrl" :src="mediaUrl" alt="" />
+      <img v-else-if="mediaUrl" :src="mediaUrl" alt="" :draggable="false" @dragstart.prevent />
       <div
         v-else
         class="ph"
@@ -1352,7 +1366,7 @@ const cropStyle = computed(() => ({
         <span v-if="type === 'shotVideo' && videoStillHint" class="still-hint">{{ videoStillHint }}</span>
         <span v-else>{{ metaLine }}</span>
         <AspectRatioSeg
-          v-if="type === 'shotBoard' || type === 'shotImage' || type === 'shotFrames' || type === 'shotVideo'"
+          v-if="type === 'shotBoard' || type === 'shotImage' || type === 'shotFrames'"
           v-model="nodeAspectRatio"
           compact
         />
@@ -1361,22 +1375,20 @@ const cropStyle = computed(() => ({
           v-model="imageResolution"
           :choices="imageResolutionChoices"
         />
-        <DocAudioToggle v-if="type === 'shotVideo' && showVideoAudio" v-model="generateAudio" />
-        <VideoResolutionSeg
-          v-if="type === 'shotVideo' && videoAllows1080p(videoModel) && !isH3Fl2va"
-          v-model="videoResolution"
-          compact
-        />
-        <ParamSelect
+        <VideoSettingsPopover
           v-if="type === 'shotVideo' && shot"
-          class="dur-edit"
-          width="76px"
-          :title="$t('common.length')"
-          :model-value="String(shotDurationValue)"
-          @update:model-value="setShotDuration(Number($event))"
-        >
-          <option v-for="n in durationOptions" :key="n" :value="String(n)">{{ n }} {{ $t('common.seconds') }}</option>
-        </ParamSelect>
+          :resolution="videoResolution"
+          :resolutions="resolutionChoices"
+          :aspect="nodeAspectRatio"
+          :duration="shotDurationValue"
+          :durations="durationOptions"
+          :show-audio="showVideoAudio"
+          :audio="generateAudio"
+          @update:resolution="videoResolution = $event"
+          @update:aspect="nodeAspectRatio = $event"
+          @update:duration="setShotDuration($event)"
+          @update:audio="generateAudio = $event"
+        />
         <button
           v-if="genLabel"
           class="go"
@@ -1410,9 +1422,9 @@ const cropStyle = computed(() => ({
 .pnode {
   position: relative;
   width: 240px;
-  background: var(--color-bg-1);
+  background: color-mix(in srgb, var(--nb-bg-2) 62%, transparent);
   border: 1px solid var(--color-node-border);
-  border-radius: 12px;
+  border-radius: 6px;
   overflow: visible;
   color: var(--color-text-1);
   box-shadow: var(--shadow-node);
@@ -1524,7 +1536,7 @@ const cropStyle = computed(() => ({
   width: 100%;
   background: var(--color-node-well);
   overflow: hidden;
-  border-radius: 12px 12px 0 0;
+  border-radius: inherit;
 }
 .pnode-media img,
 .pnode-media video {
@@ -1538,8 +1550,12 @@ const cropStyle = computed(() => ({
   background: var(--color-node-well);
 }
 .pnode-media video {
-  cursor: pointer;
+  cursor: grab;
 }
+.pnode-media img { user-select: none; -webkit-user-drag: none; cursor: grab; }
+.pnode-media img:active, .pnode-media video:active { cursor: grabbing; }
+.pnode-media .play-btn.playing { opacity: 0; }
+.pnode-media:hover .play-btn.playing, .pnode-media .play-btn.playing:focus-visible { opacity: 1; }
 .play-btn {
   position: absolute;
   left: 50%;
@@ -1734,8 +1750,8 @@ const cropStyle = computed(() => ({
   gap: 6px;
   min-height: 32px;
   padding: 0 10px;
-  background: var(--color-bg-1);
-  border-radius: 0 0 11px 11px;
+  background: transparent;
+  border-radius: 0 0 5px 5px;
 }
 
 /* 캐릭터 카드 */
@@ -1756,8 +1772,8 @@ const cropStyle = computed(() => ({
   padding: 8px 11px 9px;
   background:
     linear-gradient(180deg, rgba(167, 139, 250, 0.07), transparent 42%),
-    var(--color-bg-1);
-  border-radius: 0 0 11px 11px;
+    transparent;
+  border-radius: 0 0 5px 5px;
 }
 .sc-head {
   display: flex;

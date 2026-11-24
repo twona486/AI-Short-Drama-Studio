@@ -16,6 +16,8 @@ import {
   applyAestheticToScript,
   isPlayReady,
   buildH3ImageSlots,
+  compileH3OfficialPrompt,
+  isCompleteRef2VA,
   spokenTextOnly,
   enrichVideoPerformance,
   reviewImageQuality,
@@ -36,13 +38,17 @@ import {
   DIGITAL_HUMAN_SCENE_ANCHOR,
   DIGITAL_HUMAN_IMAGE_ASSIGNMENT,
   cloneVoiceFromSample,
-  synthesizeClonedSpeech
+  synthesizeClonedSpeech,
+  modelAcceptsReferenceAudio
 } from '@/services/ai'
 import { blobToChatImageUrl, callLLM } from '@/services/ai/client'
+import { stripReasoningLeak } from '@/utils/jsonRepair'
 import { imageModelForProject, getVideoPromptStyle } from '@/services/ai/runtime'
 import { pickDocImageResolution } from '@/services/ai/modelOptions'
+import { importedDirectorPrefix } from '@/services/settings/directorSkill'
 import { collectShotRefIds, collectShotBoardRefIds, collectShotKeyframeRefIds, collectShotVideoEntries, packVideoRefEntries, boundSubjectIds, sceneAssetForShot, sceneForShot, subjectsForShot, sceneHasKeyProps } from '@/utils/consistency'
 import { resolveShotPlace } from '@/utils/shotPlace'
+import { DIRECTOR_TIMELINE_SPEC, directorTimelineIssue, h3DirectorBodyIssue, preservesScreenText } from '@/utils/shotPrompt'
 import { videoRequiresStoryboard } from '@/utils/storyboardGate'
 import { stillModeForShot, shotsMissingKeyframe, shotsMissingStoryboard, needsShotFrames, shotUsesFrames } from '@/utils/videoStill'
 import {
@@ -51,6 +57,7 @@ import {
 } from '@/utils/scriptMarkdown'
 import { countAddedPlayScenes } from '@/utils/playContinue'
 import {
+  h3VoiceMode,
   needsExternalTts,
   pushHistory,
   resolveH3VoiceMode
@@ -89,6 +96,9 @@ import {
   videoMinSeconds
 } from '@/types'
 import { canvasReferenceSlotEntries, resolvedCanvasReferenceAssetIds } from '@/services/canvas/references'
+import { resolveH3PromptProfile } from './videoPromptProfile'
+import { withVideoReferenceBlock } from '@/utils/videoReferenceBlock'
+import { optimizeH3FullReference } from '@/services/ai/h3FullReference'
 
 export type RunProgress = (nodeId: string, msg: string) => void
 export type NodeRunOpts = { hd?: boolean }
@@ -233,6 +243,8 @@ function nodeActivityLabel(node: CanvasNode, p: NonNullable<ReturnType<typeof us
       return translate('canvasRunner.videoLabel', { shot: shotNo(node.data.shotId) })
     case 'audio':
       return translate('canvasRunner.narrationLabel', { shot: shotNo(node.data.shotId) })
+    case 'audioGen':
+      return '오디오 합성'
     case 'export':
     case 'final':
       return translate('canvasRunner.assemble')
@@ -1072,7 +1084,7 @@ function canvasVideoModelForShot(shot: Shot): VideoGenModel {
 }
 
 function canvasVideoResolutionForShot(shot: Shot, videoModel: VideoGenModel): VideoResolution {
-  return normalizeVideoResolution(canvasVideoNodeForShot(shot)?.data.videoResolution, videoModel)
+  return normalizeVideoResolution(canvasVideoNodeForShot(shot)?.data.videoResolution ?? useProjectStore().current?.settings.defaultVideoResolution, videoModel)
 }
 
 function clampVideoDuration(raw: number | undefined, videoModel: VideoGenModel, fallback = 5) {
@@ -1196,7 +1208,9 @@ export async function grabVideoLastFrameNode(
   if (!node) throw new Error('해당 영상 노드를 찾을 수 없습니다.')
   const shot = node.data.shotId ? p.shots.find((s) => s.id === node.data.shotId) : undefined
   const videoId =
-    node.type === 'final' || node.type === 'export' ? p.finalVideoAssetId : shot?.videoAssetId
+    node.type === 'final' || node.type === 'export'
+      ? p.finalVideoAssetId
+      : node.data.outputAssetId || shot?.videoAssetId
   if (!videoId) throw new Error('이 노드에 영상이 없습니다. 영상을 먼저 생성한 뒤 끝 프레임을 추출하세요.')
   const blob = await assets.getBlob(videoId)
   if (!blob) throw new Error('영상을 읽지 못했습니다.')
@@ -1209,7 +1223,7 @@ export async function grabVideoLastFrameNode(
   })
 
   const frameNodeId = `lastFrame:${node.id}`
-  const label = shot ? translate('canvasRunner.shotEnd', { number: shot.index + 1 }) : translate('canvasRunner.finalFrame')
+  const label = shot ? `${shot.index + 1}번 샷 · 끝 프레임` : `${node.data.label || '영상'} · 끝 프레임`
   const existing = p.canvas.nodes.find((n) => n.id === frameNodeId)
   if (existing) {
     const old = existing.data.outputAssetId
@@ -1379,7 +1393,7 @@ export async function generateShotVideo(shot: Shot, onProgress?: (msg: string) =
           lastFrameBlob: lastBlob,
           prompt: officialPrompt,
           promptAsIs: true,
-          aesthetic: project.current.script?.h3Aesthetic || project.current.script?.aesthetic,
+          aesthetic: project.current.script?.visualStyleOverride || project.current.script?.h3Aesthetic || project.current.script?.aesthetic,
           audioDescription: shot.audioDescription,
           voiceover: spoken,
           voiceMode,
@@ -1519,7 +1533,12 @@ export async function generateShotVideo(shot: Shot, onProgress?: (msg: string) =
   const hasKeyframeFrame = packed.some((entry) => entry.kind === 'keyframe')
   const h3Mode = hasKeyframeFrame || hasIdentityRefs || packed.length > 1 ? 'R2VA' : 'I2VA'
   shot = refreshShot(shot.id)
-  const officialPrompt = videoSendPrompt(shot, project.current)
+  const officialPrompt = withVideoReferenceBlock(videoSendPrompt(shot, project.current), packed)
+  if (officialPrompt !== shot.compiledVideoPrompt) {
+    project.setShotVideoPrompt(shot.id, officialPrompt)
+    await project.save()
+    onProgress?.('실제 참조 이미지 순서에 맞춰 노드의 이미지 매핑을 갱신했어요.')
+  }
   onProgress?.('노드의 전체 프롬프트로 영상을 생성하는 중…')
   const slotNames = packed.map((entry, index) =>
     entry.kind === 'character'
@@ -1539,7 +1558,7 @@ export async function generateShotVideo(shot: Shot, onProgress?: (msg: string) =
       referenceImages: blobs.slice(1),
       prompt: officialPrompt,
       promptAsIs: true,
-      aesthetic: project.current.script?.h3Aesthetic || project.current.script?.aesthetic,
+      aesthetic: project.current.script?.visualStyleOverride || project.current.script?.h3Aesthetic || project.current.script?.aesthetic,
       audioDescription: shot.audioDescription,
       voiceover: spoken,
       voiceMode,
@@ -1607,45 +1626,117 @@ export async function rewriteShotPerformance(shot: Shot, signal?: AbortSignal): 
     sceneExcerpt: extractSceneSlice(play, scene?.name),
     signal
   })
-  project.updateShot(shot.id, { videoPrompt: performance })
-  return optimizeShotVideoPrompt({ ...shot, videoPrompt: performance }, signal)
+  return optimizeShotVideoPrompt(shot, signal, performance)
 }
 
-/** 프롬프트 최적화에 원문을 보내고 응답에서 본문만 사용한다. */
+/** H3에서는 노드 원문을 공식 영어 형식으로 바꾼다. 다중 참조는 여섯 구역, 시작과 끝 프레임은 첫 정렬 지시와 세 구역을 사용한다. */
+async function compileH3NodePrompt(input: {
+  source: string
+  referenceIds?: string[]
+  imageSlots: ReturnType<typeof buildH3ImageSlots>
+  duration: number
+  aspectRatio?: AspectRatio
+  mode: 'R2VA' | 'FL2VA'
+  aesthetic?: string
+  audioDescription?: string
+  voiceover?: string
+  voiceMode?: 'dialogue' | 'voiceover' | 'none'
+  speakerVoice?: string
+  speakerName?: string
+  onScreenNames?: string[]
+  sceneName?: string
+  sceneDescription?: string
+  sceneLighting?: string
+  sceneAnchor?: string
+  shotTitle?: string
+  cameraMovement?: Shot['cameraMovement']
+  signal?: AbortSignal
+}): Promise<string> {
+  if (input.mode === 'R2VA') {
+    return optimizeH3FullReference({ source: input.source, duration: input.duration, dialogue: input.voiceover, aesthetic: input.aesthetic, signal: input.signal,
+      references: (input.referenceIds || []).map((id, index) => ({ id, name: input.imageSlots[index]?.sourceName || input.imageSlots[index]?.name || `Picture ${index + 1}`, kind: input.imageSlots[index]?.kind || 'extra' })) })
+  }
+  const spoken = (input.voiceover || '').trim()
+  const compiled = (
+    await compileH3OfficialPrompt({
+      prompt: input.source,
+      aesthetic: input.aesthetic,
+      audioDescription: input.audioDescription,
+      voiceover: spoken || undefined,
+      voiceMode: spoken ? input.voiceMode : input.voiceMode === 'none' ? 'none' : undefined,
+      speakerVoice: input.speakerVoice,
+      speakerName: input.speakerName,
+      onScreenNames: input.onScreenNames,
+      sceneName: input.sceneName,
+      sceneDescription: input.sceneDescription,
+      sceneLighting: input.sceneLighting,
+      sceneAnchor: input.sceneAnchor,
+      shotTitle: input.shotTitle,
+      imageAssignments: input.imageSlots.map((slot) => slot.job),
+      imageSlots: input.imageSlots,
+      duration: input.duration,
+      aspectRatio: input.aspectRatio,
+      cameraMovement: input.cameraMovement,
+      mode: input.mode,
+      signal: input.signal
+    })
+  ).trim()
+  const visible = stripReasoningLeak(compiled)
+  if (!visible) throw new Error('모델이 추론 과정만 보내고 프롬프트를 보내지 않았어요.')
+  const body = visible.match(/integrated_multimodal_description:\s*([\s\S]*?)(?=\n\s*overall_soundscape:|$)/i)?.[1] || ''
+  const issue = h3DirectorBodyIssue(body, input.duration)
+  if (issue || !preservesScreenText(withVideoReferenceBlock(input.source, []), body)) {
+    throw new Error(`H3 시작·끝 프레임 프롬프트를 최적화하지 못했어요. ${issue || '화면 문구가 빠졌거나 순서가 바뀌었어요.'} 기존 프롬프트를 보관했어요.`)
+  }
+  return visible
+}
+
+/** Wan 같은 H3 이외 모델에는 원문만 전달하고 응답의 본문만 사용한다. */
 async function rewritePromptText(input: {
   source: string
   pictures?: string
+  modelName?: string
+  dialogue?: string
+  duration: number
+  aspectRatio?: AspectRatio
   signal?: AbortSignal
 }): Promise<string> {
-  const resp = await callLLM({
+  let issue = ''
+  for (let attempt = 0; attempt < 2; attempt++) {
+    const resp = await callLLM({
     disableThinking: true,
     messages: [
       {
         role: 'system',
-        content: `Improve the video prompt. Return only the revised prompt body in English for the generation model. Do not output JSON, reasoning, explanations, or a title.
-Rewrite the source instead of returning it unchanged. Preserve the original cast, action, and spoken lines. Keep Korean (한국어) dialogue, narration, and explicitly requested Korean on-screen text verbatim. Clarify vague ideas as visible actions, and add one motivated camera move and sound. Do not add characters absent from the source.
-When references are supplied, identify the character in each numbered image at the beginning.`
+        content: `${importedDirectorPrefix()}Optimize this prompt for ${input.modelName || 'the selected video model'}. Write only English video direction suited to that model. Avoid other models' proprietary sections and tags, such as the H3 six-section format. Return only the revised prompt, without JSON, a title, or explanations.
+${DIRECTOR_TIMELINE_SPEC}
+Duration: ${input.duration}s. Aspect ratio: ${input.aspectRatio || 'use the node setting'}. Preserve the existing direction, visual style, cast, action, and exact dialogue with original speakers and order. Do not summarize the direction or add new characters, events or lines. Image assignments come from the runtime. Do not guess speakers.`
       },
       {
         role: 'user',
-        content: `${input.pictures ? `참조 이미지\n${input.pictures}\n\n` : ''}원문\n${input.source}`
+        content: `${input.pictures ? `Submitted reference image order:\n${input.pictures}\n\n` : ''}${input.dialogue ? `Original dialogue and speakers:\n${input.dialogue}\n\n` : ''}Source:\n${input.source}${issue ? `\nPrevious validation issue: ${issue}. Rewrite the entire prompt.` : ''}`
       }
     ],
     temperature: 0.5,
-    maxTokens: 1200,
-    timeoutMs: 45_000,
+    useProviderOutputLimit: true,
+    timeoutMs: 300_000,
     signal: input.signal
   })
-  const text = String(resp.content || '')
-    .replace(/^```(?:json|text|markdown)?\s*/i, '')
-    .replace(/\s*```$/, '')
-    .trim()
-  if (!text) throw new Error('모델이 프롬프트를 반환하지 않았습니다.')
-  return text
+  const text = stripReasoningLeak(
+    String(resp.content || '')
+      .replace(/^```(?:json|text|markdown)?\s*/i, '')
+      .replace(/\s*```$/, '')
+  )
+    issue = resp.finishReason === 'length' ? '응답이 중간에 끊겼어요.' :
+      directorTimelineIssue(text, input.duration) ||
+      (!preservesScreenText(withVideoReferenceBlock(input.source, []), text) ? '화면 문구가 빠졌거나 순서가 바뀌었어요.' : '')
+    if (!issue) return text
+  }
+  throw new Error(`연출 프롬프트를 만들지 못했어요. ${issue} 기존 프롬프트를 보관했어요.`)
 }
 
 /** 노드에 저장된 프롬프트를 모델로 보내고 본문을 반환한다. */
-export async function optimizeShotVideoPrompt(shot: Shot, signal?: AbortSignal): Promise<string> {
+export async function optimizeShotVideoPrompt(shot: Shot, signal?: AbortSignal, rewrittenPerformance?: string): Promise<string> {
   const project = useProjectStore()
   if (!project.current) throw new Error('열려 있는 프로젝트가 없습니다.')
   shot = refreshShot(shot.id)
@@ -1654,12 +1745,60 @@ export async function optimizeShotVideoPrompt(shot: Shot, signal?: AbortSignal):
   const imageSlots = buildH3ImageSlots(packed)
   const box = (shot.compiledVideoPrompt || '').trim()
   const performance = (shot.videoPrompt || '').trim()
-  const source = box || performance
+  const source = rewrittenPerformance || box || performance
   if (!source) throw new Error('먼저 프롬프트를 작성하세요.')
-  const pictures = imageSlots
-    .map((slot) => `Picture ${slot.index}: ${slot.sourceName || slot.name}`)
-    .join('\n')
-  const compiled = await rewritePromptText({ source, pictures, signal })
+  const videoModel = canvasVideoModelForShot(shot)
+  const profile = videoProfileById(canvasVideoNodeForShot(shot)?.data.videoProfileId || shot.videoProfileId)
+  let compiled: string
+  if (await resolveH3PromptProfile(profile, videoModel, signal)) {
+    const cast = subjectsForShot(shot, p)
+    const scene = sceneForShot(shot, p)
+    const place = resolveShotPlace(shot, scene)
+    const spoken = spokenTextOnly(shot.voiceover || '')
+    const onScreenNames = cast.map((subject) => subject.name)
+    const voiceMode = spoken
+      ? resolveH3VoiceMode(shot, onScreenNames)
+      : h3VoiceMode(shot) === 'none'
+        ? 'none'
+        : undefined
+    compiled = await compileH3NodePrompt({
+      source,
+      referenceIds: packed.map((entry) => entry.id),
+      imageSlots,
+      duration: clampVideoDuration(shot.duration, videoModel),
+      aspectRatio: shotNodeAspect(p, shot.id, 'shotVideo'),
+      mode: shotUsesFl2va(shot, videoModel) ? 'FL2VA' : 'R2VA',
+      aesthetic: p.script?.visualStyleOverride || p.script?.h3Aesthetic || p.script?.aesthetic,
+      audioDescription: shot.audioDescription,
+      voiceover: shot.voiceover || spoken,
+      voiceMode,
+      speakerVoice: resolveShotSpeakerVoice(shot, p),
+      speakerName: (shot.voiceover || '').match(/^([^：:\n]{1,12})[：:]/)?.[1]?.trim(),
+      onScreenNames,
+      sceneName: place.name,
+      sceneDescription: scene?.description,
+      sceneLighting: place.lighting,
+      sceneAnchor: place.anchor,
+      shotTitle: shot.title,
+      cameraMovement: shot.cameraMovement,
+      signal
+    })
+  } else {
+    const pictures = imageSlots
+      .map((slot) => `Picture ${slot.index}: ${slot.sourceName || slot.name}`)
+      .join('\n')
+    compiled = await rewritePromptText({ source, pictures, modelName: videoModel === 'wan-prime' ? 'Wan 3.0 Prime' : [profile?.name, profile?.workflowId].filter(Boolean).join(' / '), dialogue: shot.voiceover, duration: clampVideoDuration(shot.duration, videoModel), aspectRatio: shotNodeAspect(p, shot.id, 'shotVideo'), signal })
+  }
+  const currentShot = refreshShot(shot.id)
+  const currentProfile = videoProfileById(canvasVideoNodeForShot(currentShot)?.data.videoProfileId || currentShot.videoProfileId)
+  if (currentProfile?.id !== profile?.id || currentProfile?.workflowId !== profile?.workflowId || canvasVideoModelForShot(currentShot) !== videoModel) {
+    throw new Error('최적화 중 영상 모델이 바뀌었어요. 다시 최적화하세요.')
+  }
+  if ((currentShot.compiledVideoPrompt || '').trim() !== box || (currentShot.videoPrompt || '').trim() !== performance || JSON.stringify(packVideoRefEntries(collectShotVideoEntries(currentShot, project.current!))) !== JSON.stringify(packed)) {
+    throw new Error('최적화 중 프롬프트나 참조 이미지가 바뀌었어요. 다시 최적화하세요.')
+  }
+  compiled = withVideoReferenceBlock(compiled, packed)
+  if (rewrittenPerformance) project.updateShot(shot.id, { videoPrompt: rewrittenPerformance })
   project.setShotVideoPrompt(shot.id, compiled)
   await project.save()
   return compiled
@@ -1744,6 +1883,64 @@ export async function generateShotAudio(shot: Shot, onProgress?: (msg: string) =
     shotId: shot.id
   })
   project.assignShotAudio(shot.id, asset.id)
+  await project.save()
+  return asset
+}
+
+export async function generateFreeformAudio(
+  nodeId: string,
+  onProgress?: (msg: string) => void,
+  signal?: AbortSignal
+) {
+  ensureNotCancelled(signal)
+  const project = useProjectStore()
+  const assets = useAssetsStore()
+  const p = project.current
+  const node = p?.canvas?.nodes.find((n) => n.id === nodeId)
+  if (!p || !node || node.type !== 'audioGen') throw new Error('오디오 노드를 찾을 수 없어요.')
+  const text = spokenTextOnly(node.data.prompt || '').trim() || (node.data.prompt || '').trim()
+  if (!text) throw new Error('말할 내용을 먼저 적어 주세요.')
+  const model = node.data.ttsModel?.trim() || useSettingsStore().config.tts.model
+  const wantsClone = modelAcceptsReferenceAudio(model)
+  let blob: Blob
+  if (wantsClone) {
+    if (!node.data.referenceAudioAssetId && !node.data.clonedVoiceId) {
+      throw new Error('이 모델에 사용할 목소리 샘플을 먼저 업로드하세요.')
+    }
+    let voiceId = node.data.clonedVoiceId
+    let voiceModel = node.data.clonedVoiceModel || 'qwen3-tts-vc-2026-01-22'
+    if (!voiceId) {
+      onProgress?.('참조 음색을 복제하는 중…')
+      const sample = await assets.getBlob(node.data.referenceAudioAssetId!)
+      if (!sample) throw new Error('참조 오디오를 읽지 못했어요. 다시 업로드하세요.')
+      const cloned = await cloneVoiceFromSample(
+        sample,
+        `node${nodeId.replace(/[^a-z0-9]/gi, '').slice(-10) || 'voice'}`,
+        signal
+      )
+      voiceId = cloned.voiceId
+      voiceModel = cloned.model
+      project.patchCanvasNode(nodeId, { clonedVoiceId: voiceId, clonedVoiceModel: voiceModel })
+      await project.save()
+    }
+    onProgress?.('참조 음색으로 합성하는 중…')
+    blob = await synthesizeClonedSpeech(text, voiceId, voiceModel, signal)
+  } else {
+    onProgress?.('오디오 합성…')
+    const result = await generateSpeech({
+      text,
+      model,
+      language: 'Chinese',
+      signal
+    })
+    blob = result.blob
+  }
+  const asset = await assets.add(blob, 'audio', 'ai-generated', {
+    filename: `audio_${Date.now().toString(36)}`,
+    prompt: text,
+    projectId: p.id
+  })
+  project.assignCanvasNodeAsset(nodeId, asset.id)
   await project.save()
   return asset
 }
@@ -2057,7 +2254,7 @@ export async function runExtractStoryboard(
   const look = lookFromScript(project.current.script)
   const keepApproved = Boolean(stage && isPlayApproved(project.current))
   // 같은 대본에서 다시 실행할 때 완료한 작업 그룹의 결과를 재사용한다.
-  const playKey = scriptPlayKey(project.current.script.content || '')
+  const playKey = `shot-plan-v4:${scriptPlayKey(project.current.script.content || '')}:${resolveTargetDurationSec(project.current.script) || 0}:${videoMaxSeconds(storyboardVideoModel())}`
   const savedBatches = project.current.script.shotBatches
   const resumeBatches: Array<Record<string, unknown>[] | undefined> | undefined =
     savedBatches?.playKey === playKey
@@ -2579,11 +2776,8 @@ export async function generateFreeformVideo(
   } else {
     for (const id of ids) {
       const b = (await assets.getBlob(id)) || (await library.getBlob(id))
-      if (b) blobs.push(b)
-    }
-    if (!blobs.length) throw new Error('참조 이미지를 읽지 못했습니다.')
-    if (blobs.length < ids.length) {
-      onProgress?.(`참조 이미지 ${ids.length - blobs.length}장을 읽지 못해 건너뛰었습니다.`)
+      if (!b) throw new Error(`참조 이미지 ${blobs.length + 1}번을 읽지 못했어요. 다시 추가한 뒤 생성하세요.`)
+      blobs.push(b)
     }
   }
   if (p.folderPath) setActiveProjectDir(p.folderPath)
@@ -2616,7 +2810,7 @@ export async function generateFreeformVideo(
       promptStyle: 'scene-narrative',
       videoModel,
       videoProfileId: node.data.videoProfileId,
-      videoResolution: node.data.videoResolution,
+      videoResolution: node.data.videoResolution ?? p.settings.defaultVideoResolution,
       h3GenMode: useFl2va && blobs[1] ? 'fl2va' : 'reference',
       mode: 'R2VA',
       signal,
@@ -2649,10 +2843,38 @@ export async function optimizeFreeformVideoPrompt(nodeId: string, signal?: Abort
   const source = (node.data.prompt || '').trim()
   if (!source) throw new Error('먼저 프롬프트를 작성하세요.')
   const slotEntries = canvasReferenceSlotEntries(p, node)
-  const pictures = slotEntries
-    .map((entry, index) => `Picture ${index + 1}: ${entry.name || 'reference image'}`)
-    .join('\n')
-  const compiled = await rewritePromptText({ source, pictures, signal })
+  const videoModel = normalizeVideoGenModel(node.data.videoModel)
+  const profile = videoProfileById(node.data.videoProfileId)
+  let compiled: string
+  if (await resolveH3PromptProfile(profile, videoModel, signal)) {
+    const imageSlots = buildH3ImageSlots(slotEntries)
+    const sceneSlot = slotEntries.find((entry) => entry.kind === 'scene')
+    compiled = await compileH3NodePrompt({
+      source,
+      referenceIds: resolvedCanvasReferenceAssetIds(p, node),
+      imageSlots,
+      duration: clampVideoDuration(node.data.duration, videoModel, 8),
+      aspectRatio: canvasNodeAspect(node, p.settings.aspectRatio),
+      mode: normalizeH3GenMode(node.data.h3GenMode) === 'fl2va' ? 'FL2VA' : 'R2VA',
+      aesthetic: p.script?.visualStyleOverride || p.script?.h3Aesthetic || p.script?.aesthetic,
+      sceneName: sceneSlot?.name,
+      signal
+    })
+  } else {
+    const pictures = slotEntries
+      .map((entry, index) => `Picture ${index + 1}: ${entry.name || 'Reference image'}`)
+      .join('\n')
+    compiled = await rewritePromptText({ source, pictures, modelName: videoModel === 'wan-prime' ? 'Wan 3.0 Prime' : [profile?.name, profile?.workflowId].filter(Boolean).join(' / '), duration: clampVideoDuration(node.data.duration, videoModel, 8), aspectRatio: canvasNodeAspect(node, p.settings.aspectRatio), signal })
+    compiled = withVideoReferenceBlock(compiled, slotEntries)
+  }
+  const currentNode = project.current?.canvas?.nodes.find((item) => item.id === nodeId)
+  const currentProfile = videoProfileById(currentNode?.data.videoProfileId)
+  if (!currentNode || currentProfile?.id !== profile?.id || currentProfile?.workflowId !== profile?.workflowId || normalizeVideoGenModel(currentNode.data.videoModel) !== videoModel) {
+    throw new Error('최적화 중 영상 모델이 바뀌었어요. 다시 최적화하세요.')
+  }
+  if ((currentNode.data.prompt || '').trim() !== source || JSON.stringify(canvasReferenceSlotEntries(project.current!, currentNode)) !== JSON.stringify(slotEntries)) {
+    throw new Error('최적화 중 프롬프트나 참조 이미지가 바뀌었어요. 다시 최적화하세요.')
+  }
   project.setCanvasNodePrompt(nodeId, compiled)
   await project.save()
   return compiled
@@ -2664,6 +2886,10 @@ export async function runCanvasNode(
   signal?: AbortSignal,
   opts?: NodeRunOpts
 ) {
+  if (useProjectStore().current?.canvas?.nodes.find(n => n.id === nodeId)?.data.captureId) {
+    const { runCaptureNode } = await import('@/services/continuous/capture')
+    return runCaptureNode(nodeId, msg => onProgress?.(nodeId, msg), signal, { manual: true })
+  }
   return withNodeJob(nodeId, async () => {
     pendingRun = { hd: Boolean(opts?.hd) }
     ensureNotCancelled(signal)
@@ -2682,6 +2908,7 @@ export async function runCanvasNode(
       node.type !== 'final' &&
       node.type !== 'imageGen' &&
       node.type !== 'videoGen' &&
+      node.type !== 'audioGen' &&
       node.type !== 'subject' &&
       node.type !== 'prop' &&
       node.type !== 'scene' &&
@@ -2739,6 +2966,8 @@ export async function runCanvasNode(
         await generateFreeformImage(node.id, report, signal)
       } else if (node.type === 'videoGen') {
         await generateFreeformVideo(node.id, report, signal)
+      } else if (node.type === 'audioGen') {
+        await generateFreeformAudio(node.id, report, signal)
       } else {
         throw new Error(`알 수 없는 노드 유형 ${node.type}`)
       }

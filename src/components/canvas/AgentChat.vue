@@ -2,6 +2,9 @@
 import { t as translate } from '@/i18n'
 import { computed, nextTick, onMounted, onBeforeUnmount, ref, watch } from 'vue'
 import { runAgentTurn, type AgentEvent, type AgentMessage } from '@/services/canvas/agent'
+import { runContinuousTurn } from '@/services/continuous/capture'
+import { editSelectedCanvasText, isDirectNodeShortcut, isSelectedTextEdit, runSelectedNodeShortcut } from '@/services/canvas/selectedText'
+import { rebuildCanvasGraph } from '@/services/canvas/layout'
 import { friendlyAiError, isAbortError, isTimeoutAbort } from '@/services/ai/abort'
 import { appendAgentMessage, getAgentState, setAgentAutonomy } from '@/services/canvas/taskStore'
 import { estimateRequestText } from '@/services/canvas/toolRegistry'
@@ -10,13 +13,24 @@ import { nextExtractStage, nextPipelineStep } from '@/services/canvas/pipeline'
 import { useProjectStore, useSettingsStore, useToastStore } from '@/stores'
 import { desktop, isDesktop } from '@/services/desktop'
 import { autodlVideoProfileId } from '@/services/ai/runtime'
+import { docVideoResolutionLabel, pickDocVideoResolution, videoResolutionChoices, type DocVideoResolution } from '@/services/ai/modelOptions'
+import { SCRIPT_REFERENCE_OPTIONS, normalizeScriptReference } from '@/services/ai/scriptReference'
 import type { VideoGenModel } from '@/types'
 import type { AgentAttachment } from '@/services/canvas/attachments'
 import type { TraceRow, TraceStatus } from '@/services/canvas/agentTrace'
-import type { AgentAutonomy, AspectRatio, CanvasNode } from '@/types'
-import AgentMemoryPanel from './AgentMemoryPanel.vue'
+import type { AgentAutonomy, AspectRatio, CanvasNode, VideoResolution } from '@/types'
 import AgentRichText from './AgentRichText.vue'
 import AgentTraceList from './AgentTraceList.vue'
+import {
+  CUSTOM_STORY_SKILL_ID,
+  GENERAL_STORY_SKILL_ID,
+  STORY_SKILLS
+} from '@/skills/storyStyles'
+import {
+  parseDirectorSkill,
+  pickDirectorSkillFile,
+  pickDirectorSkillFolder
+} from '@/services/settings/directorSkill'
 
 const props = withDefaults(
   defineProps<{
@@ -51,13 +65,21 @@ const chips = ref<{ label: string; text: string }[]>([
 ])
 const box = ref<HTMLElement | null>(null)
 const autonomy = ref<AgentAutonomy>('gated')
-const modeOpen = ref(false)
-const memoryOpen = ref(false)
 const canvasLive = ref(false)
 const canvasTrace = ref<TraceRow[]>([])
 const project = useProjectStore()
+const continuousEnabled = computed(() => Boolean(project.current?.continuousCaptureEnabled))
+async function toggleContinuous() {
+  if (busy.value || !project.current) return
+  project.current.continuousCaptureEnabled = !continuousEnabled.value
+  project.current.updatedAt = Date.now()
+  project.setCanvas(rebuildCanvasGraph(project.current, true))
+  await project.save()
+  chips.value = continuousEnabled.value
+    ? [{ label: project.current.continuousCapture ? translate('agentWorkspace.viewPlan') : translate('agentWorkspace.analyzeScript'), text: translate('agentWorkspace.viewPlan') }]
+    : [{ label: translate('agentWorkspace.progress'), text: translate('agentWorkspace.progressRequest') }]
+}
 let offActivity: (() => void) | undefined
-const hoverMode = ref<AgentAutonomy | null>(null)
 const settings = useSettingsStore()
 const toast = useToastStore()
 /** 이번 요청에 첨부할 로컬 파일. 텍스트는 파일 선택 시 읽어 둔다. */
@@ -97,33 +119,11 @@ function removeAttachment(index: number) {
   attachments.value.splice(index, 1)
 }
 
-/** 영상 생성 방식은 자동 또는 시작·끝 프레임 연결이다. 연결 방식에서는 둘째 샷부터 이전 영상의 끝 프레임을 사용한다. */
-const shotChainMode = computed<'auto' | 'fl2va'>(
-  () => project.current?.settings.h3ShotChainMode || 'auto'
-)
-const genModeOpen = ref(false)
-
-function chooseShotChainMode(v: 'auto' | 'fl2va') {
-  genModeOpen.value = false
-  const p = project.current
-  if (!p) return
-  p.settings = { ...p.settings, h3ShotChainMode: v }
-  void project.save()
-  toast.success(
-    v === 'fl2va'
-      ? translate('agentChat.switchedFirstLast')
-      : translate('agentChat.switchedAuto')
-  )
-}
-
 let controller: AbortController | null = null
+const stopQueued = ref(false)
+const continuousTurn = ref(false)
 
-/* 생성에 사용할 비율과 모델을 선택하면 에이전트에 즉시 적용된다. */
-const currentMode = computed(() => MODES.find((m) => m.id === autonomy.value) || MODES[1])
-const modeTip = computed(() => {
-  const id = hoverMode.value || autonomy.value
-  return MODES.find((m) => m.id === id)?.desc || ''
-})
+// Generation preferences apply to new nodes as soon as they change.
 const ASPECT_OPTIONS: { value: AspectRatio; label: string }[] = [
   { value: '16:9', get label() { return translate('agentChat.landscape') } },
   { value: '9:16', get label() { return translate('agentChat.portrait') } },
@@ -133,45 +133,141 @@ const ASPECT_OPTIONS: { value: AspectRatio; label: string }[] = [
 ]
 /* 창작 환경설정에서 비율, 이미지 모델, 영상 모델을 함께 고른다. */
 const prefOpen = ref(false)
-const prefTab = ref<'video' | 'image'>('video')
+const prefTab = ref<'video' | 'image' | 'knowledge' | 'comfyui'>('video')
 /* 상위 요소의 overflow로 잘리지 않도록 body에 표시하고 버튼 기준으로 배치한다. */
 const prefBtn = ref<HTMLElement | null>(null)
 const prefPanel = ref<HTMLElement | null>(null)
-const PANEL_WIDTH = 480
+const PANEL_WIDTH = 720
 const prefStyle = ref<Record<string, string>>({})
 
-function placePrefPanel() {
-  const rect = prefBtn.value?.getBoundingClientRect()
-  if (!rect) return
+function placeAnchoredPanel(btn: HTMLElement | null, widthCap: number) {
+  const rect = btn?.getBoundingClientRect()
+  if (!rect) return null
   const vw = window.innerWidth
   const vh = window.innerHeight
-  const width = Math.min(PANEL_WIDTH, vw - 24)
+  const width = Math.min(widthCap, vw - 24)
   const left = Math.max(12, Math.min(rect.left, vw - width - 12))
   const spaceAbove = rect.top - 12
   const spaceBelow = vh - rect.bottom - 12
   const style: Record<string, string> = { left: `${Math.round(left)}px`, width: `${Math.round(width)}px` }
-  // 위아래 중 여유가 큰 쪽으로 열고, 공간이 부족하면 높이를 줄여 내부를 스크롤한다.
   if (spaceAbove >= 260 || spaceAbove >= spaceBelow) {
     style.bottom = `${Math.round(vh - rect.top + 6)}px`
-    style.maxHeight = `${Math.round(Math.max(180, Math.min(spaceAbove, 460)))}px`
+    style.maxHeight = `${Math.round(Math.max(240, Math.min(spaceAbove, 680)))}px`
   } else {
     style.top = `${Math.round(rect.bottom + 6)}px`
-    style.maxHeight = `${Math.round(Math.max(180, Math.min(spaceBelow, 460)))}px`
+    style.maxHeight = `${Math.round(Math.max(240, Math.min(spaceBelow, 680)))}px`
   }
-  prefStyle.value = style
+  return style
+}
+
+function placePrefPanel() {
+  const style = placeAnchoredPanel(prefBtn.value, PANEL_WIDTH)
+  if (style) prefStyle.value = style
+}
+
+const skillOpen = ref(false)
+const skillTab = ref<'style' | 'genre' | 'mine'>('style')
+const skillBtn = ref<HTMLElement | null>(null)
+const skillPanel = ref<HTMLElement | null>(null)
+const skillStyle = ref<Record<string, string>>({})
+const importingSkill = ref(false)
+const styleSkills = STORY_SKILLS.filter((skill) => skill.group === 'style')
+const genreSkills = STORY_SKILLS.filter((skill) => skill.group === 'genre')
+const storyIconFiles = import.meta.glob<string>('@/assets/story-icons/*.png', { eager: true, query: '?url', import: 'default' })
+function storyIcon(id: string): string {
+  const name = id === GENERAL_STORY_SKILL_ID ? 'general' : id
+  return Object.entries(storyIconFiles).find(([path]) => path.endsWith(`/${name}.png`))?.[1] || ''
+}
+const activeStyleId = computed(() => settings.config.storyStyleId || GENERAL_STORY_SKILL_ID)
+const activeGenreId = computed(() => settings.config.storyGenreId || GENERAL_STORY_SKILL_ID)
+const activeStorySkillId = computed(() => skillTab.value === 'genre' ? activeGenreId.value : activeStyleId.value)
+const importedSkill = computed(() => settings.config.directorSkill)
+const activeStorySkillName = computed(() => {
+  const style = activeStyleId.value === CUSTOM_STORY_SKILL_ID ? importedSkill.value?.name || translate('agentWorkspace.mySkill') : STORY_SKILLS.find((skill) => skill.id === activeStyleId.value)?.name || translate('agentWorkspace.genericSkill')
+  const genre = STORY_SKILLS.find((skill) => skill.id === activeGenreId.value)?.name || translate('agentWorkspace.anyGenre')
+  return `${style} · ${genre}`
+})
+
+function placeSkillPanel() {
+  const style = placeAnchoredPanel(skillBtn.value, 560)
+  if (style) skillStyle.value = style
+}
+
+function placeComposerPanels() {
+  placePrefPanel()
+  placeSkillPanel()
 }
 
 function togglePrefPanel() {
   prefOpen.value = !prefOpen.value
   if (prefOpen.value) {
+    skillOpen.value = false
     prefStyle.value = {}
     nextTick(placePrefPanel)
   }
-  modeOpen.value = false
 }
 
 function closePrefPanel() {
   prefOpen.value = false
+}
+
+function toggleSkillPanel() {
+  skillOpen.value = !skillOpen.value
+  if (skillOpen.value) {
+    prefOpen.value = false
+    skillStyle.value = {}
+    nextTick(placeSkillPanel)
+  }
+}
+
+function closeSkillPanel() {
+  skillOpen.value = false
+}
+
+function pickStorySkill(id: string) {
+  if (id === GENERAL_STORY_SKILL_ID && skillTab.value === 'genre') {
+    settings.update({ storyGenreId: GENERAL_STORY_SKILL_ID })
+    return
+  }
+  settings.selectStorySkill(id)
+}
+
+async function saveImportedSkill(picked: { text: string; filename: string } | null) {
+  if (!picked) return
+  const doc = parseDirectorSkill(picked.text, picked.filename)
+  settings.update({ directorSkill: doc })
+  settings.selectStorySkill(CUSTOM_STORY_SKILL_ID)
+  await settings.flush()
+  toast.success(translate('agentWorkspace.skillImported', { name: doc.name }))
+}
+
+async function importStorySkill() {
+  importingSkill.value = true
+  try {
+    await saveImportedSkill(await pickDirectorSkillFile())
+  } catch (err: any) {
+    toast.error(err?.message || translate('agentWorkspace.importFailed'))
+  } finally {
+    importingSkill.value = false
+  }
+}
+
+async function importStorySkillFolder() {
+  importingSkill.value = true
+  try {
+    await saveImportedSkill(await pickDirectorSkillFolder())
+  } catch (err: any) {
+    toast.error(err?.message || translate('agentWorkspace.importFailed'))
+  } finally {
+    importingSkill.value = false
+  }
+}
+
+async function clearImportedSkill() {
+  settings.update({ directorSkill: null })
+  settings.selectStorySkill(GENERAL_STORY_SKILL_ID)
+  await settings.flush()
+  toast.success(translate('agentWorkspace.clearedSkill'))
 }
 
 const currentAspectRatio = computed<AspectRatio>(
@@ -179,6 +275,8 @@ const currentAspectRatio = computed<AspectRatio>(
 )
 const imageProfiles = computed(() => settings.config.images ?? [])
 const videoProfiles = computed(() => settings.config.videos ?? [])
+const comfyImages = computed(() => imageProfiles.value.filter(p => p.adapter?.type === 'comfyui-prompt' && p.adapter.workflowTemplate))
+const comfyVideos = computed(() => videoProfiles.value.filter(p => p.adapter?.type === 'comfyui-prompt' && p.adapter.workflowTemplate))
 const activeImage = computed(
   () =>
     imageProfiles.value.find((p) => p.id === settings.config.activeImageId) ||
@@ -245,6 +343,53 @@ const VIDEO_WORKFLOW_OPTIONS: { value: VideoGenModel; name: string; desc: string
   { value: 'wan-prime', get name() { return translate('agentChat.wan') }, get desc() { return translate('agentChat.requiresGrid') } }
 ]
 const videoDefault = computed(() => settings.config.defaultVideoModel)
+const preferenceResolutionChoices = computed(() => {
+  const model = videoDefault.value
+  const profile = model === 'wan-prime' || model === 'h3-v5' ? null : activeVideo.value
+  const listed = videoResolutionChoices({ model, profile })
+  if (listed.length) return listed
+  const fallback: DocVideoResolution[] = model === 'h3-v5' ? ['768p', '1080p'] : ['768p']
+  return fallback
+})
+const currentVideoResolution = computed<VideoResolution>(() => {
+  const choices = preferenceResolutionChoices.value
+  const stored = project.current?.settings.defaultVideoResolution
+  return pickDocVideoResolution(stored, [...choices]) || choices[0]
+})
+const videoResolutionHint = computed(() => {
+  const values = preferenceResolutionChoices.value
+  if (values.includes('480p')) return translate('agentWorkspace.wanResolutions')
+  if (values.includes('1080p')) return translate('agentWorkspace.h3Resolution')
+  return translate('agentWorkspace.defaultResolution')
+})
+watch(preferenceResolutionChoices, (choices) => {
+  if (!project.current || !choices.length) return
+  const stored = project.current.settings.defaultVideoResolution
+  const next = pickDocVideoResolution(stored, [...choices])
+  if (next && next !== stored) project.setDefaultVideoResolution(next)
+}, { immediate: true })
+
+const scriptReferenceType = computed({
+  get: () => normalizeScriptReference(settings.config.scriptReferenceType),
+  set: (value: string) => settings.update({ scriptReferenceType: normalizeScriptReference(value) })
+})
+const videoChoice = computed({
+  get: () => videoDefault.value ? `workflow:${videoDefault.value}` : `profile:${activeVideo.value?.id || ''}`,
+  set: (value: string) => {
+    if (value.startsWith('workflow:')) {
+      const workflow = VIDEO_WORKFLOW_OPTIONS.find((item) => item.value === value.slice(9))
+      if (workflow) pickVideoWorkflow(workflow.value)
+    } else if (value.startsWith('profile:') && value.slice(8)) pickVideo(value.slice(8))
+  }
+})
+const imageChoice = computed({
+  get: () => activeImage.value?.id || '',
+  set: (value: string) => { if (value) pickImage(value) }
+})
+
+function pickVideoResolution(value: VideoResolution) {
+  project.setDefaultVideoResolution(value)
+}
 
 function pickVideoWorkflow(model: VideoGenModel) {
   settings.selectVideoModelDefault(model)
@@ -262,34 +407,7 @@ function videoProfileTag(p: { provider?: string; baseUrl?: string; adapter?: { t
   return zealman ? 'Zealman' : autodl ? 'AutoDL' : ''
 }
 
-const MODES: { id: AgentAutonomy; label: string; desc: string }[] = [
-  {
-    id: 'assist',
-    get label() { return translate('agentChat.guided') },
-    get desc() { return translate('agentChat.guidedHint') }
-  },
-  {
-    id: 'gated',
-    get label() { return translate('agentChat.confirmKeyActions') },
-    get desc() { return translate('agentChat.gatedHint') }
-  },
-  {
-    id: 'autopilot',
-    get label() { return translate('agentChat.autonomous') },
-    get desc() { return translate('agentChat.autonomousHint') }
-  }
-]
-
 const estimate = computed(() => estimateRequestText(input.value))
-const statusText = computed(() => {
-  if (busy.value) {
-    if (thinking.value) return translate('agentChat.thinking')
-    return log.value || translate('agentChat.working')
-  }
-  if (canvasLive.value) return log.value || translate('agentChat.generating')
-  return currentMode.value.label
-})
-const statusLive = computed(() => busy.value || canvasLive.value)
 
 /** 자유 캔버스에서 현재 선택한 노드 카드. */
 const selectedGenNode = computed(() => {
@@ -298,8 +416,10 @@ const selectedGenNode = computed(() => {
   return n
 })
 const selectedKindLabel = computed(() =>
-  selectedGenNode.value?.type === 'videoGen' ? translate('agentChat.videoGeneration') : translate('agentChat.imageGeneration')
+  selectedGenNode.value?.type === 'videoGen' ? translate('agentWorkspace.imageToVideo') : selectedGenNode.value ? translate('agentWorkspace.imageGeneration') :
+    ['shotVideo', 'compose', 'final', 'export'].includes(props.selectedNode?.type || '') ? translate('agentWorkspace.video') : translate('agentWorkspace.canvasNode')
 )
+const canContinueSelected = computed(() => ['videoGen', 'shotVideo', 'compose', 'final', 'export'].includes(props.selectedNode?.type || ''))
 const polishChips = [
   { get label() { return translate('agentChat.moreVisual') }, get text() { return translate('agentChat.moreVisualCommand') } },
   { get label() { return translate('agentChat.clearActions') }, get text() { return translate('agentChat.clearActionsCommand') } },
@@ -308,7 +428,8 @@ const polishChips = [
 
 onMounted(() => {
   const saved = getAgentState()
-  autonomy.value = saved.autonomy
+  autonomy.value = 'gated'
+  void setAgentAutonomy('gated')
   if (saved.messages.length) {
     feed.value = saved.messages
       .filter((message) => message.role === 'user' || message.role === 'assistant')
@@ -320,39 +441,32 @@ onMounted(() => {
       }))
   }
   window.addEventListener('pointerdown', onDocPointer, true)
-  window.addEventListener('resize', placePrefPanel)
-  window.addEventListener('scroll', placePrefPanel, true)
+  window.addEventListener('resize', placeComposerPanels)
+  window.addEventListener('scroll', placeComposerPanels, true)
   window.addEventListener('keydown', onGlobalKey, true)
   offActivity = onCanvasActivity(applyCanvasActivity)
 })
 
 onBeforeUnmount(() => {
   window.removeEventListener('pointerdown', onDocPointer, true)
-  window.removeEventListener('resize', placePrefPanel)
-  window.removeEventListener('scroll', placePrefPanel, true)
+  window.removeEventListener('resize', placeComposerPanels)
+  window.removeEventListener('scroll', placeComposerPanels, true)
   window.removeEventListener('keydown', onGlobalKey, true)
   offActivity?.()
 })
 
 function onGlobalKey(ev: KeyboardEvent) {
-  if (ev.key === 'Escape' && prefOpen.value) closePrefPanel()
+  if (ev.key !== 'Escape') return
+  if (prefOpen.value) closePrefPanel()
+  if (skillOpen.value) closeSkillPanel()
 }
 
 function onDocPointer(ev: PointerEvent) {
   const el = ev.target as HTMLElement | null
   const inPref = !!el && (!!el.closest('.pref-pop') || !!prefPanel.value?.contains(el))
-  if (!el?.closest('.bar-pop') && !inPref) {
-    modeOpen.value = false
-    closePrefPanel()
-  }
-  if (!el?.closest('.mem-pop')) memoryOpen.value = false
-}
-
-async function chooseAutonomy(mode: AgentAutonomy) {
-  autonomy.value = mode
-  modeOpen.value = false
-  hoverMode.value = null
-  await setAgentAutonomy(mode)
+  const inSkill = !!el && (!!el.closest('.skill-pop') || !!skillPanel.value?.contains(el))
+  if (!el?.closest('.bar-pop') && !inPref) closePrefPanel()
+  if (!el?.closest('.bar-pop') && !inSkill) closeSkillPanel()
 }
 
 async function scrollToEnd() {
@@ -518,15 +632,34 @@ async function sendText(text: string) {
   trace.value = [{ key: 'think', kind: 'think', get label() { return translate('agentChat.deliberating') }, status: 'running' }]
   chips.value = []
   const turnController = new AbortController()
+  stopQueued.value = false
+  continuousTurn.value = continuousEnabled.value && !props.selectedNode
   controller = turnController
   await scrollToEnd()
   try {
-    const result = await runAgentTurn(messages.value, t, onProgress, {
+    const options = {
       signal: turnController.signal,
+      stopAfterCurrent: () => stopQueued.value,
       autonomy: autonomy.value,
-      selectedNodeId: selectedGenNode.value?.id,
-      attachments: attachOptions
-    })
+      selectedNodeId: props.selectedNode?.id,
+      attachments: attachOptions,
+      history: messages.value.slice(0, -1).slice(-16).map((message) => ({ role: message.role, content: message.content }))
+    }
+    const result = props.selectedNode && isDirectNodeShortcut(t)
+      ? {
+          reply: await (onProgress({ kind: 'intent', label: translate('agentWorkspace.editSelected') }), runSelectedNodeShortcut(t, props.selectedNode, turnController.signal, (label) => onProgress({ kind: 'log', label }))),
+          results: [],
+          chips: []
+        }
+      : isSelectedTextEdit(t, props.selectedNode) && props.selectedNode
+      ? {
+          reply: await editSelectedCanvasText(t, props.selectedNode, turnController.signal),
+          results: [],
+          chips: []
+        }
+      : continuousEnabled.value
+        ? await (continuousTurn.value = true, runContinuousTurn(t, onProgress, options))
+        : await runAgentTurn(messages.value, t, onProgress, options)
     thinking.value = false
     const think = trace.value.find((s) => s.kind === 'think' && s.status === 'running')
     if (think) think.status = 'done'
@@ -557,11 +690,18 @@ async function sendText(text: string) {
     thinking.value = false
     trace.value = []
     controller = null
+    continuousTurn.value = false
+    stopQueued.value = false
     await scrollToEnd()
   }
 }
 
 function cancel() {
+  if (continuousTurn.value) {
+    stopQueued.value = true
+    log.value = translate('agentWorkspace.stopPending')
+    return
+  }
   controller?.abort()
   log.value = translate('agentChat.stopping')
 }
@@ -602,50 +742,25 @@ function visibleRows(rows: TraceRow[]) {
 
 <template>
   <aside class="agent">
-    <header class="head">
-      <div class="head-id">
-        <span class="avatar" :class="{ live: statusLive }"><i /></span>
-        <div class="head-txt">
-          <strong>{{ $t('common.agent') }}</strong>
-          <span class="sub" :class="{ live: statusLive }">{{ statusText }}</span>
-        </div>
-      </div>
-      <div class="mem-pop">
-        <button
-          type="button"
-          class="head-btn"
-          :class="{ on: memoryOpen }"
-          :title="$t('agentChat.localMemory')"
-          @click.stop="memoryOpen = !memoryOpen"
-        >
-          <svg viewBox="0 0 24 24">
-            <path d="M12 4a4 4 0 0 1 4 4c1.8.6 3 2.2 3 4.2A4.3 4.3 0 0 1 14.7 16H9.3A4.3 4.3 0 0 1 5 12.2c0-2 1.2-3.6 3-4.2a4 4 0 0 1 4-4z" />
-            <path d="M9 16v2.5M15 16v2.5M12 16V20" />
-          </svg>
-        </button>
-        <AgentMemoryPanel v-if="memoryOpen" @close="memoryOpen = false" />
-      </div>
-    </header>
-
-    <section class="target" :class="{ empty: !selectedGenNode }">
+    <section class="target" :class="{ empty: !selectedNode }">
       <p class="k">{{ $t('common.selectedModel') }}</p>
-      <p v-if="selectedGenNode" class="name">
-        {{ selectedGenNode.data.label || selectedGenNode.id }}
+      <p v-if="selectedNode" class="name">
+        {{ selectedNode.data.label || selectedNode.id }}
         <small>{{ selectedKindLabel }}</small>
       </p>
       <p v-else class="name dim">{{ $t('agentChat.noSelectedNode') }}</p>
-      <p v-if="selectedGenNode?.data.prompt" class="preview">{{ selectedGenNode.data.prompt }}</p>
-      <div v-if="selectedGenNode && !busy" class="target-chips">
-        <button v-for="c in polishChips" :key="c.label" type="button" @click="sendText(c.text)">
+      <p v-if="selectedNode?.data.prompt" class="preview">{{ selectedNode.data.prompt }}</p>
+      <div v-if="(selectedGenNode || canContinueSelected) && !busy" class="target-chips">
+        <button v-for="c in selectedGenNode ? polishChips : []" :key="c.label" type="button" @click="sendText(c.text)">
           {{ c.label }}
         </button>
+        <button v-if="canContinueSelected" type="button" @click="sendText($t('agentWorkspace.continueFromTailRequest'))">{{ $t('agentWorkspace.continueFromTail') }}</button>
       </div>
     </section>
 
     <div ref="box" class="msgs">
       <template v-for="item in feed" :key="item.id">
         <div v-if="item.type === 'msg'" class="msg" :class="item.role">
-          <span v-if="item.role === 'assistant'" class="msg-avatar"><i /></span>
           <div class="bubble">
             <AgentRichText :content="item.id === 'welcome' ? $t('agentChat.welcome') : item.content" />
             <button
@@ -682,13 +797,20 @@ function visibleRows(rows: TraceRow[]) {
     </div>
 
     <div v-if="chips.length && !busy && !canvasLive" class="chips">
-      <button v-for="c in chips" :key="c.text + c.label" type="button" @click="sendText(c.text)">
+      <button
+        v-for="c in chips"
+        :key="c.text + c.label"
+        type="button"
+        :class="{ go: /^(?:继续|계속)/.test(c.text) || /^(?:继续|계속)/.test(c.label) }"
+        @click="sendText(c.text)"
+      >
         {{ c.label }}
       </button>
     </div>
 
     <form class="composer" @submit.prevent="send">
-      <p v-if="input.trim() && estimate.calls" class="estimate">
+      <p v-if="continuousEnabled" class="capture-hint">{{ $t('agentWorkspace.captureHint') }}</p>
+      <p v-if="!continuousEnabled && input.trim() && estimate.calls" class="estimate">
         {{ $t('agentChat.estimated') }} {{ estimate.calls }} {{ $t('common.requestCountEstimate') }} {{ Math.max(1, Math.ceil(estimate.seconds / 60)) }} {{ $t('common.minutes') }}
       </p>
       <div class="box" :class="{ busy }">
@@ -702,7 +824,7 @@ function visibleRows(rows: TraceRow[]) {
           v-model="input"
           rows="5"
           :disabled="busy"
-          :placeholder="$t('agentChat.placeholder')"
+          :placeholder="continuousEnabled ? $t('agentWorkspace.capturePlaceholder') : $t('agentChat.placeholder')"
           @keydown.enter.exact.prevent="send"
         />
         <div class="bar">
@@ -719,67 +841,6 @@ function visibleRows(rows: TraceRow[]) {
               </svg>
               <span>{{ $t('agentChat.attachments') }}</span>
             </button>
-          </div>
-          <div class="bar-pop">
-            <button
-              type="button"
-              class="bar-btn"
-              :disabled="busy"
-              :title="$t('agentChat.generationModeHint')"
-              @click.stop="genModeOpen = !genModeOpen; modeOpen = false"
-            >
-              {{ $t('agentChat.mode') }} {{ shotChainMode === 'fl2va' ? $t('common.firstLastFrame') : $t('common.automatic') }}
-              <i />
-            </button>
-            <div v-if="genModeOpen" class="menu" @click.stop>
-              <button
-                type="button"
-                :class="{ on: shotChainMode === 'auto' }"
-                @click="chooseShotChainMode('auto')"
-              >
-                {{ $t('agentChat.autoMode') }}
-              </button>
-              <button
-                type="button"
-                :class="{ on: shotChainMode === 'fl2va' }"
-                @click="chooseShotChainMode('fl2va')"
-              >
-                {{ $t('agentChat.firstLastMode') }}
-              </button>
-              <p class="tip">
-                {{
-                  shotChainMode === 'fl2va'
-                    ? $t('agentChat.firstLastHint')
-                    : $t('agentChat.autoModeHint')
-                }}
-              </p>
-            </div>
-          </div>
-          <div class="bar-pop">
-            <button
-              type="button"
-              class="bar-btn"
-              :disabled="busy"
-              :title="currentMode.desc"
-              @click.stop="modeOpen = !modeOpen; prefOpen = false"
-            >
-              {{ currentMode.label }}
-              <i />
-            </button>
-            <div v-if="modeOpen" class="menu" @click.stop>
-              <button
-                v-for="m in MODES"
-                :key="m.id"
-                type="button"
-                :class="{ on: autonomy === m.id }"
-                @mouseenter="hoverMode = m.id"
-                @mouseleave="hoverMode = null"
-                @click="chooseAutonomy(m.id)"
-              >
-                {{ m.label }}
-              </button>
-              <p class="tip">{{ modeTip }}</p>
-            </div>
           </div>
           <div class="bar-pop pref-pop">
             <button
@@ -821,63 +882,57 @@ function visibleRows(rows: TraceRow[]) {
                 >
                   {{ $t('agentChat.imagePreferences') }}
                 </button>
+                <button type="button" :class="{ on: prefTab === 'knowledge' }" @click="prefTab = 'knowledge'">{{ $t('agentWorkspace.writingReferences') }}</button>
+                <button type="button" :class="{ on: prefTab === 'comfyui' }" @click="prefTab = 'comfyui'">ComfyUI</button>
               </div>
-              <div class="pref-body">
+              <div v-if="prefTab === 'comfyui'" class="pref-comfy">
+                <label>{{ $t('agentWorkspace.imageWorkflow') }}
+                  <select class="pref-select" :disabled="!comfyImages.length" :value="comfyImages.some(p => p.id === settings.config.activeImageId) ? settings.config.activeImageId : ''" @change="pickImage(($event.target as HTMLSelectElement).value)">
+                    <option value="" disabled>{{ comfyImages.length ? $t('agentWorkspace.chooseImageWorkflow') : $t('agentWorkspace.noImageWorkflow') }}</option>
+                    <option v-for="p in comfyImages" :key="p.id" :value="p.id">{{ p.name }}</option>
+                  </select>
+                </label>
+                <label>{{ $t('agentWorkspace.videoWorkflow') }}
+                  <select class="pref-select" :disabled="!comfyVideos.length" :value="!videoDefault && comfyVideos.some(p => p.id === settings.config.activeVideoId) ? settings.config.activeVideoId : ''" @change="pickVideo(($event.target as HTMLSelectElement).value)">
+                    <option value="" disabled>{{ comfyVideos.length ? $t('agentWorkspace.chooseVideoWorkflow') : $t('agentWorkspace.noVideoWorkflow') }}</option>
+                    <option v-for="p in comfyVideos" :key="p.id" :value="p.id">{{ p.name }}</option>
+                  </select>
+                </label>
+                <p v-if="!comfyImages.length || !comfyVideos.length" class="pref-hint">{{ $t('agentWorkspace.importWorkflowHint') }}</p>
+              </div>
+              <div v-else-if="prefTab !== 'knowledge'" class="pref-body">
                 <div class="pref-models">
                   <p class="pref-k">{{ $t('agentChat.modelSelection') }}</p>
                   <template v-if="prefTab === 'video'">
-                    <p class="pref-g">{{ $t('common.autoDlWorkflow') }}</p>
-                    <button
-                      v-for="w in VIDEO_WORKFLOW_OPTIONS"
-                      :key="w.value"
-                      type="button"
-                      class="pref-model"
-                      :class="{ on: videoDefault === w.value }"
-                      @click="pickVideoWorkflow(w.value)"
-                    >
-                      <span class="pref-radio" />
-                      <span class="pref-model-text">
-                        <b>{{ w.name }}</b>
-                        <small>{{ w.desc }}</small>
-                      </span>
-                    </button>
-                    <p class="pref-g">{{ $t('common.configuredVideo') }}</p>
-                    <p v-if="!videoProfiles.length" class="pref-empty">
-                      {{ $t('agentChat.noVideoModel') }}
-                    </p>
-                    <button
-                      v-for="p in videoProfiles"
-                      :key="p.id"
-                      type="button"
-                      class="pref-model"
-                      :class="{ on: !videoDefault && p.id === activeVideo?.id }"
-                      @click="pickVideo(p.id)"
-                    >
-                      <span class="pref-radio" />
-                      <span class="pref-model-text">
-                        <b>{{ videoProfileTag(p) ? `${videoProfileTag(p)} · ${p.name}` : p.name }}</b>
-                        <small>{{ videoSub(p) }}</small>
-                      </span>
-                    </button>
+                    <select v-model="videoChoice" class="pref-select" :aria-label="$t('agentWorkspace.chooseVideoModel')">
+                      <optgroup :label="$t('agentWorkspace.builtInWorkflow')">
+                        <option v-for="w in VIDEO_WORKFLOW_OPTIONS" :key="w.value" :value="`workflow:${w.value}`">{{ w.name }}</option>
+                      </optgroup>
+                      <optgroup v-if="videoProfiles.length" :label="$t('common.configuredVideo')">
+                        <option v-for="p in videoProfiles" :key="p.id" :value="`profile:${p.id}`">{{ videoProfileTag(p) ? `${videoProfileTag(p)} · ${p.name}` : p.name }}</option>
+                      </optgroup>
+                      <option v-if="!videoProfiles.length && !videoDefault" value="profile:">{{ $t('agentWorkspace.chooseVideoModelHint') }}</option>
+                    </select>
+                    <p class="pref-k pref-k-gap">{{ $t('agentWorkspace.videoResolution') }}</p>
+                    <div class="res-row">
+                      <button
+                        v-for="r in preferenceResolutionChoices"
+                        :key="r"
+                        type="button"
+                        class="res-btn"
+                        :class="{ on: currentVideoResolution === r }"
+                        @click="pickVideoResolution(r)"
+                      >
+                        {{ docVideoResolutionLabel(r) }}
+                      </button>
+                    </div>
+                    <p class="pref-hint">{{ videoResolutionHint }}</p>
                   </template>
                   <template v-else>
-                    <p v-if="!imageProfiles.length" class="pref-empty">
-                      {{ $t('agentChat.noImageModel') }}
-                    </p>
-                    <button
-                      v-for="p in imageProfiles"
-                      :key="p.id"
-                      type="button"
-                      class="pref-model"
-                      :class="{ on: p.id === activeImage?.id }"
-                      @click="pickImage(p.id)"
-                    >
-                      <span class="pref-radio" />
-                      <span class="pref-model-text">
-                        <b>{{ p.name }}</b>
-                        <small>{{ p.model }}</small>
-                      </span>
-                    </button>
+                    <select v-model="imageChoice" class="pref-select" :aria-label="$t('agentWorkspace.chooseImageModel')">
+                      <option v-if="!imageProfiles.length" value="">{{ $t('agentWorkspace.addImageModel') }}</option>
+                      <option v-for="p in imageProfiles" :key="p.id" :value="p.id">{{ p.name }} · {{ p.model }}</option>
+                    </select>
                   </template>
                 </div>
                 <div class="pref-ratios">
@@ -898,16 +953,139 @@ function visibleRows(rows: TraceRow[]) {
                   <p class="pref-hint">{{ $t('agentChat.preferenceHint') }}</p>
                 </div>
               </div>
+              <div v-else class="knowledge-preference">
+                <p class="pref-k">{{ $t('agentWorkspace.chooseReferences') }}</p>
+                <p class="pref-hint">{{ $t('agentWorkspace.referenceHint') }}</p>
+                <div class="knowledge-grid"><button v-for="item in SCRIPT_REFERENCE_OPTIONS" :key="item.value" type="button" class="knowledge-option" :class="{ on: scriptReferenceType === item.value }" @click="scriptReferenceType = item.value">{{ item.label }}</button></div>
+              </div>
               </div>
             </Teleport>
           </div>
+          <div class="bar-pop skill-pop">
+            <button
+              ref="skillBtn"
+              type="button"
+              class="bar-btn pref-btn"
+              :class="{ on: activeStyleId !== GENERAL_STORY_SKILL_ID || activeGenreId !== GENERAL_STORY_SKILL_ID }"
+              :disabled="busy"
+              :title="$t('agentWorkspace.activeSkill', { name: activeStorySkillName })"
+              @click.stop="toggleSkillPanel"
+            >
+              <svg viewBox="0 0 24 24" class="pref-icon" aria-hidden="true">
+                <path d="M7 4.5h10a1.5 1.5 0 0 1 1.5 1.5V20l-6.5-3.2L5.5 20V6A1.5 1.5 0 0 1 7 4.5Z" />
+              </svg>
+              <span>{{ $t('studioUpdate.skills') }}</span>
+            </button>
+            <Teleport to="body">
+              <div
+                v-if="skillOpen"
+                ref="skillPanel"
+                class="pref-panel skill-panel"
+                :style="skillStyle"
+                @click.stop
+              >
+                <div class="pref-tabs">
+                  <button type="button" :class="{ on: skillTab === 'style' }" @click="skillTab = 'style'">{{ $t('agentWorkspace.shotStyle') }}</button>
+                  <button type="button" :class="{ on: skillTab === 'genre' }" @click="skillTab = 'genre'">{{ $t('agentWorkspace.genre') }}</button>
+                  <button type="button" :class="{ on: skillTab === 'mine' }" @click="skillTab = 'mine'">{{ $t('agentWorkspace.mine') }}</button>
+                </div>
+                <div class="skill-body">
+                  <button
+                    type="button"
+                    class="pref-model"
+                    :class="{ on: activeStorySkillId === GENERAL_STORY_SKILL_ID }"
+                    @click="pickStorySkill(GENERAL_STORY_SKILL_ID)"
+                  >
+                    <span class="pref-radio" />
+                    <img v-if="storyIcon(GENERAL_STORY_SKILL_ID)" class="skill-icon" :src="storyIcon(GENERAL_STORY_SKILL_ID)" alt="" />
+                    <span class="pref-model-text">
+                      <b>{{ skillTab === 'genre' ? $t('agentWorkspace.anyGenre') : $t('agentWorkspace.genericSkill') }}</b>
+                      <small>{{ skillTab === 'genre' ? $t('agentWorkspace.followGenre') : $t('agentWorkspace.followStyle') }}</small>
+                    </span>
+                  </button>
+                  <template v-if="skillTab === 'style'">
+                    <button
+                      v-for="skill in styleSkills"
+                      :key="skill.id"
+                      type="button"
+                      class="pref-model"
+                      :class="{ on: activeStorySkillId === skill.id }"
+                      @click="pickStorySkill(skill.id)"
+                    >
+                      <span class="pref-radio" />
+                      <img v-if="storyIcon(skill.id)" class="skill-icon" :src="storyIcon(skill.id)" alt="" />
+                      <span class="pref-model-text">
+                        <b>{{ skill.name }}</b>
+                        <small>{{ skill.summary }}</small>
+                      </span>
+                    </button>
+                  </template>
+                  <template v-else-if="skillTab === 'genre'">
+                    <button
+                      v-for="skill in genreSkills"
+                      :key="skill.id"
+                      type="button"
+                      class="pref-model"
+                      :class="{ on: activeStorySkillId === skill.id }"
+                      @click="pickStorySkill(skill.id)"
+                    >
+                      <span class="pref-radio" />
+                      <img v-if="storyIcon(skill.id)" class="skill-icon" :src="storyIcon(skill.id)" alt="" />
+                      <span class="pref-model-text">
+                        <b>{{ skill.name }}</b>
+                        <small>{{ skill.summary }}</small>
+                      </span>
+                    </button>
+                  </template>
+                  <template v-else>
+                    <button
+                      v-if="importedSkill"
+                      type="button"
+                      class="pref-model"
+                      :class="{ on: activeStorySkillId === CUSTOM_STORY_SKILL_ID }"
+                      @click="pickStorySkill(CUSTOM_STORY_SKILL_ID)"
+                    >
+                      <span class="pref-radio" />
+                      <span class="pref-model-text">
+                        <b>{{ importedSkill.name }}</b>
+                        <small>{{ importedSkill.filename || $t('agentWorkspace.importedFilename') }}</small>
+                      </span>
+                    </button>
+                    <p v-else class="pref-empty">{{ $t('agentWorkspace.noImported') }}</p>
+                    <div class="skill-acts">
+                      <button type="button" class="skill-act" :disabled="importingSkill" @click="importStorySkill">
+                        {{ importingSkill ? $t('common.reading') : importedSkill ? $t('agentWorkspace.replaceSkill') : $t('agentWorkspace.importSkill') }}
+                      </button>
+                      <button
+                        v-if="isDesktop()"
+                        type="button"
+                        class="skill-act"
+                        :disabled="importingSkill"
+                        @click="importStorySkillFolder"
+                      >
+                        {{ $t('settings.director.importFolder') }}
+                      </button>
+                      <button v-if="importedSkill" type="button" class="skill-act danger" @click="clearImportedSkill">{{ $t('common.clear') }}</button>
+                    </div>
+                  </template>
+                  <p class="pref-hint">{{ $t('agentWorkspace.combineHint') }}</p>
+                </div>
+              </div>
+            </Teleport>
+          </div>
+          <button type="button" class="bar-btn capture-switch" role="switch" :aria-checked="continuousEnabled" :class="{ on: continuousEnabled }" :disabled="busy" :title="$t('studioUpdate.continuousHint')" @click="toggleContinuous">
+            <span class="capture-switch-track" aria-hidden="true"><span /></span><span>{{ $t('studioUpdate.continuousCapture') }}</span>
+          </button>
           <button
             v-if="busy"
             type="button"
             class="icon-act stop"
-            :title="$t('common.stop')"
+            :class="{ 'stop-queue': continuousTurn }"
+            :title="continuousTurn ? $t('agentWorkspace.stopAfterCurrent') : $t('common.stop')"
+            :aria-label="continuousTurn ? $t('agentWorkspace.stopNext') : $t('common.stop')"
             @click="cancel"
           >
+            <span v-if="continuousTurn">{{ stopQueued ? $t('agentWorkspace.waitingCurrent') : $t('agentWorkspace.stopFollowing') }}</span>
             <svg viewBox="0 0 24 24" aria-hidden="true">
               <rect x="7" y="7" width="10" height="10" rx="1.5" />
             </svg>
@@ -936,147 +1114,53 @@ function visibleRows(rows: TraceRow[]) {
   height: 100%;
   flex-shrink: 0;
   min-width: 0;
-  border-right: 1px solid var(--color-border);
-  background: var(--color-bg-1);
+  border-right: none;
+  background: var(--nb-bg-1);
+  color: var(--nb-t1);
   display: flex;
   flex-direction: column;
   min-height: 0;
   overflow-x: hidden;
 }
 
-/* 헤더 */
-.head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 10px;
-  padding: 12px 12px 10px 16px;
-}
-.head-id {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  min-width: 0;
-}
-.avatar {
-  position: relative;
-  width: 26px;
-  height: 26px;
-  border-radius: 9px;
-  background: linear-gradient(135deg, #7eb4ff 0%, #a78bfa 60%, #f0abfc 100%);
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  flex-shrink: 0;
-}
-.avatar i {
-  width: 10px;
-  height: 10px;
-  border-radius: 50%;
-  background: rgba(16, 19, 26, 0.85);
-  transition: background 0.25s;
-}
-.avatar.live i {
-  background: #4ade80;
-  box-shadow: 0 0 0 3px rgba(74, 222, 128, 0.25);
-  animation: breathe 1.6s ease-in-out infinite;
-}
-@keyframes breathe {
-  0%, 100% { box-shadow: 0 0 0 2px rgba(74, 222, 128, 0.18); }
-  50% { box-shadow: 0 0 0 5px rgba(74, 222, 128, 0.1); }
-}
-.head-txt {
-  display: flex;
-  flex-direction: column;
-  gap: 1px;
-  min-width: 0;
-}
-.head-txt strong {
-  font-size: 13px;
-  font-weight: 650;
-  letter-spacing: 0.02em;
-}
-.head-txt .sub {
-  font-size: 10px;
-  color: var(--color-text-4);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  max-width: 220px;
-}
-.head-txt .sub.live {
-  color: var(--color-accent);
-}
-.head-btn {
-  width: 28px;
-  height: 28px;
-  border: 1px solid transparent;
-  border-radius: 8px;
-  background: transparent;
-  color: var(--color-text-3);
-  cursor: pointer;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  transition: all 0.15s;
-}
-.head-btn:hover {
-  background: var(--color-fill);
-  color: var(--color-text-1);
-}
-.head-btn.on {
-  background: rgba(126, 180, 255, 0.14);
-  border-color: rgba(126, 180, 255, 0.4);
-  color: var(--color-accent);
-}
-.head-btn svg {
-  width: 15px;
-  height: 15px;
-  fill: none;
-  stroke: currentColor;
-  stroke-width: 1.7;
-  stroke-linecap: round;
-  stroke-linejoin: round;
-}
-.mem-pop {
-  position: relative;
-  flex-shrink: 0;
-}
-
 /* 선택한 자유 캔버스 노드 카드 */
 .target {
-  margin: 0 14px 8px;
+  margin: 12px 14px 8px;
   padding: 10px 12px;
-  border: 1px solid var(--color-border);
-  border-radius: 12px;
-  background: linear-gradient(180deg, rgba(126, 180, 255, 0.06), rgba(126, 180, 255, 0.02));
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--nb-accent) 8%, var(--nb-bg-2));
+  border: 1px solid var(--nb-line-accent);
 }
 .target.empty {
-  border-style: dashed;
-  background: none;
+  background: transparent;
+  border-color: transparent;
 }
 .k {
   margin: 0;
   font-size: 10px;
   font-weight: 650;
-  letter-spacing: 0.06em;
-  color: var(--color-text-4);
+  letter-spacing: 0.14em;
+  color: var(--nb-accent);
 }
 .name {
   margin: 4px 0 0;
   font-size: 13px;
   font-weight: 600;
-  color: var(--color-text-1);
+  color: var(--nb-t1);
 }
 .name small {
   margin-left: 8px;
-  font-weight: 400;
-  color: var(--color-text-3);
+  padding: 1px 6px;
+  border-radius: 4px;
+  background: var(--nb-bg-4);
+  font-weight: 500;
+  font-size: 10px;
+  color: var(--nb-t3);
 }
 .name.dim,
 .preview.dim {
   font-weight: 400;
-  color: var(--color-text-4);
+  color: var(--nb-t4);
 }
 .preview {
   margin: 6px 0 0;
@@ -1084,7 +1168,7 @@ function visibleRows(rows: TraceRow[]) {
   overflow: hidden;
   font-size: 11px;
   line-height: 1.55;
-  color: var(--color-text-3);
+  color: var(--nb-t2);
   white-space: pre-wrap;
   display: -webkit-box;
   -webkit-line-clamp: 3;
@@ -1098,16 +1182,18 @@ function visibleRows(rows: TraceRow[]) {
 }
 .target-chips button {
   margin: 0;
-  padding: 3px 9px;
-  border: 1px solid rgba(126, 180, 255, 0.3);
-  border-radius: 99px;
-  background: rgba(126, 180, 255, 0.08);
-  color: var(--color-accent);
+  padding: 3px 8px;
+  border: none;
+  border-radius: 4px;
+  background: var(--nb-bg-3);
+  color: var(--nb-t2);
   font-size: 11px;
   cursor: pointer;
+  transition: background 0.18s ease, color 0.18s ease;
 }
 .target-chips button:hover {
-  background: rgba(126, 180, 255, 0.16);
+  background: var(--nb-bg-4);
+  color: var(--nb-t1);
 }
 
 /* 메시지 목록 */
@@ -1136,47 +1222,30 @@ function visibleRows(rows: TraceRow[]) {
 .msg.user {
   justify-content: flex-end;
 }
-.msg-avatar {
-  flex-shrink: 0;
-  width: 22px;
-  height: 22px;
-  margin-top: 2px;
-  border-radius: 8px;
-  background: linear-gradient(135deg, #7eb4ff 0%, #a78bfa 60%, #f0abfc 100%);
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-}
-.msg-avatar i {
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
-  background: rgba(16, 19, 26, 0.8);
-}
 .bubble {
   min-width: 0;
   max-width: 100%;
   padding: 9px 12px;
-  border-radius: 12px;
+  border: none;
+  border-radius: 4px;
   font-size: 13px;
   line-height: 1.7;
   overflow-wrap: anywhere;
   word-break: break-word;
+  color: var(--nb-t2);
 }
 .msg.user .bubble {
   max-width: 88%;
   padding: 8px 12px;
-  border-radius: 14px 14px 4px 14px;
-  background: linear-gradient(135deg, rgba(126, 180, 255, 0.22), rgba(167, 139, 250, 0.18));
-  border: 1px solid rgba(126, 180, 255, 0.25);
-  color: var(--color-text-1);
+  background: var(--nb-accent-soft);
+  border: 1px solid var(--nb-line-accent);
+  color: var(--nb-t1);
 }
 .msg.assistant .bubble {
   position: relative;
   flex: 1;
-  border: 1px solid var(--color-border);
-  border-radius: 4px 12px 12px 12px;
-  background: var(--color-bg-2);
+  background: var(--nb-bg-2);
+  border: 1px solid var(--nb-line-2);
 }
 .bubble-copy {
   position: absolute;
@@ -1186,13 +1255,13 @@ function visibleRows(rows: TraceRow[]) {
   height: 22px;
   margin: 0;
   padding: 0;
-  border: 1px solid var(--color-border);
-  border-radius: 6px;
-  background: var(--color-bg-1);
-  color: var(--color-text-4);
+  border: none;
+  border-radius: 4px;
+  background: var(--nb-bg-3);
+  color: var(--nb-t3);
   cursor: pointer;
   opacity: 0;
-  transition: opacity 0.15s, color 0.15s, border-color 0.15s;
+  transition: opacity 0.15s ease, color 0.15s ease, background 0.15s ease;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -1201,13 +1270,13 @@ function visibleRows(rows: TraceRow[]) {
   opacity: 1;
 }
 .bubble-copy:hover {
-  color: var(--color-text-1);
-  border-color: rgba(126, 180, 255, 0.5);
+  color: var(--nb-t1);
+  background: var(--nb-bg-4);
 }
 .bubble-copy.ok {
   opacity: 1;
-  color: var(--color-success);
-  border-color: rgba(74, 222, 128, 0.5);
+  color: var(--nb-success);
+  background: var(--nb-success-soft);
 }
 .bubble-copy svg {
   width: 12px;
@@ -1223,7 +1292,7 @@ function visibleRows(rows: TraceRow[]) {
   flex-direction: column;
   gap: 8px;
   padding: 10px 0 2px;
-  border-top: 1px solid var(--color-border);
+  border-top: none;
   min-width: 0;
 }
 
@@ -1265,7 +1334,7 @@ function visibleRows(rows: TraceRow[]) {
   margin: 0;
   padding: 5px 12px;
   border: none;
-  border-radius: 99px;
+  border-radius: 4px;
   background: transparent;
   color: var(--color-text-3);
   font-size: 11px;
@@ -1276,13 +1345,30 @@ function visibleRows(rows: TraceRow[]) {
   background: var(--color-fill-hover);
   color: var(--color-text-1);
 }
+.chips button.go {
+  background: var(--nb-accent);
+  color: var(--nb-accent-ink);
+  font-size: 12px;
+  font-weight: 650;
+  padding: 6px 14px;
+}
+.chips button.go:hover {
+  background: #67e4fb;
+  color: var(--nb-accent-ink);
+}
 
 /* 입력 영역 */
 .composer {
   padding: 10px 12px 12px;
-  border-top: 1px solid var(--color-border);
+  border-top: none;
   min-width: 0;
 }
+.capture-hint { margin: 0 0 8px; padding: 8px 10px; border-radius: 8px; background: var(--nb-ai-soft); color: var(--nb-ai); font-size: 11px; line-height: 1.5; }
+.capture-switch { gap: 5px; white-space: nowrap; }
+.capture-switch-track { display: inline-flex; flex: 0 0 24px; align-items: center; width: 24px; height: 14px; padding: 2px; border-radius: 12px; background: var(--nb-bg-4); box-sizing: border-box; }
+.capture-switch-track > span { width: 10px; height: 10px; border-radius: 50%; background: var(--nb-t2); transition: transform .15s; }
+.capture-switch.on .capture-switch-track { background: var(--nb-accent); }
+.capture-switch.on .capture-switch-track > span { transform: translateX(10px); background: var(--nb-accent-ink); }
 .estimate {
   margin: 0 0 6px;
   font-size: 11px;
@@ -1292,15 +1378,17 @@ function visibleRows(rows: TraceRow[]) {
   display: flex;
   flex-direction: column;
   min-width: 0;
-  background: var(--color-bg-2);
-  border: 1px solid var(--color-border);
-  border-radius: 14px;
+  background: var(--nb-bg-2);
+  border: 1px solid var(--nb-line-2);
+  border-radius: 10px;
   padding: 8px 8px 6px;
-  transition: border-color 0.2s, box-shadow 0.2s;
+  outline: 1px solid transparent;
+  outline-offset: -1px;
+  transition: outline-color 0.2s ease, border-color 0.2s ease, background-color 0.2s ease;
 }
 .box:focus-within {
-  border-color: rgba(126, 180, 255, 0.5);
-  box-shadow: 0 0 0 3px rgba(126, 180, 255, 0.1);
+  border-color: var(--nb-line-accent);
+  outline-color: var(--nb-accent-soft);
 }
 textarea {
   width: 100%;
@@ -1317,6 +1405,7 @@ textarea {
 }
 .bar {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 6px;
   min-height: 32px;
@@ -1348,8 +1437,8 @@ textarea {
   max-width: 100%;
   padding: 3px 8px;
   border-radius: 999px;
-  background: rgba(126, 180, 255, 0.12);
-  color: #9db9ff;
+  background: var(--nb-accent-soft);
+  color: var(--nb-accent);
   font-size: 11px;
   overflow: hidden;
   white-space: nowrap;
@@ -1408,10 +1497,11 @@ textarea {
   z-index: 8;
   width: 220px;
   padding: 6px;
-  border: 1px solid var(--color-border);
-  border-radius: 10px;
-  background: var(--color-bg-1);
-  box-shadow: var(--shadow-md);
+  border: none;
+  border-radius: 4px;
+  background: var(--nb-bg-2);
+  border: 1px solid var(--nb-line-3);
+  box-shadow: var(--nb-e3);
 }
 .model-menu {
   width: 248px;
@@ -1425,6 +1515,47 @@ textarea {
   gap: 5px;
   padding: 0 10px;
 }
+.pref-btn.on {
+  color: var(--color-text-1);
+  background: var(--color-fill);
+}
+.skill-panel {
+  width: 560px;
+}
+.skill-body {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 10px;
+}
+.skill-body .pref-model { align-items: center; min-height: 58px; }
+.skill-body .pref-radio { margin-top: 0; }
+.skill-icon { width: 44px; height: 44px; object-fit: contain; flex: 0 0 44px; }
+.skill-body .pref-model-text small { white-space: normal; line-height: 1.45; }
+.skill-acts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 8px;
+}
+.skill-act {
+  height: 30px;
+  margin: 0;
+  padding: 0 12px;
+  border: none;
+  border-radius: 4px;
+  background: var(--nb-bg-3);
+  color: var(--nb-t1);
+  font-size: 12px;
+  cursor: pointer;
+}
+.skill-act.danger {
+  color: var(--color-error, #f87171);
+}
+.skill-act:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
 .pref-icon {
   width: 14px;
   height: 14px;
@@ -1436,10 +1567,11 @@ textarea {
 .pref-panel {
   position: fixed;
   z-index: 2000;
-  border: 1px solid var(--color-border);
-  border-radius: 12px;
-  background: var(--color-bg-1);
-  box-shadow: 0 18px 48px rgba(0, 0, 0, 0.28);
+  border: none;
+  border-radius: 4px;
+  background: var(--nb-bg-2);
+  border: 1px solid var(--nb-line-3);
+  box-shadow: var(--nb-e3);
   overflow: auto;
   animation: pref-pop 0.12s ease-out;
 }
@@ -1455,6 +1587,7 @@ textarea {
 }
 .pref-tabs {
   display: flex;
+  flex-wrap: wrap;
   gap: 4px;
   padding: 8px 10px 0;
 }
@@ -1482,16 +1615,53 @@ textarea {
 .pref-models {
   min-width: 0;
   padding-right: 10px;
-  border-right: 1px solid var(--color-border);
-  max-height: 260px;
+  border-right: none;
+  max-height: 520px;
   overflow: auto;
 }
-.pref-k {
-  margin: 2px 4px 8px;
-  font-size: 10px;
-  font-weight: 650;
-  letter-spacing: 0.04em;
-  color: var(--color-text-4);
+.pref-select {
+  display: block;
+  width: 100%;
+  height: 36px;
+  padding: 0 10px;
+  border: none;
+  border-radius: 4px;
+  background: var(--nb-bg-3);
+  color: var(--nb-t1);
+  font-size: 12px;
+}
+.pref-comfy { display: grid; gap: 12px; padding: 14px; min-width: 0; }
+.pref-comfy label { display: grid; gap: 6px; min-width: 0; font-size: 12px; color: var(--color-text-2); }
+.pref-comfy .pref-select { min-width: 0; max-width: 100%; box-sizing: border-box; text-overflow: ellipsis; }
+.pref-comfy .pref-hint { margin: 0; }
+.knowledge-preference { padding: 14px; }
+.knowledge-preference .pref-hint { margin: 4px 0 14px; }
+.knowledge-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(135px, 1fr)); gap: 8px; }
+.knowledge-option { padding: 10px 12px; border: 1px solid var(--nb-line-2); border-radius: 8px; background: var(--nb-bg-3); color: var(--nb-t2); text-align: left; cursor: pointer; }
+.knowledge-option.on { color: var(--nb-accent); background: var(--nb-accent-soft); border-color: var(--nb-line-accent); }
+.pref-k-gap {
+  margin-top: 14px;
+}
+.res-row {
+  display: flex;
+  gap: 8px;
+  padding: 0 4px 6px;
+}
+.res-btn {
+  height: 32px;
+  min-width: 72px;
+  padding: 0 12px;
+  border: none;
+  border-radius: 4px;
+  background: var(--nb-bg-3);
+  color: var(--nb-t2);
+  font-size: 12px;
+  cursor: pointer;
+}
+.res-btn.on {
+  color: var(--nb-accent);
+  background: var(--nb-accent-soft);
+  border: 1px solid var(--nb-line-accent);
 }
 
 /* 영상 워크플로와 구성된 연결의 그룹 제목 */
@@ -1539,8 +1709,8 @@ textarea {
   border-radius: 50%;
 }
 .pref-model.on .pref-radio {
-  border-color: var(--color-primary, #7c6cff);
-  background: var(--color-primary, #7c6cff);
+  border-color: var(--nb-accent);
+  background: var(--nb-accent);
   box-shadow: inset 0 0 0 2.5px var(--color-bg-1);
 }
 .pref-model-text {
@@ -1581,8 +1751,8 @@ textarea {
   width: 56px;
   height: 56px;
   margin: 0;
-  border: 1px solid var(--color-border);
-  border-radius: 10px;
+  border: none;
+  border-radius: 4px;
   background: transparent;
   color: var(--color-text-3);
   cursor: pointer;
@@ -1591,9 +1761,8 @@ textarea {
   background: var(--color-fill);
 }
 .ratio-item.on {
-  border-color: var(--color-primary, #7c6cff);
-  background: var(--color-fill);
-  color: var(--color-text-1);
+  background: var(--nb-accent-soft);
+  color: var(--nb-accent);
 }
 .ratio-box {
   border: 1.5px solid currentColor;
@@ -1658,7 +1827,7 @@ textarea {
 .tip {
   margin: 6px 2px 2px;
   padding-top: 6px;
-  border-top: 1px solid var(--color-border);
+  border-top: none;
   font-size: 11px;
   line-height: 1.45;
   color: var(--color-text-4);
@@ -1685,24 +1854,25 @@ textarea {
   stroke-linecap: round;
   stroke-linejoin: round;
 }
+.icon-act.stop-queue { width: auto; min-width: 28px; padding: 0 8px; gap: 4px; font-size: 11px; white-space: nowrap; }
 .send {
-  background: linear-gradient(135deg, #7eb4ff, #a78bfa);
-  color: #fff;
-  transition: transform 0.12s, box-shadow 0.2s;
+  border-radius: 8px;
+  background: var(--nb-accent);
+  color: var(--nb-accent-ink);
+  transition: background 0.18s ease;
 }
 .send:hover:not(:disabled) {
-  box-shadow: 0 4px 14px rgba(126, 180, 255, 0.35);
-  transform: translateY(-1px);
+  background: #4ce0ff;
 }
 .send:disabled {
   opacity: 0.35;
   cursor: default;
 }
 .stop {
-  background: transparent;
-  color: var(--color-error);
-  border: 1px solid rgba(185, 28, 28, 0.35);
-  border-radius: 10px;
+  background: var(--nb-danger-soft);
+  color: var(--nb-danger);
+  border: none;
+  border-radius: 4px;
 }
 .stop svg {
   fill: currentColor;

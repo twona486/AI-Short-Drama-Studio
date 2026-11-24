@@ -25,6 +25,7 @@ import {
   subjectsForShot
 } from '@/utils/consistency'
 import { resolveShotPlace } from '@/utils/shotPlace'
+import { containsSceneDramaText } from '@/utils/scriptMarkdown'
 import { lookFromScript, mediumLockText } from '@/utils/visualStyle'
 import { videoRequiresStoryboard } from '@/utils/storyboardGate'
 
@@ -60,7 +61,8 @@ export function defaultBoardPrompt(shot: Shot, project: Project): string {
 export function defaultShotImagePrompt(shot: Shot, project: Project): string {
   if (!videoRequiresStoryboard(project)) {
     const look = lookFromScript(project.script)
-    return shotKeyframePrompt(shot, look, { aspectRatio: project.settings.aspectRatio })
+    const roster = shotRefRoster(shot, project, collectShotRefIds(shot, project).ids)
+    return [roster, shotKeyframePrompt(shot, look, { aspectRatio: project.settings.aspectRatio })].filter(Boolean).join('\n\n')
   }
   return composeShotImagePrompt(shot, project, (shot.visualPrompt || shot.title).trim())
 }
@@ -144,6 +146,7 @@ export function defaultVideoSendPrompt(shot: Shot, project: Project): string {
   const performance = String(shot.videoPrompt || '').trim()
   const voices = shotVoiceBlock(shot, project)
   return [
+    shotRefRoster(shot, project, packed.map((entry) => entry.id)),
     roster,
     voices,
     `Shot: ${shot.title || `Shot ${shot.index + 1}`}`,
@@ -186,6 +189,13 @@ export function subjectSendPrompt(subject: Subject, project: Project): string {
 }
 
 export function sceneSendPrompt(scene: Scene, project: Project): string {
+  const saved = scene.platePrompt?.trim()
+  if (saved && /场景锚点图\s*\/\s*四宫格/.test(saved) && containsSceneDramaText(saved)) {
+    throw new Error('장면 기준 이미지 프롬프트에 대사나 샷 내용이 들어 있어요. 장면을 다시 추출하거나 장면 설명과 프롬프트를 수정한 뒤 생성하세요.')
+  }
+  if (!saved && containsSceneDramaText(scene.description)) {
+    throw new Error('장면 설명에 대사나 샷 내용이 들어 있어요. 장면을 다시 추출하거나 설명을 수정한 뒤 생성하세요.')
+  }
   return ensureStyleLock(scene.platePrompt?.trim() || defaultScenePlatePrompt(scene, project), project)
 }
 
@@ -200,6 +210,10 @@ export function boardSendPrompt(shot: Shot, project: Project): string {
 }
 
 export function shotImageSendPrompt(shot: Shot, project: Project): string {
+  const stored = shot.imagePrompt?.trim() || ''
+  if (stored && (shot.voiceover || '').split('\n').some((line) => line.trim().length > 6 && stored.includes(line.trim()))) {
+    throw new Error('키프레임 프롬프트에 대사가 들어 있어요. 노드에서 프롬프트를 수정하고 참조 이미지 매핑을 확인한 뒤 생성하세요.')
+  }
   return ensureStyleLock(shot.imagePrompt?.trim() || defaultShotImagePrompt(shot, project), project)
 }
 

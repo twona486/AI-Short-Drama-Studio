@@ -1,28 +1,39 @@
 <script setup lang="ts">
 import { confirmAction } from '@/utils/confirmAction'
 import { t as translate } from '@/i18n'
-import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
+import { computed, defineComponent, h, markRaw, nextTick, onMounted, onUnmounted, ref, watch, type Component } from 'vue'
 import { useRouter } from 'vue-router'
-import { VueFlow, useVueFlow, type Connection, type Edge, type Node, type NodeMouseEvent } from '@vue-flow/core'
-import { Background } from '@vue-flow/background'
+import { SelectionMode, VueFlow, useVueFlow, type Connection, type Edge, type Node, type NodeMouseEvent } from '@vue-flow/core'
 import { Controls } from '@vue-flow/controls'
 import '@vue-flow/core/dist/style.css'
 import '@vue-flow/core/dist/theme-default.css'
 import '@vue-flow/controls/dist/style.css'
 import { useProjectStore, useAssetsStore, useToastStore } from '@/stores'
-import { rebuildCanvasGraph, NODE_W, nextFreeformPosition, rescueStrandedFreeformNodes } from '@/services/canvas/layout'
-import { setCanvasReveal, setCanvasInspect, setCanvasSelect } from '@/services/canvas/canvasBridge'
+import { rebuildCanvasGraph, NODE_W, pipelineNodeHeight, nextFreeformPosition, rescueStrandedFreeformNodes } from '@/services/canvas/layout'
+import { setCanvasReveal, setCanvasInspect, setCanvasSelect, setCanvasLinkMenu } from '@/services/canvas/canvasBridge'
 import { rebindShotScenes, optimizeShotVideoPrompt, optimizeFreeformVideoPrompt } from '@/services/canvas/runner'
 import {
   appendCanvasReferenceSource,
-  canvasNodeProducesImage
+  canvasNodeOutputAssetId,
+  canvasNodeProducesImage,
+  carryTextFromNode,
+  nextCanvasLinks,
+  prevCanvasLinks,
+  type LinkCanvasKind
 } from '@/services/canvas/references'
 import { isDesktop, desktop } from '@/services/desktop'
+import ThemeToggle from '@/components/common/ThemeToggle.vue'
 import PipelineNode from '@/components/canvas/PipelineNode.vue'
+import CaptureTextNode from '@/components/canvas/CaptureTextNode.vue'
+import ResizableNode from '@/components/canvas/ResizableNode.vue'
+import { normalizeNodeScale } from '@/utils/nodeResize'
 import AudioNode from '@/components/canvas/AudioNode.vue'
 import ScriptDocNode from '@/components/canvas/ScriptDocNode.vue'
 import GroupFrame from '@/components/canvas/GroupFrame.vue'
 import FreeformGenNode from '@/components/canvas/FreeformGenNode.vue'
+import AudioGenNode from '@/components/canvas/AudioGenNode.vue'
+import ComposeNode from '@/components/canvas/ComposeNode.vue'
+import CtxMenuIcon from '@/components/canvas/CtxMenuIcon.vue'
 import AgentChat from '@/components/canvas/AgentChat.vue'
 import CanvasGuide from '@/components/canvas/CanvasGuide.vue'
 import NodeInspector from '@/components/canvas/NodeInspector.vue'
@@ -133,7 +144,8 @@ function clampAgentToViewport() {
 
 watch(rightOpen, clampAgentToViewport)
 
-const nodeTypes = {
+const rawNodeTypes = {
+  captureText: CaptureTextNode,
   script: ScriptDocNode,
   subject: PipelineNode,
   prop: PipelineNode,
@@ -148,10 +160,16 @@ const nodeTypes = {
   final: PipelineNode,
   groupFrame: GroupFrame,
   imageGen: FreeformGenNode,
-  videoGen: FreeformGenNode
+  videoGen: FreeformGenNode,
+  audioGen: AudioGenNode,
+  compose: ComposeNode
 }
+const nodeTypes = Object.fromEntries(Object.entries(rawNodeTypes).map(([type, renderer]) => [type, type === 'groupFrame' ? markRaw(renderer) : markRaw(defineComponent({
+  inheritAttrs: false,
+  setup(_, { attrs }) { return () => h(ResizableNode, { ...attrs, id: String(attrs.id), data: attrs.data as any, renderer: markRaw(renderer as Component) }) }
+}))]))
 
-const { onConnect, onNodeDragStop, onMoveEnd, fitView, screenToFlowCoordinate } = useVueFlow()
+const { onConnect, onNodeDragStop, onMoveEnd, fitView, screenToFlowCoordinate, getSelectedNodes, removeSelectedNodes } = useVueFlow()
 
 const ctxMenu = ref<{
   x: number
@@ -159,7 +177,40 @@ const ctxMenu = ref<{
   flow: { x: number; y: number }
   nodeId?: string
   onNode?: boolean
+  linkOnly?: boolean
+  linkSide?: 'prev' | 'next'
+  links?: LinkCanvasKind[]
 } | null>(null)
+
+// Expand rendered rows for taller images without rewriting saved canvas coordinates.
+const imageRowLayout = computed(() => {
+  const offsets = new Map<string, number>()
+  const growth = new Map<string, number>()
+  const p = project.current
+  const nodes = p?.canvas?.nodes
+  if (!p || !nodes) return { offsets, growth }
+  const byGroup = new Map<string, CanvasNode[]>()
+  for (const n of nodes) {
+    if (!n.parentGroupId) continue
+    const children = byGroup.get(n.parentGroupId) ?? []
+    children.push(n)
+    byGroup.set(n.parentGroupId, children)
+  }
+  for (const [group, children] of byGroup) {
+    let extra = 0
+    for (const n of children.sort((a, b) => a.position.y - b.position.y)) {
+      offsets.set(n.id, extra)
+      if ((!canvasNodeProducesImage(n) && n.type !== 'shotVideo') || n.type === 'shotFrames') continue
+      const id = canvasNodeOutputAssetId(p, n)
+      const asset = id ? assets.getMeta(id) : undefined
+      const defaultAspect = n.type === 'shotImage' || n.type === 'shotBoard' || n.type === 'shotVideo' ? p.settings.aspectRatio : '16:9'
+      const imageAspect = asset?.kind === 'image' && asset.width > 0 && asset.height > 0 ? `${asset.width}:${asset.height}` : defaultAspect
+      extra += Math.max(0, pipelineNodeHeight(imageAspect) * normalizeNodeScale(n.data.canvasScale) - pipelineNodeHeight(defaultAspect))
+    }
+    growth.set(group, extra)
+  }
+  return { offsets, growth }
+})
 
 const flowNodes = computed<Node[]>(() => {
   const graph = project.current?.canvas
@@ -173,7 +224,7 @@ const flowNodes = computed<Node[]>(() => {
         data: { ...n.data, nodeType: n.type },
         style: {
           width: `${n.data.width ?? 280}px`,
-          height: `${n.data.height ?? 240}px`
+          height: `${(n.data.height ?? 240) + (imageRowLayout.value.growth.get(n.id) ?? 0)}px`
         },
         draggable: true,
         selectable: false,
@@ -187,8 +238,8 @@ const flowNodes = computed<Node[]>(() => {
         position: n.position,
         data: { ...n.data, nodeType: n.type },
         style: {
-          width: `${n.data.width ?? 460}px`,
-          height: `${n.data.height ?? 720}px`
+          width: `${(n.data.width ?? 460) * normalizeNodeScale(n.data.canvasScale)}px`,
+          height: `${(n.data.height ?? 720) * normalizeNodeScale(n.data.canvasScale)}px`
         },
         draggable: true,
         zIndex: 2
@@ -197,10 +248,10 @@ const flowNodes = computed<Node[]>(() => {
     const mapped: Node = {
       id: n.id,
       type: n.type,
-      position: n.position,
+      position: { x: n.position.x, y: n.position.y + (imageRowLayout.value.offsets.get(n.id) ?? 0) },
       data: { ...n.data, nodeType: n.type },
       draggable: true,
-      zIndex: n.type === 'imageGen' || n.type === 'videoGen' ? 12 : 1
+      zIndex: n.type === 'imageGen' || n.type === 'videoGen' || n.type === 'audioGen' || n.type === 'compose' ? 12 : 1
     }
     if (n.parentGroupId) {
       mapped.parentNode = n.parentGroupId
@@ -222,7 +273,7 @@ const flowEdges = computed<Edge[]>(() => {
     animated: false,
     interactionWidth: 28,
     class: 'pipe-edge',
-    style: { stroke: 'rgba(126, 180, 255, 0.42)', strokeWidth: 1.1 }
+    style: { stroke: 'var(--nb-edge)', strokeWidth: 1.4 }
   }))
 })
 
@@ -232,6 +283,206 @@ const selected = computed<CanvasNode | null>(() => {
   return project.current.canvas.nodes.find((n) => n.id === id) ?? null
 })
 const selectedId = ref<string | null>(null)
+const selectionIds = ref<string[]>([])
+const selectionMenu = ref<{ x: number; y: number; actions: Array<{ id: string; label: string }> } | null>(null)
+const REF_LIMIT = 9
+
+function flowSelection(): CanvasNode[] {
+  const nodes = project.current?.canvas?.nodes || []
+  return getSelectedNodes.value
+    .map((item) => nodes.find((node) => node.id === item.id))
+    .filter((node): node is CanvasNode => Boolean(node))
+}
+
+function isPickText(node: CanvasNode) {
+  return node.type === 'script' || node.type === 'captureText'
+}
+
+function isPickVideo(node: CanvasNode) {
+  return node.type === 'videoGen' || node.type === 'shotVideo' || node.type === 'compose'
+}
+
+function byReadingOrder(nodes: CanvasNode[]) {
+  return [...nodes].sort((a, b) => a.position.x - b.position.x || a.position.y - b.position.y)
+}
+
+function placeSelectionMenu(event: Event | undefined, actions: Array<{ id: string; label: string }>) {
+  const point = event && 'clientX' in event ? (event as MouseEvent) : undefined
+  selectionMenu.value = {
+    x: point ? Math.max(8, Math.min(point.clientX, window.innerWidth - 216)) : 24,
+    y: point ? Math.max(8, Math.min(point.clientY, window.innerHeight - 240)) : 24,
+    actions
+  }
+}
+
+function onBoxSelect(event?: MouseEvent) {
+  const picked = flowSelection()
+  if (picked.length < 2) {
+    selectionIds.value = []
+    selectionMenu.value = null
+    return
+  }
+  const texts = picked.filter(isPickText)
+  if (texts.length > 1) toast.info(translate('canvasContext.multiText'))
+  selectionIds.value = picked.map((node) => node.id)
+  const nodes = texts.length > 1
+    ? picked.filter((node) => !texts.slice(1).some((text) => text.id === node.id))
+    : picked
+  const videos = byReadingOrder(nodes.filter(isPickVideo))
+  const images = byReadingOrder(nodes.filter((node) => canvasNodeProducesImage(node)))
+  const text = texts[0]
+  const actions: Array<{ id: string; label: string }> = []
+  if (videos.length >= 2 && !images.length) {
+    actions.push({ id: 'compose', label: translate('canvasContext.composeVideo') }, { id: 'download', label: translate('canvasContext.downloadAll') })
+  } else if (images.length && videos.length === 1) {
+    actions.push({ id: 'attach', label: translate('canvasContext.attachReference') })
+  } else if (images.length && !videos.length) {
+    actions.push({ id: 'video', label: translate('canvasContext.addVideo') }, { id: 'image', label: translate('canvasContext.generateImage') })
+  } else if (videos.length === 1 && text && !images.length) {
+    actions.push({ id: 'attach', label: translate('canvasContext.attachText') })
+  } else if (videos.length >= 2) {
+    actions.push({ id: 'compose', label: translate('canvasContext.composeVideo') }, { id: 'download', label: translate('canvasContext.downloadAll') })
+  }
+  placeSelectionMenu(event, actions)
+}
+
+function selectionNodes() {
+  const all = project.current?.canvas?.nodes || []
+  const nodes = selectionIds.value
+    .map((id) => all.find((node) => node.id === id))
+    .filter((node): node is CanvasNode => Boolean(node))
+  return {
+    videos: byReadingOrder(nodes.filter(isPickVideo)),
+    images: byReadingOrder(nodes.filter((node) => canvasNodeProducesImage(node))).slice(0, REF_LIMIT),
+    text: nodes.find(isPickText)
+  }
+}
+
+function connectNodes(pairs: Array<[string, string]>) {
+  const canvas = project.current?.canvas
+  if (!canvas || !pairs.length) return
+  const edges = [...canvas.edges]
+  for (const [source, target] of pairs) {
+    const id = `e-${source}-${target}-in`
+    if (!edges.some((edge) => edge.id === id || (edge.source === source && edge.target === target))) {
+      edges.push({ id, source, target, sourceHandle: 'out', targetHandle: 'in' })
+    }
+  }
+  project.setCanvas({ ...canvas, edges })
+}
+
+function composeSelection() {
+  const { videos } = selectionNodes()
+  if (videos.length < 2 || !project.current) return
+  const last = videos[videos.length - 1]
+  const id = `compose_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 6)}`
+  project.addCanvasNode({
+    id,
+    type: 'compose',
+    position: { x: last.position.x + 280, y: last.position.y },
+    data: { label: translate('canvasContext.compose') },
+    status: 'idle'
+  })
+  connectNodes(videos.map((node) => [node.id, id]))
+  selectedId.value = id
+  selectionMenu.value = null
+  selectionIds.value = []
+  toast.success(translate('canvasContext.clipsConnected', { count: videos.length }))
+}
+
+async function downloadSelection() {
+  const { videos } = selectionNodes()
+  let saved = 0
+  for (const node of videos) {
+    const assetId = project.current ? canvasNodeOutputAssetId(project.current, node) : undefined
+    const blob = assetId ? await assets.getBlob(assetId) : undefined
+    if (!blob) continue
+    const url = URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    link.href = url
+    link.download = `${(node.data.label || translate('comfySettings.video')).replace(/[\\/:*?"<>|]/g, ' ')}.mp4`
+    link.click()
+    URL.revokeObjectURL(url)
+    saved += 1
+    await new Promise((resolve) => setTimeout(resolve, 180))
+  }
+  toast[saved ? 'success' : 'warn'](saved ? translate('canvasContext.downloadStarted', { count: saved }) : translate('canvasContext.noOutput'))
+}
+
+function addFromSelection(type: 'imageGen' | 'videoGen') {
+  if (!project.current) return
+  const { images, text } = selectionNodes()
+  if (!images.length) return
+  const count = (project.current.canvas?.nodes ?? []).filter((node) => node.type === type).length + 1
+  const id = `${type}_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 6)}`
+  const anchor = images[images.length - 1]
+  project.addCanvasNode({
+    id,
+    type,
+    position: nextFreeformPosition(project.current.canvas?.nodes ?? [], { source: anchor, place: 'after' }),
+    status: 'idle',
+    data: {
+      label: type === 'videoGen' ? translate('canvasContext.videoN', { count }) : translate('canvasContext.imageN', { count }),
+      prompt: text ? carryTextFromNode(project.current, text) : '',
+      referenceAssetIds: [],
+      referenceSourceNodeIds: images.map((node) => node.id),
+      aspectRatio: project.current.settings.aspectRatio,
+      ...(type === 'videoGen'
+        ? { duration: 8, videoModel: 'h3' as const, videoResolution: project.current.settings.defaultVideoResolution || '768p' }
+        : {})
+    }
+  })
+  connectNodes([
+    ...images.map((node) => [node.id, id] as [string, string]),
+    ...(text ? [[text.id, id] as [string, string]] : [])
+  ])
+  selectedId.value = id
+  selectionMenu.value = null
+  selectionIds.value = []
+  toast.success(type === 'videoGen' ? translate('canvasContext.videoReferencesAdded', { count: images.length }) : translate('canvasContext.imageReferencesAdded', { count: images.length }))
+}
+
+function attachSelection() {
+  if (!project.current) return
+  const { videos, images, text } = selectionNodes()
+  const video = videos[0]
+  if (!video || (!images.length && !text)) return
+  const before = new Set(video.data.referenceSourceNodeIds || [])
+  let added = 0
+  for (const image of images) {
+    if (appendCanvasReferenceSource(project.current, video.id, image.id) && !before.has(image.id)) added += 1
+  }
+  const prompt = text ? carryTextFromNode(project.current, text) : ''
+  if (prompt) {
+    const existing = video.data.prompt || ''
+    project.setCanvasNodePrompt(video.id, existing.includes(prompt) ? existing : `${existing}\n${prompt}`.trim())
+  }
+  connectNodes([
+    ...images.map((node) => [node.id, video.id] as [string, string]),
+    ...(text ? [[text.id, video.id] as [string, string]] : [])
+  ])
+  project.patchCanvasNode(video.id, { referenceSourceNodeIds: [...(video.data.referenceSourceNodeIds || [])] })
+  selectedId.value = video.id
+  selectionMenu.value = null
+  selectionIds.value = []
+  toast.success(
+    added && prompt
+      ? translate('canvasContext.imagesAndTextAdded', { count: added })
+      : added
+        ? translate('canvasContext.imagesAdded', { count: added })
+        : prompt
+          ? translate('canvasContext.textAttached')
+          : translate('canvasContext.referencesExist')
+  )
+}
+
+function runSelectionAction(id: string) {
+  if (id === 'compose') composeSelection()
+  else if (id === 'download') void downloadSelection()
+  else if (id === 'video') addFromSelection('videoGen')
+  else if (id === 'image') addFromSelection('imageGen')
+  else if (id === 'attach') attachSelection()
+}
 
 onMounted(async () => {
   if (!project.current) {
@@ -268,18 +519,22 @@ onMounted(async () => {
   setCanvasSelect((nodeId) => {
     selectedId.value = nodeId
   })
+  setCanvasLinkMenu((nodeId, x, y, side) => openNodeLinkMenu(nodeId, x, y, side))
   setTimeout(() => fitView({ padding: 0.2 }), 80)
   window.addEventListener('keydown', onDupKey)
+  window.addEventListener('keydown', keepSpaceForSelection)
   window.addEventListener('resize', clampAgentToViewport)
 })
 
 onUnmounted(() => {
   stopAgentResize()
   window.removeEventListener('keydown', onDupKey)
+  window.removeEventListener('keydown', keepSpaceForSelection)
   window.removeEventListener('resize', clampAgentToViewport)
   setCanvasReveal(null)
   setCanvasInspect(null)
   setCanvasSelect(null)
+  setCanvasLinkMenu(null)
 })
 
 onConnect((c: Connection) => {
@@ -326,8 +581,8 @@ onNodeDragStop(({ node }) => {
   if (parentId) {
     const parent = project.current.canvas.nodes.find((n) => n.id === parentId)
     const pw = Number(parent?.data.width) || 0
-    const ph = Number(parent?.data.height) || 0
-    const cx = node.position.x + NODE_W / 2
+    const ph = (Number(parent?.data.height) || 0) + (imageRowLayout.value.growth.get(parentId) ?? 0)
+    const cx = node.position.x + (node.dimensions?.width || NODE_W) / 2
     const cy = node.position.y + 48
     const inside = cx >= 0 && cy >= 0 && cx <= pw && cy <= ph
     if (!inside && parent) {
@@ -336,6 +591,8 @@ onNodeDragStop(({ node }) => {
         y: parent.position.y + node.position.y
       }
       parentGroupId = undefined
+    } else {
+      position.y -= imageRowLayout.value.offsets.get(node.id) ?? 0
     }
   }
   const nodes = project.current.canvas.nodes.map((n) =>
@@ -461,7 +718,7 @@ function pointerClient(ev: MouseEvent | TouchEvent): { x: number; y: number } | 
 function canDuplicate(id: string | null | undefined): boolean {
   if (!id) return false
   const n = project.current?.canvas?.nodes.find((x) => x.id === id)
-  return n?.type === 'imageGen' || n?.type === 'videoGen'
+  return n?.type === 'imageGen' || n?.type === 'videoGen' || n?.type === 'audioGen'
 }
 
 function canDeleteNode(id: string | null | undefined): boolean {
@@ -473,13 +730,13 @@ function canDeleteNode(id: string | null | undefined): boolean {
 
 function duplicateNode(id: string | null | undefined) {
   if (!id) {
-    toast.warn(translate('studio.selectNodeToCopy'))
+    toast.warn(translate('canvasContext.selectDuplicate'))
     return
   }
   const nid = project.duplicateCanvasNode(id)
   closeCtxMenu()
   if (!nid) {
-    toast.warn(translate('studio.copyRestricted'))
+    toast.warn(translate('canvasContext.duplicateKinds'))
     return
   }
   selectedId.value = nid
@@ -489,18 +746,34 @@ function duplicateNode(id: string | null | undefined) {
   })
 }
 
-async function deleteCtxNode(id: string | null | undefined) {
+async function deleteSelection() {
+  const ids = selectionIds.value.filter((id) => canDeleteNode(id))
+  if (!ids.length || !project.current) return
+  const projectId = project.current.id
+  if (!await confirmAction(translate('canvasContext.deleteCount', { count: ids.length }))) return
+  if (project.current?.id !== projectId) return
+  for (const id of ids) deleteCtxNode(id, { skipConfirm: true, quiet: true })
+  if (selectedId.value && ids.includes(selectedId.value)) selectedId.value = null
+  selectionMenu.value = null
+  selectionIds.value = []
+  removeSelectedNodes(getSelectedNodes.value.filter((node) => ids.includes(node.id)))
+  toast.success(translate('canvasContext.deletedCount', { count: ids.length }))
+}
+
+async function deleteCtxNode(id: string | null | undefined, options?: { skipConfirm?: boolean; quiet?: boolean }) {
   if (!id || !project.current) return
   const n = project.current.canvas?.nodes.find((x) => x.id === id)
   if (!n || !canDeleteNode(id)) {
     closeCtxMenu()
     return
   }
-  if (!await confirmAction(translate('studio.deleteNodeConfirm'))) {
+  const projectId = project.current.id
+  if (!options?.skipConfirm && !await confirmAction(translate('canvasContext.confirmDelete'))) {
     closeCtxMenu()
     return
   }
   const p = project.current
+  if (!p || p.id !== projectId) return
   if (n.type === 'prop') {
     const pid = n.data.propId
     if (pid) {
@@ -545,7 +818,14 @@ async function deleteCtxNode(id: string | null | undefined) {
   }
   if (selectedId.value === id) selectedId.value = null
   closeCtxMenu()
-  toast.success(translate('studio.nodeDeleted'))
+  if (!options?.quiet) toast.success(translate('canvasContext.nodeDeleted'))
+}
+
+function keepSpaceForSelection(e: KeyboardEvent) {
+  if (e.code !== 'Space' || e.repeat) return
+  const target = e.target as HTMLElement | null
+  if (!target || target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable) return
+  e.preventDefault()
 }
 
 function onDupKey(e: KeyboardEvent) {
@@ -558,6 +838,27 @@ function onDupKey(e: KeyboardEvent) {
   if (e.key === 'Delete' && canDeleteNode(selectedId.value)) {
     e.preventDefault()
     deleteCtxNode(selectedId.value)
+  }
+}
+
+function openNodeLinkMenu(nodeId: string, x: number, y: number, side: 'prev' | 'next') {
+  const node = project.current?.canvas?.nodes.find((item) => item.id === nodeId)
+  const links = side === 'prev' ? prevCanvasLinks(node) : nextCanvasLinks(node)
+  if (!links.length) {
+    toast.warn(side === 'prev' ? translate('canvasContext.noneBefore') : translate('canvasContext.noneAfter'))
+    return
+  }
+  selectedId.value = nodeId
+  const h = links.length * 36 + 16
+  ctxMenu.value = {
+    x: Math.max(8, Math.min(x, window.innerWidth - 216)),
+    y: Math.max(8, Math.min(y, window.innerHeight - h - 8)),
+    flow: screenToFlowCoordinate({ x, y }),
+    nodeId,
+    onNode: true,
+    linkOnly: true,
+    linkSide: side,
+    links
   }
 }
 
@@ -574,9 +875,8 @@ function openCtxMenu(ev: MouseEvent | NodeMouseEvent) {
   if (clickedId) selectedId.value = clickedId
   const nodeId = clickedId || selectedId.value || undefined
   const extra = (canDuplicate(clickedId) ? 36 : 0) + (clickedId && canDeleteNode(clickedId) ? 36 : 0)
-  const extraFree = 4 * 36 + 10
   const w = 216
-  const h = 92 + extra + extraFree
+  const h = 8 * 36 + 16 + extra
   ctxMenu.value = {
     x: Math.max(8, Math.min(pt.x, window.innerWidth - w - 8)),
     y: Math.max(8, Math.min(pt.y, window.innerHeight - h - 8)),
@@ -598,39 +898,51 @@ function pullStrandedFreeformIntoView() {
   project.setCanvas({ ...canvas, nodes: rescued })
 }
 
-function addFreeform(type: 'imageGen' | 'videoGen') {
+function addFreeform(type: 'imageGen' | 'videoGen' | 'audioGen') {
   if (!project.current) return
   pullStrandedFreeformIntoView()
   const all = project.current.canvas?.nodes ?? []
   const count = all.filter((n) => n.type === type).length + 1
   const id = `${type}_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 6)}`
-  const sourceId = ctxMenu.value?.onNode ? ctxMenu.value.nodeId : undefined
-  const source = sourceId ? all.find((node) => node.id === sourceId) : undefined
-  const inheritsSource = canvasNodeProducesImage(source)
+  const upstream = ctxMenu.value?.linkSide === 'prev'
+  const anchorId = ctxMenu.value?.onNode ? ctxMenu.value.nodeId : undefined
+  const anchor = anchorId ? all.find((node) => node.id === anchorId) : undefined
+  const inheritsSource = !upstream && type !== 'audioGen' && canvasNodeProducesImage(anchor)
   const pos = nextFreeformPosition(all, {
-    source,
-    click: ctxMenu.value?.flow
+    source: anchor,
+    click: ctxMenu.value?.flow,
+    place: upstream ? 'before' : 'after'
   })
   project.addCanvasNode({
     id,
     type,
     position: { x: pos.x, y: pos.y },
     data: {
-      label: type === 'imageGen' ? translate('studio.imageNodeName', { p0: count }) : translate('studio.videoNodeName', { p0: count }),
-      prompt: '',
+      label: type === 'imageGen' ? translate('canvasContext.imageN', { count }) : type === 'audioGen' ? translate('canvasContext.audioN', { count }) : translate('canvasContext.videoN', { count }),
+      prompt: anchor && project.current ? carryTextFromNode(project.current, anchor) : '',
       referenceAssetIds: [],
-      referenceSourceNodeIds: inheritsSource && sourceId ? [sourceId] : [],
+      referenceSourceNodeIds: inheritsSource && anchorId ? [anchorId] : [],
       duration: 8,
       aspectRatio: project.current.settings.aspectRatio,
-      ...(type === 'videoGen' ? { videoModel: 'h3' as const } : {})
+      ...(type === 'videoGen'
+        ? {
+            videoModel: 'h3' as const,
+            videoResolution: project.current.settings.defaultVideoResolution || '768p'
+          }
+        : {})
     },
     status: 'idle'
   })
-  if (inheritsSource && sourceId && project.current.canvas) {
+  if (upstream && anchorId && type === 'imageGen') {
+    appendCanvasReferenceSource(project.current, anchorId, id)
+  }
+  if (anchorId && project.current.canvas) {
+    const source = upstream ? id : anchorId
+    const target = upstream ? anchorId : id
     const edge = {
-      id: `e-${sourceId}-${id}-in`,
-      source: sourceId,
-      target: id,
+      id: `e-${source}-${target}-in`,
+      source,
+      target,
       sourceHandle: 'out',
       targetHandle: 'in'
     }
@@ -641,10 +953,113 @@ function addFreeform(type: 'imageGen' | 'videoGen') {
   }
   selectedId.value = id
   closeCtxMenu()
-  toast.success(type === 'videoGen' ? translate('studio.videoNodeAdded') : translate('studio.imageNodeAdded'))
+  toast.success(type === 'videoGen' ? translate('canvasContext.videoAdded') : type === 'audioGen' ? translate('canvasContext.audioAdded') : translate('canvasContext.imageAdded'))
   nextTick(() => {
     fitView({ nodes: [id], padding: 0.35, duration: 280 })
   })
+}
+
+function addLinkedText() {
+  if (!project.current) return
+  const anchorId = ctxMenu.value?.onNode ? ctxMenu.value.nodeId : undefined
+  const anchor = anchorId ? project.current.canvas?.nodes.find((node) => node.id === anchorId) : undefined
+  const nodes = project.current.canvas?.nodes ?? []
+  const pos = anchor
+    ? nextFreeformPosition(nodes, { source: anchor, place: 'before', span: 460 })
+    : (ctxMenu.value?.flow ?? { x: 120, y: 120 })
+  const carried = anchor ? carryTextFromNode(project.current, anchor) : ''
+  const script = project.current.script
+  if (script && !script.content.trim() && carried) {
+    project.setScript({ ...script, content: carried })
+  } else if (
+    anchor &&
+    script?.content.trim() &&
+    !carried &&
+    (anchor.type === 'imageGen' || anchor.type === 'videoGen' || anchor.type === 'audioGen')
+  ) {
+    project.setCanvasNodePrompt(anchor.id, script.content.trim().slice(0, 8000))
+  }
+  const existing = nodes.find((node) => node.type === 'script')
+  const scriptId = existing?.id || 'script'
+  if (!existing) {
+    project.addCanvasNode({
+      id: scriptId,
+      type: 'script',
+      position: pos,
+      data: {
+        label: project.current.script?.topic || project.current.name || translate('studioUpdate.script'),
+        width: 460,
+        height: 720,
+        kind: 'scriptDoc'
+      },
+      status: 'idle'
+    })
+  } else {
+    existing.position = { x: pos.x, y: pos.y }
+  }
+  if (anchorId && project.current.canvas) {
+    const edge = {
+      id: `e-${scriptId}-${anchorId}-in`,
+      source: scriptId,
+      target: anchorId,
+      sourceHandle: 'out',
+      targetHandle: 'in'
+    }
+    const linked = project.current.canvas.edges.some((item) => item.source === scriptId && item.target === anchorId)
+    project.setCanvas({
+      ...project.current.canvas,
+      edges: linked ? project.current.canvas.edges : [...project.current.canvas.edges, edge]
+    })
+  }
+  selectedId.value = scriptId
+  closeCtxMenu()
+  toast.success(existing ? translate('canvasContext.textConnected') : translate('canvasContext.textAdded'))
+  nextTick(() => fitView({ nodes: [scriptId], padding: 0.35, duration: 280 }))
+}
+
+function addCompose() {
+  if (!project.current) return
+  const anchorId = ctxMenu.value?.onNode ? ctxMenu.value.nodeId : undefined
+  const anchor = anchorId ? project.current.canvas?.nodes.find((node) => node.id === anchorId) : undefined
+  const nodes = project.current.canvas?.nodes ?? []
+  let compose = [...nodes].reverse().find((node) => node.type === 'compose')
+  const created = !compose
+  if (!compose) {
+    const pos = anchor
+      ? nextFreeformPosition(nodes, { source: anchor, place: 'after' })
+      : (ctxMenu.value?.flow ?? { x: 120, y: 120 })
+    const id = `compose_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 6)}`
+    project.addCanvasNode({
+      id,
+      type: 'compose',
+      position: pos,
+      data: { label: translate('canvasContext.compose') },
+      status: 'idle'
+    })
+    compose = project.current.canvas?.nodes.find((node) => node.id === id)
+  }
+  if (!compose) return
+  if (anchorId && project.current.canvas) {
+    const edge = {
+      id: `e-${anchorId}-${compose.id}-in`,
+      source: anchorId,
+      target: compose.id,
+      sourceHandle: 'out',
+      targetHandle: 'in'
+    }
+    const linked = project.current.canvas.edges.some((item) => item.source === anchorId && item.target === compose?.id)
+    if (!linked) {
+      project.setCanvas({
+        ...project.current.canvas,
+        edges: [...project.current.canvas.edges, edge]
+      })
+    }
+    toast.success(linked ? translate('canvasContext.videoInComposition') : created ? translate('canvasContext.compositionAdded') : translate('canvasContext.addedToComposition'))
+  }
+  selectedId.value = compose.id
+  closeCtxMenu()
+  const focusId = compose.id
+  nextTick(() => fitView({ nodes: [focusId], padding: 0.35, duration: 280 }))
 }
 
 function addScriptNode() {
@@ -736,6 +1151,55 @@ function addPipelineEntity(kind: 'subject' | 'scene' | 'shot' | 'prop') {
   closeCtxMenu()
 }
 
+const creatingCanvas = ref(false)
+const renaming = ref(false)
+const nameInput = ref('')
+
+function startRename() {
+  renaming.value = true
+  nameInput.value = project.current?.name || ''
+}
+function commitRename() {
+  const name = nameInput.value.trim()
+  if (project.current && name) {
+    project.current.name = name
+    project.current.updatedAt = Date.now()
+    project.save()
+  }
+  renaming.value = false
+}
+
+async function newCanvas() {
+  if (creatingCanvas.value) return
+  creatingCanvas.value = true
+  try {
+    const now = new Date()
+    const pad = (n: number) => String(n).padStart(2, '0')
+    const label = translate('canvasContext.newProjectName', { date: `${now.getMonth() + 1}-${now.getDate()} ${pad(now.getHours())}:${pad(now.getMinutes())}` })
+    const p = await project.createNamed(label)
+    p.pipelineMode = 'standard'
+    p.script = {
+      id: 's_' + Date.now().toString(36),
+      topic: label,
+      content: '',
+      keywords: [],
+      style: 'cinematic',
+      aspectRatio: '16:9',
+      shotDuration: 5,
+      createdAt: Date.now()
+    }
+    project.setScript(p.script)
+    project.setAspectRatio('16:9')
+    await project.save()
+    selectedId.value = null
+    toast.success(translate('studioUpdate.canvasCreated'))
+  } catch (e: any) {
+    toast.error(e?.message || translate('studioUpdate.canvasCreateFailed'))
+  } finally {
+    creatingCanvas.value = false
+  }
+}
+
 async function openFolder() {
   const dir = project.current?.folderPath
   if (dir && isDesktop()) await desktop().openPath(dir)
@@ -752,7 +1216,18 @@ function goClassic() {
       <button class="icon-btn" :title="$t('studio.backToProjects')" @click="router.push('/')">
         <CanvasToolbarIcon name="back" />
       </button>
-      <strong>{{ project.current?.name || $t('common.canvas') }}</strong>
+      <input
+        v-if="renaming"
+        v-model="nameInput"
+        class="name-input nodrag"
+        @keydown.enter="commitRename"
+        @keydown.escape="renaming = false"
+        @blur="commitRename"
+        autofocus
+      />
+      <button v-else class="project-name nodrag" type="button" :title="$t('canvasContext.rename')" @click="startRename">
+        {{ project.current?.name || $t('canvasContext.canvas') }}
+      </button>
       <span class="dim">{{
         $t('studio.counts', { p0: project.current?.shots.length || 0, p1: project.current?.canvas?.nodes.length || 0 })
       }}</span>
@@ -762,26 +1237,6 @@ function goClassic() {
       <div class="spacer" />
       <button class="icon-btn" :title="$t('studio.guide')" @click="guideOpen = true">
         <span class="guide-mark">?</span>
-      </button>
-      <button
-        class="mode-switch-btn script-lib-btn"
-        type="button"
-        :title="$t('studio.openScriptLibrary')"
-        @click="router.push('/scripts')"
-      >
-        <CanvasToolbarIcon name="script" :size="15" />
-        {{ $t('common.scripts') }}
-        <em>→</em>
-      </button>
-      <button
-        class="mode-switch-btn"
-        type="button"
-        :title="$t('studio.classicHint')"
-        @click="goClassic"
-      >
-        <CanvasToolbarIcon name="steps" :size="15" />
-        {{ $t('common.classicWorkflow') }}
-        <em>→</em>
       </button>
       <button
         class="bulk-optimize-btn"
@@ -804,12 +1259,6 @@ function goClassic() {
       <button class="icon-btn" :title="$t('studio.rearrange')" @click="relayout">
         <CanvasToolbarIcon name="layout" />
       </button>
-      <button v-if="isDesktop()" class="icon-btn" :title="$t('common.openFolder')" @click="openFolder">
-        <CanvasToolbarIcon name="folder" />
-      </button>
-      <button class="icon-btn" :title="$t('common.settings')" @click="openSettings">
-        <CanvasToolbarIcon name="settings" />
-      </button>
       <button
         class="icon-btn"
         :class="{ on: rightOpen }"
@@ -820,6 +1269,32 @@ function goClassic() {
       </button>
     </header>
     <div class="body">
+      <nav class="side-rail" :aria-label="$t('studioUpdate.canvasNavigation')">
+        <button type="button" :title="$t('studioUpdate.newCanvas')" :disabled="creatingCanvas" @click="newCanvas">
+          <CanvasToolbarIcon name="newCanvas" :size="18" />
+        </button>
+        <button type="button" :title="$t('studioUpdate.script')" @click="router.push('/scripts')">
+          <CanvasToolbarIcon name="script" :size="18" />
+        </button>
+        <button type="button" :title="$t('common.classicWorkflow')" @click="goClassic">
+          <CanvasToolbarIcon name="steps" :size="18" />
+        </button>
+        <div class="rail-bottom">
+          <button
+            v-if="isDesktop()"
+            type="button"
+            :title="$t('common.openFolder')"
+            :disabled="!project.current?.folderPath"
+            @click="openFolder"
+          >
+            <CanvasToolbarIcon name="folder" :size="18" />
+          </button>
+          <ThemeToggle />
+          <button type="button" :title="$t('studioUpdate.settings')" @click="openSettings">
+            <CanvasToolbarIcon name="settings" :size="18" />
+          </button>
+        </div>
+      </nav>
       <CanvasGuide
         v-if="guideOpen"
         :agent-open="agentOpen"
@@ -858,19 +1333,46 @@ function goClassic() {
           :default-viewport="project.current?.canvas?.viewport"
           :min-zoom="0.2"
           :max-zoom="2"
+          selection-key-code="Space"
+          :selection-mode="SelectionMode.Partial"
+          :pan-activation-key-code="null"
           fit-view-on-init
           @node-click="onNodeClick"
+          @pane-click="selectionMenu = null; selectionIds = []"
+          @selection-end="onBoxSelect"
           @pane-context-menu="openCtxMenu"
           @node-context-menu="openCtxMenu"
         >
-          <Background :gap="22" color="rgba(255,255,255,0.08)" />
           <Controls position="bottom-left" :show-interactive="false" />
         </VueFlow>
         <div v-if="!project.current?.canvas?.nodes.length" class="empty-hint">
-          {{ $t('studio.emptyCanvas') }}
+          {{ $t('canvasContext.canvasIntro') }}
         </div>
       </div>
       <Teleport to="body">
+        <div
+          v-if="selectionMenu"
+          class="ctx-mask"
+          @click="selectionMenu = null"
+          @contextmenu.prevent="selectionMenu = null"
+        />
+        <div
+          v-if="selectionMenu"
+          class="ctx-menu"
+          :style="{ left: `${selectionMenu.x}px`, top: `${selectionMenu.y}px` }"
+          @mousedown.stop
+        >
+          <button
+            v-for="action in selectionMenu.actions"
+            :key="action.id"
+            type="button"
+            @mousedown.prevent.stop="runSelectionAction(action.id)"
+          >
+            {{ action.label }}
+          </button>
+          <div v-if="selectionMenu.actions.length" class="ctx-sep" />
+          <button type="button" class="danger" @mousedown.prevent.stop="deleteSelection">{{ $t('common.delete') }}</button>
+        </div>
         <div
           v-if="ctxMenu"
           class="ctx-mask"
@@ -883,57 +1385,80 @@ function goClassic() {
           :style="{ left: `${ctxMenu.x}px`, top: `${ctxMenu.y}px` }"
           @mousedown.stop
         >
+          <template v-if="ctxMenu.linkOnly">
+            <button
+              v-if="ctxMenu.links?.includes('script')"
+              type="button"
+              @mousedown.prevent.stop="addLinkedText"
+            >
+              <CtxMenuIcon name="script" />
+              {{ $t('canvasContext.textNode') }}
+            </button>
+            <button
+              v-if="ctxMenu.links?.includes('imageGen')"
+              type="button"
+              @mousedown.prevent.stop="addFreeform('imageGen')"
+            >
+              <CtxMenuIcon name="image" />
+              {{ $t('canvasContext.imageNode') }}
+            </button>
+            <button
+              v-if="ctxMenu.links?.includes('videoGen')"
+              type="button"
+              @mousedown.prevent.stop="addFreeform('videoGen')"
+            >
+              <CtxMenuIcon name="video" />
+              {{ $t('canvasContext.videoNode') }}
+            </button>
+            <button
+              v-if="ctxMenu.links?.includes('audioGen')"
+              type="button"
+              @mousedown.prevent.stop="addFreeform('audioGen')"
+            >
+              <CtxMenuIcon name="audio" />
+              {{ $t('canvasContext.audioNode') }}
+            </button>
+            <button
+              v-if="ctxMenu.links?.includes('compose')"
+              type="button"
+              @mousedown.prevent.stop="addCompose"
+            >
+              <CtxMenuIcon name="compose" />
+              {{ $t('canvasContext.composeNode') }}
+            </button>
+          </template>
+          <template v-else>
           <button type="button" @mousedown.prevent.stop="addFreeform('imageGen')">
-            <svg viewBox="0 0 24 24" aria-hidden="true">
-              <rect x="3.5" y="5.5" width="17" height="13" rx="2" />
-              <path d="M8 13.5 10.2 11l3.3 3.2 2-1.8L20 16" />
-              <circle cx="9" cy="9" r="1.1" />
-            </svg>
+            <CtxMenuIcon name="image" />
             {{ ctxMenu.nodeId ? $t('studio.appendImage') : $t('studio.addImage') }}
           </button>
           <button type="button" @mousedown.prevent.stop="addFreeform('videoGen')">
-            <svg viewBox="0 0 24 24" aria-hidden="true">
-              <rect x="3.5" y="5.5" width="17" height="13" rx="2" />
-              <path d="M10 9.5v5l5-2.5-5-2.5Z" />
-            </svg>
+            <CtxMenuIcon name="video" />
             {{ ctxMenu.nodeId ? $t('studio.appendVideo') : $t('studio.addVideo') }}
+          </button>
+          <button type="button" @mousedown.prevent.stop="addFreeform('audioGen')">
+            <CtxMenuIcon name="audio" />
+            {{ ctxMenu.nodeId ? $t('canvasContext.appendAudio') : $t('canvasContext.addAudio') }}
           </button>
           <div class="ctx-sep" />
           <button type="button" @mousedown.prevent.stop="addScriptNode">
-            <svg viewBox="0 0 24 24" aria-hidden="true">
-              <path d="M7 4.5h7l4 4V19.5H7V4.5Z" />
-              <path d="M14 4.5V9h4.5" />
-              <path d="M9.5 12.5h5M9.5 15.5h5" />
-            </svg>
+            <CtxMenuIcon name="script" />
             {{ ctxMenu.nodeId ? $t('studio.appendScript') : $t('studio.addScript') }}
           </button>
           <button type="button" @mousedown.prevent.stop="addPipelineEntity('subject')">
-            <svg viewBox="0 0 24 24" aria-hidden="true">
-              <circle cx="12" cy="8" r="2.6" />
-              <path d="M6.5 18.5c.8-3.2 2.8-4.8 5.5-4.8s4.7 1.6 5.5 4.8" />
-            </svg>
+            <CtxMenuIcon name="character" />
             {{ ctxMenu.nodeId ? $t('studio.appendCharacter') : $t('studio.addCharacter') }}
           </button>
           <button type="button" @mousedown.prevent.stop="addPipelineEntity('prop')">
-            <svg viewBox="0 0 24 24" aria-hidden="true">
-              <path d="M8 8.5h8l1.2 2.2H18a2 2 0 0 1 2 2V17a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2v-4.3a2 2 0 0 1 2-2h.8L8 8.5Z" />
-              <path d="M9 8.5V7.2A1.2 1.2 0 0 1 10.2 6h3.6A1.2 1.2 0 0 1 15 7.2v1.3" />
-            </svg>
+            <CtxMenuIcon name="prop" />
             {{ ctxMenu.nodeId ? $t('studio.appendProp') : $t('studio.addProp') }}
           </button>
           <button type="button" @mousedown.prevent.stop="addPipelineEntity('scene')">
-            <svg viewBox="0 0 24 24" aria-hidden="true">
-              <path d="M4 16.5 9 11l3.2 3.2 2.3-2.2L20 16.8" />
-              <path d="M4.5 6.5h15v12h-15z" />
-              <path d="M4.5 18.5h15" />
-            </svg>
+            <CtxMenuIcon name="scene" />
             {{ ctxMenu.nodeId ? $t('studio.appendScene') : $t('studio.addScene') }}
           </button>
           <button type="button" @mousedown.prevent.stop="addPipelineEntity('shot')">
-            <svg viewBox="0 0 24 24" aria-hidden="true">
-              <rect x="4" y="6.5" width="16" height="11" rx="1.5" />
-              <path d="M8 6.5v11M16 6.5v11M4 10.5h16M4 13.5h16" />
-            </svg>
+            <CtxMenuIcon name="shot" />
             {{ ctxMenu.nodeId ? $t('studio.appendStoryboard') : $t('studio.addStoryboard') }}
           </button>
           <template v-if="ctxMenu.onNode && (canDuplicate(ctxMenu.nodeId) || canDeleteNode(ctxMenu.nodeId))">
@@ -943,10 +1468,7 @@ function goClassic() {
               type="button"
               @mousedown.prevent.stop="duplicateNode(ctxMenu.nodeId)"
             >
-              <svg viewBox="0 0 24 24" aria-hidden="true">
-                <rect x="8" y="8" width="11" height="11" rx="1.5" />
-                <path d="M6 16V5.5A1.5 1.5 0 0 1 7.5 4H16" />
-              </svg>
+              <CtxMenuIcon name="duplicate" />
               {{ $t('studio.copyNode') }}
             </button>
             <button
@@ -955,14 +1477,10 @@ function goClassic() {
               class="danger"
               @mousedown.prevent.stop="deleteCtxNode(ctxMenu.nodeId)"
             >
-              <svg viewBox="0 0 24 24" aria-hidden="true">
-                <path d="M5 7.5h14" />
-                <path d="M10 7.5V5.5h4v2" />
-                <path d="M8 7.5V18a1.5 1.5 0 0 0 1.5 1.5h5A1.5 1.5 0 0 0 16 18V7.5" />
-                <path d="M10.5 11v5M13.5 11v5" />
-              </svg>
+              <CtxMenuIcon name="delete" />
               {{ $t('studio.deleteNode') }}
             </button>
+          </template>
           </template>
         </div>
       </Teleport>
@@ -996,6 +1514,26 @@ function goClassic() {
   -webkit-app-region: drag;
   app-region: drag;
 }
+.project-name, .name-input {
+  -webkit-app-region: no-drag;
+  app-region: no-drag;
+  max-width: 280px;
+  border: none;
+  background: transparent;
+  color: var(--color-text-1);
+  font: inherit;
+  font-weight: 650;
+}
+.project-name {
+  padding: 4px 6px;
+  border-radius: 4px;
+  cursor: text;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.project-name:hover { background: rgba(255, 255, 255, 0.06); }
+.name-input { width: 220px; padding: 4px 6px; border-radius: 6px; background: var(--nb-bg-inset); outline: 1px solid var(--nb-line-3); }
 .bar .dim {
   color: var(--color-text-4);
   font-size: 11px;
@@ -1096,18 +1634,19 @@ function goClassic() {
   gap: 6px;
   height: 30px;
   padding: 0 10px;
-  border: 1px solid color-mix(in srgb, var(--color-accent) 38%, var(--color-border));
-  border-radius: 7px;
-  background: color-mix(in srgb, var(--color-accent) 10%, var(--color-bg-1));
-  color: var(--color-text-1);
+  border: 1px solid var(--nb-ai-line);
+  border-radius: 8px;
+  background: var(--nb-ai-soft);
+  color: var(--nb-ai);
   font-size: 11px;
   white-space: nowrap;
+  transition: background 0.18s ease, color 0.18s ease;
   -webkit-app-region: no-drag;
   app-region: no-drag;
 }
 .bulk-optimize-btn:hover:not(:disabled) {
-  border-color: var(--color-accent);
-  background: color-mix(in srgb, var(--color-accent) 16%, var(--color-bg-1));
+  background: rgba(125, 140, 255, 0.2);
+  color: #d5dbff;
 }
 .bulk-optimize-btn:disabled { opacity: .65; cursor: wait; }
 .empty-hint {
@@ -1211,6 +1750,46 @@ function goClassic() {
   min-height: 0;
   position: relative;
 }
+.side-rail {
+  width: 46px;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 0;
+  border-right: 1px solid var(--color-border);
+  background: var(--color-bg-1);
+  z-index: 5;
+}
+.side-rail button {
+  width: 32px;
+  height: 32px;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  place-items: center;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--color-text-2);
+  cursor: pointer;
+}
+.side-rail button:hover:not(:disabled) {
+  background: var(--color-bg-3);
+  color: var(--color-text-1);
+}
+.side-rail button:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+.rail-bottom {
+  margin-top: auto;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+}
 .guide-mark {
   display: grid;
   place-items: center;
@@ -1233,7 +1812,7 @@ function goClassic() {
 .agent-shell :deep(.agent) {
   width: 100%;
   height: 100%;
-  border-right: 1px solid var(--color-border);
+  border-right: none;
 }
 .agent-resizer {
   position: absolute;
@@ -1268,42 +1847,83 @@ function goClassic() {
   position: relative;
 }
 .flow-wrap :deep(.vue-flow) {
-  background: var(--color-canvas);
+  background-color: var(--nb-void);
+  background-image:
+    radial-gradient(1000px 560px at 30% 10%, var(--nb-accent-wash), transparent 60%),
+    radial-gradient(circle, var(--nb-grid-dot) 1px, transparent 1.2px),
+    linear-gradient(var(--nb-grid-line-2) 1px, transparent 1px),
+    linear-gradient(90deg, var(--nb-grid-line-2) 1px, transparent 1px);
+  background-size: auto, 24px 24px, 120px 120px, 120px 120px;
+  background-repeat: no-repeat, repeat, repeat, repeat;
+}
+.flow-wrap :deep(.vue-flow__pane),
+.flow-wrap :deep(.vue-flow__viewport) {
+  background: transparent;
 }
 .flow-wrap :deep(.vue-flow__controls) {
   display: flex;
   flex-direction: row;
   gap: 2px;
-  margin: 12px;
+  margin: 16px;
   padding: 4px;
-  border-radius: 10px;
-  border: 1px solid var(--color-border);
-  background: var(--color-bg-1);
-  box-shadow: var(--shadow-md);
+  border-radius: 14px;
+  border: 1px solid var(--nb-line-3);
+  background: var(--nb-bg-2) !important;
+  color: var(--nb-t2);
+  color-scheme: inherit;
+  box-shadow: var(--nb-e2, var(--shadow-md));
+  backdrop-filter: blur(14px);
 }
 .flow-wrap :deep(.vue-flow__controls-button) {
   width: 30px;
   height: 30px;
   padding: 0;
-  border: none;
-  border-bottom: none;
+  border: none !important;
+  border-bottom: none !important;
   border-radius: 8px;
-  background: transparent;
+  background: transparent !important;
+  color: var(--nb-t2);
+  color-scheme: inherit;
+  appearance: none;
   box-sizing: border-box;
 }
-.flow-wrap :deep(.vue-flow__controls-button svg) {
+.flow-wrap :deep(.vue-flow__controls-button svg),
+.flow-wrap :deep(.vue-flow__controls-button svg path) {
   max-width: 14px;
   max-height: 14px;
-  fill: var(--color-text-2);
+  fill: currentColor !important;
 }
 .flow-wrap :deep(.vue-flow__controls-button:hover) {
-  background: var(--color-fill-hover);
+  background: var(--nb-bg-3) !important;
+  color: var(--nb-t1);
 }
-.flow-wrap :deep(.vue-flow__controls-button:hover svg) {
-  fill: var(--color-text-1);
+.flow-wrap :deep(.vue-flow__controls-button:hover svg),
+.flow-wrap :deep(.vue-flow__controls-button:hover svg path) {
+  fill: currentColor !important;
 }
 .flow-wrap :deep(.vue-flow__controls-button:disabled) {
   opacity: 0.35;
+}
+.flow-wrap :deep(.vue-flow__handle) {
+  width: 1px !important;
+  height: 1px !important;
+  min-width: 0 !important;
+  min-height: 0 !important;
+  background: transparent !important;
+  border: none !important;
+  opacity: 0 !important;
+  pointer-events: none !important;
+}
+.flow-wrap :deep(.vue-flow__pane.selection .vue-flow__node) {
+  pointer-events: none;
+}
+.flow-wrap:has(.vue-flow__node.selected ~ .vue-flow__node.selected) :deep(.vue-flow__node .toolbar-wrap),
+.flow-wrap:has(.vue-flow__node.selected ~ .vue-flow__node.selected) :deep(.vue-flow__node .prompt),
+.flow-wrap:has(.vue-flow__node.selected ~ .vue-flow__node.selected) :deep(.vue-flow__node .anode .panel) {
+  display: none;
+}
+.flow-wrap :deep(.vue-flow__node:hover:not(.vue-flow__node-groupFrame)) {
+  z-index: 12 !important;
 }
 .flow-wrap :deep(.vue-flow__node) {
   overflow: visible !important;
@@ -1314,6 +1934,9 @@ function goClassic() {
 }
 .flow-wrap :deep(.vue-flow__node.selected) {
   z-index: 12 !important;
+  outline: 1px solid var(--nb-accent);
+  outline-offset: 3px;
+  border-radius: 10px;
 }
 .flow-wrap :deep(.vue-flow__node-groupFrame) {
   overflow: visible !important;
@@ -1332,13 +1955,16 @@ function goClassic() {
 .flow-wrap :deep(.vue-flow__node-export),
 .flow-wrap :deep(.vue-flow__node-final),
 .flow-wrap :deep(.vue-flow__node-imageGen),
-.flow-wrap :deep(.vue-flow__node-videoGen) {
+.flow-wrap :deep(.vue-flow__node-videoGen),
+.flow-wrap :deep(.vue-flow__node-audioGen),
+.flow-wrap :deep(.vue-flow__node-compose) {
   width: auto;
   height: auto;
 }
-.flow-wrap :deep(.vue-flow__edge-path) {
-  stroke: rgba(126, 180, 255, 0.42) !important;
-  stroke-width: 1.1 !important;
+.flow-wrap :deep(.vue-flow__edge-path),
+.flow-wrap :deep(.vue-flow__connection-path) {
+  stroke: var(--nb-edge) !important;
+  stroke-width: 1.8 !important;
   transition: stroke 0.16s ease, stroke-width 0.16s ease, filter 0.16s ease;
 }
 .flow-wrap :deep(.vue-flow__edge.pipe-edge:hover),
@@ -1346,9 +1972,9 @@ function goClassic() {
   z-index: 20;
 }
 .flow-wrap :deep(.vue-flow__edge:hover .vue-flow__edge-path) {
-  stroke: #9cc4ff !important;
-  stroke-width: 2.4 !important;
-  filter: none;
+  stroke: var(--nb-accent) !important;
+  stroke-width: 2.2 !important;
+  filter: drop-shadow(0 0 4px var(--nb-accent-glow));
 }
 .flow-wrap :deep(.vue-flow__edge .vue-flow__edgeupdater),
 .flow-wrap :deep(.vue-flow__edge-interaction) {
@@ -1356,7 +1982,7 @@ function goClassic() {
   stroke: transparent;
 }
 .flow-wrap :deep(.vue-flow__connection-line) {
-  stroke: rgba(126, 180, 255, 0.55) !important;
+  stroke: var(--nb-accent) !important;
   stroke-width: 1.4 !important;
 }
 </style>

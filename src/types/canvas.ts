@@ -2,6 +2,7 @@ import type { TaskStatus } from './pipeline'
 // VideoStillMode is declared below and used on CanvasNode.data
 
 export type CanvasNodeType =
+  | 'captureText'
   | 'script'
   | 'subject'
   | 'prop'
@@ -18,11 +19,13 @@ export type CanvasNodeType =
   | 'groupFrame'
   | 'imageGen'
   | 'videoGen'
+  | 'audioGen'
+  | 'compose'
 
 /** 이미지에서 영상을 만드는 노드 모델. H3 기본은 15초, h3-v5는 10초와 1080p 옵션을 지원하며 완샹은 Model Studio 키를 쓴다. */
 export type VideoGenModel = 'h3' | 'h3-v5' | 'wan-prime'
 
-export type VideoResolution = '768p' | '1080p'
+export type VideoResolution = '480p' | '720p' | '768p' | '1080p'
 
 /** H3 영상 생성 방식. reference는 다중 이미지 참조, fl2va는 시작·끝 프레임 방식이다. */
 export type H3VideoGenMode = 'reference' | 'fl2va'
@@ -98,9 +101,17 @@ export function videoAllows1080p(model: VideoGenModel): boolean {
 }
 
 export function normalizeVideoResolution(value: unknown, model: VideoGenModel): VideoResolution {
-  if (!videoAllows1080p(model)) return '768p'
-  if (value === '768p') return '768p'
-  return '1080p'
+  const raw = String(value || '')
+    .trim()
+    .toLowerCase()
+    .replace(/\s/g, '')
+  if (raw === '480p' || raw === '480') return '480p'
+  if (raw === '720p' || raw === '720') return '720p'
+  if (raw === '1080p' || raw === '1080') return '1080p'
+  if (raw === '768p' || raw === '768') return '768p'
+  if (model === 'wan-prime') return '720p'
+  if (model === 'h3-v5') return '1080p'
+  return '768p'
 }
 
 export function normalizeH3GenMode(value: unknown): H3VideoGenMode {
@@ -119,8 +130,16 @@ export interface CanvasNode {
     label?: string
     width?: number
     height?: number
+    /** 캔버스에 표시하는 노드 크기의 비율이다. 모델 해상도에 영향을 주지 않는다. */
+    canvasScale?: number
     kind?: string
     prompt?: string
+    /** 연속 촬영 전용 노드는 독립 대기열에서 실행한다. */
+    captureId?: string
+    /** 연속 촬영 계획을 실행할 JSON이다. 노드에서 원시 JSON을 직접 표시하지 않는다. */
+    captureJson?: string
+    /** 제출 뒤 작업 ID를 받지 못하면 중복 과금을 피하도록 자동 요청을 중단한다. */
+    captureSubmissionPending?: boolean
     referenceAssetIds?: string[]
     /** 캔버스 연결에서 참조 이미지를 가져오는 상위 노드. 배열 순서대로 이미지 번호를 붙인다. */
     referenceSourceNodeIds?: string[]
@@ -133,7 +152,7 @@ export interface CanvasNode {
     videoProfileId?: string
     /** 영상 참조 방식. 모델을 바꿀 때 저장하며 키프레임 배치를 결정한다. */
     videoStillMode?: VideoStillMode
-    /** h3-v5는 1080p를 선택할 수 있다. 다른 모델은 768p로 고정된다. */
+    /** 이 샷의 영상 해상도다. Wan은 480P, 720P, 1080P, H3 v5는 768p와 1080p를 지원한다. */
     videoResolution?: VideoResolution
     /** 노드에서 선택하는 이미지 해상도. 모델 문서에 따라 1K, 2K, 4K를 사용한다. */
     imageResolution?: '1k' | '2k' | '4k'
@@ -145,6 +164,11 @@ export interface CanvasNode {
     lastFrameAssetId?: string
     /** 진행 중인 AutoDL 또는 완샹 작업. 재시도 시 기존 결과를 먼저 조회한다. */
     videoTaskId?: string
+    /** 오디오 노드에서 선택한 TTS 모델이다. 음색 복제 모델만 참조 오디오를 사용한다. */
+    ttsModel?: string
+    referenceAudioAssetId?: string
+    clonedVoiceId?: string
+    clonedVoiceModel?: string
   }
   status?: TaskStatus
   error?: string

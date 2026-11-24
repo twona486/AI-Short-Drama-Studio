@@ -20,6 +20,7 @@ import { spawn } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
 import { lookup } from 'node:dns/promises'
 import { isIP } from 'node:net'
+import http from 'node:http'
 import https from 'node:https'
 import ko from '../src/locales/ko'
 import zh from '../src/locales/zh'
@@ -33,6 +34,49 @@ function nativeText(key: keyof typeof ko.electron, fields: Record<string, string
   return messages[key].replace(/\{(\w+)\}/g, (placeholder, field: string) =>
     Object.hasOwn(fields, field) ? String(fields[field]) : placeholder
   )
+}
+
+function installApplicationMenu() {
+  if (process.platform !== 'darwin') {
+    Menu.setApplicationMenu(null)
+    return
+  }
+  const item = (role: Electron.MenuItemConstructorOptions['role'], label: keyof typeof ko.electron) => ({
+    role,
+    label: nativeText(label, { app: USER_DATA_NAME })
+  })
+  const separator = { type: 'separator' as const }
+  Menu.setApplicationMenu(Menu.buildFromTemplate([
+    {
+      label: USER_DATA_NAME,
+      submenu: [
+        item('about', 'menuAbout'), separator,
+        item('hide', 'menuHide'), item('hideOthers', 'menuHideOthers'), item('unhide', 'menuShowAll'), separator,
+        item('quit', 'menuQuit')
+      ]
+    },
+    { label: nativeText('menuFile'), submenu: [item('close', 'menuClose')] },
+    {
+      label: nativeText('menuEdit'),
+      submenu: [
+        item('undo', 'menuUndo'), item('redo', 'menuRedo'), separator,
+        item('cut', 'menuCut'), item('copy', 'menuCopy'), item('paste', 'menuPaste'),
+        item('pasteAndMatchStyle', 'menuPastePlain'), item('selectAll', 'menuSelectAll')
+      ]
+    },
+    {
+      label: nativeText('menuView'),
+      submenu: [
+        item('resetZoom', 'menuActualSize'), item('zoomIn', 'menuZoomIn'), item('zoomOut', 'menuZoomOut'), separator,
+        item('togglefullscreen', 'menuFullScreen')
+      ]
+    },
+    {
+      label: nativeText('menuWindow'),
+      role: 'window',
+      submenu: [item('minimize', 'menuMinimize'), item('zoom', 'menuZoomWindow')]
+    }
+  ]))
 }
 
 const mainDir = path.dirname(fileURLToPath(import.meta.url))
@@ -404,7 +448,8 @@ function slugName(name: string, id: string) {
 }
 
 function resolveAppIcon() {
-  const names = ['logo.ico', 'logo.png', 'icon.png']
+  const names =
+    process.platform === 'win32' ? ['logo.ico', 'logo.png'] : ['logo.png', 'icon.png']
   const dirs = [
     process.resourcesPath,
     path.join(mainDir, '..'),
@@ -439,6 +484,14 @@ function createWindow() {
       nodeIntegration: false,
       sandbox: false
     }
+  })
+
+  win.webContents.setWindowOpenHandler(({ url }) => {
+    if (url === 'https://www.bilibili.com/video/BV1o6n66fE5p/') {
+      void shell.openExternal(url).catch(() => undefined)
+      return { action: 'deny' }
+    }
+    return { action: 'allow' }
   })
 
   const sendMax = () => {
@@ -486,7 +539,7 @@ if (app.isPackaged && !app.commandLine.hasSwitch('user-data-dir')) {
 }
 
 app.whenReady().then(async () => {
-  Menu.setApplicationMenu(null)
+  installApplicationMenu()
   const root = readStorageRootPreference(rootPreferencePath()) ?? defaultRoot()
   activeRoot = root
   await ensureDir(root)
@@ -506,8 +559,12 @@ app.whenReady().then(async () => {
   })
 
   ipcMain.handle('desktop:setLocale', (event, locale: unknown) => {
-    nativeLocale = locale === 'zh' ? 'zh' : 'ko'
-    BrowserWindow.fromWebContents(event.sender)?.setTitle(nativeLocale === 'zh' ? zh.common.appName : ko.common.appName)
+    const next = locale === 'zh' ? 'zh' : 'ko'
+    if (nativeLocale !== next) {
+      nativeLocale = next
+      installApplicationMenu()
+    }
+    BrowserWindow.fromWebContents(event.sender)?.setTitle(USER_DATA_NAME)
   })
 
   const confirming = new Set<number>()
@@ -630,6 +687,8 @@ app.whenReady().then(async () => {
   ipcMain.handle('desktop:pickFiles', async (_e, filters?: Electron.FileFilter[]) => {
     const win = BrowserWindow.getFocusedWindow()
     const res = await dialog.showOpenDialog(win ?? undefined, {
+      title: nativeText('pickFilesTitle'),
+      buttonLabel: nativeText('dialogOpen'),
       properties: ['openFile', 'multiSelections'],
       filters: filters ?? [{ name: nativeText('media'), extensions: ['png', 'jpg', 'jpeg', 'webp', 'mp4', 'webm', 'mp3', 'wav'] }]
     })
@@ -662,6 +721,8 @@ app.whenReady().then(async () => {
                 ]
       const win = BrowserWindow.getFocusedWindow()
       const res = await dialog.showOpenDialog(win ?? undefined, {
+        title: nativeText('importFilesTitle'),
+        buttonLabel: nativeText('dialogImport'),
         properties: opts?.multiple === false ? ['openFile'] : ['openFile', 'multiSelections'],
         filters
       })
@@ -752,6 +813,8 @@ app.whenReady().then(async () => {
   }) => {
     const win = BrowserWindow.getFocusedWindow()
     const res = await dialog.showSaveDialog(win ?? undefined, {
+      title: nativeText('saveFileTitle'),
+      buttonLabel: nativeText('dialogSave'),
       defaultPath: String(opts?.defaultName || 'script.md'),
       filters: opts?.filters ?? [{ name: 'Markdown', extensions: ['md'] }]
     })
@@ -763,6 +826,8 @@ app.whenReady().then(async () => {
   ipcMain.handle('desktop:pickDirectory', async () => {
     const win = BrowserWindow.getFocusedWindow()
     const res = await dialog.showOpenDialog(win ?? undefined, {
+      title: nativeText('pickDirectoryTitle'),
+      buttonLabel: nativeText('dialogChoose'),
       properties: ['openDirectory']
     })
     return res.canceled ? null : res.filePaths[0]
@@ -803,7 +868,7 @@ app.whenReady().then(async () => {
     if (!isAllowedProviderFetch(parsed)) throw new Error(nativeText('comfyProtocol'))
     const method = String(opts?.method || 'GET').toUpperCase()
     if (method !== 'GET' && method !== 'POST') throw new Error(nativeText('comfyMethod'))
-    const timeoutMs = Math.min(180000, Math.max(5000, Number(opts?.timeoutMs) || 120000))
+    const timeoutMs = Math.min(600000, Math.max(5000, Number(opts?.timeoutMs) || 120000))
     const controller = new AbortController()
     const timer = setTimeout(() => controller.abort(), timeoutMs)
     try {
@@ -847,6 +912,76 @@ app.whenReady().then(async () => {
     }
   })
 
+  // 긴 LLM 응답에서 Chromium의 HTTP/2 연결이 일찍 끊길 수 있어 Node의 HTTP/1.1을 사용한다.
+  const readLlmText = (
+    target: URL,
+    method: 'GET' | 'POST',
+    headers: Record<string, string>,
+    body: string | undefined,
+    timeoutMs: number,
+    signal: AbortSignal
+  ) => new Promise<{ status: number; ok: boolean; text: string }>((resolve, reject) => {
+    let settled = false
+    const finish = (run: () => void) => {
+      if (settled) return
+      settled = true
+      run()
+    }
+    if (signal.aborted) {
+      finish(() => reject(Object.assign(new Error('aborted'), { name: 'AbortError' })))
+      return
+    }
+    const secure = target.protocol === 'https:'
+    const lib = (secure ? https : http) as typeof https
+    const agent = new lib.Agent({ keepAlive: false })
+    const reqHeaders = { ...headers }
+    if (method === 'POST') reqHeaders['Content-Length'] = String(Buffer.byteLength(body || ''))
+    let broken = false
+    const fail = (err: unknown) => {
+      broken = true
+      agent.destroy()
+      finish(() => reject(err))
+    }
+    const req = lib.request(target, { method, headers: reqHeaders, agent, timeout: timeoutMs }, (res) => {
+      const chunks: Buffer[] = []
+      let size = 0
+      res.on('data', (chunk: Buffer | string) => {
+        if (broken) return
+        const buf = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk)
+        size += buf.length
+        if (size > 32 * 1024 * 1024) {
+          fail(new Error(nativeText('llmResponseTooLarge')))
+          req.destroy()
+          return
+        }
+        chunks.push(buf)
+      })
+      res.on('end', () => {
+        if (broken) return
+        agent.destroy()
+        const status = res.statusCode || 0
+        finish(() => resolve({ status, ok: status >= 200 && status < 300, text: Buffer.concat(chunks).toString('utf8') }))
+      })
+      res.on('error', (err) => fail(err))
+    })
+    const onAbort = () => {
+      req.destroy()
+      fail(Object.assign(new Error('aborted'), { name: 'AbortError' }))
+    }
+    signal.addEventListener('abort', onAbort, { once: true })
+    req.on('timeout', () => {
+      const err = new Error('timeout') as NodeJS.ErrnoException
+      err.code = 'ETIMEDOUT'
+      req.destroy(err)
+    })
+    req.on('error', (err) => {
+      signal.removeEventListener('abort', onAbort)
+      fail(err)
+    })
+    if (method === 'POST') req.write(body || '')
+    req.end()
+  })
+
   ipcMain.handle('desktop:llmFetch', async (_e, opts?: {
     url?: string
     authorization?: string
@@ -876,7 +1011,7 @@ app.whenReady().then(async () => {
     if (method === 'POST' && body.length > 32 * 1024 * 1024) {
       throw new Error(nativeText('llmRequestTooLarge'))
     }
-    const timeoutMs = Math.min(540000, Math.max(5000, Number(opts?.timeoutMs) || 120000))
+    const timeoutMs = Math.min(900000, Math.max(5000, Number(opts?.timeoutMs) || 120000))
     const controller = new AbortController()
     const timer = setTimeout(() => controller.abort(), timeoutMs)
     try {
@@ -886,24 +1021,21 @@ app.whenReady().then(async () => {
       if (method === 'POST') headers['Content-Type'] = 'application/json'
       const token = String(opts?.authorization || '').trim()
       if (token) headers.Authorization = token
-      const res = await net.fetch(url, {
-        method,
-        headers,
-        body: method === 'POST' ? body : undefined,
-        signal: controller.signal
-      })
-      const text = await res.text()
-      return { status: res.status, ok: res.ok, text }
+      return await readLlmText(parsed, method, headers, method === 'POST' ? body : undefined, timeoutMs, controller.signal)
     } catch (err: any) {
-      if (controller.signal.aborted) {
+      if (controller.signal.aborted || err?.code === 'ETIMEDOUT' || err?.name === 'AbortError') {
         throw new Error(nativeText('llmTimeout', { seconds: Math.round(timeoutMs / 1000) }))
       }
+      const code = String(err?.code || '')
       const msg = err instanceof Error ? err.message : String(err ?? '')
-      throw new Error(
-        /Failed to fetch|net::ERR|ECONNRESET|ETIMEDOUT|ENOTFOUND|ECONNREFUSED/i.test(msg)
-          ? nativeText('llmNetwork')
-          : msg || nativeText('llmConnectionFailed')
-      )
+      const reason = code || msg || nativeText('unknownNetworkError')
+      if (/ECONNRESET|EPIPE|ECONNABORTED|socket hang up|EAI_AGAIN/i.test(`${code} ${msg}`)) {
+        throw new Error(nativeText('llmConnectionInterrupted', { reason }))
+      }
+      if (/ENOTFOUND|ECONNREFUSED|EHOSTUNREACH|ENETUNREACH/i.test(`${code} ${msg}`)) {
+        throw new Error(nativeText('llmEndpointUnreachable', { reason }))
+      }
+      throw new Error(msg || nativeText('llmConnectionFailed'))
     } finally {
       clearTimeout(timer)
     }
@@ -937,7 +1069,7 @@ app.whenReady().then(async () => {
       throw new Error(nativeText('bailianEndpoint'))
     }
     const method = String(opts?.method || 'GET').toUpperCase()
-    const timeoutMs = Math.min(180000, Math.max(5000, Number(opts?.timeoutMs) || 120000))
+    const timeoutMs = Math.min(600000, Math.max(5000, Number(opts?.timeoutMs) || 120000))
     const controller = new AbortController()
     const timer = setTimeout(() => controller.abort(), timeoutMs)
     try {

@@ -1,5 +1,5 @@
 /**
- * FFmpeg 코어 파일을 로컬로 내려받는다.
+ * FFmpeg 코어를 src/assets/ffmpeg/에 다운로드한다.
  *
  * 실행 방법
  *   node scripts/download-ffmpeg-core.cjs
@@ -31,7 +31,7 @@ const SOURCES = {
     files: ['ffmpeg-core.js', 'ffmpeg-core.wasm']
   },
   npmmirror: {
-    base: `https://registry.npmmirror.com/@ffmpeg/core@${CORE_VERSION}/files/dist/esm`,
+    base: `https://registry.npmmirror.com/@ffmpeg/core/${CORE_VERSION}/files/dist/esm`,
     files: ['ffmpeg-core.js', 'ffmpeg-core.wasm']
   }
 }
@@ -99,7 +99,7 @@ async function main() {
   const args = parseArgs()
   if (args.help) {
     console.log(`
-Download FFmpeg core to public/ffmpeg/.
+FFmpeg 코어를 src/assets/ffmpeg/에 다운로드해요.
 
 Usage:
   node scripts/download-ffmpeg-core.cjs
@@ -146,13 +146,17 @@ Sources:
   // Vite가 ESM 코어를 UMD로 처리하지 않도록 .esm.js 확장자를 사용한다.
   const esmSrc = path.join(OUT_DIR, 'ffmpeg-core.js')
   const esmDest = path.join(OUT_DIR, 'ffmpeg-core.esm.js')
-  if (fs.existsSync(esmSrc) && !fs.existsSync(esmDest)) {
-    fs.renameSync(esmSrc, esmDest)
-    console.log(`  ↻ ffmpeg-core.js → ffmpeg-core.esm.js`)
+  if (fs.existsSync(esmSrc)) {
+    if (fs.existsSync(esmDest)) {
+      fs.unlinkSync(esmSrc)
+    } else {
+      fs.renameSync(esmSrc, esmDest)
+      console.log(`  ↻ ffmpeg-core.js → ffmpeg-core.esm.js`)
+    }
   }
 
-  console.log(`\nDownload complete: ${OUT_DIR}`)
-  console.log('\nRestart npm run dev to use the local FFmpeg core.\n')
+  console.log(`\nFFmpeg 코어를 src/assets/ffmpeg/에 저장했어요.`)
+  console.log(`\n개발 서버를 다시 시작하면 로컬 FFmpeg 코어를 먼저 사용해요.\n`)
 }
 
 main().catch((e) => {

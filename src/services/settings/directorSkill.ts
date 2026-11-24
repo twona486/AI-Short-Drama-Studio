@@ -1,5 +1,10 @@
 import { t } from '@/i18n'
 import { getSkillBody } from '@/skills'
+import {
+  CUSTOM_STORY_SKILL_ID,
+  GENERAL_STORY_SKILL_ID,
+  storySkillById
+} from '@/skills/storyStyles'
 import { useSettingsStore, type DirectorSkillDoc } from '@/stores/settings'
 import { desktop, isDesktop } from '@/services/desktop'
 
@@ -47,24 +52,50 @@ The exact video duration window, per-shot limit, verbatim dialogue, and required
 ${skill.body}`
 }
 
-/** 가져온 지침이 있으면 사용하고 없으면 내장 스토리보드 감독 지침을 사용한다. */
+/** 현재 선택한 스토리보드 스킬이다. 기본 매뉴얼은 그대로 사용한다. */
+export function activeStorySkillOverlay(): string {
+  let styleId = GENERAL_STORY_SKILL_ID
+  let genreId = GENERAL_STORY_SKILL_ID
+  try {
+    const config = useSettingsStore().config
+    styleId = config.storyStyleId || GENERAL_STORY_SKILL_ID
+    genreId = config.storyGenreId || GENERAL_STORY_SKILL_ID
+  } catch {
+    return ''
+  }
+  const sections: string[] = []
+  if (styleId === CUSTOM_STORY_SKILL_ID) {
+    const imported = currentDirectorSkill()
+    if (imported) sections.push(manualText(imported))
+  } else {
+    const style = storySkillById(styleId)
+    if (style?.group === 'style') sections.push(`Shot style: ${style.name}\n${style.body}`)
+  }
+  const genre = storySkillById(genreId)
+  if (genre?.group === 'genre') sections.push(`Genre preference: ${genre.name}\n${genre.body}`)
+  if (!sections.length) return ''
+  return `Use these creative preferences as guidance. Prioritize the user request, script facts, duration and model capabilities. Adapt the guidance without inventing plot events.\n\n${sections.join('\n\n')}`
+}
+
+/** 기본 스토리보드 연출 매뉴얼에 선택한 방식이나 장르를 추가한다. 가져온 매뉴얼을 선택하면 이 부분을 해당 매뉴얼로 바꾼다. */
 export function directorPlaybookText(): string {
-  const imported = currentDirectorSkill()
-  if (imported) return manualText(imported)
-  return getSkillBody('storyboard-director')
+  const base = getSkillBody('storyboard-director')
+  const extra = activeStorySkillOverlay()
+  if (!extra) return base
+  return `${base}\n\n${extra}`
 }
 
-/** 사용자가 가져온 지침이 있을 때만 기존 프롬프트에 추가한다. */
+/** 대본, 샷, 프롬프트 작성에 현재 스킬을 삽입한다. 기본 스토리보드에는 별도 지침을 추가하지 않는다. */
 export function importedDirectorPrefix(): string {
-  const imported = currentDirectorSkill()
-  return imported ? `${manualText(imported)}\n\n` : ''
+  const extra = activeStorySkillOverlay()
+  return extra ? `${extra}\n\n` : ''
 }
 
-/** H3 영문 연출에 가져온 지침을 적용하면서 인물 식별자와 대사 태그 형식을 유지한다. */
+/** H3 영어 프롬프트에서 스킬의 동선과 연출을 따르되 (S#)와 <d> 형식을 유지한다. */
 export function importedDirectorForH3(): string {
-  const imported = currentDirectorSkill()
-  if (!imported) return ''
-  return `User director manual "${imported.name}" (follow its blocking, performance and how a shot is staged). Keep this task's output format: speaker lock, English action, dialogue only inside d tags.\n${imported.body.slice(0, 8_000)}\n\n`
+  const extra = activeStorySkillOverlay()
+  if (!extra) return ''
+  return `Active story skill (follow its blocking, performance and how a shot is staged). Keep this task's output format: speaker lock, English action, dialogue only inside d tags.\n${extra.slice(0, 8_000)}\n\n`
 }
 
 const SKILL_NAMES = ['SKILL.md', 'skill.md', 'README.md', 'readme.md', 'Readme.md']

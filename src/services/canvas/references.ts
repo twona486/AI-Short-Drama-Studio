@@ -4,7 +4,7 @@ import { normalizeVideoGenModel, videoMaxRefImages } from '@/types'
 /** 상위 노드를 바인딩해 재생성 후에도 최신 결과를 참조한다. */
 export function canvasNodeOutputAssetId(project: Project, node?: CanvasNode): ID | undefined {
   if (!node) return undefined
-  if (node.type === 'imageGen' || node.type === 'videoGen') return node.data.outputAssetId
+  if (node.type === 'imageGen' || node.type === 'videoGen' || node.type === 'compose') return node.data.outputAssetId
   if (node.type === 'final' || node.type === 'export') return project.finalVideoAssetId
   if (node.type === 'subject' || node.type === 'subjectProps') {
     const subject = (project.subjects ?? []).find((item) => item.id === node.data.subjectId)
@@ -30,6 +30,64 @@ export function canvasNodeOutputAssetId(project: Project, node?: CanvasNode): ID
   return undefined
 }
 
+export type NextCanvasLink = 'imageGen' | 'videoGen' | 'audioGen' | 'compose'
+export type PrevCanvasLink = 'script' | 'imageGen' | 'videoGen'
+export type LinkCanvasKind = PrevCanvasLink | NextCanvasLink
+
+/** 현재 노드 뒤에 연결할 수 있는 노드다. 이미지는 오디오에 연결할 수 없고, 텍스트는 이미지, 영상, 오디오에 전달할 수 있다. 영상은 합성 노드에 연결할 수 있다. */
+export function nextCanvasLinks(node?: CanvasNode): NextCanvasLink[] {
+  if (!node) return []
+  if (node.type === 'script') return ['imageGen', 'videoGen', 'audioGen']
+  if (node.type === 'videoGen' || node.type === 'shotVideo') return ['compose']
+  if (canvasNodeProducesImage(node)) return ['imageGen', 'videoGen']
+  return []
+}
+
+/** 현재 노드 앞에 연결할 수 있는 노드다. 영상은 텍스트와 이미지를, 오디오는 텍스트만 받을 수 있다. */
+export function prevCanvasLinks(node?: CanvasNode): PrevCanvasLink[] {
+  if (!node || node.type === 'script') return []
+  if (node.type === 'compose') return ['videoGen']
+  if (node.type === 'audioGen' || node.type === 'audio') return ['script']
+  if (
+    node.type === 'videoGen' ||
+    node.type === 'shotVideo' ||
+    node.type === 'imageGen' ||
+    canvasNodeProducesImage(node)
+  ) {
+    return ['script', 'imageGen']
+  }
+  return []
+}
+
+/** 새 하위 노드로 전달할 텍스트다. 대본, 원래 노드의 프롬프트, 인물이나 장면 또는 샷 설명을 전달한다. */
+export function carryTextFromNode(project: Project, node: CanvasNode): string {
+  const clip = (value: string) => value.trim().slice(0, 8000)
+  if (node.type === 'script') {
+    return clip(project.script?.content || project.script?.topic || '')
+  }
+  if (node.type === 'captureText') return clip(node.data.prompt || '')
+  if (node.type === 'imageGen' || node.type === 'videoGen' || node.type === 'audioGen') {
+    return clip(node.data.prompt || '')
+  }
+  if (node.type === 'subject' || node.type === 'subjectProps') {
+    const subject = (project.subjects ?? []).find((item) => item.id === node.data.subjectId)
+    return clip([subject?.name, subject?.description].filter(Boolean).join('\n'))
+  }
+  if (node.type === 'prop') {
+    const prop = (project.props ?? []).find((item) => item.id === node.data.propId)
+    return clip([prop?.name, prop?.description].filter(Boolean).join('\n'))
+  }
+  if (node.type === 'scene' || node.type === 'sceneProps') {
+    const scene = (project.scenes ?? []).find((item) => item.id === node.data.sceneId)
+    return clip([scene?.name, scene?.description].filter(Boolean).join('\n'))
+  }
+  if (node.type === 'shotBoard' || node.type === 'shotImage' || node.type === 'shotFrames') {
+    const shot = project.shots.find((item) => item.id === node.data.shotId)
+    return clip(shot?.visualPrompt || shot?.title || '')
+  }
+  return ''
+}
+
 export function canvasNodeProducesImage(node?: CanvasNode): boolean {
   return Boolean(
     node &&
@@ -39,13 +97,15 @@ export function canvasNodeProducesImage(node?: CanvasNode): boolean {
   )
 }
 
-/** 연결한 참조를 우선하고 수동 업로드와 라이브러리 참조를 추가한다. */
+/** 연결 참조를 먼저 쓰고 수동 업로드 또는 라이브러리 참조를 이어 쓴다. 노드에 참조가 순서대로 지정돼 있으면 그 순서를 유지한다. */
 export function resolvedCanvasReferenceAssetIds(project: Project, node?: CanvasNode): ID[] {
   if (!node) return []
   const connected = (node.data.referenceSourceNodeIds ?? [])
     .map((id) => canvasNodeOutputAssetId(project, project.canvas?.nodes.find((item) => item.id === id)))
     .filter((id): id is ID => Boolean(id))
-  return [...new Set([...connected, ...(node.data.referenceAssetIds ?? [])])]
+  const listed = node.data.referenceAssetIds ?? []
+  if (listed.length && connected.every((id) => listed.includes(id))) return [...new Set(listed)]
+  return [...new Set([...connected, ...listed])]
 }
 
 /** 자유 노드의 수동 및 연결 참조를 제거한다. 연결에서 온 이미지의 연결도 끊는다. */

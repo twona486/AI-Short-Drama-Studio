@@ -33,6 +33,13 @@ export function getLlmConfig() {
   }
 }
 
+/** 이미지 이해 기능이 켜져 있고 현재 연결의 주소, 키, 모델이 모두 설정돼 있어야 한다. */
+export function visionCallsEnabled(): boolean {
+  const config = pick()
+  const vision = config?.vision
+  return Boolean(config?.visionEnabled && vision?.baseUrl?.trim() && vision.apiKey?.trim() && vision.model?.trim())
+}
+
 export function getVisionConfig() {
   const d = envDefaults().vision
   const s = pick()?.vision
@@ -111,6 +118,9 @@ function videoKeyForProfile(
 export function getVideoConfig(profileId?: string) {
   const d = envDefaults().video
   const settings = pick()
+  if (profileId && settings && !settings.videos?.some((profile) => profile.id === profileId)) {
+    throw new Error('이 노드에서 사용하던 영상 연결이 삭제됐어요. 모델이나 워크플로를 다시 선택하세요.')
+  }
   let s = profileId
     ? settings?.videos?.find((profile) => profile.id === profileId) || settings?.video
     : settings?.video
@@ -136,14 +146,20 @@ export function getVideoConfig(profileId?: string) {
         !isAutodlHost(profile.baseUrl || '')
     ) || s
   }
+  const nativeComfy = s?.adapter?.type === 'comfyui-prompt'
+  const comfyBaseUrl = (s?.baseUrl || '').trim().replace(/\/+$/, '')
+  if (nativeComfy && (!comfyBaseUrl || isAutodlHost(comfyBaseUrl))) {
+    throw new Error('ComfyUI 워크플로의 서버 주소가 올바르지 않아요. ComfyUI 연결에서 API 주소를 다시 입력하세요.')
+  }
   return {
-    baseUrl: migrateVideoBaseUrl(s?.baseUrl || d.baseUrl),
-    apiKey: videoKeyForProfile(s, d.apiKey),
-    workflowId: migrateVideoWorkflowId(s?.workflowId || d.workflowId),
+    baseUrl: nativeComfy ? comfyBaseUrl : migrateVideoBaseUrl(s?.baseUrl || d.baseUrl),
+    apiKey: nativeComfy ? videoKeyForProfile(s, '') : videoKeyForProfile(s, d.apiKey),
+    workflowId: nativeComfy ? (s?.workflowId || 'comfyui-local') : migrateVideoWorkflowId(s?.workflowId || d.workflowId),
     promptStyle: getVideoPromptStyle(),
     adapter: s?.adapter,
     provider: s?.provider,
     options: s?.options,
+    name: s && 'name' in s ? String((s as { name?: string }).name || '') : '',
     zealmanBaseUrl: settings?.zealmanBaseUrl || ''
   }
 }

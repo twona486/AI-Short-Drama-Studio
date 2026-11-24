@@ -211,6 +211,7 @@ export function continueQuestion(next: PipelineStep | null, justDid: string) {
 }
 
 export const TOOL_LABEL: Record<string, string> = {
+  set_visual_style: '프로젝트 스타일 변경',
   generate_play: '전체 대본 작성',
   continue_play: '대본 이어 쓰기',
   generate_storyboard: '전체 대본 작성',
@@ -243,6 +244,8 @@ export const TOOL_LABEL: Record<string, string> = {
   update_node: '생성 노드 수정',
   run_node: '노드 실행',
   optimize_node_prompt: '노드 프롬프트 최적화',
+  inspect_canvas_image: '캔버스 이미지 확인',
+  continue_from_video_tail: '끝 프레임을 추출해 이어서 촬영할 노드 만들기',
   remember: '선호 기억',
   forget: '기억 삭제',
   focus_node: '캔버스 노드로 이동'

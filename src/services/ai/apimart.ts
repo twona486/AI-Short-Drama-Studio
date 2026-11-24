@@ -8,6 +8,7 @@
 
 import { t as translate } from '@/i18n'
 import { isApimartHost, isLocalComfyHost, providerHttp } from './adapters'
+import { providerVideoResolution } from './modelOptions'
 
 export const APIMART_DEFAULT_BASE = 'https://api.aishuch.com'
 export const APIMART_IMAGE_MODEL = 'gpt-image-2'
@@ -125,14 +126,11 @@ function videoSize(aspectRatio?: string, width?: number, height?: number): strin
   return height && width && height > width ? '9:16' : '16:9'
 }
 
-function videoSeconds(model: string, raw?: number): number {
+function videoSeconds(model: string, raw?: number, limit?: number): number {
   const seconds = Math.round(Number(raw) || 0)
+  if (limit === 30 && /seedance[\s._-]*2[._-]5|wan[\s._-]*3[._-]0/i.test(model)) return Math.min(30, Math.max(6, seconds || 6))
   if (/grok-imagine-1\.5/i.test(model)) return Math.min(15, Math.max(6, seconds || 6))
   return Math.min(15, Math.max(1, seconds || 6))
-}
-
-function videoQuality(raw?: string): '480p' | '720p' {
-  return /480/.test(String(raw || '')) ? '480p' : '720p'
 }
 
 function errorMessage(json: any, status: number): string {
@@ -204,7 +202,8 @@ function resultUrls(json: any, kind: 'image' | 'video'): string[] {
 async function downloadMedia(
   url: string,
   authorization: string,
-  signal?: AbortSignal
+  signal?: AbortSignal,
+  timeoutMs = 120_000
 ): Promise<{ blob: Blob; mimeType: string }> {
   // 결과 파일은 별도 이미지 호스트에 있다. 생성용 Bearer 또는 JSON Accept 헤더를 보내면 400이 반환된다.
   const load = (auth?: string) =>
@@ -215,7 +214,7 @@ async function downloadMedia(
         ...(auth ? { Authorization: auth } : {})
       },
       signal,
-      timeoutMs: 120_000
+      timeoutMs
     })
   let resp = await load()
   if (!resp.ok && authorization && (resp.status === 400 || resp.status === 401 || resp.status === 403)) {
@@ -259,7 +258,7 @@ async function pollTask(opts: {
       const media = resultUrls(json, opts.kind)[0]
       if (!media) throw new Error('작업이 완료됐지만 이미지나 영상 주소가 반환되지 않았습니다.')
       opts.onProgress?.(translate('apimartService.download'))
-      return downloadMedia(media, opts.authorization, opts.signal)
+      return downloadMedia(media, opts.authorization, opts.signal, opts.kind === 'video' ? 10 * 60_000 : 120_000)
     }
     const label = Number.isFinite(progress) ? `${Math.round(progress)}%` : status || translate('apimartService.processing')
     opts.onProgress?.(translate('apimartService.generating', { status: label }))
@@ -268,7 +267,7 @@ async function pollTask(opts: {
   throw new Error('생성 결과를 기다리는 시간이 초과됐습니다.')
 }
 
-async function postJson(root: string, path: string, authorization: string, body: Record<string, unknown>, signal?: AbortSignal) {
+async function postJson(root: string, path: string, authorization: string, body: Record<string, unknown>, signal?: AbortSignal, timeoutMs = 60_000) {
   const resp = await providerHttp(`${root}${path}`, {
     method: 'POST',
     headers: {
@@ -278,7 +277,7 @@ async function postJson(root: string, path: string, authorization: string, body:
     },
     body: JSON.stringify(body),
     signal,
-    timeoutMs: 60_000
+    timeoutMs
   })
   return readJson(resp)
 }
@@ -372,7 +371,8 @@ async function uploadReferenceImage(
   root: string,
   authorization: string,
   blob: Blob,
-  signal?: AbortSignal
+  signal?: AbortSignal,
+  timeoutMs = 120_000
 ): Promise<string> {
   const file = dataUriToBlob(await referenceDataUrl(blob))
   const bytes = new Uint8Array(await file.blob.arrayBuffer())
@@ -384,7 +384,7 @@ async function uploadReferenceImage(
     bodyBase64: part.bodyBase64,
     contentType: part.contentType,
     signal,
-    timeoutMs: 120_000
+    timeoutMs
   })
   const json = await readJson(resp)
   const url = String(json?.url || json?.data?.url || '').trim()
@@ -413,7 +413,8 @@ async function referenceImageUrls(
   blobs: Blob[],
   limit: number,
   signal?: AbortSignal,
-  onProgress?: (msg: string) => void
+  onProgress?: (msg: string) => void,
+  timeoutMs = 120_000
 ): Promise<string[]> {
   const list = blobs.slice(0, limit)
   if (!list.length) return []
@@ -423,7 +424,7 @@ async function referenceImageUrls(
       for (let i = 0; i < list.length; i++) {
         if (signal?.aborted) throw new DOMException(translate('canvasRunner.aborted'), 'AbortError')
         onProgress?.(translate('apimartService.uploadRefs', { current: i + 1, total: list.length }))
-        urls.push(await uploadReferenceImage(root, authorization, list[i], signal))
+        urls.push(await uploadReferenceImage(root, authorization, list[i], signal, timeoutMs))
       }
       return urls
     } catch (error) {
@@ -576,6 +577,7 @@ export async function apimartGenerateVideo(opts: {
   width?: number
   height?: number
   duration?: number
+  durationLimit?: number
   resolution?: string
   generateAudio?: boolean
   audioField?: string
@@ -588,7 +590,7 @@ export async function apimartGenerateVideo(opts: {
   const root = apimartRoot(opts.baseUrl)
   const authorization = bearer(opts.apiKey)
   const model = pickModel(opts.model, APIMART_VIDEO_MODEL)
-  const duration = videoSeconds(model, opts.duration)
+  const duration = videoSeconds(model, opts.duration, opts.durationLimit)
   let taskId = String(opts.resumeTaskId || '').trim()
   if (!taskId) {
     const imageUrls = await referenceImageUrls(
@@ -597,7 +599,8 @@ export async function apimartGenerateVideo(opts: {
       opts.images || [],
       7,
       opts.signal,
-      opts.onProgress
+      opts.onProgress,
+      10 * 60_000
     )
     const ratio = concreteAspectRatio(opts.aspectRatio, opts.width, opts.height)
     const body: Record<string, unknown> = {
@@ -606,7 +609,7 @@ export async function apimartGenerateVideo(opts: {
       size: videoSize(ratio, opts.width, opts.height),
       aspect_ratio: ratio,
       duration,
-      resolution: videoQuality(opts.resolution)
+      resolution: providerVideoResolution(model, opts.resolution)
     }
     if (typeof opts.generateAudio === 'boolean') {
       const field = String(opts.audioField || 'audio').trim()
@@ -614,7 +617,7 @@ export async function apimartGenerateVideo(opts: {
     }
     if (imageUrls.length) body.image_urls = imageUrls
     opts.onProgress?.(translate('apimartService.video'))
-    const submitted = await postJson(root, '/v1/videos/generations', authorization, body, opts.signal)
+    const submitted = await postJson(root, '/v1/videos/generations', authorization, body, opts.signal, 10 * 60_000)
     taskId = taskIdOf(submitted)
     if (!taskId) throw new Error('작업을 제출했지만 task_id를 반환하지 않았습니다.')
     await opts.onTaskSubmitted?.(taskId)

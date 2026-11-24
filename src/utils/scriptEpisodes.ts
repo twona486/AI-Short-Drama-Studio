@@ -97,7 +97,13 @@ export function nextEpisodeTitle(parsed: ParsedScriptDoc): string {
   return translate('scripts.defaultEpisodeTitle', { p0: n })
 }
 
-/** 회차를 추가하고 갱신된 Markdown과 회차 인덱스를 반환한다. */
+export const NEW_EPISODE_BODY = `장면 1 · 장소 · 밤 · 밖
+(이번 장면 0자 · 약 0초 · 0샷)
+
+등장　인물　소품　환경음
+`
+
+/** 회차를 추가한 Markdown과 새 회차의 인덱스를 반환한다. */
 export function appendEpisode(md: string, title?: string): { markdown: string; index: number } {
   const parsed = parseScriptDoc(md)
   parsed.episodes.push({

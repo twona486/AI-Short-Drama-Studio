@@ -14,6 +14,8 @@ export const VIDEO_H3_V5_10S_WORKFLOW_ID = 'minimax_h3_lightx2v_v5'
 export const VIDEO_FL2VA_WORKFLOW_ID = 'minimax_h3_b99_002'
 /** 디지털 휴먼의 이미지와 음성 립싱크 */
 export const VIDEO_DIGITAL_HUMAN_WORKFLOW_ID = 'minimax_h3_image_audio_to_video'
+/** H3의 다중 이미지와 오디오 참조, 화질 개선 옵션 */
+export const VIDEO_H3_MULTI_AUDIO_WORKFLOW_ID = 'minimax_h3_zm_u24'
 
 export function isLegacyVideoConfig(value: string): boolean {
   return /seetacloud|:8443|\/api\/workflow|U09-API|U06-API|9图版|light2v-1|lightx2v_no_pic/i.test(value)

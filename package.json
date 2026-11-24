@@ -1,7 +1,7 @@
 {
   "name": "ai-cut",
   "private": true,
-  "version": "0.1.22",
+  "version": "0.1.38",
   "type": "module",
   "main": "dist-electron/main.js",
   "description": "Drama Flow Studio는 AI 숏드라마와 영상 워크플로를 제작하는 오픈소스 워크스페이스입니다.",
@@ -28,6 +28,9 @@
     "electron:build": "node scripts/assert-source-clean.mjs && vue-tsc --noEmit && vite build && node scripts/assert-pack-clean.mjs && node scripts/pack-electron.mjs",
     "preview": "vite preview --host",
     "type-check": "vue-tsc --noEmit",
+    "test:agent": "node scripts/test-agent-redo.mjs",
+    "test:comfy": "node scripts/test-comfy-reference-slots.mjs",
+    "test:continuous": "node scripts/test-continuous-capture.mjs",
     "diagnose:storyboard": "node scripts/diagnose-storyboard-llm.mjs"
   },
   "build": {
@@ -55,13 +58,18 @@
         "to": "logo.png"
       }
     ],
-    "mac": {
-      "icon": "logo.png"
-    },
     "win": {
       "icon": "logo.ico",
       "target": [
         "nsis"
+      ]
+    },
+    "mac": {
+      "icon": "logo.png",
+      "category": "public.app-category.video",
+      "target": [
+        "dmg",
+        "zip"
       ]
     },
     "nsis": {
@@ -71,6 +79,7 @@
     }
   },
   "dependencies": {
+    "@ai-sdk/openai-compatible": "^3.0.92",
     "@ffmpeg/core": "0.12.10",
     "@ffmpeg/ffmpeg": "^0.12.10",
     "@ffmpeg/util": "^0.12.1",
@@ -78,11 +87,13 @@
     "@vue-flow/controls": "^1.1.3",
     "@vue-flow/core": "^1.48.2",
     "@vue-flow/minimap": "^1.5.4",
+    "ai": "^7.0.172",
     "naive-ui": "^2.38.2",
     "pinia": "^2.1.7",
     "vue": "^3.4.27",
     "vue-i18n": "^11.4.23",
-    "vue-router": "^4.3.2"
+    "vue-router": "^4.3.2",
+    "zod": "^4.6.7"
   },
   "devDependencies": {
     "@types/node": "^20.12.12",

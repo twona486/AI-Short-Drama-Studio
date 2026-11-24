@@ -435,7 +435,7 @@ export function inferMarkdownTitle(markdown: string, filename = ''): string {
   const normalized = normalizeImportedMarkdown(markdown)
   const heading = normalized.match(/^\s*#\s+(.+?)\s*$/m)?.[1]
   if (heading) return cleanMarkdownTitle(heading).slice(0, 80)
-  const baseName = filename.replace(/\.(?:md|markdown|txt)$/i, '')
+  const baseName = filename.replace(/\.(?:md|markdown|txt|text|docx|doc|rtf)$/i, '')
   return cleanMarkdownTitle(baseName).slice(0, 80) || '제목 없는 대본'
 }
 
@@ -503,6 +503,12 @@ export interface PlayLocationDraft {
   props?: string
 }
 
+/** 장면 환경 설정에 잘못 들어간 샷 제목이나 대사를 감지한다. */
+export function containsSceneDramaText(text: string): boolean {
+  const value = String(text || '').replace(/\\\*/g, '*')
+  return /【\s*镜头\s*[：:]|(?:^|\n)\s*#{2,4}\s*场景\s*[一二三四五六七八九十百\d]+|\*\*\s*[\u3400-\u9fff\s]{1,12}[：:]\s*\*\*|(?:^|\n)\s*[\u3400-\u9fff]{2,6}[（(][^）)\n]{0,16}[）)]\s*[：:]/m.test(value)
+}
+
 function normLocationKey(name: string): string {
   return name.replace(/\s+/g, '').replace(/[，,。．.、]/g, '').toLowerCase()
 }
@@ -535,7 +541,8 @@ export function extractLocationsFromPlay(markdown: string): PlayLocationDraft[] 
     if (!name || key.length < 2 || seen.has(key)) return
     if (/^(?:场景\s*[一二三四五六七八九十百0-9]+|장면\s*\d+|scene\s+\d+)$/i.test(name)) return
     seen.add(key)
-    const desc = (description || `${name}. 대본에 나온 빈 공간, 바닥, 건축물과 조명을 참고해요.`).replace(/\s+/g, ' ').trim()
+    const clean = (description || '').trim()
+    const desc = (clean && !containsSceneDramaText(clean) ? clean : `${name}。空间、建筑、地面与光线需依据剧本补充。`).replace(/\s+/g, ' ').trim()
     const mainAnchor = guessLocationAnchor(name, desc)
     out.push({
       name,
@@ -558,7 +565,7 @@ export function extractLocationsFromPlay(markdown: string): PlayLocationDraft[] 
     const heading = sec.body.match(SCENE_SLUG)
     const loc = heading?.[1]?.trim()
     const weather = heading?.[2]?.trim()
-    add(loc || sec.title, sec.body.slice(0, 600), weather)
+    if (loc) add(loc, '', weather)
   }
 
   return out

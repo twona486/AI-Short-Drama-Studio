@@ -293,7 +293,7 @@ async function onClick(ev: MouseEvent) {
 .rich :deep(a) {
   color: var(--color-accent);
   text-decoration: none;
-  border-bottom: 1px dashed rgba(126, 180, 255, 0.45);
+  border-bottom: none;
 }
 .rich :deep(h1),
 .rich :deep(h2),
@@ -332,10 +332,10 @@ async function onClick(ev: MouseEvent) {
 .rich :deep(blockquote) {
   margin: 8px 0;
   padding: 6px 10px;
-  border-left: 2px solid rgba(126, 180, 255, 0.5);
-  border-radius: 0 6px 6px 0;
-  background: rgba(126, 180, 255, 0.07);
-  color: var(--color-text-3);
+  border-left: none;
+  border-radius: 4px;
+  background: var(--nb-fill-2);
+  color: var(--nb-t2);
   font-size: 12.5px;
 }
 .rich :deep(ul),
@@ -362,7 +362,7 @@ async function onClick(ev: MouseEvent) {
   width: 4px;
   height: 4px;
   border-radius: 50%;
-  background: rgba(126, 180, 255, 0.75);
+  background: var(--nb-t3);
 }
 .rich :deep(ol) {
   padding-left: 20px;
@@ -378,19 +378,19 @@ async function onClick(ev: MouseEvent) {
 .rich :deep(.ic) {
   padding: 1px 5px;
   border-radius: 5px;
-  background: rgba(255, 255, 255, 0.07);
-  border: 1px solid var(--color-border);
+  background: var(--nb-fill-2);
+  border: none;
   font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
   font-size: 0.88em;
-  color: #cbd5ff;
+  color: var(--nb-t1);
 }
 
 /* 표 */
 .rich :deep(.tb-wrap) {
   margin: 8px 0 10px;
   overflow-x: auto;
-  border: 1px solid var(--color-border);
-  border-radius: 9px;
+  border: none;
+  border-radius: 4px;
 }
 .rich :deep(table) {
   width: 100%;
@@ -405,9 +405,9 @@ async function onClick(ev: MouseEvent) {
   white-space: nowrap;
 }
 .rich :deep(th) {
-  color: var(--color-text-3);
+  color: var(--nb-t2);
   font-weight: 600;
-  background: rgba(255, 255, 255, 0.03);
+  background: var(--nb-fill-1);
 }
 .rich :deep(tbody tr:last-child td) {
   border-bottom: none;
@@ -416,9 +416,9 @@ async function onClick(ev: MouseEvent) {
 /* 코드 블록과 프롬프트 카드 */
 .rich :deep(.code-card) {
   margin: 8px 0 10px;
-  border: 1px solid var(--color-border);
-  border-radius: 10px;
-  background: var(--color-bg-0);
+  border: 1px solid var(--nb-line-2);
+  border-radius: 4px;
+  background: var(--nb-bg-inset);
   overflow: hidden;
 }
 .rich :deep(.code-head) {
@@ -426,14 +426,14 @@ async function onClick(ev: MouseEvent) {
   align-items: center;
   gap: 8px;
   padding: 5px 8px 5px 10px;
-  border-bottom: 1px solid var(--color-border);
-  background: rgba(255, 255, 255, 0.028);
+  border-bottom: 1px solid var(--nb-line-2);
+  background: var(--nb-bg-3);
 }
 .rich :deep(.code-lang) {
   font-size: 10.5px;
   font-weight: 650;
   letter-spacing: 0.04em;
-  color: #a5b8ff;
+  color: var(--nb-accent-text);
   text-transform: none;
 }
 .rich :deep(.code-lines) {
@@ -444,10 +444,10 @@ async function onClick(ev: MouseEvent) {
 .rich :deep(.code-act) {
   margin: 0 0 0 auto;
   padding: 2px 8px;
-  border: 1px solid var(--color-border);
-  border-radius: 6px;
+  border: none;
+  border-radius: 4px;
   background: transparent;
-  color: var(--color-text-3);
+  color: var(--nb-t2);
   font-size: 10.5px;
   font-family: inherit;
   cursor: pointer;
@@ -457,20 +457,23 @@ async function onClick(ev: MouseEvent) {
   margin-left: 4px;
 }
 .rich :deep(.code-act:hover) {
-  border-color: rgba(126, 180, 255, 0.5);
-  background: rgba(126, 180, 255, 0.1);
-  color: var(--color-text-1);
+  background: var(--nb-fill-3);
+  color: var(--nb-t1);
 }
-.rich :deep(.code-body) {
+.rich :deep(.code-body),
+.rich :deep(.code-body code) {
   margin: 0;
   padding: 9px 11px;
   overflow-x: auto;
   font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
   font-size: 11.5px;
   line-height: 1.65;
-  color: #d6ddf0;
+  color: var(--nb-t1);
   white-space: pre-wrap;
   overflow-wrap: anywhere;
+}
+.rich :deep(.code-body code) {
+  padding: 0;
 }
 .rich :deep(.code-card.fold .code-body) {
   max-height: 148px;

@@ -1,40 +1,48 @@
 <script setup lang="ts">
 import { confirmAction } from '@/utils/confirmAction'
 import { t as translate } from '@/i18n'
-import { ref, onMounted, onBeforeUnmount, computed, watch } from 'vue'
+import { ref, onMounted, onBeforeUnmount, computed, watch, nextTick } from 'vue'
 import { useRouter } from 'vue-router'
 import { useProjectStore, useToastStore, useLibraryStore, LIBRARY_PUBLIC_ID } from '@/stores'
 import GlassCard from '@/components/common/GlassCard.vue'
-import GradientButton from '@/components/common/GradientButton.vue'
+import GalleryTemplates from '@/components/common/GalleryTemplates.vue'
 import EmptyState from '@/components/common/EmptyState.vue'
 import Tag from '@/components/common/Tag.vue'
 import HomeIcon from '@/components/common/HomeIcon.vue'
+import ThemeToggle from '@/components/common/ThemeToggle.vue'
 import { isDesktop, desktop } from '@/services/desktop'
 import { pickCoverAssetId, projectCoverUrl } from '@/services/storage'
 import { pickLocalFiles } from '@/utils/pickLocalFiles'
 import { openLightbox } from '@/composables/useLightbox'
 
 const router = useRouter()
+const showWindowChrome = /electron/i.test(navigator.userAgent) || isDesktop()
 const project = useProjectStore()
 const toast = useToastStore()
 
 const search = ref('')
+const searchEl = ref<HTMLInputElement | null>(null)
 const creating = ref(false)
+type HomeNav = 'home' | 'projects' | 'library' | 'tools' | 'templates'
+type ProjectFilter = 'all' | 'active' | 'done'
+const nav = ref<HomeNav>('home')
+const projectFilter = ref<ProjectFilter>('all')
+const viewMode = ref<'grid' | 'list'>('grid')
 
 const covers = ref<Record<string, string>>({})
 const library = useLibraryStore()
 const libUrls = ref<Record<string, string>>({})
 const libUploading = ref(false)
-const homeTab = ref<'projects' | 'library'>('projects')
-const libFolderId = ref(LIBRARY_PUBLIC_ID)
+const libKind = ref<'all' | 'image' | 'video' | 'audio'>('all')
 const libSelected = ref<Set<string>>(new Set())
 const libMoveTarget = ref(LIBRARY_PUBLIC_ID)
-const folderDraft = ref('')
-const renamingId = ref('')
-const renameDraft = ref('')
-const creatingFolder = ref(false)
+
+function showHomeNav() {
+  nav.value = 'home'
+}
 
 onMounted(async () => {
+  window.addEventListener('aicut:home', showHomeNav)
   await project.refreshList()
   await library.refresh()
   await loadLibraryThumbs()
@@ -84,6 +92,7 @@ watch(
 )
 
 onBeforeUnmount(() => {
+  window.removeEventListener('aicut:home', showHomeNav)
   for (const url of Object.values(covers.value)) revokeCover(url)
 })
 
@@ -96,6 +105,33 @@ const filteredProjects = computed(() => {
       p.script?.topic.toLowerCase().includes(kw)
   )
 })
+
+function projectDone(p: { shots: { videoAssetId?: string }[] }) {
+  return p.shots.length > 0 && p.shots.every((shot) => Boolean(shot.videoAssetId))
+}
+
+const activeCount = computed(() => project.allProjects.filter((p) => !projectDone(p)).length)
+const doneCount = computed(() => project.allProjects.filter((p) => projectDone(p)).length)
+
+const listedProjects = computed(() => {
+  if (projectFilter.value === 'active') return filteredProjects.value.filter((p) => !projectDone(p))
+  if (projectFilter.value === 'done') return filteredProjects.value.filter((p) => projectDone(p))
+  return filteredProjects.value
+})
+
+function focusProjectSearch() {
+  if (nav.value === 'library' || nav.value === 'tools' || nav.value === 'templates') nav.value = 'projects'
+  nextTick(() => searchEl.value?.focus())
+}
+
+function openLatestProject() {
+  const latest = [...project.allProjects].sort((a, b) => b.updatedAt - a.updatedAt)[0]
+  if (!latest) {
+    toast.warn(translate('upstreamHome.noProjects'))
+    return
+  }
+  openProject(latest.id)
+}
 
 const totalShots = computed(() =>
   project.allProjects.reduce((sum, p) => sum + p.shots.length, 0)
@@ -167,6 +203,24 @@ async function quickCreate() {
   }
 }
 
+async function startRemake() {
+  if (creating.value) return
+  creating.value = true
+  try {
+    const now = new Date()
+    const pad = (n: number) => String(n).padStart(2, '0')
+    const label = translate('upstreamHome.replicaProject', { date: `${now.getMonth() + 1}-${now.getDate()} ${pad(now.getHours())}:${pad(now.getMinutes())}` })
+    const p = await project.createNamed(label)
+    p.pipelineMode = 'remake'
+    await project.save()
+    router.push('/studio')
+  } catch (e: any) {
+    toast.error(e?.message || translate('upstreamHome.createFailed'))
+  } finally {
+    creating.value = false
+  }
+}
+
 async function deleteProject(id: string) {
   if (!await confirmAction(translate('home.confirmDeleteProject'))) return
   project.remove(id)
@@ -227,19 +281,41 @@ const statItems = computed(() => [
   { value: fmtDuration(totalDuration.value), get label() { return translate('home.videoDuration') }, accent: true }
 ])
 
-const visibleLibraryAssets = computed(() => library.inFolder(libFolderId.value))
+const libKindCount = computed(() => ({
+  image: library.all.filter((a) => a.kind === 'image').length,
+  video: library.all.filter((a) => a.kind === 'video').length,
+  audio: library.all.filter((a) => a.kind === 'audio').length,
+  all: library.all.length
+}))
 
-const currentFolderLabel = computed(() =>
-  libFolderId.value === LIBRARY_PUBLIC_ID ? translate('home.publicAssets') : library.folderName(libFolderId.value)
+const libTabs = computed(() => [
+  { id: 'image' as const, label: translate('upstreamHome.assetImage'), count: libKindCount.value.image },
+  { id: 'video' as const, label: translate('upstreamHome.assetVideo'), count: libKindCount.value.video },
+  { id: 'audio' as const, label: translate('upstreamHome.assetAudio'), count: libKindCount.value.audio },
+  { id: 'all' as const, label: translate('upstreamHome.all'), count: libKindCount.value.all }
+])
+
+const visibleLibraryAssets = computed(() =>
+  libKind.value === 'all' ? library.all : library.all.filter((a) => a.kind === libKind.value)
 )
 
-function selectLibFolder(id: string) {
-  libFolderId.value = id
+const selectedLibraryNames = computed(() => {
+  const names = [...libSelected.value]
+    .map((id) => library.getMeta(id)?.filename)
+    .filter((name): name is string => Boolean(name))
+  if (names.length <= 3) return names.join('、')
+  return `${names.slice(0, 3).join(', ')}…`
+})
+
+function setLibKind(id: 'all' | 'image' | 'video' | 'audio') {
+  libKind.value = id
   libSelected.value = new Set()
-  libMoveTarget.value =
-    id === LIBRARY_PUBLIC_ID
-      ? library.folders[0]?.id ?? LIBRARY_PUBLIC_ID
-      : LIBRARY_PUBLIC_ID
+}
+
+function openLibraryItem(asset: { id: string; kind: string; filename: string }) {
+  const url = libUrls.value[asset.id]
+  if (!url || asset.kind === 'audio') return
+  openLightbox(url, asset.kind === 'video' ? 'video' : 'image', asset.filename)
 }
 
 function clearLibSelected() {
@@ -278,13 +354,10 @@ async function uploadLibraryImages() {
   libUploading.value = true
   try {
     for (const file of files) {
-      await library.add(file, 'uploaded', {
-        filename: file.name,
-        folderId: libFolderId.value
-      })
+      await library.add(file, 'uploaded', { filename: file.name })
     }
     await loadLibraryThumbs()
-    toast.success(translate('home.uploaded', { p0: files.length, p1: currentFolderLabel.value }))
+    toast.success(translate('upstreamHome.uploadedCount', { count: files.length }))
   } catch (err: any) {
     toast.error(err?.message || translate('common.uploadFailed'))
   } finally {
@@ -302,52 +375,35 @@ async function removeLibraryItem(id: string) {
   toast.success(translate('common.deleted'))
 }
 
-async function createLibFolder() {
-  creatingFolder.value = true
-  try {
-    const folder = await library.createFolder(folderDraft.value)
-    folderDraft.value = ''
-    libFolderId.value = folder.id
-    toast.success(translate('common.created', { p0: folder.name }))
-  } catch (err: any) {
-    toast.error(err?.message || translate('common.createFailed'))
-  } finally {
-    creatingFolder.value = false
+async function downloadSelectedLibrary() {
+  const ids = [...libSelected.value]
+  let saved = 0
+  for (const id of ids) {
+    const asset = library.getMeta(id)
+    const blob = await library.getBlob(id)
+    if (!blob || !asset) continue
+    const url = URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    link.href = url
+    link.download = asset.filename || id
+    link.click()
+    URL.revokeObjectURL(url)
+    saved += 1
+    await new Promise((resolve) => setTimeout(resolve, 180))
   }
+  toast[saved ? 'success' : 'warn'](saved ? translate('upstreamHome.downloadCount', { count: saved }) : translate('upstreamHome.unreadableAssets'))
 }
 
-function startRenameFolder(id: string, name: string) {
-  renamingId.value = id
-  renameDraft.value = name
-}
-
-async function commitRenameFolder() {
-  const id = renamingId.value
-  if (!id) return
-  try {
-    await library.renameFolder(id, renameDraft.value)
-    renamingId.value = ''
-    toast.success(translate('common.renamed'))
-  } catch (err: any) {
-    toast.error(err?.message || translate('common.renameFailed'))
+async function removeSelectedLibrary() {
+  const ids = [...libSelected.value]
+  if (!ids.length) return
+  if (!await confirmAction(translate('upstreamHome.deleteConfirm', { count: ids.length }))) return
+  for (const id of ids) {
+    await library.remove(id)
+    delete libUrls.value[id]
   }
-}
-
-async function removeLibFolder(id: string, name: string) {
-  const n = library.folderCount(id)
-  const msg =
-    n > 0
-      ? translate('home.deleteNonEmptyFolderConfirm', { p0: name, p1: n })
-      : translate('home.deleteFolderConfirm', { p0: name })
-  if (!await confirmAction(msg)) return
-  try {
-    await library.deleteFolder(id)
-    if (libFolderId.value === id) libFolderId.value = LIBRARY_PUBLIC_ID
-    libSelected.value = new Set()
-    toast.success(translate('common.folderDeleted'))
-  } catch (err: any) {
-    toast.error(err?.message || translate('common.deleteFailed'))
-  }
+  libSelected.value = new Set()
+  toast.success(translate('upstreamHome.deletedCount', { count: ids.length }))
 }
 
 async function moveSelectedLibrary() {
@@ -369,126 +425,175 @@ async function moveSelectedLibrary() {
 
 <template>
   <div class="home">
-    <div class="hero">
-      <div class="hero-grid" />
-      <div class="hero-glow" />
-      <div class="hero-content">
-        <span class="hero-badge"><i class="dot" />{{ $t('home.heroBadge') }}</span>
-        <h1 class="title">
-          {{ $t('home.heroIntro') }} <span class="gradient-text">{{ $t('home.heroPipeline') }}</span>{{ $t('home.heroPunctuation') }}<br />
-          {{ $t('home.heroResult') }}
-        </h1>
-        <p class="subtitle">
-          {{ $t('home.heroDescription') }}
-        </p>
-        <div class="hero-actions">
-          <GradientButton size="lg" type="secondary" @click="openQuickEditor">
-            <template #icon><HomeIcon name="scissors" :size="18" /></template>
-            {{ $t('common.videoEditing') }}
-          </GradientButton>
-          <GradientButton size="lg" type="secondary" @click="router.push({ name: 'smart-speech', query: { new: '1' } })">
-            <template #icon><HomeIcon name="mic" :size="18" /></template>
-            {{ $t('common.smartSpeech') }}
-          </GradientButton>
-          <GradientButton size="lg" :loading="creating" :disabled="creating" @click="quickCreate">
-            <template #icon><HomeIcon name="plus" :size="18" /></template>
-            {{ $t('common.new') }}
-          </GradientButton>
-          <GradientButton
-            size="lg"
-            type="ghost"
-            :title="$t('home.scriptLibraryHint')"
-            @click="router.push('/scripts')"
-          >
-            <template #icon><HomeIcon name="script" :size="18" /></template>
-            {{ $t('common.scriptLibrary') }}
-          </GradientButton>
-          <GradientButton
-            size="lg"
-            type="ghost"
-            :title="$t('home.classicStartHint')"
-            @click="goClassicFlow"
-          >
-            <template #icon><HomeIcon name="wand" :size="18" /></template>
-            {{ $t('common.classicWorkflow') }}
-          </GradientButton>
-          <GradientButton
-            v-if="isDesktop()"
-            size="lg"
-            type="ghost"
-            :disabled="!project.current?.folderPath"
-            :title="project.current?.folderPath || $t('common.createOrOpenProject')"
-            @click="openProjectFolder()"
-          >
-            <template #icon><HomeIcon name="folder" :size="18" /></template>
-            {{ $t('home.openCurrentFolder') }}
-          </GradientButton>
-          <GradientButton size="lg" type="ghost" @click="router.push('/settings')">
-            <template #icon><HomeIcon name="settings" :size="18" /></template>
-            {{ $t('home.connectAi') }}
-          </GradientButton>
-        </div>
-        <div class="stats">
-          <div v-for="s in statItems" :key="s.label" class="stat">
-            <div class="stat-value" :class="{ accent: s.accent }">{{ s.value }}</div>
-            <div class="stat-label">{{ s.label }}</div>
-          </div>
-        </div>
+    <aside class="sidenav">
+      <button v-if="!showWindowChrome" type="button" class="brand" @click="nav = 'home'">
+        <img class="brand-mark" src="/logo.png" alt="" />
+        <span class="nav-label">{{ $t('common.appName') }}</span>
+      </button>
+      <nav class="side-links" :aria-label="$t('upstreamHome.homeNavigation')">
+        <button type="button" :class="{ on: nav === 'home' }" @click="nav = 'home'">
+          <HomeIcon name="home" :size="18" /><span class="nav-label">{{ $t('upstreamHome.homeTab') }}</span>
+        </button>
+        <button type="button" :class="{ on: nav === 'projects' }" @click="nav = 'projects'">
+          <HomeIcon name="folder" :size="18" /><span class="nav-label">{{ $t('upstreamHome.myProjects') }}</span>
+        </button>
+        <button type="button" @click="router.push('/scripts')">
+          <HomeIcon name="script" :size="18" /><span class="nav-label">{{ $t('upstreamHome.scriptCenter') }}</span>
+        </button>
+        <button type="button" :class="{ on: nav === 'library' }" @click="nav = 'library'">
+          <HomeIcon name="library" :size="18" /><span class="nav-label">{{ $t('upstreamHome.mediaLibrary') }}</span>
+        </button>
+        <button type="button" :class="{ on: nav === 'templates' }" @click="nav = 'templates'">
+          <HomeIcon name="image" :size="18" /><span class="nav-label">{{ $t('upstreamHome.galleryTemplates') }}</span>
+        </button>
+        <button type="button" :class="{ on: nav === 'tools' }" @click="nav = 'tools'">
+          <HomeIcon name="wand" :size="18" /><span class="nav-label">{{ $t('upstreamHome.tools') }}</span>
+        </button>
+        <button type="button" @click="router.push('/settings')">
+          <HomeIcon name="settings" :size="18" /><span class="nav-label">{{ $t('upstreamHome.settings') }}</span>
+        </button>
+        <a class="tutorial-link" href="https://www.bilibili.com/video/BV1o6n66fE5p/" target="_blank" rel="noopener noreferrer">
+          <HomeIcon name="play" :size="18" /><span class="nav-label">{{ $t('upstreamHome.videoTutorial') }}</span>
+        </a>
+      </nav>
+      <div class="side-foot">
+        <ThemeToggle />
+        <a href="https://github.com/JerrIsTheBesta/AI-Short-Drama-Studio" target="_blank" rel="noreferrer">
+          <HomeIcon name="github" :size="16" />
+          <span class="nav-label">{{ $t('upstreamHome.github') }}</span>
+        </a>
       </div>
-    </div>
+    </aside>
 
-    <div class="container">
-      <div class="section-header">
-        <div class="home-tabs" role="tablist">
-          <button
-            type="button"
-            role="tab"
-            :class="{ on: homeTab === 'projects' }"
-            :aria-selected="homeTab === 'projects'"
-            @click="homeTab = 'projects'"
-          >
-            {{ $t('home.myProjects') }}
-            <em>{{ project.allProjects.length }}</em>
-          </button>
-          <button
-            type="button"
-            role="tab"
-            :class="{ on: homeTab === 'library' }"
-            :aria-selected="homeTab === 'library'"
-            @click="homeTab = 'library'"
-          >
-            {{ $t('common.assetLibrary') }}
-            <em>{{ library.all.length }}</em>
-          </button>
-        </div>
-        <div v-if="homeTab === 'projects'" class="filter">
-          <HomeIcon class="search-icon" name="search" :size="17" />
-          <input v-model="search" class="search" :placeholder="$t('home.searchProjects')" />
-        </div>
-        <button v-else type="button" class="lib-upload" :disabled="libUploading" @click="uploadLibraryImages">
-          <HomeIcon name="upload" :size="16" />
-          {{ libUploading ? $t('common.uploading') : $t('home.uploadTo', { p0: currentFolderLabel }) }}
+    <div class="stage">
+      <div v-if="nav !== 'home'" class="stage-bar">
+        <button type="button" class="icon-round" :title="$t('upstreamHome.searchProjects')" @click="focusProjectSearch">
+          <HomeIcon name="search" :size="16" />
+        </button>
+        <button type="button" class="icon-round avatar" :title="$t('upstreamHome.settings')" @click="router.push('/settings')">
+          <HomeIcon name="settings" :size="16" />
         </button>
       </div>
 
-      <div v-if="homeTab === 'projects'">
-      <EmptyState
-        v-if="filteredProjects.length === 0"
-        :title="$t('home.noProjects')"
-        :description="$t('home.noProjectsHelp')"
-      >
-        <template #icon><HomeIcon name="film" :size="44" /></template>
-        <template #action>
-          <GradientButton :loading="creating" :disabled="creating" @click="quickCreate">
-            <template #icon><HomeIcon name="plus" :size="16" /></template>
-            {{ $t('common.new') }}
-          </GradientButton>
-        </template>
-      </EmptyState>
+      <template v-if="nav === 'home'">
+        <section class="banner">
+          <div class="banner-flow" aria-hidden="true">
+            <svg viewBox="0 0 1000 240" preserveAspectRatio="none">
+              <defs>
+                <linearGradient id="banner-wave" x1="0" y1="0" x2="1000" y2="0" gradientUnits="userSpaceOnUse">
+                  <stop offset="0%" stop-color="var(--nb-accent-2)" stop-opacity="0.42" />
+                  <stop offset="42%" stop-color="var(--nb-accent)" stop-opacity="0.22" />
+                  <stop offset="100%" stop-color="var(--nb-accent)" stop-opacity="0" />
+                </linearGradient>
+              </defs>
+              <path class="wave hint" vector-effect="non-scaling-stroke" d="M0 108C42 94 83 94 125 108C167 122 208 122 250 108C292 94 333 94 375 108C417 122 458 122 500 108C542 94 583 94 625 108C667 122 708 122 750 108C792 94 833 94 875 108C917 122 958 122 1000 108" />
+              <path class="wave streak" vector-effect="non-scaling-stroke" d="M0 108C42 94 83 94 125 108C167 122 208 122 250 108C292 94 333 94 375 108C417 122 458 122 500 108C542 94 583 94 625 108C667 122 708 122 750 108C792 94 833 94 875 108C917 122 958 122 1000 108" />
+              <path class="wave hint" vector-effect="non-scaling-stroke" d="M0 148C42 160 83 160 125 148C167 136 208 136 250 148C292 160 333 160 375 148C417 136 458 136 500 148C542 160 583 160 625 148C667 136 708 136 750 148C792 160 833 160 875 148C917 136 958 136 1000 148" />
+              <path class="wave streak late" vector-effect="non-scaling-stroke" d="M0 148C42 160 83 160 125 148C167 136 208 136 250 148C292 160 333 160 375 148C417 136 458 136 500 148C542 160 583 160 625 148C667 136 708 136 750 148C792 160 833 160 875 148C917 136 958 136 1000 148" />
+            </svg>
+          </div>
+          <div class="banner-copy">
+            <span class="home-kicker">{{ $t('home.heroBadge') }}</span>
+            <h1>{{ $t('upstreamHome.heroTitle') }}<br /><em>{{ $t('upstreamHome.heroEmphasis') }}</em></h1>
+            <p>{{ $t('upstreamHome.heroDescription') }}</p>
+            <div class="banner-actions">
+              <button type="button" class="go" :disabled="creating" @click="quickCreate">{{ $t('upstreamHome.startCreating') }}</button>
+              <button type="button" class="open" @click="openLatestProject">{{ $t('upstreamHome.openProject') }}</button>
+            </div>
+            <div class="hero-meta">
+              <div><strong>{{ project.allProjects.length }}</strong><span>{{ $t('upstreamHome.localProjects') }}</span></div>
+              <div><strong>{{ totalShots }}</strong><span>{{ $t('upstreamHome.createdShots') }}</span></div>
+              <div><strong>{{ doneCount }}</strong><span>{{ $t('upstreamHome.completedProjects') }}</span></div>
+            </div>
+          </div>
+          <img class="banner-art" src="/home-banner.png" alt="" />
+        </section>
 
-      <div v-else class="grid">
+        <section class="quick">
+          <h2><i /> {{ $t('upstreamHome.quickAccess') }}</h2>
+          <div class="quick-row">
+            <button type="button" @click="quickCreate">
+              <span class="q-icon violet"><HomeIcon name="video" :size="18" /></span>
+              <span><strong>{{ $t('upstreamHome.generateVideo') }}</strong><em>{{ $t('upstreamHome.videoFromInput') }}</em></span>
+              <b>→</b>
+            </button>
+            <button type="button" @click="openQuickEditor">
+              <span class="q-icon blue"><HomeIcon name="scissors" :size="18" /></span>
+              <span><strong>{{ $t('upstreamHome.editVideo') }}</strong><em>{{ $t('upstreamHome.editAndCombine') }}</em></span>
+              <b>→</b>
+            </button>
+            <button type="button" @click="router.push({ name: 'smart-speech', query: { new: '1' } })">
+              <span class="q-icon green"><HomeIcon name="video" :size="18" /></span>
+              <span><strong>{{ $t('upstreamHome.digitalHuman') }}</strong><em>{{ $t('upstreamHome.digitalHumanHint') }}</em></span>
+              <b>→</b>
+            </button>
+            <button type="button" @click="startRemake">
+              <span class="q-icon indigo"><HomeIcon name="remake" :size="18" /></span>
+              <span><strong>{{ $t('upstreamHome.replicateVideo') }}</strong><em>{{ $t('upstreamHome.copyStyle') }}</em></span>
+              <b>→</b>
+            </button>
+            <button type="button" @click="quickCreate">
+              <span class="q-icon amber"><HomeIcon name="wand" :size="18" /></span>
+              <span><strong>{{ $t('upstreamHome.aiEffects') }}</strong><em>{{ $t('upstreamHome.aiEffectsHint') }}</em></span>
+              <b>→</b>
+            </button>
+          </div>
+        </section>
+      </template>
+
+      <section v-if="nav === 'tools'" class="tools">
+        <h2>{{ $t('upstreamHome.tools') }}</h2>
+        <div class="quick-row">
+          <button type="button" @click="router.push('/scripts')">
+            <span class="q-icon indigo"><HomeIcon name="script" :size="18" /></span>
+            <span><strong>{{ $t('upstreamHome.scriptCenter') }}</strong><em>{{ $t('upstreamHome.scriptCenterHint') }}</em></span>
+          </button>
+          <button type="button" @click="goClassicFlow">
+            <span class="q-icon amber"><HomeIcon name="wand" :size="18" /></span>
+            <span><strong>{{ $t('upstreamHome.classicPipeline') }}</strong><em>{{ $t('upstreamHome.classicPipelineHint') }}</em></span>
+          </button>
+          <button type="button" @click="openQuickEditor">
+            <span class="q-icon blue"><HomeIcon name="scissors" :size="18" /></span>
+            <span><strong>{{ $t('upstreamHome.editVideo') }}</strong><em>{{ $t('upstreamHome.timelineLayout') }}</em></span>
+          </button>
+          <button type="button" @click="router.push({ name: 'smart-speech', query: { new: '1' } })">
+            <span class="q-icon green"><HomeIcon name="mic" :size="18" /></span>
+            <span><strong>{{ $t('upstreamHome.smartNarration') }}</strong><em>{{ $t('upstreamHome.narrationHint') }}</em></span>
+          </button>
+        </div>
+      </section>
+
+      <section v-if="nav === 'home' || nav === 'projects'" class="projects">
+        <div class="proj-head">
+          <h2><HomeIcon name="folder" :size="16" /> {{ $t('upstreamHome.myProjects') }}</h2>
+          <div class="filters" role="tablist">
+            <button type="button" :class="{ on: projectFilter === 'all' }" @click="projectFilter = 'all'">{{ $t('upstreamHome.all') }} ({{ project.allProjects.length }})</button>
+            <button type="button" :class="{ on: projectFilter === 'active' }" @click="projectFilter = 'active'">{{ $t('upstreamHome.inProgress') }} ({{ activeCount }})</button>
+            <button type="button" :class="{ on: projectFilter === 'done' }" @click="projectFilter = 'done'">{{ $t('upstreamHome.completed') }} ({{ doneCount }})</button>
+          </div>
+          <label class="filter">
+            <HomeIcon class="search-icon" name="search" :size="16" />
+            <input id="home-search" ref="searchEl" v-model="search" class="search" :placeholder="$t('upstreamHome.searchProjects')" />
+          </label>
+          <div class="view-toggle">
+            <button type="button" :class="{ on: viewMode === 'grid' }" :title="$t('upstreamHome.grid')" @click="viewMode = 'grid'">
+              <HomeIcon name="image" :size="15" />
+            </button>
+            <button type="button" :class="{ on: viewMode === 'list' }" :title="$t('upstreamHome.list')" @click="viewMode = 'list'">
+              <HomeIcon name="library" :size="15" />
+            </button>
+          </div>
+        </div>
+      <div class="grid" :class="viewMode">
+        <button type="button" class="create-card" :disabled="creating" @click="quickCreate">
+          <span class="create-mark"><HomeIcon name="film" :size="28" /></span>
+          <strong>{{ $t('upstreamHome.newProject') }}</strong>
+          <em>{{ $t('upstreamHome.blankProject') }}</em>
+          <span class="create-go">{{ $t('upstreamHome.createProjectLink') }}</span>
+        </button>
+        <p v-if="listedProjects.length === 0" class="filter-empty">{{ $t('upstreamHome.noProjectInFilter') }}</p>
         <GlassCard
-          v-for="p in filteredProjects"
+          v-for="p in listedProjects"
           :key="p.id"
           hoverable
           padding="none"
@@ -520,6 +625,8 @@ async function moveSelectedLibrary() {
               </button>
             </div>
             <div class="proj-meta-top">
+              <span v-if="p.shots.length" class="shot-pill">{{ $t('upstreamHome.shotCount', { count: p.shots.length }) }}</span>
+              <span class="phase" :class="projectDone(p) ? 'done' : 'active'">{{ projectDone(p) ? $t('upstreamHome.completed') : $t('upstreamHome.inProgress') }}</span>
               <Tag v-if="p.pipelineMode === 'remake'" type="warning" size="sm">{{ $t('common.recreate') }}</Tag>
               <Tag v-else-if="p.pipelineMode === 'img2video'" type="info" size="sm">{{ $t('common.freeMode') }}</Tag>
               <Tag v-else-if="p.pipelineMode === 'smart-speech'" type="success" size="sm">{{ $t('common.smartSpeech') }}</Tag>
@@ -572,116 +679,86 @@ async function moveSelectedLibrary() {
           </div>
         </GlassCard>
       </div>
-      </div>
+      </section>
 
-      <div v-else class="lib-layout">
-        <aside class="lib-side">
-          <div class="lib-side-title">{{ $t('common.folderCategory') }}</div>
-          <button
-            type="button"
-            class="lib-folder"
-            :class="{ on: libFolderId === LIBRARY_PUBLIC_ID }"
-            @click="selectLibFolder(LIBRARY_PUBLIC_ID)"
-          >
-            <HomeIcon name="library" :size="16" />
-            <span>{{ $t('home.publicAssets') }}</span>
-            <em>{{ library.folderCount(LIBRARY_PUBLIC_ID) }}</em>
-          </button>
-          <div v-for="f in library.folders" :key="f.id" class="lib-folder-row">
-            <button
-              v-if="renamingId !== f.id"
-              type="button"
-              class="lib-folder"
-              :class="{ on: libFolderId === f.id }"
-              @click="selectLibFolder(f.id)"
-            >
-              <span>{{ library.folderName(f.id) }}</span>
-              <em>{{ library.folderCount(f.id) }}</em>
-            </button>
-            <form v-else class="lib-rename" @submit.prevent="commitRenameFolder">
-              <input v-model="renameDraft" maxlength="24" @keydown.esc="renamingId = ''" />
-              <button type="submit">{{ $t('common.ok') }}</button>
-            </form>
-            <button
-              type="button"
-              class="lib-folder-act"
-              :title="$t('common.rename')"
-              @click="startRenameFolder(f.id, f.name)"
-            >
-              <HomeIcon name="edit" :size="14" />
-            </button>
-            <button
-              type="button"
-              class="lib-folder-act danger"
-              :title="$t('common.deleteFolder')"
-              @click="removeLibFolder(f.id, library.folderName(f.id))"
-            >
-              <HomeIcon name="trash" :size="14" />
-            </button>
+      <GalleryTemplates v-if="nav === 'templates'" />
+      <div v-if="nav === 'library'" class="lib-page">
+        <header class="lib-top">
+          <div>
+            <span class="home-kicker">{{ $t('upstreamHome.libraryAllProjects') }}</span>
+            <h2>{{ $t('upstreamHome.allAssetsTitle') }}</h2>
+            <p>{{ $t('upstreamHome.allAssetsHint') }}</p>
           </div>
-          <form class="lib-new-folder" @submit.prevent="createLibFolder">
-            <input
-              v-model="folderDraft"
-              maxlength="24"
-              :placeholder="$t('home.newFolderName')"
-              :disabled="creatingFolder"
-            />
-            <button type="submit" :disabled="creatingFolder || !folderDraft.trim()">{{ $t('common.create') }}</button>
-          </form>
-        </aside>
-
-        <div class="lib-main">
-          <p class="lib-hint">
-            {{ $t('home.publicAssetsHelp') }}
-          </p>
-          <div v-if="libSelected.size" class="lib-move-bar">
-            <span>{{ $t('common.selectionCount') }} {{ libSelected.size }} {{ $t('common.imageCounter') }}</span>
-            <select v-model="libMoveTarget">
+          <button type="button" class="lib-upload" :disabled="libUploading" @click="uploadLibraryImages">
+            <HomeIcon name="upload" :size="16" />
+            {{ libUploading ? $t('upstreamHome.uploading') : $t('upstreamHome.importAsset') }}
+          </button>
+        </header>
+        <div class="lib-tabs" role="tablist">
+          <button
+            v-for="tab in libTabs"
+            :key="tab.id"
+            type="button"
+            role="tab"
+            class="lib-tab"
+            :class="{ on: libKind === tab.id }"
+            :aria-selected="libKind === tab.id"
+            @click="setLibKind(tab.id)"
+          >
+            {{ tab.label }} <span class="cnt">{{ tab.count }}</span>
+          </button>
+        </div>
+        <div v-if="libSelected.size" class="lib-batch">
+          <span class="n">{{ $t('upstreamHome.selectedCount', { count: libSelected.size }) }}</span>
+          <span v-if="selectedLibraryNames" class="d">{{ selectedLibraryNames }}</span>
+          <div class="lib-batch-actions">
+            <select v-model="libMoveTarget" :aria-label="$t('upstreamHome.moveToFolder')">
               <option :value="LIBRARY_PUBLIC_ID">{{ $t('home.publicAssets') }}</option>
               <option v-for="f in library.folders" :key="f.id" :value="f.id">{{ library.folderName(f.id) }}</option>
             </select>
-            <button type="button" @click="moveSelectedLibrary">{{ $t('common.move') }}</button>
-            <button type="button" class="ghost" @click="clearLibSelected">{{ $t('common.cancel') }}</button>
+            <button type="button" class="outline" @click="moveSelectedLibrary">{{ $t('upstreamHome.moveToFolder') }}</button>
+            <button type="button" class="outline" @click="downloadSelectedLibrary">
+              <HomeIcon name="download" :size="14" />
+              {{ $t('upstreamHome.downloadSelected') }}
+            </button>
+            <button type="button" class="danger" @click="removeSelectedLibrary">
+              <HomeIcon name="trash" :size="14" />
+              {{ $t('upstreamHome.delete') }}
+            </button>
+            <button type="button" class="ghost" @click="clearLibSelected">{{ $t('upstreamHome.clearSelection') }}</button>
           </div>
-          <EmptyState
-            v-if="visibleLibraryAssets.length === 0"
-            :title="
-              library.all.length === 0 && libFolderId === LIBRARY_PUBLIC_ID
-                ? $t('home.noAssets')
-                : $t('home.noAssetsInFolder', { p0: currentFolderLabel })
-            "
-            :description="
-              library.all.length === 0 && libFolderId === LIBRARY_PUBLIC_ID
-                ? $t('home.noAssetsHelp')
-                : $t('home.noAssetsInFolderHelp')
-            "
+        </div>
+        <EmptyState
+          v-if="visibleLibraryAssets.length === 0"
+          :title="library.all.length === 0 ? $t('upstreamHome.emptyLibrary') : $t('upstreamHome.emptyCategory')"
+          :description="library.all.length === 0 ? $t('upstreamHome.emptyLibraryHint') : $t('upstreamHome.emptyCategoryHint')"
+        >
+          <template #icon>
+            <HomeIcon :name="libKind === 'video' ? 'video' : libKind === 'audio' ? 'mic' : 'image'" :size="44" />
+          </template>
+        </EmptyState>
+        <div v-else class="lib-grid">
+          <div
+            v-for="a in visibleLibraryAssets"
+            :key="a.id"
+            class="lib-card"
+            :class="{ picked: libSelected.has(a.id) }"
           >
-            <template #icon>
-              <HomeIcon :name="library.all.length === 0 ? 'image' : 'folder'" :size="44" />
-            </template>
-          </EmptyState>
-          <div v-else class="lib-grid">
-            <div
-              v-for="a in visibleLibraryAssets"
-              :key="a.id"
-              class="lib-card"
-              :class="{ picked: libSelected.has(a.id) }"
-            >
-              <label class="lib-check">
-                <input
-                  type="checkbox"
-                  :checked="libSelected.has(a.id)"
-                  @change="toggleLibSelect(a.id)"
-                />
-              </label>
-              <button type="button" class="lib-thumb" @click="libUrls[a.id] && openLightbox(libUrls[a.id], 'image')">
-                <img v-if="libUrls[a.id]" :src="libUrls[a.id]" alt="" />
-                <span v-else><HomeIcon name="image" :size="30" /></span>
-              </button>
-              <div class="lib-meta">
-                <span>{{ a.filename }}</span>
-                <button type="button" :title="$t('common.delete')" @click="removeLibraryItem(a.id)"><HomeIcon name="trash" :size="14" /></button>
-              </div>
+            <label class="lib-check">
+              <input
+                type="checkbox"
+                :checked="libSelected.has(a.id)"
+                @change="toggleLibSelect(a.id)"
+              />
+            </label>
+            <button type="button" class="lib-thumb" :aria-label="$t('upstreamHome.viewAsset', { name: a.filename })" @click="openLibraryItem(a)">
+              <img v-if="a.kind === 'image' && libUrls[a.id]" :src="libUrls[a.id]" alt="" />
+              <video v-else-if="a.kind === 'video' && libUrls[a.id]" :src="libUrls[a.id]" muted />
+              <span v-else><HomeIcon :name="a.kind === 'audio' ? 'mic' : a.kind === 'video' ? 'video' : 'image'" :size="30" /></span>
+            </button>
+            <div class="lib-meta">
+              <span>{{ a.filename }}</span>
+              <button type="button" :title="$t('upstreamHome.delete')" @click="removeLibraryItem(a.id)"><HomeIcon name="trash" :size="14" /></button>
             </div>
           </div>
         </div>
@@ -694,8 +771,537 @@ async function moveSelectedLibrary() {
 <style scoped>
 .home {
   height: 100%;
-  overflow-y: auto;
-  background: #0d0e12;
+  display: flex;
+  min-height: 0;
+  background: var(--nb-bg-0);
+  color: var(--nb-t1);
+}
+.sidenav {
+  width: 64px;
+  flex: 0 0 64px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 16px 0 14px;
+  background: var(--nb-bg-1);
+  border-right: 1px solid var(--nb-line-2);
+  overflow: visible;
+  z-index: 6;
+}
+.brand {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  margin-bottom: 12px;
+  padding: 0;
+  background: none;
+  border: 0;
+  color: inherit;
+  cursor: pointer;
+}
+.brand-mark {
+  width: 28px;
+  height: 28px;
+  object-fit: contain;
+}
+.side-links {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  width: 100%;
+}
+.side-links button,
+.side-links .tutorial-link,
+.side-foot a,
+.brand {
+  position: relative;
+}
+.side-links button,
+.side-links .tutorial-link {
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  padding: 0;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--nb-t3);
+  cursor: pointer;
+  text-decoration: none;
+}
+.nav-label {
+  position: absolute;
+  left: calc(100% + 10px);
+  top: 50%;
+  z-index: 8;
+  transform: translateY(-50%);
+  padding: 6px 10px;
+  border-radius: 8px;
+  border: 1px solid var(--nb-line-3);
+  background: var(--nb-bg-3);
+  color: var(--nb-t1);
+  font-size: 12px;
+  font-weight: 550;
+  line-height: 1.2;
+  white-space: nowrap;
+  opacity: 0;
+  pointer-events: none;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+}
+.brand:hover .nav-label,
+.side-links button:hover .nav-label,
+.side-links .tutorial-link:hover .nav-label,
+.side-foot a:hover .nav-label {
+  opacity: 1;
+}
+.side-links button.on {
+  color: var(--nb-accent);
+  background: var(--nb-accent-soft);
+}
+.side-links button:hover:not(.on),
+.side-links .tutorial-link:hover {
+  background: var(--nb-bg-2);
+  color: var(--nb-t1);
+}
+.side-foot {
+  margin-top: auto;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 0;
+}
+.side-foot :deep(.nb-theme),
+.side-foot a {
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  border: 1px solid var(--nb-line-2);
+  border-radius: 8px;
+  background: var(--nb-bg-2);
+  color: var(--nb-t2);
+  text-decoration: none;
+}
+.side-foot a:hover,
+.side-foot :deep(.nb-theme:hover) {
+  background: var(--nb-bg-3);
+  color: var(--nb-t1);
+  border-color: var(--nb-line-accent);
+}
+.stage {
+  flex: 1;
+  min-width: 0;
+  overflow: auto;
+  padding: 28px 36px 48px;
+  background:
+    radial-gradient(900px 480px at 18% -8%, var(--nb-accent-wash), transparent 62%),
+    radial-gradient(700px 420px at 88% 4%, var(--nb-ai-soft), transparent 60%),
+    linear-gradient(var(--nb-grid-line-2) 1px, transparent 1px),
+    linear-gradient(90deg, var(--nb-grid-line-2) 1px, transparent 1px),
+    var(--nb-bg-0);
+  background-size: auto, auto, 32px 32px, 32px 32px, auto;
+  background-repeat: no-repeat, no-repeat, repeat, repeat, no-repeat;
+}
+.stage-bar {
+  position: relative;
+  z-index: 3;
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-bottom: 8px;
+}
+.icon-round {
+  width: 36px;
+  height: 36px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(20, 16, 40, 0.7);
+  color: #d9d4ea;
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+}
+.icon-round:hover { border-color: var(--nb-line-accent); color: var(--nb-accent); }
+.home-kicker {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--nb-t3);
+}
+.home-kicker::before {
+  content: "";
+  width: 14px;
+  height: 1px;
+  background: var(--nb-line-accent);
+}
+.banner {
+  position: relative;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(336px, 552px);
+  gap: 36px;
+  align-items: center;
+  min-height: 384px;
+  margin: 0 0 28px;
+  padding: 12px 0 8px;
+}
+.banner-stars {
+  position: absolute;
+  z-index: 0;
+  inset: 0 0 -8px;
+  overflow: hidden;
+  pointer-events: none;
+  -webkit-mask-image: linear-gradient(180deg, #000 0%, #000 50%, transparent 100%);
+  mask-image: linear-gradient(180deg, #000 0%, #000 50%, transparent 100%);
+}
+.banner-stars::before,
+.banner-stars::after {
+  content: "";
+  position: absolute;
+  top: -8%;
+  left: 0;
+  width: calc(100% + 720px);
+  height: 116%;
+  background-repeat: repeat;
+  background-size: 720px 240px;
+  background-image:
+    radial-gradient(1.2px 1.2px at 40px 48px, rgba(255, 255, 255, 0.9) 50%, transparent 51%),
+    radial-gradient(1px 1px at 140px 160px, rgba(214, 204, 255, 0.75) 50%, transparent 51%),
+    radial-gradient(1.4px 1.4px at 230px 72px, rgba(255, 255, 255, 0.8) 50%, transparent 51%),
+    radial-gradient(1px 1px at 330px 190px, rgba(255, 214, 170, 0.65) 50%, transparent 51%),
+    radial-gradient(1.1px 1.1px at 430px 36px, rgba(255, 255, 255, 0.85) 50%, transparent 51%),
+    radial-gradient(1px 1px at 520px 120px, rgba(198, 186, 255, 0.7) 50%, transparent 51%),
+    radial-gradient(1.5px 1.5px at 610px 64px, rgba(255, 255, 255, 0.9) 50%, transparent 51%),
+    radial-gradient(1px 1px at 680px 176px, rgba(255, 226, 190, 0.6) 50%, transparent 51%);
+  animation: star-drift 38s linear infinite, star-twinkle 5.5s ease-in-out infinite;
+}
+.banner-stars::after {
+  width: calc(100% + 860px);
+  background-size: 860px 280px;
+  background-image:
+    radial-gradient(1px 1px at 90px 90px, rgba(255, 255, 255, 0.55) 50%, transparent 51%),
+    radial-gradient(1.3px 1.3px at 240px 40px, rgba(210, 198, 255, 0.65) 50%, transparent 51%),
+    radial-gradient(1px 1px at 400px 170px, rgba(255, 255, 255, 0.5) 50%, transparent 51%),
+    radial-gradient(1.2px 1.2px at 560px 100px, rgba(255, 220, 180, 0.55) 50%, transparent 51%),
+    radial-gradient(1px 1px at 700px 210px, rgba(255, 255, 255, 0.6) 50%, transparent 51%),
+    radial-gradient(1.4px 1.4px at 790px 30px, rgba(214, 204, 255, 0.65) 50%, transparent 51%);
+  animation-name: star-drift-slow, star-twinkle;
+  animation-duration: 58s, 7.5s;
+  animation-direction: reverse, alternate;
+}
+@keyframes star-drift-slow {
+  from { transform: translateX(0); }
+  to { transform: translateX(-860px); }
+}
+@keyframes star-drift {
+  from { transform: translateX(0); }
+  to { transform: translateX(-720px); }
+}
+@keyframes star-twinkle {
+  0%, 100% { opacity: 0.35; }
+  50% { opacity: 0.9; }
+}
+.banner-flow {
+  position: absolute;
+  z-index: 0;
+  inset: 8% 4% 6% 30%;
+  overflow: hidden;
+  pointer-events: none;
+  mask-image: linear-gradient(90deg, transparent, #000 8%, #000 86%, transparent);
+  -webkit-mask-image: linear-gradient(90deg, transparent, #000 8%, #000 86%, transparent);
+}
+.banner-flow svg { width: 100%; height: 100%; display: block; }
+.banner-flow .wave {
+  fill: none;
+  stroke: url(#banner-wave);
+  stroke-width: 1.2;
+  stroke-linecap: round;
+}
+.banner-flow .wave.hint { opacity: 0.28; }
+.banner-flow .wave.streak {
+  stroke-width: 1.6;
+  opacity: 0.72;
+  stroke-dasharray: 56 1100;
+  filter: blur(0.4px);
+  animation: banner-wave 1.7s linear infinite;
+}
+.banner-flow .wave.streak.late { animation-duration: 2.3s; animation-delay: -0.8s; }
+@keyframes banner-wave {
+  to { stroke-dashoffset: -1156; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .banner-stars::before,
+  .banner-stars::after,
+  .banner-flow .wave { animation: none; }
+  .banner-flow .wave.streak { stroke-dasharray: none; opacity: 0.2; }
+}
+.banner-copy { position: relative; z-index: 2; min-width: 0; }
+.banner h1 {
+  margin: 12px 0 10px;
+  font-size: 42px;
+  line-height: 1.12;
+  font-weight: 700;
+  letter-spacing: -0.03em;
+}
+.banner h1 em { font-style: normal; color: var(--nb-t4); }
+.banner p {
+  margin: 0;
+  max-width: 460px;
+  color: var(--nb-t3);
+  font-size: 14px;
+  line-height: 1.7;
+}
+.banner-actions { display: flex; gap: 12px; margin-top: 22px; }
+.banner-actions button {
+  height: 40px;
+  padding: 0 18px;
+  border-radius: 8px;
+  font-size: 14px;
+  cursor: pointer;
+}
+.banner-actions .go {
+  border: 0;
+  color: var(--nb-accent-ink);
+  background: var(--nb-accent);
+}
+.banner-actions .go:hover:not(:disabled) { background: #67e4fb; }
+.banner-actions .go:disabled { opacity: 0.6; cursor: default; }
+.banner-actions .open {
+  color: var(--nb-t1);
+  background: transparent;
+  border: 1px solid var(--nb-line-3);
+}
+.banner-actions .open:hover { border-color: var(--nb-line-accent); color: var(--nb-accent); }
+.hero-meta {
+  display: flex;
+  gap: 28px;
+  margin-top: 28px;
+  padding-top: 18px;
+  border-top: 1px solid var(--nb-line-1);
+}
+.hero-meta strong {
+  display: block;
+  font-size: 20px;
+  font-weight: 650;
+  color: var(--nb-t1);
+}
+.hero-meta span { font-size: 12px; color: var(--nb-t4); }
+.banner-art {
+  position: relative;
+  z-index: 1;
+  width: 100%;
+  height: 384px;
+  object-fit: contain;
+  object-position: center;
+  pointer-events: none;
+  filter: drop-shadow(0 18px 28px rgba(0, 0, 0, 0.28));
+}
+.quick, .tools, .projects { margin-top: 8px; }
+.quick h2, .tools h2, .proj-head h2, .lib-top h2 {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 14px;
+  font-size: 16px;
+  font-weight: 650;
+}
+.quick h2 i {
+  width: 8px;
+  height: 14px;
+  border-radius: 2px;
+  background: linear-gradient(180deg, #8d74ff, #5b46e6);
+}
+.quick-row {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 12px;
+}
+.quick-row button, .tools .quick-row button {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 74px;
+  padding: 14px;
+  text-align: left;
+  color: inherit;
+  cursor: pointer;
+  border-radius: 12px;
+  border: 1px solid var(--nb-line-2);
+  background: var(--nb-bg-2);
+}
+.quick-row button:hover { border-color: var(--nb-line-accent); transform: translateY(-2px); }
+.quick-row strong, .tools strong { display: block; font-size: 13px; color: var(--nb-t1); }
+.quick-row em, .tools em {
+  display: block;
+  margin-top: 3px;
+  font-style: normal;
+  font-size: 11px;
+  color: var(--nb-t3);
+}
+.quick-row b { margin-left: auto; color: #7d7696; font-weight: 500; }
+.q-icon {
+  width: 36px;
+  height: 36px;
+  border-radius: 12px;
+  display: grid;
+  place-items: center;
+  flex: 0 0 auto;
+}
+.q-icon.violet { background: rgba(255, 180, 84, 0.13); color: var(--nb-t-video, #ffb454); }
+.q-icon.blue { background: rgba(255, 143, 168, 0.13); color: var(--nb-t-audio, #ff8fa8); }
+.q-icon.green { background: rgba(52, 216, 168, 0.13); color: var(--nb-t-image, #34d8a8); }
+.q-icon.indigo { background: rgba(125, 140, 255, 0.13); color: var(--nb-t-script, #7d8cff); }
+.q-icon.amber { background: rgba(183, 139, 255, 0.13); color: var(--nb-t-compose, #b78bff); }
+.projects { margin-top: 26px; }
+.proj-head {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin-bottom: 14px;
+}
+.proj-head h2 { margin: 0; white-space: nowrap; }
+.filters { display: flex; gap: 8px; }
+.filters button, .view-toggle button {
+  height: 32px;
+  padding: 0 12px;
+  border-radius: 8px;
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--nb-t3);
+  cursor: pointer;
+  font-size: 13px;
+}
+.filters button.on {
+  color: var(--nb-accent);
+  background: var(--nb-accent-soft);
+  border-color: var(--nb-line-accent);
+}
+.view-toggle {
+  display: flex;
+  padding: 3px;
+  border-radius: 10px;
+  background: var(--nb-fill-1);
+  border: 1px solid var(--nb-line-1);
+}
+.view-toggle button {
+  width: 30px;
+  padding: 0;
+  display: grid;
+  place-items: center;
+  border-radius: 8px;
+  color: var(--nb-t3);
+}
+.view-toggle button.on { background: var(--nb-bg-3); color: var(--nb-t1); }
+.filter {
+  margin-left: auto;
+  position: relative;
+  display: flex;
+  align-items: center;
+  height: 36px;
+}
+.filter .search-icon {
+  position: absolute;
+  left: 12px;
+  top: 50%;
+  z-index: 1;
+  transform: translateY(-50%);
+  color: var(--nb-t4);
+  pointer-events: none;
+}
+.filter .search {
+  box-sizing: border-box;
+  width: 220px;
+  height: 36px;
+  padding: 0 14px 0 34px;
+  line-height: 36px;
+  border-radius: 8px;
+  border: 1px solid var(--nb-line-2);
+  background: var(--nb-bg-inset);
+  color: var(--nb-t1);
+  outline: none;
+}
+.create-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 228px;
+  border-radius: 12px;
+  border: 1px dashed var(--nb-line-3);
+  background: var(--nb-fill-1);
+  color: var(--nb-t2);
+  cursor: pointer;
+}
+.create-card:hover { border-color: var(--nb-line-accent); color: var(--nb-accent); background: var(--nb-accent-soft); }
+.create-card em { font-style: normal; color: var(--nb-t4); font-size: 12px; }
+.create-mark {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  border: 1px solid var(--nb-line-3);
+  background: transparent;
+  color: inherit;
+}
+.create-go {
+  margin-top: 6px;
+  color: var(--nb-accent);
+  font-size: 13px;
+}
+.filter-empty { grid-column: 1 / -1; color: var(--nb-t4); font-size: 13px; }
+.shot-pill, .phase {
+  display: inline-flex;
+  align-items: center;
+  height: 22px;
+  padding: 0 8px;
+  border-radius: 999px;
+  font-size: 11px;
+  background: rgba(6, 8, 11, 0.72);
+  color: #eef4fa;
+}
+.phase.active { background: var(--nb-accent-soft); color: var(--nb-accent); }
+.phase.done { background: var(--nb-success-soft, rgba(61, 217, 160, 0.14)); color: var(--nb-success, #3dd9a0); }
+.proj-open { display: none; }
+.grid.list { grid-template-columns: 1fr; }
+.grid.list .create-card { min-height: 84px; flex-direction: row; }
+.lib-top {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 24px;
+  padding: 8px 0 18px;
+}
+.lib-top h2 { margin: 8px 0 6px; font-size: 28px; letter-spacing: -0.03em; }
+.lib-top p { margin: 0; max-width: 620px; color: var(--nb-t3); font-size: 13px; line-height: 1.6; }
+@media (max-width: 1100px) {
+  .quick-row { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .banner { grid-template-columns: 1fr; min-height: 0; }
+  .banner-flow { display: none; }
+  .banner-art { height: 264px; }
+  .banner p { white-space: normal; }
+  .banner-art { height: 70%; right: 8px; bottom: 0; }
+}
+@media (max-width: 860px) {
+  .home { flex-direction: column; }
+  .sidenav { width: auto; flex: none; flex-direction: row; border-right: 0; border-bottom: 1px solid var(--nb-line-2); padding: 8px 12px; }
+  .side-links { flex-direction: row; }
+  .side-foot { flex-direction: row; width: auto; margin-top: 0; margin-left: auto; }
+  .brand { margin: 0 8px 0 0; }
+  .nav-label { left: 50%; top: calc(100% + 8px); transform: translateX(-50%); }
+  .proj-head { flex-wrap: wrap; }
+  .filter { margin-left: 0; }
 }
 
 /* ───────── Hero ───────── */
@@ -938,23 +1544,27 @@ async function moveSelectedLibrary() {
 .proj {
   cursor: pointer;
   overflow: hidden;
-  border-radius: 14px !important;
+  border-radius: var(--radius-lg) !important;
   box-shadow: none !important;
-  background: #14161c !important;
+  border: 1px solid var(--nb-line-2) !important;
+  background: var(--nb-bg-2) !important;
+  color: var(--nb-t1);
   transition:
     border-color 0.18s,
     transform 0.18s,
+    box-shadow 0.18s,
     background 0.18s !important;
 }
 .proj:hover {
   transform: translateY(-3px) !important;
-  border-color: rgba(126, 180, 255, 0.4) !important;
-  background: #171921 !important;
+  border-color: var(--nb-line-3) !important;
+  background: var(--nb-bg-2) !important;
+  box-shadow: var(--nb-e3) !important;
 }
 .proj-thumb {
   position: relative;
   aspect-ratio: 16/9;
-  background: #191b22;
+  background: var(--nb-bg-inset);
   overflow: hidden;
 }
 .proj-cover {
@@ -972,10 +1582,7 @@ async function moveSelectedLibrary() {
 .proj-thumb-grad {
   position: absolute;
   inset: 0;
-  opacity: 0.55;
-  background:
-    radial-gradient(120% 100% at 30% 0%, rgba(126, 180, 255, 0.22), transparent 60%),
-    linear-gradient(135deg, #23262f 0%, #171921 100%);
+  background: var(--nb-bg-inset);
 }
 .proj-thumb-overlay {
   position: absolute;
@@ -985,20 +1592,20 @@ async function moveSelectedLibrary() {
   justify-content: center;
 }
 .proj-thumb-icon {
-  color: var(--color-text-4);
-  opacity: 0.5;
+  color: var(--nb-t4);
+  opacity: 0.85;
 }
 .proj-open {
+  display: none;
   position: absolute;
   inset: 0;
   z-index: 3;
-  display: flex;
   align-items: flex-end;
   justify-content: flex-start;
   gap: 8px;
   padding: 12px 14px;
   opacity: 0;
-  background: linear-gradient(to top, rgba(10, 11, 15, 0.72), transparent 58%);
+  background: linear-gradient(to top, rgba(6, 8, 11, 0.72), transparent 58%);
   transition: opacity 0.2s;
 }
 .proj:hover .proj-open {
@@ -1009,28 +1616,28 @@ async function moveSelectedLibrary() {
   align-items: center;
   gap: 5px;
   padding: 4px 11px;
-  border: 1px solid var(--color-border);
+  border: 1px solid rgba(255, 255, 255, 0.16);
   border-radius: 99px;
-  background: rgba(16, 18, 24, 0.55);
+  background: rgba(6, 8, 11, 0.55);
   backdrop-filter: blur(4px);
-  color: var(--color-text-2);
+  color: #e9f0f9;
   font-size: 11px;
   letter-spacing: 0.04em;
   cursor: pointer;
   transition: all 0.15s;
 }
 .open-btn:hover {
-  border-color: rgba(126, 180, 255, 0.6);
-  background: rgba(126, 180, 255, 0.16);
-  color: #eaf0ff;
+  border-color: var(--nb-line-accent);
+  background: var(--nb-accent-soft);
+  color: #e9f0f9;
 }
 .open-btn.primary {
-  border-color: rgba(126, 180, 255, 0.5);
-  background: rgba(126, 180, 255, 0.2);
-  color: #dce6ff;
+  border-color: var(--nb-line-accent);
+  background: var(--nb-accent-soft);
+  color: #e9f0f9;
 }
 .open-btn.primary:hover {
-  background: rgba(126, 180, 255, 0.3);
+  background: rgba(53, 214, 247, 0.22);
 }
 .proj-open em {
   font-style: normal;
@@ -1051,7 +1658,7 @@ async function moveSelectedLibrary() {
 .proj-name {
   font-size: 14px;
   font-weight: 600;
-  color: var(--color-text-1);
+  color: var(--nb-t1);
   margin-bottom: 3px;
   white-space: nowrap;
   overflow: hidden;
@@ -1059,7 +1666,7 @@ async function moveSelectedLibrary() {
 }
 .proj-topic {
   font-size: 12px;
-  color: var(--color-text-3);
+  color: var(--nb-t3);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -1072,7 +1679,7 @@ async function moveSelectedLibrary() {
 }
 .proj-date {
   font-size: 11px;
-  color: var(--color-text-4);
+  color: var(--nb-t4);
   font-variant-numeric: tabular-nums;
 }
 .proj-actions {
@@ -1087,19 +1694,19 @@ async function moveSelectedLibrary() {
   background: transparent;
   border-radius: 6px;
   opacity: 0.5;
-  color: var(--color-text-2);
+  color: var(--nb-t3);
   cursor: pointer;
   transition: all 0.15s;
 }
 .proj-del:hover {
   opacity: 1;
-  background: rgba(239, 68, 68, 0.15);
-  color: #f87171;
+  background: var(--nb-danger-soft);
+  color: var(--nb-danger);
 }
 .proj-folder:hover:not(:disabled) {
   opacity: 1;
-  background: rgba(126, 180, 255, 0.14);
-  color: #a9c8ff;
+  background: var(--nb-accent-soft);
+  color: var(--nb-accent);
 }
 .proj-folder:disabled {
   opacity: 0.2;
@@ -1458,201 +2065,145 @@ async function moveSelectedLibrary() {
   display: inline-flex;
   align-items: center;
   gap: 7px;
-  padding: 8px 14px;
-  border-radius: 10px;
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  background: rgba(255, 255, 255, 0.03);
-  color: var(--color-text-1);
-  font-size: 12px;
-  cursor: pointer;
-  transition: all 0.16s;
-}
-.lib-upload:hover:not(:disabled) {
-  border-color: rgba(126, 180, 255, 0.5);
-  background: rgba(126, 180, 255, 0.08);
-  color: #cfe0ff;
-}
-.lib-layout {
-  display: grid;
-  grid-template-columns: 220px minmax(0, 1fr);
-  gap: 20px;
-  align-items: start;
-}
-.lib-side {
-  position: sticky;
-  top: 12px;
-  padding: 12px;
-  background: #14161c;
-  border: 1px solid rgba(255, 255, 255, 0.07);
-  border-radius: 12px;
-}
-.lib-side-title {
-  font-size: 10px;
-  font-weight: 650;
-  color: var(--color-text-4);
-  letter-spacing: 0.08em;
-  margin-bottom: 10px;
-}
-.lib-folder-row {
-  display: grid;
-  grid-template-columns: 1fr auto auto;
-  gap: 2px;
-  align-items: center;
-}
-.lib-folder {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  width: 100%;
-  margin: 0 0 4px;
-  padding: 7px 8px;
+  height: 36px;
+  padding: 0 14px;
   border-radius: 8px;
-  border: 1px solid transparent;
-  background: transparent;
-  color: var(--color-text-3);
+  border: 0;
+  background: var(--nb-accent);
+  color: var(--nb-accent-ink);
   font-size: 13px;
-  text-align: left;
-  cursor: pointer;
-  transition: all 0.15s;
-}
-.lib-folder span {
-  flex: 1;
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.lib-folder em {
-  font-style: normal;
-  font-size: 11px;
-  color: var(--color-text-4);
-  font-variant-numeric: tabular-nums;
-}
-.lib-folder:hover {
-  background: rgba(255, 255, 255, 0.05);
-  color: var(--color-text-2);
-}
-.lib-folder.on {
-  background: rgba(126, 180, 255, 0.12);
-  border-color: rgba(126, 180, 255, 0.32);
-  color: var(--color-text-1);
-}
-.lib-folder-act {
-  margin: 0 0 4px;
-  padding: 4px;
-  background: transparent;
-  border: none;
-  color: var(--color-text-4);
-  cursor: pointer;
-  display: inline-flex;
-}
-.lib-folder-act:hover {
-  color: var(--color-text-1);
-}
-.lib-folder-act.danger:hover {
-  color: var(--color-error);
-}
-.lib-rename,
-.lib-new-folder {
-  display: flex;
-  gap: 4px;
-  margin-top: 8px;
-}
-.lib-rename {
-  margin: 0 0 4px;
-}
-.lib-rename input,
-.lib-new-folder input {
-  flex: 1;
-  min-width: 0;
-  padding: 6px 8px;
-  border-radius: 8px;
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  background: rgba(255, 255, 255, 0.03);
-  color: var(--color-text-1);
-  font-size: 12px;
-  outline: none;
-}
-.lib-rename input:focus,
-.lib-new-folder input:focus {
-  border-color: rgba(126, 180, 255, 0.55);
-}
-.lib-rename button,
-.lib-new-folder button {
-  margin: 0;
-  padding: 6px 10px;
-  border-radius: 8px;
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  background: rgba(255, 255, 255, 0.03);
-  color: var(--color-text-1);
-  font-size: 12px;
-  cursor: pointer;
-}
-.lib-new-folder button:disabled {
-  opacity: 0.45;
-  cursor: default;
-}
-.lib-hint {
-  margin: 0 0 16px;
-  font-size: 12px;
-  color: var(--color-text-4);
-}
-.lib-move-bar {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin-bottom: 16px;
-  padding: 8px 10px;
-  border-radius: 10px;
-  border: 1px solid rgba(126, 180, 255, 0.3);
-  background: rgba(126, 180, 255, 0.08);
-  font-size: 12px;
-  color: var(--color-text-2);
-}
-.lib-move-bar select {
-  padding: 4px 8px;
-  border-radius: 8px;
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  background: #14161c;
-  color: var(--color-text-1);
-}
-.lib-move-bar button {
-  margin: 0;
-  padding: 4px 12px;
-  border-radius: 8px;
-  border: 1px solid transparent;
-  background: linear-gradient(135deg, #7eb4ff, #8f9dff);
-  color: #0b0d13;
   font-weight: 600;
   cursor: pointer;
 }
-.lib-move-bar button.ghost {
-  background: transparent;
-  border-color: rgba(255, 255, 255, 0.1);
-  color: var(--color-text-2);
-  font-weight: 400;
+.lib-upload:hover:not(:disabled) { background: #67e4fb; }
+.lib-upload:disabled { opacity: 0.6; cursor: default; }
+.lib-page {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
 }
+.lib-tabs {
+  display: flex;
+  align-items: center;
+  gap: 24px;
+  margin-bottom: 16px;
+  border-bottom: 1px solid var(--nb-line-2);
+}
+.lib-tab {
+  position: relative;
+  margin: 0;
+  padding: 10px 0;
+  border: 0;
+  background: transparent;
+  color: var(--nb-t3);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+}
+.lib-tab:hover { color: var(--nb-t2); }
+.lib-tab.on { color: var(--nb-t1); }
+.lib-tab.on::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: -1px;
+  height: 2px;
+  border-radius: 2px 2px 0 0;
+  background: var(--nb-accent);
+  box-shadow: 0 0 10px var(--nb-accent-glow);
+}
+.lib-tab .cnt {
+  margin-left: 5px;
+  color: var(--nb-t4);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+.lib-batch {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-bottom: 16px;
+  padding: 8px 12px;
+  border-radius: 10px;
+  border: 1px solid var(--nb-line-accent);
+  background: var(--nb-accent-soft);
+}
+.lib-batch .n {
+  font-size: 12px;
+  font-weight: 650;
+  color: var(--nb-accent);
+}
+.lib-batch .d {
+  min-width: 0;
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 11px;
+  color: var(--nb-t2);
+}
+.lib-batch-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-left: auto;
+  flex-wrap: wrap;
+}
+.lib-batch select {
+  height: 28px;
+  padding: 0 8px;
+  border-radius: 8px;
+  border: 1px solid var(--nb-line-2);
+  background: var(--nb-bg-3);
+  color: var(--nb-t1);
+  font-size: 12px;
+}
+.lib-batch button {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 28px;
+  margin: 0;
+  padding: 0 10px;
+  border-radius: 8px;
+  border: 1px solid var(--nb-line-3);
+  background: transparent;
+  color: var(--nb-t1);
+  font-size: 12px;
+  cursor: pointer;
+}
+.lib-batch button.danger {
+  border-color: var(--nb-danger-line);
+  color: var(--nb-danger);
+}
+.lib-batch button.ghost {
+  border-color: transparent;
+  color: var(--nb-t3);
+}
+.lib-batch button:hover { background: rgba(255, 255, 255, 0.04); }
 .lib-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
-  gap: 12px;
+  grid-template-columns: repeat(auto-fill, minmax(212px, 1fr));
+  gap: 16px;
   padding-bottom: 32px;
 }
 .lib-card {
   position: relative;
-  background: #14161c;
-  border: 1px solid rgba(255, 255, 255, 0.07);
+  background: var(--nb-bg-2);
+  border: 1px solid var(--nb-line-2);
   border-radius: 12px;
   overflow: hidden;
   transition: border-color 0.16s, transform 0.16s;
 }
 .lib-card:hover {
   transform: translateY(-2px);
-  border-color: rgba(255, 255, 255, 0.16);
+  border-color: var(--nb-line-accent);
 }
 .lib-card.picked {
-  border-color: rgba(126, 180, 255, 0.8);
-  box-shadow: 0 0 0 1px rgba(126, 180, 255, 0.6);
+  border-color: var(--nb-accent);
+  box-shadow: 0 0 0 1px var(--nb-accent), 0 0 24px var(--nb-accent-glow);
 }
 .lib-check {
   position: absolute;
@@ -1672,18 +2223,22 @@ async function moveSelectedLibrary() {
   cursor: pointer;
 }
 .lib-thumb {
+  display: grid;
+  place-items: center;
   width: 100%;
-  aspect-ratio: 1;
+  aspect-ratio: 16 / 10;
+  height: auto;
   margin: 0;
   padding: 0;
   border: none;
-  background: #171921;
-  cursor: pointer;
+  background: var(--nb-bg-inset);
+  cursor: zoom-in;
 }
-.lib-thumb img {
+.lib-thumb img,
+.lib-thumb video {
   width: 100%;
   height: 100%;
-  object-fit: cover;
+  object-fit: contain;
   display: block;
 }
 .lib-meta {
@@ -1713,7 +2268,10 @@ async function moveSelectedLibrary() {
 .lib-meta button:hover {
   color: var(--color-error);
 }
-.proj-meta-top :deep(.tag) { gap: 4px; }
+.proj-meta-top :deep(.tag) { display: none; }
+.grid.list .proj { display: flex !important; align-items: stretch; }
+.grid.list .proj-thumb { width: 240px; flex: none; }
+.search { border-radius: 999px; }
 .modal-actions :deep(.grad-btn) { border-radius: 10px; box-shadow: none; }
 @media (max-width: 720px) {
   .hero-content {
@@ -1727,11 +2285,6 @@ async function moveSelectedLibrary() {
   .search { width: 100%; }
   .mode-grid,
   .aspect-grid { grid-template-columns: 1fr 1fr; }
-  .lib-layout {
-    grid-template-columns: 1fr;
-  }
-  .lib-side {
-    position: static;
-  }
+  .lib-batch-actions { margin-left: 0; }
 }
 </style>

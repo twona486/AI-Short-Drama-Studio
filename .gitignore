@@ -25,6 +25,7 @@ secrets*.json
 coverage
 output
 diagnostics
+*.tsbuildinfo
 *.zip
 
 # FFmpeg 코어는 용량이 커서 사용자 환경에서 다운로드한다.

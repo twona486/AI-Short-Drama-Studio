@@ -37,13 +37,13 @@ export const STYLE_ALIASES: Record<VisualStyle, string[]> = {
     '工笔',
     '宣纸'
   ],
-  watercolor: ['수채화', 'watercolor', 'watercolour', '水彩画风', '水彩画', '水彩风', '水彩'],
-  'oil-painting': ['고전 유화', '유화', '古典油画', '油画风', 'oil painting', 'oil-painting', '厚涂', '油画'],
-  'pixel-art': ['픽셀 아트', '도트 그래픽', '像素风格', '像素风', 'pixel-art', 'pixel art', '像素画', '像素'],
-  '3d-render': ['3D 렌더링', '3D render', '三维渲染', '3d渲染', '3d-render', 'blender', 'octane', 'c4d'],
-  anime: ['일본 애니메이션', '애니메이션', '셀 채색', '日系动画', '二次元', '赛璐璐', '动漫风', '动画风', 'anime', '动漫', '动画'],
-  photorealistic: ['사실적 사진', '실사 사진', '写实摄影', '超写实', 'photorealistic', '纪实摄影', '真人实拍'],
-  cinematic: ['영화 스틸', '영화풍', '필름 사진', '电影剧照', '院线电影', '胶片摄影', '电影感', 'cinematic', '胶片颗粒']
+  watercolor: ['水彩画风', '水彩画', '水彩风', 'watercolor', '水彩'],
+  'oil-painting': ['古典油画', '油画风', 'oil painting', 'oil-painting', '厚涂', '油画'],
+  'pixel-art': ['像素风格', '像素风', 'pixel-art', 'pixel art', '像素画', '像素'],
+  '3d-render': ['3d动画', '3d 动画', '三维动画', '3d stylized animation', 'pixar', '皮克斯', '三维渲染', '3d渲染', '3d-render', 'blender', 'octane', 'c4d'],
+  anime: ['日系动画', '二次元', '赛璐璐', '动漫风', '动画风', 'anime', '动漫', '动画'],
+  photorealistic: ['写实摄影', '超写实', 'photorealistic', '纪实摄影', '真人实拍'],
+  cinematic: ['电影剧照', '院线电影', '胶片摄影', '电影感', 'cinematic', '胶片颗粒']
 }
 
 const INFER_ORDER: VisualStyle[] = [
@@ -209,6 +209,8 @@ export function extractUserMediumPhrase(...texts: Array<string | undefined>): st
   if (!blob.trim()) return ''
 
   const cel = extractCelShadePhrase(blob)
+  const dimensional = blob.match(/(?:3\s*d|三维)\s*[-·]?\s*(?:半写实|写实|卡通|动画|渲染)(?:\s*(?:风格|画风))?/i)
+  if (dimensional) return dimensional[0].trim()
   if (cel) return cel
 
   const open: string[] = []
@@ -217,7 +219,7 @@ export function extractUserMediumPhrase(...texts: Array<string | undefined>): st
   }
   for (const m of blob.matchAll(/([\u4e00-\u9fffA-Za-z]{2,8}风)/g)) {
     const w = m[1]
-    if (w && !MEDIUM_STOP.has(w)) open.push(w)
+    if (w && !MEDIUM_STOP.has(w) && !/的风$|起风$|吹风$|阵风$|冷风$|寒风$|晚风$|微风$|被.*风$/.test(w)) open.push(w)
   }
   open.sort((a, b) => b.length - a.length)
   if (open[0]) return open[0]
@@ -246,6 +248,7 @@ export function inferVisualStyleFromText(...texts: Array<string | undefined>): V
   if (!blob.trim()) return null
   // 카툰 렌더링은 픽셀 아트나 실사 3D로 분류하지 않는다.
   if (extractCelShadePhrase(blob)) return null
+  if (/(?:3\s*d|三维)\s*[-·]?\s*(?:半写实|写实|动画|渲染)/i.test(blob)) return '3d-render'
   const lower = blob.toLowerCase()
   for (const style of INFER_ORDER) {
     const hit = STYLE_ALIASES[style].some((alias) => {
@@ -296,13 +299,14 @@ export function styleLinesFromPlay(content?: string): string {
   return (content || '')
     .split('\n')
     .map((line) => line.trim())
-    .filter((line) => /画风|视觉风格|画面风格|美术风格|绘制风格|风格要求|整体风格|画面质感|화풍|그림체|시각 스타일|visual style|rendering medium/i.test(line))
+    .filter((line) => /画风|视觉风格|画面风格|美术风格|绘制风格|风格要求|整体风格|画面质感|(?:3\s*d|三维)\s*(?:半写实|写实|动画|渲染)/i.test(line))
     .join('\n')
 }
 
 export function lookFromScript(
   script?: {
     style?: VisualStyle
+    visualStyleOverride?: string
     topic?: string
     content?: string
     keywords?: string[]
@@ -312,6 +316,9 @@ export function lookFromScript(
   ...extra: Array<string | undefined>
 ): VisualLook {
   const fallback = script?.style ?? 'cinematic'
+  if (script?.visualStyleOverride?.trim()) return lookFromTexts(fallback, script.visualStyleOverride)
+  const scriptLook = lookFromTexts(fallback, styleLinesFromPlay(script?.content))
+  if (scriptLook.userNamed) return scriptLook
   return lookFromTexts(
     fallback,
     script?.topic,
@@ -325,6 +332,7 @@ export function lookFromScript(
 
 /** 실사 매체인지 확인해 캐릭터 설정 이미지 방식을 결정한다. */
 export function isPhotographicLook(look: VisualLook): boolean {
+  if (/(?:3\s*d|三维)/i.test(look.medium)) return false
   if (look.matched) {
     return look.matched === 'cinematic' || look.matched === 'photorealistic'
   }

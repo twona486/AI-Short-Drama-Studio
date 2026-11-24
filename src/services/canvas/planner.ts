@@ -2,7 +2,9 @@
  * 도구 작업을 사용자가 읽을 수 있는 계획으로 정리한다.
  * plan 이벤트로 패널에 전달하고 stepKey로 실행 상태를 갱신한다.
  */
-import { estimateToolActions, toolPhase, type AgentToolAction } from './toolRegistry'
+import { estimateToolActions, type AgentToolAction } from './toolRegistry'
+import { useProjectStore } from '@/stores'
+import { expandRegeneration, uniqueActions } from './actionPolicy'
 import { TOOL_LABEL } from './pipeline'
 
 export type PlanStepStatus = 'pending' | 'running' | 'done' | 'fail'
@@ -25,20 +27,21 @@ export interface AgentPlan {
 }
 
 export function stepKeyOf(action: AgentToolAction): string {
-  return `${action.tool}:${action.shotId || action.subjectId || action.sceneId || action.nodeId || ''}`
+  return `${action.tool}:${action.shotId || action.subjectId || action.sceneId || action.nodeId || action.extractStage || ''}${action.referenceIndex ? `:${action.referenceIndex}` : ''}`
 }
 
 function stepTitle(action: AgentToolAction): string {
-  const label = TOOL_LABEL[action.tool] || action.tool
+  const label = `${action.regenerate ? '다시 ' : ''}${TOOL_LABEL[action.tool] || action.tool}`
+  if (action.tool === 'inspect_canvas_image' && action.referenceIndex) return `${label} · 참조 이미지 ${action.referenceIndex}`
   if (action.tool === 'optimize_node_prompt' || action.tool === 'update_node' || action.tool === 'run_node') {
     return action.nodeId ? `${label} ${action.nodeId}` : label
   }
   return label
 }
 
-/** agentLoop의 실행 순서에 맞춰 작업을 단계별로 정렬한다. */
+/** 실행 순서대로 계획을 표시한다. 일괄 재생성은 대상별로 표시한다. */
 export function buildPlanFromActions(actions: AgentToolAction[], intentLabel: string): AgentPlan {
-  const sorted = [...actions].sort((a, b) => toolPhase(a.tool) - toolPhase(b.tool))
+  const sorted = uniqueActions(expandRegeneration(actions, useProjectStore().current))
   const estimate = estimateToolActions(sorted)
   const steps: AgentPlanStep[] = sorted.map((action) => ({
     key: stepKeyOf(action),

@@ -243,20 +243,26 @@ export function shotKeyframePrompt(
 ): string {
   const ar = options?.aspectRatio || '16:9'
   const frame = ar === '9:16' ? 'vertical 9:16' : ar === '1:1' ? 'square 1:1' : `landscape ${ar}`
-  const body = (shot.visualPrompt || shot.title).trim()
+  const visualOnly = (text: string) => {
+    let result = text.replace(/<d>[\s\S]*?<\/d>/gi, '')
+    for (const line of (shot.voiceover || '').split('\n').map((item) => item.trim()).filter(Boolean)) {
+      result = result.split(line).join('')
+      const spoken = line.replace(/^[^：:\n]{1,20}[：:]\s*/, '')
+      if (spoken.length > 2) result = result.split(spoken).join('')
+    }
+    return result.trim()
+  }
+  const body = visualOnly(shot.visualPrompt || shot.title)
   const size = shot.shotSize ? `Shot size: ${shot.shotSize}.` : ''
   const blocking = shot.blocking ? `Blocking: ${shot.blocking}.` : ''
-  const prop = shot.propFocus && !isPlaceholderSpokenLine(shot.propFocus) ? `Key prop: ${shot.propFocus}.` : ''
-  const continuity = shot.continuity ? `Continuity: ${shot.continuity}.` : ''
-  const performance = shot.videoPrompt?.trim() ? `Action and performance: ${shot.videoPrompt.trim()}.` : ''
+  const prop = shot.propFocus && shot.propFocus !== '无' ? `Key prop: ${shot.propFocus}.` : ''
+  const continuity = shot.continuity ? `Action continuity: ${shot.continuity}.` : ''
+  const performance = shot.videoPrompt?.trim() ? `Performance: ${visualOnly(shot.videoPrompt)}.` : ''
   const voiceMode = shot.audioMode ?? 'h3-dialogue'
   const dialogue = shot.voiceover?.trim()
     ? voiceMode === 'h3-voiceover' || voiceMode === 'tts' || voiceMode === 'none'
-      ? `This shot uses off-screen narration. Keep every visible mouth closed in all four cells. Use narration for emotion only, without subtitles or speech bubbles: ${shot.voiceover.trim()}。`
-      : (() => {
-          const speaker = shot.voiceover.trim().match(/^([^：:\n]{1,12})[：:]/)?.[1]?.trim()
-          return `Dialogue shot for ${speaker || 'the current speaker'}. Frame the speaker before they talk. Place dialogue in the middle of the action. Do not draw the spoken words or speech bubbles: ${shot.voiceover.trim()}。`
-        })()
+      ? 'This shot has off-screen narration. Draw physical actions and expressions without dialogue text, subtitles or speech bubbles.'
+      : 'Show the exchange through actions, gazes and expressions. Keep dialogue text, subtitles and speech bubbles out of the image. Show how each participant responds.'
     : ''
   const camera =
     shot.cameraMovement === 'static'

@@ -8,6 +8,7 @@ export { getAIMode } from './runtime'
 import { t as translate } from '@/i18n'
 import { desktop, isDesktop } from '@/services/desktop'
 import { parseJsonRobust } from '@/utils/jsonRepair'
+import { finalAnswerText } from './finalAnswer'
 import { mockLLM } from './mock'
 import { getAIMode, getLlmConfig, getVisionConfig } from './runtime'
 
@@ -27,6 +28,8 @@ export interface LLMRequest {
   model?: string
   temperature?: number
   maxTokens?: number
+  /** Leave the output limit to the provider and model by omitting max_tokens. */
+  useProviderOutputLimit?: boolean
   jsonMode?: boolean
   /** Doubao 응답에서 본문만 필요하면 추론을 끈다. */
   disableThinking?: boolean
@@ -37,6 +40,7 @@ export interface LLMRequest {
 export interface LLMResponse {
   content: string
   model: string
+  finishReason?: string
   usage?: {
     promptTokens: number
     completionTokens: number
@@ -52,27 +56,6 @@ export function messageText(content: LLMMessage['content']): string {
     .join('\n')
 }
 
-function flattenText(value: unknown): string {
-  if (value == null) return ''
-  if (typeof value === 'string') return value
-  if (Array.isArray(value)) {
-    return value
-      .map((part) =>
-        typeof part === 'string' ? part : flattenText((part as any)?.text ?? (part as any)?.content)
-      )
-      .filter(Boolean)
-      .join('\n')
-  }
-  if (typeof value === 'object') {
-    return flattenText((value as any).text ?? (value as any).content)
-  }
-  return String(value)
-}
-
-function hasJsonObject(text: string) {
-  return /[{｛]/.test(text)
-}
-
 function isValidJsonOutput(text: string): boolean {
   if (!text.trim()) return false
   try {
@@ -83,22 +66,6 @@ function isValidJsonOutput(text: string): boolean {
   }
 }
 
-function looksLikeShotList(text: string) {
-  return /镜头\s*\d+\s*[：:]/.test(text) && /画面[：:]/.test(text)
-}
-
-/** reasoning_content에도 본문이 들어갈 수 있으므로 JSON이 있는 필드를 우선한다. */
-function pickMessageContent(message: any): string {
-  const content = flattenText(message?.content).trim()
-  const reasoning = flattenText(
-    message?.reasoning_content ?? message?.reasoning ?? message?.reasoningContent
-  ).trim()
-  if (hasJsonObject(content)) return content
-  if (hasJsonObject(reasoning)) return reasoning
-  if (looksLikeShotList(reasoning) && !looksLikeShotList(content)) return reasoning
-  return content || reasoning
-}
-
 function hasImageParts(messages: LLMMessage[]): boolean {
   return messages.some(
     (m) => Array.isArray(m.content) && m.content.some((p) => p.type === 'image_url')
@@ -107,7 +74,7 @@ function hasImageParts(messages: LLMMessage[]): boolean {
 
 function isRetryableNetwork(e: unknown): boolean {
   const msg = e instanceof Error ? e.message : String(e ?? '')
-  return /Failed to fetch|NetworkError|ERR_NETWORK|ERR_CONNECTION|ECONNRESET|ETIMEDOUT|ENOTFOUND|ECONNREFUSED|net::ERR|socket hang up|fetch failed|连不上语言模型/i.test(
+  return /Failed to fetch|NetworkError|ERR_NETWORK|ERR_CONNECTION|ECONNRESET|ETIMEDOUT|ENOTFOUND|ECONNREFUSED|net::ERR|socket hang up|fetch failed|连不上语言模型|언어 모델(?:에 연결|의 응답을 받는 중 연결)/i.test(
     msg
   )
 }
@@ -126,9 +93,13 @@ function llmHttpError(status: number, detail: string, baseUrl: string, provider?
   return new Error(`[LLM] ${status} ${detail}`)
 }
 
+function stripRemoteMethod(msg: string): string {
+  return msg.replace(/^Error invoking remote method '[^']+':\s*(?:Error:\s*)?/i, '').trim()
+}
+
 function friendlyNetworkError(e: unknown): Error {
-  const msg = e instanceof Error ? e.message : String(e ?? '')
-  if (/连不上语言模型/.test(msg)) return e instanceof Error ? e : new Error(msg)
+  const msg = stripRemoteMethod(e instanceof Error ? e.message : String(e ?? ''))
+  if (/连不上语言模型|언어 모델(?:에 연결|의 응답을 받는 중 연결)/.test(msg)) return new Error(msg)
   return new Error('언어 모델에 연결하지 못했어요. 네트워크와 브라우저 설정을 확인한 뒤 다시 시도해 주세요.')
 }
 
@@ -197,9 +168,9 @@ export async function callLLM(req: LLMRequest): Promise<LLMResponse> {
   const body: Record<string, unknown> = {
     model,
     messages: req.messages,
-    temperature: req.temperature ?? 0.7,
-    max_tokens: req.maxTokens ?? (withImages ? 8192 : 4000)
+    temperature: req.temperature ?? 0.7
   }
+  if (!req.useProviderOutputLimit) body.max_tokens = req.maxTokens ?? (withImages ? 8192 : 4000)
   if (req.jsonMode) {
     body.response_format = { type: 'json_object' }
   }
@@ -292,24 +263,24 @@ export async function callLLM(req: LLMRequest): Promise<LLMResponse> {
     }
     if (!ok) throw llmHttpError(status, errText, baseUrl, req.provider)
     let data = await json()
-    let content = pickMessageContent(data.choices?.[0]?.message)
+    let content = finalAnswerText(data.choices?.[0]?.message?.content)
     if (!content.trim() && body.response_format) {
       delete body.response_format
       ;({ ok, status, errText, json } = await post(body))
       if (!ok) throw llmHttpError(status, errText, baseUrl, req.provider)
       data = await json()
-      content = pickMessageContent(data.choices?.[0]?.message)
+      content = finalAnswerText(data.choices?.[0]?.message?.content)
     }
     if (req.jsonMode && !isValidJsonOutput(content)) {
-      const followControl = controlledSignal(req.signal, Math.min(timeoutMs, 240_000))
+      const followControl = controlledSignal(req.signal, timeoutMs)
       try {
         const follow = {
           ...body,
           temperature: 0,
-          max_tokens: Math.min(
+          ...(!req.useProviderOutputLimit ? { max_tokens: Math.min(
             12_000,
             Math.max(Math.ceil((Number(body.max_tokens) || 4000) * 1.5), 6000)
-          ),
+          ) } : {}),
           messages: [
             ...req.messages,
             ...(content.trim() ? ([{ role: 'assistant', content }] as LLMMessage[]) : []),
@@ -323,16 +294,20 @@ export async function callLLM(req: LLMRequest): Promise<LLMResponse> {
         ;({ ok, status, errText, json } = await post(follow, followControl.signal))
         if (ok) {
           data = await json()
-          const next = pickMessageContent(data.choices?.[0]?.message)
+          const next = finalAnswerText(data.choices?.[0]?.message?.content)
           if (next.trim()) content = next
         }
       } finally {
         followControl.cleanup()
       }
     }
+    if (!content) throw new Error(data.choices?.[0]?.finish_reason === 'length'
+      ? '모델이 출력 한도에 도달해 답변을 보내지 못했어요. 게이트웨이의 출력 한도를 늘리거나 모델을 바꿔 주세요.'
+      : '모델이 답변을 보내지 않았어요. 다시 시도하거나 모델을 바꿔 주세요.')
     return {
       content,
       model: data.model ?? model,
+      finishReason: data.choices?.[0]?.finish_reason ?? undefined,
       usage: data.usage
         ? {
             promptTokens: data.usage.prompt_tokens,
@@ -346,6 +321,8 @@ export async function callLLM(req: LLMRequest): Promise<LLMResponse> {
       throw llmAbortError(e, control.signal, timeoutMs)
     }
     if (isRetryableNetwork(e)) throw friendlyNetworkError(e)
+    const stripped = stripRemoteMethod(e instanceof Error ? e.message : String(e ?? ''))
+    if (e instanceof Error && stripped !== e.message) throw new Error(stripped)
     throw e
   } finally {
     control.cleanup()
