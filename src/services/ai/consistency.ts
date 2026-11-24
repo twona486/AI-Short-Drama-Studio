@@ -1,8 +1,9 @@
+import { isPlaceholderSpokenLine } from './dialogue'
 /**
- * 人设 / 场景底板提示词
+ * 캐릭터 설정 및 장면 기준 이미지 프롬프트
  *
- * 媒介跟用户原话走：点了什么画风就按什么材料画。
- * 对得上已知画种时补该画种技法；对不上也锁用户原词，不拿水墨或电影感顶替。
+ * 사용자가 요청한 매체와 화면 스타일의 재료를 사용한다.
+ * 알려진 스타일은 해당 기법으로 보완하고 그 외에는 요청한 표현을 보존한다.
  */
 
 import type { Scene, Shot, Subject, VisualStyle } from '@/types'
@@ -23,32 +24,32 @@ export function characterSheetPrompt(
   const medium = resolved.medium
   const kindHint =
     subject.kind === 'animal'
-      ? '同一只动物，品种、斑纹、毛发/羽毛完全一致'
+      ? 'Use the same animal with identical species or breed, markings, fur or feathers.'
       : subject.kind === 'other'
-        ? '同一物体/吉祥物，材质、标志、颜色与轮廓完全一致'
-        : '同一人物，脸型、年龄、发型、体型、服装与配饰完全一致'
+        ? 'Use the same object or mascot with identical material, logo, color, and silhouette.'
+        : 'Use the same person with identical face shape, age, hair, build, clothing, and accessories.'
 
   const refHint = hasReferencePhotos
-    ? '附件参考图已展示该角色，必须严格按参考图复制身份特征，禁止另造一张脸或换装。'
+    ? 'Match identity closely to the supplied reference images. Do not invent a different face or change wardrobe.'
     : ''
 
   const whiteBg =
-    '背景必须是无缝纯白（#FFFFFF），四格同一块白底。禁止灰色/米色影棚、渐变、地面线、阴影底板、风景、室内陈设、路人或任何环境。'
+    'Use one seamless pure white background (#FFFFFF) across all four panels. Exclude gray or beige studio backdrops, gradients, floor lines, cast-shadow backdrops, scenery, furnishings, and passersby.'
 
   const layout = isPhotographicLook(resolved)
-    ? `【16:9】「${subject.name}」角色四视图。画风必须是「${medium}」。
+    ? `[16:9] Four-view character sheet for ${subject.name}. Use the specified visual style: ${medium}.
 ${whiteBg}
-从左到右正好四格、不要第五格：
-1. 面部特写  2. 全身正面  3. 全身侧面  4. 全身背面。`
-    : `【16:9】「${subject.name}」角色四视图。绘制媒介必须是「${medium}」。
+Use exactly four panels from left to right:
+1. Face close-up  2. Full-body front  3. Full-body side  4. Full-body back.`
+    : `[16:9] Four-view character sheet for ${subject.name}. Render in ${medium}.
 ${whiteBg}
-从左到右正好四格：面部特写、全身正面、全身侧面、全身背面。身份特征锁死。
-材料、笔触、质感必须符合「${medium}」。禁止用真人摄影棚或其他画风冒充。`
+Use exactly four panels, left to right: face close-up, full-body front, full-body side, and full-body back. Preserve identity features.
+Match materials, strokes, and texture to ${medium}. Do not substitute a live-action studio photo or another medium.`
 
   return `${layout}
 ${refHint}${subject.description}
 
-${kindHint}。四格必须是同一角色、同一服装、同一配色。不要拼贴无关人物，不要画道具拆解图。
+${kindHint} Keep the same character, wardrobe, and colors across the four panels. Exclude unrelated people and exploded prop diagrams.
 ${whiteBg}
 ${mediumLockText(resolved)}`
 }
@@ -56,33 +57,33 @@ ${mediumLockText(resolved)}`
 const WHITE_BG_HINT = /纯白背景|#FFFFFF|无缝纯白/
 const STUDIO_BG_HINT = /浅色棚拍|中性灰|影棚背景|干净浅色|浅色干净背景/
 
-/** 角色设计图一律纯白底；旧提示词里的浅色棚拍/灰影棚改掉。 */
+/** 캐릭터 설정 이미지 배경은 순백색으로 통일한다. */
 export function ensureCharacterSheetWhiteBackground(prompt: string): string {
   const lock =
-    '背景必须是无缝纯白（#FFFFFF），四格同一块白底。禁止灰色/米色影棚、渐变、地面线、阴影底板、风景、室内陈设、路人或任何环境。'
+    'Use one seamless pure white background (#FFFFFF) across all four panels. Exclude gray or beige studio backdrops, gradients, floor lines, cast-shadow backdrops, scenery, furnishings, and passersby.'
   let next = prompt
     .replace(/干净浅色棚拍背景（无风景、无路人）/g, lock)
-    .replace(/中性灰影棚背景/g, '无缝纯白背景（#FFFFFF）')
-    .replace(/浅色棚拍背景/g, '无缝纯白背景（#FFFFFF）')
-    .replace(/浅色干净背景/g, '无缝纯白背景（#FFFFFF）')
+    .replace(/中性灰影棚背景/g, 'seamless pure white background (#FFFFFF)')
+    .replace(/浅色棚拍背景/g, 'seamless pure white background (#FFFFFF)')
+    .replace(/浅色干净背景/g, 'seamless pure white background (#FFFFFF)')
   if (!WHITE_BG_HINT.test(next) || STUDIO_BG_HINT.test(next)) {
     next = `${next.trim()}\n${lock}`
   }
   return next.trim()
 }
 
-/** 反复入镜的同一件道具：纯白底正面、侧面、背面、细节。 */
+/** 반복 등장하는 소품의 앞면, 옆면, 뒷면과 상세를 순백색 배경에서 보여 준다. */
 export function propTurnaroundPrompt(prop: { name: string; description?: string }, look?: VisualLook): string {
-  const medium = look?.medium || '与全片一致的画风'
+  const medium = look?.medium || 'the visual style of the film'
   const whiteBg =
-    '背景必须是无缝纯白（#FFFFFF），四格同一块白底。禁止灰色/米色影棚、渐变、地面线、阴影底板、风景、室内陈设、人手或任何环境。'
-  return `【16:9】道具「${prop.name}」多角度设计图。画风必须是「${medium}」。
+    'Use one seamless pure white background (#FFFFFF) across all four panels. Exclude gray or beige studio backdrops, gradients, floor lines, cast-shadow backdrops, scenery, furnishings, hands, and any setting.'
+  return `[16:9] Multi-view design sheet for ${prop.name}. Use ${medium}.
 ${whiteBg}
-同一件道具，形状、材质、颜色、磨损和标志完全一致。从左到右四格：正面、侧面、背面、局部细节。不要人物，不要场景，不要把别的物件画进来。
-外观锁定：${prop.description || prop.name}`
+Show one object with consistent shape, material, colors, wear, and logos. Four panels from left to right: front, side, back, and detail. Exclude people, settings, and other objects.
+Appearance reference: ${prop.description || prop.name}`
 }
 
-/** 这个角色身上有哪些东西：包、证件、平板、鞋、配饰，单独一张资产图 */
+/** 가방, 신분증, 태블릿, 신발, 장신구처럼 캐릭터가 사용하는 물건을 별도 이미지로 만든다. */
 export function characterPropSheetPrompt(
   subject: Subject,
   style: VisualStyle,
@@ -92,18 +93,18 @@ export function characterPropSheetPrompt(
   const medium = resolved.medium
   const inventory =
     subject.props?.trim() ||
-    '从角色描述里抽出穿戴和随身物：包、证件、平板、鞋、帽子、配饰、手里常拿的东西。没有明显物件就画服装关键细节（扣、领、鞋、口袋）。'
+    'Extract clothing and personal items from the character description: bags, identification, tablet, shoes, hats, accessories, and objects often held. If none stands out, show clothing details such as buttons, collars, shoes, and pockets.'
 
-  return `【16:9】「${subject.name}」角色资产图 / 随身物件设定。画风必须是「${medium}」。
-浅色干净背景，像道具说明书：把这个角色身上会出现的东西各自摆清楚，能看清形状、材质、颜色、logo。
-清单：${inventory}
-角色描述（用来对上款式，不要再画全身人）：${subject.description}
+  return `[16:9] Character asset sheet and personal items for ${subject.name}. Use ${medium}.
+Use a clean light background. Lay each personal item out separately with visible shape, material, color, and logo.
+Inventory: ${inventory}
+Character description for style matching only. Do not draw the whole person: ${subject.description}
 
-只画物件，不要再画完整人物四视图。每件东西单独完整，便于后面分镜当参考。
+Show the objects alone. Draw each one separately and completely for later storyboard reference.
 ${mediumLockText(resolved)}`
 }
 
-/** 当前场景里真正需要锁定的少量关键道具；不把普通陈设拆成资产。 */
+/** 장면에서 꼭 유지할 주요 소품만 추출하고 일반 비품은 제외한다. */
 export function scenePropSheetPrompt(
   scene: Scene,
   style: VisualStyle,
@@ -111,17 +112,17 @@ export function scenePropSheetPrompt(
 ): string {
   const resolved = look ?? lookFromTexts(style)
   const medium = resolved.medium
-  const inventory = scene.props?.trim() || '无明确关键道具'
+  const inventory = scene.props?.trim() || 'no specified key props'
 
-  return `【16:9】「${scene.name}」关键道具设计图。绘制媒介必须是「${medium}」。
-只展示本场景中明显出现、被人物拿取或使用、或者推动剧情的关键道具，最多 4 件：${inventory}
-场景语境：${scene.description}
+  return `[16:9] Key prop sheet for ${scene.name}. Render in ${medium}.
+Show at most four props that are prominently visible, handled or used by characters, or important to the story: ${inventory}
+Scene context: ${scene.description}
 
-像影视美术部门的道具设定板：每件道具单独完整展示，清楚锁定形状、尺寸比例、材质、颜色和磨损痕迹。纯净中性背景，不画人物，不画完整场景，不添加清单之外的杯子、普通家具、装饰、衣服或零碎杂物。若清单只有一件，就只设计这一件，不要自行凑数。
+Make a production-design prop sheet. Present each object separately and completely, making its shape, scale, material, color, and wear clear. Use a plain neutral backdrop, without people, a complete location, or unlisted cups, furniture, decorations, clothing, and clutter. If there is one object on the list, show only that object.
 ${mediumLockText(resolved)}`
 }
 
-/** 单镜故事看板：六格黑白草图，锁定同一镜头内的动作时间线。 */
+/** 한 샷의 동작을 흑백 스케치 여섯 칸으로 나눈다. */
 export function shotBoardPrompt(
   shot: Pick<
     Shot,
@@ -143,84 +144,84 @@ export function shotBoardPrompt(
   options?: { filmChapter?: boolean; aspectRatio?: string }
 ): string {
   const ar = options?.aspectRatio || '16:9'
-  const frame = ar === '9:16' ? '竖版 9:16' : ar === '1:1' ? '方形 1:1' : `横版 ${ar}`
+  const frame = ar === '9:16' ? 'vertical 9:16' : ar === '1:1' ? 'square 1:1' : `landscape ${ar}`
   const body = (shot.boardPrompt || shot.visualPrompt || shot.title).trim()
-  const size = shot.shotSize ? `景别：${shot.shotSize}。` : ''
-  const blocking = shot.blocking ? `站位：${shot.blocking}。` : ''
-  const prop = shot.propFocus && shot.propFocus !== '无' ? `关键道具：${shot.propFocus}。` : ''
-  const continuity = shot.continuity ? `动作承接：${shot.continuity}。` : ''
+  const size = shot.shotSize ? `Shot size: ${shot.shotSize}.` : ''
+  const blocking = shot.blocking ? `Blocking: ${shot.blocking}.` : ''
+  const prop = shot.propFocus && !isPlaceholderSpokenLine(shot.propFocus) ? `Key prop: ${shot.propFocus}.` : ''
+  const continuity = shot.continuity ? `Continuity: ${shot.continuity}.` : ''
   const performance = shot.videoPrompt?.trim()
-    ? `动态表演：${shot.videoPrompt.trim()}。`
+    ? `Action and performance: ${shot.videoPrompt.trim()}.`
     : ''
   const voiceMode = shot.audioMode ?? 'h3-dialogue'
   const dialogue = shot.voiceover?.trim()
     ? voiceMode === 'h3-voiceover' || voiceMode === 'tts' || voiceMode === 'none'
-      ? `这是画外音镜头，不是对白镜头。六格里所有出镜人物都必须闭嘴，禁止张嘴念词或对口型。被叫到名字的人只做听见、停步、回头、寻找等反应。口播原文只用来理解情绪，禁止画字幕、编号或气泡：${shot.voiceover.trim()}。`
+      ? `This is an off-screen narration shot. Every visible person keeps their lips closed across the six panels. A person who hears their name can listen, stop, turn, or search without speaking. Use the narration only as emotional context. Exclude captions, numbering, and speech bubbles: ${shot.voiceover.trim()}。`
       : (() => {
           const speaker = shot.voiceover.trim().match(/^([^：:\n]{1,12})[：:]/)?.[1]?.trim()
-          return `这是${speaker ? `「${speaker}」` : '当前说话者'}的对白镜头：开口前构图必须先明确落到${speaker || '当前说话者'}身上，使其成为唯一主视觉，脸和嘴清楚可见；其他人物可以同框但必须闭嘴，只做视线和表情反应。对白发生在动作中段或反应段：${shot.voiceover.trim()}。画面里禁止出现对白文字或气泡。`
+          return `Dialogue shot for ${speaker || 'the current speaker'}. Frame that person before speaking as the one visual focus, with face and lips clearly visible. Others may remain in frame with closed mouths, reacting through gaze and expression. Place dialogue in the middle or reaction beat: ${shot.voiceover.trim()}. Do not draw the dialogue or speech bubbles.`
         })()
     : ''
   const camera =
     shot.cameraMovement === 'push'
-      ? '六格中人物和关键物逐格自然变大，表现同一次缓慢推进。'
+      ? 'Let people and key objects grow gradually over six cells as the camera pushes in once.'
       : shot.cameraMovement === 'pull'
-        ? '六格中画面逐格自然变宽，表现同一次缓慢拉远。'
+        ? 'Widen the view gradually over six cells as the camera pulls back once.'
         : shot.cameraMovement === 'pan'
-          ? '六格保持人物比例，背景与构图逐格横向移动，表现同一次平摇。'
+          ? 'Preserve character scale and move the background framing horizontally over six cells as one pan.'
           : shot.cameraMovement === 'tilt'
-            ? '六格保持人物比例，构图逐格纵向移动，表现同一次俯仰。'
+            ? 'Preserve character scale and move the framing vertically over six cells as one tilt.'
             : shot.cameraMovement === 'orbit'
-              ? '六格中观察角度逐格小幅变化，保持同一人物、同一空间关系。'
-              : '六格机位和景别完全相同，只让人物动作、表情与道具状态连续变化。'
+              ? 'Vary viewing angle slightly across six cells while keeping cast and spatial relationships consistent.'
+              : 'Keep camera position and shot size fixed for six cells. Change only actions, expressions, and props continuously.'
 
   if (options?.filmChapter) {
     const longAction =
       shot.duration >= 9 || /蒙太奇|快速切|连续数|反复|多次|逐渐/.test(`${body}${performance}`)
     const count = longAction ? 8 : 4
-    const layout = longAction ? '4 列 × 2 行' : '2 列 × 2 行'
+    const layout = longAction ? '4 columns × 2 rows' : '2 columns × 2 rows'
     const beats = longAction
-      ? '八格依次表现：建立环境、人物初态、犹豫或准备、动作开始、核心动作、身体或环境反应、动作收束、清楚的结束姿势。'
-      : '四格依次表现：建立与初态、犹豫或准备、核心动作、反应与结束姿势。'
+      ? 'Eight cells: establish the space, set initial character state, show hesitation or preparation, start the action, show the core action, show bodily or environmental reaction, resolve the action, and show a clear final pose.'
+      : 'Four cells: establish and set the initial state, show hesitation or preparation, show the core action, and show reaction with the final pose.'
     const filmCamera =
       shot.cameraMovement === 'static'
-        ? `${count} 格机位、焦段和构图完全固定，只让人物动作、表情、雨水、蒸汽等环境细节连续变化。`
-        : `用 ${count} 个连续时间采样清楚表现同一次「${shot.cameraMovement}」运镜，幅度克制，禁止跳轴或突然换机位。`
+        ? `Lock position, focal length, and framing across ${count} cells. Let movement, expressions, rain, steam, and other environmental details develop continuously.`
+        : `Use ${count} sequential samples of the same ${shot.cameraMovement} camera move. Keep the motion restrained. Do not jump the axis or change positions suddenly.`
 
-    return `【${ar} ${frame}彩色电影故事看板】「${shot.title}」，总时长 ${shot.duration} 秒。
-生成一张 ${layout}、正好 ${count} 格的彩色电影故事看板，阅读顺序为左上到右下。整张图的画幅必须是 ${ar}，禁止竖图或方图冒充。所有格子属于同一个连续镜头或同一段连续蒙太奇，不是互不相关的场景。
+    return `[${ar} ${frame} color film storyboard panel] ${shot.title}, ${shot.duration} seconds total.
+Generate one color film storyboard panel in a ${layout} layout with exactly ${count} cells, read from top left to bottom right. Use aspect ratio ${ar} throughout. Keep all cells in the same continuous shot or montage rather than unrelated scenes.
 
-画面风格：正常上色的现实主义电影画面，真实自然光、生活化人物、符合剧本年代和地区的服装建筑与用品；像导演与摄影指导使用的成片预演，不是黑白线稿、漫画或海报。
-版式要求：格子大小整齐，细黑线分隔；不出现标题、编号、时间码、字幕、对白气泡、说明文字、logo、水印或任何可读文字。
+Use a normally colored, realistic film look with natural light and believable people. Match clothing, architecture, and objects to the script's period and region. Make a previsualization suitable for the director and cinematographer. Avoid monochrome line art, comics, and poster layouts.
+Use equal cells divided by fine black lines. Do not add titles, numbers, timestamps, captions, speech bubbles, notes, logos, or watermarks. Keep explicitly requested Korean on-screen text verbatim.
 
 ${beats}
 ${filmCamera}
 
-连续性硬约束：所有格必须是同一地点、同一时段、同一批人物、同一张脸、同一年龄、同一发型服装和同一道具。天气、地面干湿、污渍、伤痛、饥饿、衣物湿润、光源方向、屏幕方向、人物站位和场景主锚必须逐格承接，禁止凭空增加人物、换装、换边或改变建筑结构。
+Keep place, time, cast, faces, ages, hair, costumes, and props consistent. Carry weather, ground wetness, stains, injuries, hunger, damp clothes, light direction, screen direction, blocking, and the main scene anchor from one cell to the next. Do not add characters, change clothes or sides, or alter the building structure.
 ${size}${blocking}${prop}${continuity}${performance}${dialogue}
 ${body}
 
-参考图必须用上：脸、年龄、体型和服装跟角色设计图；建筑、地面、天气、材料和光跟场景锚点图。禁止另造人物或地点。最终只输出这一张彩色 ${count} 宫格电影故事看板。`
+Use reference sheets for faces, ages, builds, and clothes, and scene anchors for buildings, ground, weather, materials, and light. Do not invent people or locations. Output just this ${count}-cell color film storyboard panel.`
   }
 
-  return `【${ar} ${frame}单镜动作故事看板】「${shot.title}」，总时长 ${shot.duration} 秒。
-生成一张 3 列 × 2 行、正好六格的导演分镜草图，阅读顺序为左上到右下。整张图的画幅必须是 ${ar}，禁止输出另一种比例。六格是同一个连续镜头在六个时间点的采样，不是六个不同场景，也不是六个独立镜头。
+  return `[${ar} ${frame} action panel for one shot] ${shot.title}, ${shot.duration} seconds total.
+Generate one director's sketch in a 3×2 grid of exactly six cells, read top left to bottom right. The full image must be ${ar}. The six cells sample six moments in one continuous shot, in the same location.
 
-画面风格：白底、黑色或浅灰铅笔线稿，线条简洁，少量灰面辅助空间关系；人物用清楚的简笔轮廓表达动作。禁止精致上色、禁止电影海报、禁止写实渲染。
-版式要求：六格大小整齐，细线分隔。画面内不出现标题、编号、时间码、字幕、对白气泡、说明文字、水印或任何可读文字。
+Use black or light gray pencil on white. Keep lines simple, add sparse gray values to explain space, and use clear silhouettes to show movement. Avoid detailed coloring, poster layouts, and realistic rendering.
+Use equal cells separated by fine lines. Exclude titles, numbers, timecodes, subtitles, speech bubbles, explanatory text, and watermarks. Preserve only explicitly requested Korean on-screen text.
 
-六格动作节奏：
-第一格建立 0 秒的起始构图和人物初始状态；第二格做动作准备；第三格动作开始；第四格完成核心动作；第五格表现对白/反应和道具状态变化；第六格锁定本镜结束状态，供下一镜或视频末帧承接。
+Action progression across six cells:
+1. Set the opening composition and character positions at zero seconds. 2. Show preparation. 3. Begin the action. 4. Complete the core action. 5. Show dialogue or reaction and prop changes. 6. Lock the ending state for the next shot or last frame.
 ${camera}
 
-连续性硬约束：六格必须是同一地点、同一时段、同一批人物、同一张脸、同一发型服装、同一道具；人物不能凭空增加、消失、换装或换边，道具状态只能沿时间顺序变化。保持屏幕方向、站位关系、光源方向和场景主锚一致。
+Keep place, time, cast, faces, hair, clothes, and props consistent. Do not introduce or remove people, change clothes, or swap sides. Prop changes must follow time order. Preserve screen direction, blocking, light direction, and the main scene anchor.
 ${size}${blocking}${prop}${continuity}${performance}${dialogue}
 ${body}
 
-参考图必须用上：人物轮廓、脸、服装跟角色设计图；地点、光、地面跟场景图。禁止另造人物或地点。最终只输出这一张六格黑白故事看板。`
+Use character design images for silhouettes, faces, and clothing, and the scene image for location, lighting, and ground. Do not invent people or places. Output this one black-and-white six-cell storyboard panel.`
 }
 
-/** 普通创作关键帧：2×2 四宫格，正好 4 格，不能多。 */
+/** 일반 키프레임은 2×2 배열의 네 칸으로 만든다. */
 export function shotKeyframePrompt(
   shot: Pick<
     Shot,
@@ -241,71 +242,71 @@ export function shotKeyframePrompt(
   options?: { aspectRatio?: string }
 ): string {
   const ar = options?.aspectRatio || '16:9'
-  const frame = ar === '9:16' ? '竖版 9:16' : ar === '1:1' ? '方形 1:1' : `横版 ${ar}`
+  const frame = ar === '9:16' ? 'vertical 9:16' : ar === '1:1' ? 'square 1:1' : `landscape ${ar}`
   const body = (shot.visualPrompt || shot.title).trim()
-  const size = shot.shotSize ? `景别：${shot.shotSize}。` : ''
-  const blocking = shot.blocking ? `站位：${shot.blocking}。` : ''
-  const prop = shot.propFocus && shot.propFocus !== '无' ? `关键道具：${shot.propFocus}。` : ''
-  const continuity = shot.continuity ? `动作承接：${shot.continuity}。` : ''
-  const performance = shot.videoPrompt?.trim() ? `动态表演：${shot.videoPrompt.trim()}。` : ''
+  const size = shot.shotSize ? `Shot size: ${shot.shotSize}.` : ''
+  const blocking = shot.blocking ? `Blocking: ${shot.blocking}.` : ''
+  const prop = shot.propFocus && !isPlaceholderSpokenLine(shot.propFocus) ? `Key prop: ${shot.propFocus}.` : ''
+  const continuity = shot.continuity ? `Continuity: ${shot.continuity}.` : ''
+  const performance = shot.videoPrompt?.trim() ? `Action and performance: ${shot.videoPrompt.trim()}.` : ''
   const voiceMode = shot.audioMode ?? 'h3-dialogue'
   const dialogue = shot.voiceover?.trim()
     ? voiceMode === 'h3-voiceover' || voiceMode === 'tts' || voiceMode === 'none'
-      ? `这是画外音镜头。四格里所有出镜人物都必须闭嘴。口播只用来理解情绪，禁止画字幕或气泡：${shot.voiceover.trim()}。`
+      ? `This shot uses off-screen narration. Keep every visible mouth closed in all four cells. Use narration for emotion only, without subtitles or speech bubbles: ${shot.voiceover.trim()}。`
       : (() => {
           const speaker = shot.voiceover.trim().match(/^([^：:\n]{1,12})[：:]/)?.[1]?.trim()
-          return `这是${speaker ? `「${speaker}」` : '当前说话者'}的对白镜头：开口前构图先落到说话者身上。对白发生在动作中段。画面里禁止对白文字或气泡：${shot.voiceover.trim()}。`
+          return `Dialogue shot for ${speaker || 'the current speaker'}. Frame the speaker before they talk. Place dialogue in the middle of the action. Do not draw the spoken words or speech bubbles: ${shot.voiceover.trim()}。`
         })()
     : ''
   const camera =
     shot.cameraMovement === 'static'
-      ? '四格机位、焦段和构图完全固定，只让人物动作、表情和环境细节连续变化。'
-      : `用 4 个连续时间采样清楚表现同一次「${shot.cameraMovement}」运镜，幅度克制，禁止跳轴。`
+      ? 'Keep camera position, focal length, and composition fixed across four panels. Show only continuous changes in action, expressions, and environmental details.'
+      : `Use four sequential samples of the same ${shot.cameraMovement} camera move. Keep the move restrained and maintain the camera axis.`
   const medium = look ? mediumLockText(look) : ''
 
-  return `【${ar} ${frame}四宫格关键帧】「${shot.title}」，总时长 ${shot.duration} 秒。
-生成一张 2 列 × 2 行、正好 4 格的彩色关键帧。只能有 4 个格子，禁止 5 格、6 格、8 格或更多，禁止少格留白。阅读顺序为左上 → 右上 → 左下 → 右下。整张图的画幅必须是 ${ar}。
+  return `[${ar} ${frame} four-panel keyframe] ${shot.title}, ${shot.duration} seconds total.
+Generate a color keyframe in a 2×2 grid with exactly four filled panels: top left, top right, bottom left, bottom right. The whole image must have aspect ratio ${ar}.
 
-四格属于同一个连续镜头的四个时间点，不是四张无关海报，也不是空白格。
-四格依次表现：1. 建立与人物初态；2. 犹豫或动作准备；3. 核心事件（这一镜真正发生的事）；4. 反应与结束姿势。
+All four panels show sequential moments from one continuous shot. Do not use unrelated images or empty panels.
+Show in order: 1. Establishing view and initial character state; 2. Hesitation or preparation; 3. The core event; 4. Reaction and final pose.
 ${camera}
 
-版式：格子大小整齐，细线分隔；不出现标题、编号、时间码、字幕、对白气泡、说明文字、logo 或水印。禁止空白格子、纯色空格或未画完的框。
+Use equal panels with thin lines. Exclude titles, numbering, timecodes, subtitles, speech bubbles, captions, logos, and watermarks, unless the user explicitly supplied Korean on-screen text for the scene. No blank, solid-color, or unfinished panels.
 
-连续性：同一地点、同一时段、同一批人物、同一张脸、同一服装、同一道具。禁止另造人、换装、换景。
+Preserve location, time, cast, faces, clothing, and props across panels. Do not invent people, change wardrobe, or change the setting.
 ${size}${blocking}${prop}${continuity}${performance}${dialogue}
 ${body}
 
-参考图必须用上：脸、体型、服装跟人设图；地点、地面、光线跟场景图。最终只输出这一张正好 4 格的彩色四宫格关键帧。
+Use the supplied references: faces, builds, and clothing from the character sheets; location, ground, and lighting from the scene image. Output this one four-panel color keyframe only.
 ${medium}`.trim()
 }
 
 export function scenePlatePrompt(scene: Scene, style: VisualStyle, look?: VisualLook): string {
   const resolved = look ?? lookFromTexts(style)
   const medium = resolved.medium
-  const lighting = scene.lighting?.trim() || '与文案匹配的主光源'
-  const main = scene.mainAnchor?.trim() || '这个地点里最能对焦的实物'
+  const lighting = scene.lighting?.trim() || 'the primary light source appropriate to the script'
+  const main = scene.mainAnchor?.trim() || 'the most recognizable physical anchor'
   const extra = scene.anchors?.trim()
   const grid = extra
-    ? `四格按这个清单来：${extra}。不够四项就用全景、主锚「${main}」、地面站位区、光源「${lighting}」补齐。`
-    : `从左到右、从上到下正好四格：
-1. 全景空镜（能认出这是「${scene.name}」）
-2. 主锚特写（${main}）
-3. 地面 / 站位区（人之后会踩在这里）
-4. 光源或次锚（${lighting}）`
+    ? `Use this list for the four panels: ${extra}. Fill missing entries with the wide view, main anchor (${main}), ground and blocking area, and light source (${lighting}).`
+    : `Exactly four panels, left to right and top to bottom:
+1. Wide unoccupied view that identifies ${scene.name}
+2. Close-up of the primary anchor (${main})
+3. Ground and the area where people will stand
+4. Light source or secondary anchor (${lighting})`
 
   const photo = isPhotographicLook(resolved)
   const lead = photo
-    ? `【16:9】「${scene.name}」场景锚点图 / 四宫格。画风必须是「${medium}」。干净、像场景设定表。`
-    : `【16:9】「${scene.name}」场景锚点图 / 四宫格。绘制媒介必须是「${medium}」。材料与质感必须符合「${medium}」，禁止用实景照片或其他画风冒充。`
+    ? `[16:9] Four-panel anchor image for ${scene.name}. Use ${medium}. Make a clean location design sheet.`
+    : `[16:9] Four-panel anchor image for ${scene.name}. Render in ${medium}, matching its materials and texture. Do not substitute a photograph or another style.`
 
   return `${lead}
 ${scene.description}
 ${grid}
 
-这是锚点图，不是成片：四格必须是同一地点、同一时段、同一套材质。
-画面里绝对不能有：人物、人脸、手脚、剪影、模特、假人、路人、人群、镜子或玻璃里的人影、人形雕像。
-只画建筑、家具、地面、门窗、主锚物件和光。一个活物都没有。
-禁止把四格合成一张宽画幅风景。
+This is a location reference. Keep the same place, time of day, and materials in all four panels.
+Exclude people, faces, limbs, silhouettes, models, mannequins, passersby, crowds, human reflections in glass or mirrors, and human-shaped statues.
+Show only buildings, furnishings, ground, doors, windows, the main anchor, and light. Include no living subjects.
+Keep the four-panel layout. Do not combine panels into a single wide landscape.
 ${mediumLockText(resolved)}`
 }

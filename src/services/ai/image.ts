@@ -1,12 +1,12 @@
 /**
- * AI 图片生成（OpenAI 兼容 Images API）
+ * OpenAI 호환 Images API를 이용한 AI 이미지 생성
  *
- * 统一：
+ * 이미지 생성 및 편집 요청 형식
  *   POST /images/generations
- *   - 文生图：不传 image
- *   - 单图/多图编辑：传 image[]（URL 或 data:image/...;base64,...）+ sequential_image_generation:"disabled"
+ *   텍스트→이미지에서는 image를 생략한다.
+ *   이미지 편집에서는 URL 또는 데이터 URL을 image 배열에 넣고 sequential_image_generation을 disabled로 설정한다.
  *
- * 响应优先 b64_json（纯 base64，无 data: 前缀），兼容 url
+ * 응답은 접두사 없는 b64_json을 우선하며 URL도 지원한다.
  */
 
 import { getAIMode } from './client'
@@ -32,16 +32,16 @@ export interface ImageGenInput {
   style: VisualStyle
   width: number
   height: number
-  /** 比例标签（'16:9' / '9:16' 等），写到 prompt 最前面 */
+  /** 프롬프트 앞에 16:9나 9:16 같은 화면 비율 태그를 붙인다. */
   aspectRatio?: AspectRatio
   n?: number
-  /** 参考图（图生图/多图融合），最多 10 张；本项目通常 1–3 张人设/场景 */
+  /** 이미지 편집 및 합성에 참조를 최대 10장 제공한다. 일반적으로 캐릭터와 장면 이미지 1~3장을 쓴다. */
   referenceImages?: Blob[]
-  /** 每张参考图的语义（会写进 prompt，告诉模型第几张是什么） */
+  /** 참조마다 프롬프트에 넣을 역할 설명 */
   referenceLabels?: string[]
-  /** 覆盖设置页作图模型，例如视频复刻用 gpt-image-1 */
+  /** 설정의 이미지 모델을 재정의한다. 예를 들어 영상 재현은 gpt-image-1을 사용한다. */
   model?: string
-  /** 文档列出的出图档位：1k / 2k / 4k */
+  /** 서비스가 허용하는 1k, 2k, 4k 출력 옵션 */
   resolution?: string
   signal?: AbortSignal
 }
@@ -68,7 +68,7 @@ async function realCustomOrComfy(input: ImageGenInput): Promise<ImageGenOutput> 
   const adapterType = resolveImageAdapter(cfg)
   const prompt = withGptImageQuality(buildPrompt(input, Boolean(input.referenceImages?.length)), cfg.model)
   if (adapterType === 'http-custom') {
-    log(`→ 自定义 HTTP 生图 · ${cfg.model}`)
+    log(`→ 사용자 지정 HTTP 이미지 생성 · ${cfg.model}`)
     const imageUrls: string[] = []
     for (const blob of input.referenceImages || []) {
       imageUrls.push(await blobToDataUri(blob))
@@ -90,7 +90,7 @@ async function realCustomOrComfy(input: ImageGenInput): Promise<ImageGenOutput> 
     return { blob, mimeType, prompt: input.prompt }
   }
   if (adapterType === 'comfyui-prompt' || adapterType === 'comfyui-workflow') {
-    log(`→ ComfyUI 生图 · ${adapterType}`)
+    log(`→ ComfyUI 이미지 생성 · ${adapterType}`)
     let imageDataUrl: string | undefined
     if (input.referenceImages?.[0]) {
       imageDataUrl = await blobToDataUri(input.referenceImages[0])
@@ -106,7 +106,7 @@ async function realCustomOrComfy(input: ImageGenInput): Promise<ImageGenOutput> 
     })
     return { blob, mimeType, prompt: input.prompt }
   }
-  throw new Error(`[image] 未知适配器 ${adapterType}`)
+  throw new Error(`[image] 알 수 없는 어댑터 ${adapterType}`)
 }
 
 function isSeedreamModel(model: string): boolean {
@@ -117,7 +117,7 @@ function isGptImageModel(model: string): boolean {
   return /gpt[-_]?image|dall-e|dalle/i.test(model)
 }
 
-const GPT_IMAGE_QUALITY_SUFFIX = '去除燥波燥点，去除涂抹感，色彩平滑，画面严格执行干净质感。'
+const GPT_IMAGE_QUALITY_SUFFIX = 'Reduce noise, speckling, and smearing. Use smooth colors and a clean finish.'
 
 function withGptImageQuality(prompt: string, model: string): string {
   const base = String(prompt || '').trim()
@@ -127,7 +127,7 @@ function withGptImageQuality(prompt: string, model: string): string {
   return `${base} ${GPT_IMAGE_QUALITY_SUFFIX}`
 }
 
-/** 把图片 API 响应统一转成 Blob（优先 b64_json） */
+/** 이미지 API 응답을 Blob으로 변환한다. b64_json을 우선 사용한다. */
 async function imageResponseToBlob(
   data: any,
   apiKey?: string,
@@ -135,16 +135,16 @@ async function imageResponseToBlob(
 ): Promise<{ blob: Blob; mimeType: string }> {
   const item = data.data?.[0]
   if (!item) {
-    throw new Error('图片 API 响应无 data[0]')
+    throw new Error('이미지 API 응답에 data[0]이 없습니다.')
   }
 
-  // 情况 1：b64_json（Seedream / 兼容接口常用）
+  // Seedream과 호환 공급자의 b64_json 응답을 처리한다.
   if (item.b64_json) {
     const raw = String(item.b64_json).replace(/\s/g, '')
     const bytes = atob(raw)
     const arr = new Uint8Array(bytes.length)
     for (let i = 0; i < bytes.length; i++) arr[i] = bytes.charCodeAt(i)
-    // 4.5/4.0 仅 jpeg；5.0 可能 png。按魔数判断更稳
+    // 4.5와 4.0은 JPEG를 반환하지만 5.0은 PNG도 가능하므로 파일 서명을 검사한다.
     const mime =
       arr[0] === 0x89 && arr[1] === 0x50
         ? 'image/png'
@@ -154,18 +154,18 @@ async function imageResponseToBlob(
     return { blob: new Blob([arr], { type: mime }), mimeType: mime }
   }
 
-  // 情况 2：url
+  // URL 응답을 처리한다.
   if (item.url) {
     const r = await fetch(item.url, {
       headers: apiKey ? { Authorization: `Bearer ${apiKey}` } : undefined,
       signal
     })
-    if (!r.ok) throw new Error(`下载图片失败：${r.status}`)
+    if (!r.ok) throw new Error(`이미지 다운로드에 실패했습니다. ${r.status}`)
     const blob = await r.blob()
     return { blob, mimeType: blob.type || 'image/jpeg' }
   }
 
-  // 情况 3：外层 b64_json
+  // 최상위 b64_json 응답을 처리한다.
   if (data.b64_json) {
     const bytes = atob(String(data.b64_json).replace(/\s/g, ''))
     const arr = new Uint8Array(bytes.length)
@@ -174,14 +174,14 @@ async function imageResponseToBlob(
   }
 
   throw new Error(
-    `无法解析图片响应（既无 b64_json 也无 url）\n原始响应：${JSON.stringify(data).slice(0, 200)}`
+    `이미지 응답에 b64_json과 url이 없어 해석할 수 없습니다.\n원본 응답 ${JSON.stringify(data).slice(0, 200)}`
   )
 }
 
 /**
- * Seedream size：预设档位或精确 WxH
- * seedream-4.5 实测精确像素下限约 3686400（≈1920²），低于此会 400。
- * 总像素还需 ≤ 4096×4096，宽高比 ∈ [1/16, 16]
+ * Seedream 크기는 프리셋 또는 정확한 너비와 높이로 지정한다.
+ * seedream-4.5에서 정확한 크기의 최소값은 약 3,686,400픽셀이다.
+ * 전체 픽셀 수는 최대 4096×4096이며 화면 비율은 1:16에서 16:1 사이다.
  */
 const SEEDREAM_MIN_PIXELS = 3_686_400
 const SEEDREAM_MAX_PIXELS = 4096 * 4096
@@ -215,7 +215,7 @@ function scaleToPixelBudget(
 }
 
 function pickSeedreamSize(ar?: AspectRatio, w?: number, h?: number): string {
-  // 有项目宽高：按比例抬到 Seedream 下限像素
+  // 프로젝트 크기를 유지하면서 최소 픽셀 수에 맞게 확대한다.
   if (w && h && w > 0 && h > 0) {
     const { width, height } = scaleToPixelBudget(
       w,
@@ -227,7 +227,7 @@ function pickSeedreamSize(ar?: AspectRatio, w?: number, h?: number): string {
     if (ratio >= 1 / 16 && ratio <= 16) return `${width}x${height}`
   }
 
-  // 按比例给一组已满足下限的常用尺寸
+  // 화면 비율과 최소 픽셀 수를 만족하는 일반 크기를 사용한다.
   switch (ar) {
     case '16:9':
       return '2560x1440'
@@ -244,7 +244,7 @@ function pickSeedreamSize(ar?: AspectRatio, w?: number, h?: number): string {
   }
 }
 
-/** 旧 OpenAI / gpt-image size（兜底） */
+/** 이전 OpenAI 호환 및 gpt-image 크기의 대체값 */
 function pickLegacySize(ar?: AspectRatio, w?: number, h?: number): string {
   if (ar === '16:9') return '1792x1024'
   if (ar === '9:16') return '1024x1792'
@@ -263,12 +263,12 @@ function blobToDataUri(blob: Blob): Promise<string> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader()
     reader.onload = () => resolve(String(reader.result))
-    reader.onerror = () => reject(new Error('参考图转 base64 失败'))
+    reader.onerror = () => reject(new Error('참조 이미지를 base64로 변환하지 못했습니다.'))
     reader.readAsDataURL(blob)
   })
 }
 
-/** 把较大参考图压成 JPEG data URI，减小请求体 */
+/** 큰 참조를 JPEG 데이터 URI로 압축해 요청 크기를 줄인다. */
 async function blobToChatImageDataUri(
   blob: Blob,
   maxEdge = 1536,
@@ -300,11 +300,11 @@ function buildPrompt(input: ImageGenInput, _withRefs: boolean): string {
   return withGptImageQuality(input.prompt, model)
 }
 
-/** Seedream：统一走 /images/generations，优先返回 b64_json */
+/** Seedream은 /images/generations를 호출하고 b64_json을 우선 요청한다. */
 async function realSeedream(input: ImageGenInput): Promise<ImageGenOutput> {
   const { baseUrl, apiKey, model } = imageConfig(input.model)
   if (!baseUrl || !apiKey) {
-    throw new Error('[image] 未配置 VITE_IMAGE_BASE_URL / VITE_IMAGE_API_KEY')
+    throw new Error('[image] VITE_IMAGE_BASE_URL 또는 VITE_IMAGE_API_KEY가 설정되지 않았습니다.')
   }
 
   const refs = (input.referenceImages ?? []).slice(0, 10)
@@ -327,9 +327,9 @@ async function realSeedream(input: ImageGenInput): Promise<ImageGenOutput> {
     }
     body.image = images
     body.sequential_image_generation = 'disabled'
-    log(`→ Seedream 多图融合 ${images.length} 张参考 · ${model} · ${size}`)
+    log(`→ Seedream 참조 이미지 ${images.length}장 합성 · ${model} · ${size}`)
   } else {
-    log(`→ Seedream 文生图 · ${model} · ${size}`)
+    log(`→ Seedream 텍스트→이미지 · ${model} · ${size}`)
   }
 
   const resp = await fetch(`${baseUrl}/images/generations`, {
@@ -343,7 +343,7 @@ async function realSeedream(input: ImageGenInput): Promise<ImageGenOutput> {
   })
 
   if (!resp.ok) {
-    throw new Error(`[image] 出图失败 ${resp.status} ${await resp.text()}`)
+    throw new Error(`[image] 이미지 생성에 실패했습니다. ${resp.status} ${await resp.text()}`)
   }
 
   const data = await resp.json()
@@ -352,11 +352,11 @@ async function realSeedream(input: ImageGenInput): Promise<ImageGenOutput> {
   return { blob, mimeType, prompt: input.prompt }
 }
 
-/** 旧 gpt-image 等：文生图 */
+/** 이전 gpt-image 텍스트→이미지 경로 */
 async function realLegacyGenerate(input: ImageGenInput): Promise<ImageGenOutput> {
   const { baseUrl, apiKey, model } = imageConfig(input.model)
   if (!baseUrl || !apiKey) {
-    throw new Error('[image] 未配置 VITE_IMAGE_BASE_URL / VITE_IMAGE_API_KEY')
+    throw new Error('[image] VITE_IMAGE_BASE_URL 또는 VITE_IMAGE_API_KEY가 설정되지 않았습니다.')
   }
 
   const fullPrompt = buildPrompt(input, false)
@@ -377,7 +377,7 @@ async function realLegacyGenerate(input: ImageGenInput): Promise<ImageGenOutput>
   })
 
   if (!resp.ok) {
-    throw new Error(`[image] 文生图失败 ${resp.status} ${await resp.text()}`)
+    throw new Error(`[image] 텍스트→이미지 생성에 실패했습니다. ${resp.status} ${await resp.text()}`)
   }
 
   const data = await resp.json()
@@ -385,14 +385,14 @@ async function realLegacyGenerate(input: ImageGenInput): Promise<ImageGenOutput>
   return { blob, mimeType, prompt: input.prompt }
 }
 
-/** 旧 gpt-image：/images/edits multipart */
+/** 이전 gpt-image 편집의 멀티파트 경로 */
 async function realLegacyEdit(input: ImageGenInput): Promise<ImageGenOutput> {
   const { baseUrl, apiKey, model } = imageConfig(input.model)
   if (!baseUrl || !apiKey) {
-    throw new Error('[image] 未配置 VITE_IMAGE_BASE_URL / VITE_IMAGE_API_KEY')
+    throw new Error('[image] VITE_IMAGE_BASE_URL 또는 VITE_IMAGE_API_KEY가 설정되지 않았습니다.')
   }
   if (!input.referenceImages?.length) {
-    throw new Error('图编辑模式必须传 referenceImages')
+    throw new Error('이미지 편집 모드에는 referenceImages가 필요합니다.')
   }
 
   const fullPrompt = buildPrompt(input, true)
@@ -421,7 +421,7 @@ async function realLegacyEdit(input: ImageGenInput): Promise<ImageGenOutput> {
   })
 
   if (!resp.ok) {
-    throw new Error(`[image] 图编辑失败 ${resp.status} ${await resp.text()}`)
+    throw new Error(`[image] 이미지 편집에 실패했습니다. ${resp.status} ${await resp.text()}`)
   }
 
   const data = await resp.json()
@@ -429,14 +429,14 @@ async function realLegacyEdit(input: ImageGenInput): Promise<ImageGenOutput> {
   return { blob, mimeType, prompt: input.prompt }
 }
 
-/** Zealman 镜像文生图：POST {base}/api/workflow/generate，轮询 /api/workflow/result。地址完全以用户配置为准。 */
+/** Zealman 이미지 요청은 설정된 주소의 /api/workflow/generate로 제출하고 /api/workflow/result로 조회한다. */
 async function realZealmanImage(
   input: ImageGenInput,
   onProgress?: (msg: string) => void
 ): Promise<ImageGenOutput> {
   const cfg = imageConfig(input.model)
   const root = normalizeZealmanBaseUrl(String(cfg.baseUrl || '').trim())
-  if (!root) throw new Error('[image] Zealman 生图需要先填写镜像 Base URL（设置 → Zealman 镜像）')
+  if (!root) throw new Error('[image] Zealman에서 이미지를 생성하려면 설정 → Zealman 미러에서 Base URL을 입력하세요.')
   const workflow = zealmanImageWorkflowById(cfg.model) || ZEALMAN_IMAGE_WORKFLOWS[0]
   const prompt = buildPrompt(input, Boolean(input.referenceImages?.length)).slice(0, 10000)
   const width = Math.max(256, Math.round(input.width) || workflow.defaultWidth)
@@ -448,7 +448,7 @@ async function realZealmanImage(
     [workflow.widthKey]: width,
     [workflow.heightKey]: height
   }
-  onProgress?.(`提交 Zealman 生图任务（${workflow.name}）…`)
+  onProgress?.(`Zealman 이미지 작업을 제출하고 있어요(${workflow.displayName})…`)
   const submitUrl = `${root}/api/workflow/generate`
   const submitBody = JSON.stringify({ workflow_id: workflow.id, input_values: inputValues })
   const postSubmit = (url: string) =>
@@ -464,28 +464,28 @@ async function realZealmanImage(
     )
   let response = await postSubmit(submitUrl)
   let text = await response.text()
-  // 部分 Zealman/Nginx 部署对结尾斜杠采用严格路由；405 时换一种形式重试一次。
+  // 일부 Zealman 및 Nginx 환경은 끝 슬래시를 구분해 405이면 다른 형식으로 한 번 재시도한다.
   if (response.status === 405) {
     response = await postSubmit(`${submitUrl}/`)
     text = await response.text()
   }
   if (!response.ok) {
-    throw new Error(`[image] Zealman 提交失败 HTTP ${response.status}\n${text.slice(0, 800)}`)
+    throw new Error(`[image] Zealman 작업 제출에 실패했습니다. HTTP ${response.status}\n${text.slice(0, 800)}`)
   }
   let data: any
   try {
     data = JSON.parse(text)
   } catch {
-    throw new Error('[image] Zealman 提交成功但响应不是 JSON')
+    throw new Error('[image] Zealman 작업이 제출됐지만 응답이 JSON 형식이 아닙니다.')
   }
-  if (data?.success === false) throw new Error(`[image] Zealman 提交失败：${data?.error || text.slice(0, 800)}`)
+  if (data?.success === false) throw new Error(`[image] Zealman 작업 제출에 실패했습니다.：${data?.error || text.slice(0, 800)}`)
   const promptId = String(data?.prompt_id || '').trim()
-  if (!promptId) throw new Error('[image] Zealman 响应中没有 prompt_id')
+  if (!promptId) throw new Error('[image] Zealman 응답에 prompt_id가 없습니다.')
 
   const deadline = Date.now() + 15 * 60 * 1000
   while (Date.now() < deadline) {
     throwIfAborted(input.signal)
-    onProgress?.('Zealman 正在生图…')
+    onProgress?.('Zealman에서 이미지를 생성하는 중…')
     const poll = await autodlRequest(
       `${root}/api/workflow/result?prompt_id=${encodeURIComponent(promptId)}`,
       { method: 'GET', signal: input.signal },
@@ -499,37 +499,37 @@ async function realZealmanImage(
       pollData = null
     }
     if (!poll.ok || pollData?.success === false) {
-      throw new Error(`[image] Zealman 查询失败：${pollData?.error || pollText.slice(0, 800)}`)
+      throw new Error(`[image] Zealman 상태 조회에 실패했습니다. ${pollData?.error || pollText.slice(0, 800)}`)
     }
     if (pollData?.pending === false) {
       const result = Array.isArray(pollData.results)
         ? pollData.results.find((item: any) => item?.type === 'image' && item?.url)
         : null
-      if (!result?.url) throw new Error('[image] Zealman 任务已结束，但没有返回图片')
+      if (!result?.url) throw new Error('[image] Zealman 작업이 완료됐지만 이미지를 반환하지 않았습니다.')
       const imageUrl = new URL(String(result.url), `${root}/`).toString()
-      onProgress?.('下载 Zealman 生成的图片…')
+      onProgress?.('Zealman이 생성한 이미지를 다운로드하는 중…')
       const dl = await fetch(imageUrl, { signal: input.signal })
-      if (!dl.ok) throw new Error(`[image] Zealman 图片下载失败 HTTP ${dl.status}`)
+      if (!dl.ok) throw new Error(`[image] Zealman 이미지 다운로드에 실패했습니다. HTTP ${dl.status}`)
       const blob = await dl.blob()
       return { blob, mimeType: blob.type || 'image/png', prompt }
     }
     await abortableDelay(1500, input.signal)
   }
-  throw new Error('[image] Zealman 生图超过 15 分钟，已停止轮询')
+  throw new Error('[image] Zealman 생성 시간이 15분을 넘어 상태 조회를 중단했습니다.')
 }
 
 export async function generateImage(
   input: ImageGenInput,
   onProgress?: (msg: string) => void
 ): Promise<ImageGenOutput> {
-  onProgress?.('准备生成图片...')
+  onProgress?.('이미지 생성을 준비하는 중…')
   const model = imageConfig(input.model).model
 
   if (getAIMode() === 'real') {
     const cfg = imageConfig(input.model)
     const adapterType = resolveImageAdapter(cfg)
     if (adapterType === 'zealman-workflow') {
-      onProgress?.('Zealman 出图...')
+      onProgress?.('Zealman에서 이미지를 생성하는 중…')
       return await realZealmanImage(input, onProgress)
     }
     if (
@@ -538,7 +538,7 @@ export async function generateImage(
       (isRelayImageEndpoint(cfg.baseUrl, cfg.provider) || adapterType === 'http-custom')
     ) {
       const prompt = withGptImageQuality(buildPrompt(input, Boolean(input.referenceImages?.length)), cfg.model)
-      onProgress?.(input.referenceImages?.length ? '中转站图生图...' : '中转站文生图...')
+      onProgress?.(input.referenceImages?.length ? '중계 API에서 이미지→이미지를 생성하는 중…' : '중계 API에서 텍스트→이미지를 생성하는 중…')
       const { blob, mimeType } = await apimartGenerateImage({
         baseUrl: cfg.baseUrl,
         apiKey: cfg.apiKey,
@@ -554,27 +554,27 @@ export async function generateImage(
       return { blob, mimeType, prompt }
     }
     if (adapterType === 'comfyui-prompt' || adapterType === 'comfyui-workflow') {
-      onProgress?.('ComfyUI 出图...')
+      onProgress?.('ComfyUI에서 이미지를 생성하는 중…')
       return await realCustomOrComfy(input)
     }
     if (isSeedreamModel(model)) {
       onProgress?.(
         input.referenceImages?.length
-          ? `多图融合（${input.referenceImages.length} 张参考）...`
-          : '文生图...'
+          ? `참조 이미지 ${input.referenceImages.length}장을 합성하는 중…`
+          : '텍스트→이미지를 생성하는 중…'
       )
       return await realSeedream(input)
     }
     if (input.referenceImages && input.referenceImages.length > 0) {
-      onProgress?.(`图生图（${input.referenceImages.length} 张参考）...`)
+      onProgress?.(`이미지→이미지 생성 중(참조 이미지 ${input.referenceImages.length}장)…`)
       return await realLegacyEdit(input)
     }
-    onProgress?.('文生图...')
+    onProgress?.('텍스트→이미지를 생성하는 중…')
     return await realLegacyGenerate(input)
   }
 
   if (input.referenceImages && input.referenceImages.length > 0) {
-    onProgress?.('(演示) 混合参考图...')
+    onProgress?.('(데모) 참조 이미지를 합성하는 중…')
     await abortableDelay(600, input.signal)
     return await generateMockWithReferences(input)
   }
@@ -589,7 +589,7 @@ export async function generateImage(
   return { blob, mimeType: 'image/png', prompt: input.prompt }
 }
 
-/** mock 模式：把参考图拼到一起 + 加滤镜 */
+/** 데모에서는 참조 이미지를 합치고 필터를 적용한다. */
 async function generateMockWithReferences(
   input: ImageGenInput
 ): Promise<ImageGenOutput> {
@@ -628,7 +628,7 @@ async function generateMockWithReferences(
   ctx.font = `bold ${Math.round(input.width * 0.025)}px sans-serif`
   ctx.textAlign = 'center'
   ctx.fillText(
-    `[演示] ${refs.length} 张参考 + ${input.prompt.slice(0, 30)}`,
+    `[데모] 참조 이미지 ${refs.length}장 + ${input.prompt.slice(0, 30)}`,
     input.width / 2,
     input.height - 40
   )

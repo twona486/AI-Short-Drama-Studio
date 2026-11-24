@@ -1,5 +1,5 @@
 /**
- * 运行时 AI 配置：设置页保存值优先，缺省回落到 .env
+ * 런타임 AI 설정은 저장된 설정을 우선하고 없으면 .env를 사용한다.
  */
 
 import { useSettingsStore } from '@/stores'
@@ -40,7 +40,7 @@ export function getVisionConfig() {
   return {
     baseUrl: (s?.baseUrl || d.baseUrl).replace(/\/+$/, ''),
     apiKey: s?.apiKey || d.apiKey,
-    // 旧视觉配置自动迁移到项目指定的 Qwen3-VL。
+    // 이전 비전 설정을 프로젝트의 Qwen3-VL 설정으로 마이그레이션한다.
     model: /^(qwen3\.7|qwen-vl-)/i.test(selectedModel) ? 'qwen3-vl-plus' : selectedModel,
     adapter: s?.adapter,
     provider: s?.provider
@@ -75,7 +75,7 @@ export function getVideoPromptStyle(): VideoPromptStyle {
   return pick()?.video?.promptStyle === 'formatted' ? 'formatted' : 'scene-narrative'
 }
 
-/** 内置 H3 要用 AutoDL 令牌。当前项若是 Zealman，不能拿来冒充 AutoDL。 */
+/** 내장 H3는 AutoDL 토큰을 사용한다. Zealman 토큰을 대신 사용하지 않는다. */
 export function autodlVideoProfileId(): string | undefined {
   const settings = pick()
   const list = (settings?.videos || []).filter((profile) => {
@@ -92,7 +92,7 @@ function isAutodlVideoProfile(profile: { provider?: string; baseUrl?: string }):
   return profile.provider === 'autodl' || isAutodlHost(profile.baseUrl || '')
 }
 
-/** 非 AutoDL 接入如果存进了 AutoDL 令牌，生成时丢掉，不拿去请求别的供应商。 */
+/** AutoDL이 아닌 연결에는 잘못 저장된 AutoDL 토큰을 보내지 않는다. */
 function videoKeyForProfile(
   profile: { id?: string; provider?: string; baseUrl?: string; apiKey?: string } | undefined,
   envKey: string
@@ -115,8 +115,8 @@ export function getVideoConfig(profileId?: string) {
     ? settings?.videos?.find((profile) => profile.id === profileId) || settings?.video
     : settings?.video
   if (s) s = normalizeStoredVideoEndpoint(s)
-  // 只有这条接入本身就是 Zealman，且工作流 id 也是内置 U 系列时，才允许把误填的 autodl.art 换回镜像地址。
-  // 不能因为残留 adapter 就把用户选中的 AutoDL 整份换成 SeetaCloud。
+  // Zealman 연결이며 내장 U 시리즈 ID일 때만 AutoDL 오입력 주소를 미러로 교체한다.
+  // 남아 있는 어댑터 설정만으로 사용자가 선택한 AutoDL 연결을 변경하지 않는다.
   if (
     s?.provider === 'zealman' &&
     s.adapter?.type === 'zealman-workflow' &&
@@ -166,7 +166,7 @@ export function getRemakeImageModel() {
   return envDefaults().remakeImageModel || 'gpt-image-1'
 }
 
-/** 出图模型：设置页当前选中的；没配时复刻项目回落到 GPT Image */
+/** 설정에서 선택한 이미지 모델을 쓰고 영상 재현에 설정이 없으면 GPT Image를 사용한다. */
 export function imageModelForProject(pipelineMode?: string) {
   const selected = pick()?.image?.model?.trim()
   if (selected) return selected

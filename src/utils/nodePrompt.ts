@@ -12,7 +12,7 @@ import {
   shotBoardPrompt,
   shotKeyframePrompt
 } from '@/services/ai/consistency'
-import { spokenTextOnly } from '@/services/ai/dialogue'
+import { isPlaceholderSpokenLine, spokenTextOnly } from '@/services/ai/dialogue'
 import { buildH3ImageSlots, pictureIdentityBlock } from '@/services/ai/h3Prompt'
 import type { Project, Scene, Shot, StoryProp, Subject } from '@/types'
 import {
@@ -91,7 +91,7 @@ export function shotDirectorBrief(shot: Shot, project: Project): string {
     shot.continuity ? `Continuity: ${shot.continuity}` : '',
     shot.visualPrompt?.trim() ? `Visible action: ${shot.visualPrompt.trim()}` : '',
     performance ? `Performance: ${performance}` : '',
-    shot.propFocus && !/^(?:无|없음|none)$/i.test(shot.propFocus) ? `Props: ${shot.propFocus}` : '',
+    shot.propFocus && !isPlaceholderSpokenLine(shot.propFocus) ? `Props: ${shot.propFocus}` : '',
     shot.audioDescription?.trim() ? `On-location sound: ${shot.audioDescription.trim()}` : ''
   ]
   return lines.filter(Boolean).join('\n')
@@ -153,7 +153,7 @@ export function defaultVideoSendPrompt(shot: Shot, project: Project): string {
     shot.blocking ? `Blocking: ${shot.blocking}` : '',
     shot.eyeline ? `Eyelines: ${shot.eyeline}` : '',
     shot.continuity ? `Continuity: ${shot.continuity}` : '',
-    shot.propFocus && !/^(?:无|없음|none)$/i.test(shot.propFocus) ? `Key props: ${shot.propFocus}` : '',
+    shot.propFocus && !isPlaceholderSpokenLine(shot.propFocus) ? `Key props: ${shot.propFocus}` : '',
     shot.audioDescription ? `Synchronized sound: ${shot.audioDescription}` : '',
     spoken ? `Deliver the following dialogue in its original language: ${shot.voiceover}` : 'There is no dialogue. Do not animate the characters speaking.'
   ]
@@ -272,7 +272,7 @@ export function defaultShotFramePrompts(shot: Shot, project: Project): { start: 
       : '',
     shot.shotSize ? `Shot size: ${shot.shotSize}.` : '',
     shot.blocking ? `Blocking: ${shot.blocking}.` : '',
-    shot.propFocus && !/^(?:无|없음|none)$/i.test(shot.propFocus) ? `Key props: ${shot.propFocus}.` : '',
+    shot.propFocus && !isPlaceholderSpokenLine(shot.propFocus) ? `Key props: ${shot.propFocus}.` : '',
     `Use exactly a ${ar} aspect ratio for the entire image.`
   ].filter(Boolean)
   const still = 'Output a single complete still. Avoid panels, collages, numbering, text, and dialogue subtitles. Preserve any explicitly requested Korean on-screen text verbatim.'

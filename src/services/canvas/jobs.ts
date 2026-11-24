@@ -1,6 +1,6 @@
 import { ref } from 'vue'
 
-/** 正在生成的画布节点。各节点互不影响，可同时点。 */
+/** 현재 생성 중인 캔버스 노드. 여러 노드를 독립적으로 실행할 수 있다. */
 export const runningNodeIds = ref<string[]>([])
 
 export function isNodeRunning(id: string) {
@@ -9,7 +9,7 @@ export function isNodeRunning(id: string) {
 
 export async function withNodeJob<T>(id: string, fn: () => Promise<T>): Promise<T> {
   if (runningNodeIds.value.includes(id)) {
-    throw new Error('这个节点正在生成')
+    throw new Error('이 노드에서 이미 생성하고 있습니다.')
   }
   runningNodeIds.value = [...runningNodeIds.value, id]
   try {
@@ -19,7 +19,7 @@ export async function withNodeJob<T>(id: string, fn: () => Promise<T>): Promise<
   }
 }
 
-/** AutoDL 出视频支持并发；批量出片按这个上限同时提交 */
+/** AutoDL 일괄 영상 생성의 동시 요청 상한 */
 export const VIDEO_GEN_CONCURRENCY = 8
 
 export async function mapPool<T>(
@@ -38,7 +38,7 @@ export async function mapPool<T>(
         try {
           await fn(item)
         } catch {
-          /* 单个失败不影响其它 */
+          /* 개별 실패가 나머지 작업을 중단시키지 않는다. */
         }
       }
     })

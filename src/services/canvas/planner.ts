@@ -1,6 +1,6 @@
 /**
- * 任务规划系统：把解析出来的工具动作整理成用户可读的任务计划。
- * 计划通过 AgentEvent(kind='plan') 推给面板，执行中按 stepKey 同步状态。
+ * 도구 작업을 사용자가 읽을 수 있는 계획으로 정리한다.
+ * plan 이벤트로 패널에 전달하고 stepKey로 실행 상태를 갱신한다.
  */
 import { estimateToolActions, toolPhase, type AgentToolAction } from './toolRegistry'
 import { TOOL_LABEL } from './pipeline'
@@ -8,7 +8,7 @@ import { TOOL_LABEL } from './pipeline'
 export type PlanStepStatus = 'pending' | 'running' | 'done' | 'fail'
 
 export interface AgentPlanStep {
-  /** 与 agentLoop 的 stepKey 同构：tool:shotId/subjectId/sceneId/nodeId */
+  /** agentLoop의 stepKey와 같은 도구명 및 대상 ID 형식 */
   key: string
   title: string
   tool: string
@@ -36,7 +36,7 @@ function stepTitle(action: AgentToolAction): string {
   return label
 }
 
-/** 按工具 phase 排序后生成计划（与 agentLoop 实际执行顺序一致）。 */
+/** agentLoop의 실행 순서에 맞춰 작업을 단계별로 정렬한다. */
 export function buildPlanFromActions(actions: AgentToolAction[], intentLabel: string): AgentPlan {
   const sorted = [...actions].sort((a, b) => toolPhase(a.tool) - toolPhase(b.tool))
   const estimate = estimateToolActions(sorted)
@@ -48,8 +48,8 @@ export function buildPlanFromActions(actions: AgentToolAction[], intentLabel: st
   }))
   const summary =
     steps.length === 1
-      ? `计划 1 步：${steps[0].title}`
-      : `计划 ${steps.length} 步：${steps.map((s) => s.title).join(' → ')}`
+      ? `1단계 계획 ${steps[0].title}`
+      : `${steps.length}단계 계획 ${steps.map((s) => s.title).join(' → ')}`
   return {
     intentLabel,
     summary,

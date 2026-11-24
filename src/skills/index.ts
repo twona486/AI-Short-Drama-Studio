@@ -1,6 +1,6 @@
 /**
- * 画布智能体 Skill：按用户意图只加载相关 playbook。
- * 正文是我们自己写的现场手册，不是外站提示词。
+ * 캔버스 에이전트에서 사용자 의도에 맞는 스킬을 불러온다.
+ * 본문은 프로젝트에서 작성한 작업 지침이다.
  */
 
 import characterRaw from './character-consistency.md?raw'
@@ -105,8 +105,8 @@ function triggeredByText(skill: Skill, text: string): boolean {
 }
 
 /**
- * 按意图挑选要塞进上下文的 Skill。
- * 目录始终可见；正文只加载本轮匹配到的手册。
+ * 모델 컨텍스트에 포함할 스킬을 의도에 따라 선택한다.
+ * 목록은 항상 표시하고 일치하는 스킬 본문만 추가한다.
  */
 export function selectSkills(ctx: SkillSelectContext): Skill[] {
   const text = ctx.userText
@@ -175,7 +175,7 @@ export function selectSkills(ctx: SkillSelectContext): Skill[] {
 }
 
 export function catalogPrompt(): string {
-  return ALL_SKILLS.map((s) => `- ${s.id}：${s.description}`).join('\n')
+  return ALL_SKILLS.map((s) => `- ${s.id}: ${s.description}`).join('\n')
 }
 
 export function bodiesPrompt(skills: Skill[]): string {
@@ -188,11 +188,12 @@ export function skillContextForAgent(ctx: SkillSelectContext): {
   prompt: string
 } {
   const selected = selectSkills(ctx)
-  const prompt = `【可调用 Skill 目录】
+  // 선택한 제작 지침을 영어로 주입하고 답변 언어를 지정한다.
+  const prompt = `Available skills
 ${catalogPrompt()}
 
-【本轮已加载】${selected.map((s) => s.id).join('、')}
-按已加载手册做事，不要发明目录里没有的流程。
+Skills loaded for this turn: ${selected.map((s) => s.id).join(', ')}
+Follow the loaded guides and do not invent workflows outside this catalog. Write user-facing answers in Korean (한국어). Write final image and video generation prompts in English, keeping original dialogue and requested Korean on-screen text.
 
 ${bodiesPrompt(selected)}`
   return { selected, prompt }

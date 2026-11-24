@@ -1,7 +1,7 @@
 import type { CanvasNode, ID, Project } from '@/types'
 import { normalizeVideoGenModel, videoMaxRefImages } from '@/types'
 
-/** 返回节点当前产物；绑定节点而不是绑定旧 asset，所以上游重绘后会自动跟随。 */
+/** 상위 노드를 바인딩해 재생성 후에도 최신 결과를 참조한다. */
 export function canvasNodeOutputAssetId(project: Project, node?: CanvasNode): ID | undefined {
   if (!node) return undefined
   if (node.type === 'imageGen' || node.type === 'videoGen') return node.data.outputAssetId
@@ -23,7 +23,7 @@ export function canvasNodeOutputAssetId(project: Project, node?: CanvasNode): ID
   if (!shot) return undefined
   if (node.type === 'shotBoard') return shot.boardAssetId
   if (node.type === 'shotImage') return shot.imageAssetId
-  // 首尾帧节点有两张产出，对外连线默认给起始帧
+  // 시작·끝 프레임 노드에서 기본 참조로 시작 프레임을 전달한다.
   if (node.type === 'shotFrames') return shot.firstFrameAssetId || shot.lastFrameAssetId
   if (node.type === 'shotVideo') return shot.videoAssetId
   if (node.type === 'audio') return shot.audioAssetId
@@ -39,7 +39,7 @@ export function canvasNodeProducesImage(node?: CanvasNode): boolean {
   )
 }
 
-/** 连线参考优先，其后是手工上传/资产库选择的参考图。 */
+/** 연결한 참조를 우선하고 수동 업로드와 라이브러리 참조를 추가한다. */
 export function resolvedCanvasReferenceAssetIds(project: Project, node?: CanvasNode): ID[] {
   if (!node) return []
   const connected = (node.data.referenceSourceNodeIds ?? [])
@@ -48,7 +48,7 @@ export function resolvedCanvasReferenceAssetIds(project: Project, node?: CanvasN
   return [...new Set([...connected, ...(node.data.referenceAssetIds ?? [])])]
 }
 
-/** 从自由节点拿掉一张参考图：手工添加的和连线带进来的都能删，连线一并断开。 */
+/** 자유 노드의 수동 및 연결 참조를 제거한다. 연결에서 온 이미지의 연결도 끊는다. */
 export function removeCanvasNodeReference(project: Project, nodeId: ID, assetId: ID): boolean {
   const canvas = project.canvas
   const node = canvas?.nodes.find((item) => item.id === nodeId)
@@ -84,7 +84,7 @@ export function appendCanvasReferenceSource(project: Project, targetId: ID, sour
   return true
 }
 
-/** 自由节点参考图按连线来源标身份：图1是人设/场景名，而不是笼统的 first frame。 */
+/** 참조 이미지에 원본 캐릭터나 장면의 역할을 표시한다. */
 export function canvasReferenceSlotEntries(
   project: Project,
   node?: CanvasNode

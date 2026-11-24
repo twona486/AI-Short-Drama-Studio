@@ -1,4 +1,4 @@
-/** MiniMax H3 提示词：分镜默认 integrated_multimodal_description + 内部 [Shot N]；台词只进 <d>。 */
+/** MiniMax H3 프롬프트의 기본 형식은 integrated_multimodal_description과 내부 샷 표식이다. 대사는 d 태그에만 넣는다. */
 
 import type { AspectRatio, Shot } from '@/types'
 import { englishOrOmit, h3NameMap, h3UniqueName } from '@/utils/h3Names'
@@ -23,7 +23,7 @@ export interface H3ImageSlot {
 }
 
 export interface H3PromptInput {
-  /** 中文内容表现，或用户已写好的官方全文。 */
+  /** 노드의 연출 내용 또는 사용자가 작성한 공식 형식 전문 */
   prompt: string
   aesthetic?: string
   audioDescription?: string
@@ -31,17 +31,17 @@ export interface H3PromptInput {
   voiceMode?: 'dialogue' | 'voiceover' | 'none'
   speakerHint?: string
   /**
-   * 说话角色的音色描述（中文，来自人物节点 voicePrompt）。
-   * 台词本身是中文，所以这里不进 englishOrOmit，直接跟在说话人后面。
+   * 캐릭터 노드의 voicePrompt에 저장된 화자 음색
+   * 대사의 원문과 음색 설명을 구분하고 음색은 화자 뒤에 배치한다.
    */
   speakerVoice?: string
   /**
-   * 本镜出场人物各自的声音描述（中文，来自人物卡 voicePrompt）。
-   * 必须写在提示词最开头，紧跟「图几是谁」，否则会被正文中文清洗一起抹掉。
+   * 이 샷에 등장하는 캐릭터의 voicePrompt
+   * 프롬프트 시작 부분에서 참조 이미지와 캐릭터를 연결한 직후에 넣는다.
    */
   voiceRoster?: string
   speakerName?: string
-  /** 画面里实际出镜的人，画外音时必须闭嘴。 */
+  /** 실제로 화면에 등장하는 인물은 화면 밖 내레이션 중에 입을 다문다. */
   onScreenNames?: string[]
   sceneName?: string
   sceneDescription?: string
@@ -49,7 +49,7 @@ export interface H3PromptInput {
   sceneAnchor?: string
   shotTitle?: string
   imageAssignments?: string[]
-  /** 按提交顺序的图槽：图1是谁、哪张是场景、哪张是看板。 */
+  /** 제출 순서에 따른 이미지 슬롯. 캐릭터, 장면, 스토리 개요판을 구분한다. */
   imageSlots?: H3ImageSlot[]
   duration: number
   width?: number
@@ -63,7 +63,7 @@ export interface H3PromptInput {
   purpose?: string
   mode?: 'I2VA' | 'T2VA' | 'R2VA' | 'FL2VA' | 'L2VA'
   promptStyle?: VideoPromptStyle
-  /** 为 true 时压成三段 integrated，不按官方模式加对齐句或六段。 */
+  /** true이면 세 구역으로 줄이고 공식 여섯 구역과 프레임 정렬 문구를 추가하지 않는다. */
   forceIntegrated?: boolean
   signal?: AbortSignal
 }
@@ -76,7 +76,7 @@ type LabeledSlot = {
   sourceName?: string
 }
 
-/** 官方运镜三维：类型 + amplitude + speed，写成句内动作。 */
+/** 카메라 움직임의 유형, 이동 폭, 속도를 동작 문장에 넣는다. */
 const CAMERA_EN: Record<NonNullable<Shot['cameraMovement']>, string> = {
   push: 'The camera pushes in with small amplitude at slow speed',
   pull: 'The camera pulls out with small amplitude at slow speed',
@@ -89,16 +89,17 @@ const CAMERA_EN: Record<NonNullable<Shot['cameraMovement']>, string> = {
 export function detectDialogueLanguage(text: string): string {
   const value = text.trim()
   if (/[぀-ヿ]/.test(value)) return 'Japanese'
-  if (/[가-힯]/.test(value)) return 'Korean'
+  if (/[가-힣]/.test(value)) return 'Korean'
   if (/[㐀-鿿]/.test(value)) return 'Chinese'
   return 'English'
 }
 
-/** 台词/旁白只允许进这个标签；中文原词固定 [Chinese]。 */
+/** Keep Korean dialogue in its own language tag and preserve the existing Chinese format. */
 export function h3SpokenTag(spoken: string): string {
   const line = sanitizeDialogue(spoken)
   if (!line) return ''
-  return `<d>[Chinese] ${line}</d>`
+  const language = detectDialogueLanguage(line) === 'Korean' ? 'Korean' : 'Chinese'
+  return `<d>[${language}] ${line}</d>`
 }
 
 export function isOfficialH3Prompt(text: string): boolean {
@@ -109,7 +110,7 @@ export function isOfficialH3Prompt(text: string): boolean {
   return hasSound && (hasI2va || hasR2va)
 }
 
-/** 官方 FL2VA 首行：Picture 1=0.00s，Picture 2=片尾。 */
+/** 공식 FL2VA의 첫 줄은 첫 이미지를 시작 시점에, 두 번째 이미지를 끝에 맞춘다. */
 export function ensureFl2vaLead(prompt: string, duration: number): string {
   const body = String(prompt || '').trim()
   if (/aligns with the 0\.00-second mark/i.test(body) && /Picture 2/i.test(body)) return body
@@ -118,7 +119,7 @@ export function ensureFl2vaLead(prompt: string, duration: number): string {
   return body ? `${lead}\n\n${body}` : lead
 }
 
-/** 官方 L2VA 首行：唯一参考图对齐成片结尾。 */
+/** 공식 L2VA의 첫 줄은 유일한 참조 이미지를 영상 끝에 맞춘다. */
 export function ensureL2vaLead(prompt: string, duration: number): string {
   const body = String(prompt || '').trim()
   if (/<Picture 1> \(from \[Shot \d+\]\) aligns with the \d+\.\d{2}-second mark/i.test(body)) return body
@@ -129,7 +130,7 @@ export function ensureL2vaLead(prompt: string, duration: number): string {
   return body ? `${lead}\n\n${body}` : lead
 }
 
-/** 只有槽位和套话、没有这一镜具体戏的空模板 */
+/** 슬롯과 일반 문구만 있고 현재 샷의 구체적 동작이 없는 템플릿 */
 export function isH3FillTemplate(text: string): boolean {
   const t = String(text || '')
   return (
@@ -140,7 +141,7 @@ export function isH3FillTemplate(text: string): boolean {
   )
 }
 
-/** 官方多模态参考：六段齐了才算成稿。缺段的 subject_definitions 仍是脏稿。 */
+/** 멀티모달 참조 형식은 공식 여섯 구역이 모두 있어야 한다. */
 export function isCompleteRef2VA(text: string): boolean {
   const t = String(text || '')
   return (
@@ -153,7 +154,7 @@ export function isCompleteRef2VA(text: string): boolean {
   )
 }
 
-/** 把中文场记原样塞进英文模板、或六段写残的脏稿。完整 Ref2VA 可以发给 H3。 */
+/** 영문 템플릿에 현장 기록을 그대로 넣었거나 공식 여섯 구역이 빠진 원고를 찾는다. */
 export function isMessyH3Prompt(text: string): boolean {
   const t = String(text || '').trim()
   if (!t) return false
@@ -164,8 +165,8 @@ export function isMessyH3Prompt(text: string): boolean {
 }
 
 /**
- * 允许留在英文正文里的中文：台词 <d>、图号身份、被《》式书名号包的人名，
- * 以及开头那块「人物声音」（音色是中文，删了人物就没有声音了）。
+ * 영문 본문에서 대사, 이미지 번호의 인물 매핑, 인용 부호로 감싼 이름은 유지한다.
+ * 시작 부분의 캐릭터 음색 블록도 유지한다.
  */
 function stripAllowedCjk(text: string): string {
   return String(text || '')
@@ -179,7 +180,7 @@ function cjkOutsideSpokenTags(text: string): boolean {
   return /[㐀-鿿]/.test(stripAllowedCjk(text))
 }
 
-/** 正文里的汉字一律删掉；只保留 <d> 里的台词、图号/「人名」身份锁定和人物声音块。 */
+/** 본문의 한자를 제거하되 대사와 인물 매핑 및 음색 블록은 보존한다. */
 export function stripCjkOutsideSpokenTags(text: string): string {
   const held: string[] = []
   const mask = (block: string) => {
@@ -190,7 +191,7 @@ export function stripCjkOutsideSpokenTags(text: string): string {
     .replace(/<d>\s*\[[^\]]+\]\s*[\s\S]*?<\/d>/gi, mask)
     .replace(/图\s*\d+\s*[是：:=]*/g, mask)
     .replace(/「[^」]{1,24}」/g, mask)
-    // 音色是中文：整块护住，否则会被下面的汉字清理删成空壳
+    // 음색 블록을 보호해 본문 정리 과정에서 사라지지 않게 한다.
     .replace(/人物声音[^\n]*(?:\r?\n(?!\r?\n)[^\n]*)*/g, mask)
     .replace(/voice\s*:\s*[^\n,]*/gi, mask)
   const cleaned = masked
@@ -210,13 +211,16 @@ function looksLikeSpokenDialogue(text: string): boolean {
   if (/图\s*\d+|Camera language|Performance direction|时长|画风|场记|integrated_multimodal|Reference pictures/i.test(line)) {
     return false
   }
+  if (detectDialogueLanguage(line) === 'Korean') return true
   if (line.length <= 4 && !/[。！？!?，、]/.test(line)) return false
   return /[\u3400-\u9fff]/.test(line)
 }
 
 function sanitizeDialogue(text: string): string {
+  const spoken = spokenTextOnly(text)
+  const source = detectDialogueLanguage(spoken) === 'Korean' ? spoken : normalizeForSpeech(spoken)
   const line = stripSpokenStageDirection(
-    normalizeForSpeech(spokenTextOnly(text))
+    source
       .replace(/<\/?d>/gi, '')
       .replace(/\[[^\]]{0,120}\]/g, '')
   )
@@ -227,13 +231,14 @@ function sanitizeDialogue(text: string): string {
   return line
 }
 
-/** 已写成官方稿时，把 <d> 里的场记清掉；标本格式的说话人/口型提示保留在括号里。 */
+/** 공식 형식의 대사 태그에서 현장 기록을 없애고 화자와 입 모양 안내는 괄호에 둔다. */
 export function sanitizeDTagContents(text: string): string {
   return String(text || '')
     .replace(/<d>\s*(\[[^\]]*\])?\s*([\s\S]*?)<\/d>/gi, (_, bracket, inner) => {
       const line = sanitizeDialogue(inner)
       if (!line) return ''
       const meta = String(bracket || '').trim()
+      if (detectDialogueLanguage(line) === 'Korean') return `<d>[Korean] ${line}</d>`
       if (/^\[Chinese\b/i.test(meta) && /,/.test(meta)) return `<d>${meta} ${line}</d>`
       return `<d>[Chinese] ${line}</d>`
     })
@@ -242,7 +247,7 @@ export function sanitizeDTagContents(text: string): string {
     .trim()
 }
 
-/** 按行拆对白，去掉「人物名：」后只留要进 <d> 的原词。场记/时长轴/图号不能当台词。 */
+/** 대사를 줄별로 나누고 화자 이름을 제외한 원문만 태그에 넣는다. */
 export function spokenCueLines(voiceover: string): string[] {
   return String(voiceover || '')
     .split(/\r?\n/)
@@ -259,7 +264,7 @@ export function formatH3Timestamp(seconds: number): string {
   return `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}.${String(ms).padStart(3, '0')}`
 }
 
-/** 一条成片内部的 [Shot 1/2/3] 时间切分，不是画布上的多个分镜节点。 */
+/** 한 영상에 들어가는 내부 샷의 구간을 나타낸다. */
 export function h3InternalShotPlan(
   duration: number,
   spokenCount = 0
@@ -457,7 +462,7 @@ function labeledSlots(input: H3PromptInput): LabeledSlot[] {
   })
 }
 
-/** 人设/场景/看板多图参考走 Ref2VA；单张作为成片第一帧才走 I2VA。 */
+/** 캐릭터, 장면, 개요판을 함께 제공하면 Ref2VA를 쓴다. 한 이미지가 시작 프레임이면 I2VA를 쓴다. */
 export function isRef2VA(input?: H3PromptInput): boolean {
   if (!input) return false
   if (input.mode === 'T2VA' || input.mode === 'I2VA' || input.mode === 'FL2VA' || input.mode === 'L2VA') return false
@@ -481,7 +486,7 @@ function identityLabel(slot: LabeledSlot): string {
   return en || `reference ${slot.picture}`
 }
 
-/** 人物图用 (S1)(S2) 固定绑到对应 Picture。S 号跟人物走，不跟台词顺序走。 */
+/** 말하는 순서와 무관하게 캐릭터 식별자를 해당 이미지에 고정한다. */
 export function pictureIdentityBlock(input: H3PromptInput): string {
   const slots = labeledSlots(input)
   if (!slots.length) return ''
@@ -537,7 +542,7 @@ export function promptHasPictureIdentity(text: string, count: number): boolean {
   return true
 }
 
-/** 用代码写死的图1/图2/图3 身份块覆盖模型稿；不依赖模型自觉写。 */
+/** 모델 응답의 인물 매핑을 코드에서 생성한 매핑으로 교체한다. */
 export function ensurePictureIdentity(prompt: string, input: H3PromptInput): string {
   const src0 = String(prompt || '').trim()
   if (
@@ -553,7 +558,7 @@ export function ensurePictureIdentity(prompt: string, input: H3PromptInput): str
   const block = pictureIdentityBlock(input)
   if (!block) return String(prompt || '').trim()
   let src = String(prompt || '').trim()
-  // 清掉旧的 Reference pictures / 残缺图号段，再强制插入权威映射
+  // 기존 참조 이미지 블록을 제거한 뒤 확정한 이미지 매핑을 삽입한다.
   src = src
     .replace(/Reference pictures\s*\([^)]*\)\s*:[\s\S]*?(?=\n\s*\[Shot\s*\d+\]|\n\s*(?:镜头|景别与运镜|画面与动作依据)\s*[：:]|\n\s*Camera language\s*:|\n\s*overall_soundscape\s*:|$)/i, '')
     .replace(/Speaker lock \(these labels are the pictures\):[\s\S]*?(?=\n\s*\[Shot\s*\d+\]|\n\s*Camera language\s*:|\n\s*overall_soundscape\s*:|$)/i, '')
@@ -575,8 +580,8 @@ export function ensurePictureIdentity(prompt: string, input: H3PromptInput): str
 }
 
 /**
- * 人物声音必须紧跟「图几是谁」写清楚：谁的声音是什么样，开口就按这个来。
- * 用代码插入，不依赖模型自觉，也不让旧稿里残缺的音色段落留在正文中间。
+ * 인물 매핑 직후에 캐릭터별 음색을 명시한다.
+ * 코드에서 음색을 삽입하고 이전 원고의 불완전한 음색 단락을 제거한다.
  */
 export function ensureVoiceRoster(prompt: string, roster: string): string {
   const block = String(roster || '').trim()
@@ -594,7 +599,7 @@ export function ensureVoiceRoster(prompt: string, roster: string): string {
       last = i
       continue
     }
-    // 图号块结束（遇到空行或正文起手）就停，别把正文里的图号也算进来
+    // 빈 줄이나 본문이 시작되면 이미지 매핑 구역을 끝낸다.
     if (last >= 0 && (!line.trim() || /^\[Shot\s*\d+\]/i.test(line))) break
   }
   if (last >= 0) {
@@ -624,7 +629,7 @@ function bareSpeakerName(raw?: string): string {
     .trim()
 }
 
-/** (S1) 永远是第一张人物图，不按台词先后重新编号。 */
+/** 첫 번째 캐릭터 이미지는 첫 번째 식별자에 고정하며 발화 순서로 다시 번호를 붙이지 않는다. */
 function speakerCode(input: H3PromptInput, raw?: string): string {
   const people = characterPeople(input)
   const wanted = [bareSpeakerName(raw), bareSpeakerName(input.speakerName)].filter(Boolean)
@@ -823,7 +828,7 @@ function visualShotBody(desc: string): string {
   return (cut >= 0 ? text.slice(cut) : text).trim()
 }
 
-/** 多模态参考：官方六段。人物绑定写在 subject_definitions，镜头正文从 [Shot 1] 开始。 */
+/** 공식 멀티모달 참조는 여섯 구역이며 인물 매핑 후 샷 본문이 시작된다. */
 function assembleRef2VA(desc: string, sound: string, music: string, input: H3PromptInput): string {
   let body = sanitizeDTagContents(stripCjkOutsideSpokenTags(visualShotBody(desc)))
   body = ensureVoiceRoster(body, input.voiceRoster || '')
@@ -916,11 +921,11 @@ function ensureSpokenTags(text: string, lines: string[]): string {
   if (exactMatch) {
     return sanitizeDTagContents(text)
   }
-  // 与可信台词不一致时：清空旧 <d>，再按可信列表重写，避免场记残留
+  // 확정한 대사와 다르면 기존 대사 태그를 지우고 원문으로 다시 작성한다.
   let cleaned = text.replace(/<d>\s*\[[^\]]*\]\s*[\s\S]*?<\/d>/gi, '').trim()
   const extra = tags.join('\n\n')
   if (/\[\d{2}:\d{2}\.\d{3}\s*[–-]/i.test(cleaned)) {
-    // 插到第一个时间轴段落后
+    // 첫 시간 구간 뒤에 삽입한다.
     const rebuilt = cleaned.replace(
       /(\[\d{2}:\d{2}\.\d{3}\s*[–-][^\]]+\][\s\S]*?)(?=\n\s*\[\d{2}:\d{2}\.\d{3}|\n\s*Camera language\s*:|$)/i,
       (chunk) => `${chunk.trim()}\n\n${extra}\n`
@@ -945,7 +950,7 @@ function extractQuotedSpeech(text: string): string[] {
   return out
 }
 
-/** 从节点原文里抠台词：只认 d 标签、引号、「台词/对白」行、喊出「…」。整段场记绝不拆成台词。 */
+/** 대사 태그, 인용문, 대사 필드, 발화 동작에서만 대사를 추출한다. */
 export function extractSpokenFromNotes(text: string): string[] {
   const raw = String(text || '')
   if (!raw.trim()) return []
@@ -955,17 +960,17 @@ export function extractSpokenFromNotes(text: string): string[] {
   if (fromTags.length) return [...new Set(fromTags)]
 
   const out = extractQuotedSpeech(raw)
-  for (const match of raw.matchAll(/(?:^|\n)\s*(?:台词|对白|口播|旁白)\s*[：:]\s*(.+)$/gm)) {
+  for (const match of raw.matchAll(/(?:^|\n)[ \t]*(?:台词|对白|口播|旁白|대사|내레이션|화면 밖 음성|dialogue|narration|voiceover)\s*[：:][ \t]*(.+)$/gim)) {
     const body = String(match[1] || '').trim()
     if (looksLikeShotDirection(body)) continue
     const line = sanitizeDialogue(body)
-    if (line && /[㐀-鿿]/.test(line) && !out.includes(line)) out.push(line)
+    if (line && !isPlaceholderSpokenLine(line) && !out.includes(line)) out.push(line)
   }
   for (const match of raw.matchAll(
-    /(?:^|\n)\s*([\u3400-\u9fff]{1,8})(?:[（(][^）)\n]{0,16}[）)])?\s*[：:]\s*([^\n]+)/g
+    /(?:^|\n)[ \t]*([\u3400-\u9fff가-힣]{1,8})(?:[（(][^）)\n]{0,16}[）)])?\s*[：:][ \t]*([^\n]+)/g
   )) {
     const label = String(match[1] || '').trim()
-    if (/^(?:场景|音效|镜头|景别|时长|画风|站位|地点|道具|场记|画面|动作|运镜|机位|构图|环境|光影|备注|说明)$/.test(label)) {
+    if (/^(?:场景|音效|镜头|景别|时长|画风|站位|地点|道具|场记|画面|动作|运镜|机位|构图|环境|光影|备注|说明|장면|효과음|샷|길이|스타일|장소|소품|현장기록|화면|동작|구도|환경|조명|비고|설명)$/.test(label)) {
       continue
     }
     const line = sanitizeDialogue(match[2] || '')
@@ -983,20 +988,20 @@ export function extractSpokenFromNotes(text: string): string[] {
 export function nodeTextHasSpeech(text: string): boolean {
   const t = String(text || '')
   if (extractSpokenFromNotes(t).length) return true
-  if (/没有台词|无对白|不说话|无口播|No dialogue/i.test(t)) return false
-  if (/<d\s*>/i.test(t) && !/<d>\s*\[[^\]]+\]\s*(?:无|没有|无对白|none|N\/A)\s*<\/d>/i.test(t)) return true
+  if (/没有台词|无对白|不说话|无口播|대사 없음|대사가 없|내레이션 없음|말하지 않|No dialogue|No narration/i.test(t)) return false
+  if (/<d\s*>/i.test(t) && !/<d>\s*\[[^\]]+\]\s*(?:无|没有|无对白|없음|대사 없음|none|N\/A)\s*<\/d>/i.test(t)) return true
   return /(?:喊出|喊道|叫道|叫着|轻声说|小声说|小声喊)/.test(t)
 }
 
 export function nodeTextForbidsSpeech(text: string): boolean {
   const t = String(text || '')
   if (extractSpokenFromNotes(t).length) return false
-  return /没有台词|无对白|不说话|无口播|No dialogue/i.test(t)
+  return /没有台词|无对白|不说话|无口播|대사 없음|대사가 없|내레이션 없음|말하지 않|No dialogue|No narration/i.test(t)
 }
 
 function spokenLinesForPrompt(input: H3PromptInput): string[] {
-  // 口播栏一旦有内容，它就是唯一台词来源。人物小传里的「欲望」「弧光」等引号
-  // 不是对白，不能再从整包场记中二次抽取。
+  // 내레이션 필드에 내용이 있으면 해당 필드만 대사 원문으로 사용한다.
+  // 인물 소개의 욕망이나 변화 같은 설정 문구는 대사로 추출하지 않는다.
   if (input.voiceMode === 'none') return []
   const fromVo = spokenCueLines(input.voiceover || '')
   if (fromVo.length) return [...new Set(fromVo)]
@@ -1024,7 +1029,7 @@ function isStructuredShotBody(text: string): boolean {
 }
 
 function applyDialogue(desc: string, input: H3PromptInput): string {
-  // 可信台词：口播栏 / 引号 / 「台词：」。没有就强制无对白，丢掉模型胡写的 <d>。
+  // 확정한 대사가 없으면 무대사로 처리하고 모델이 추가한 대사 태그를 제거한다.
   const wanted = spokenLinesForPrompt(input)
   if (isStructuredShotBody(desc)) {
     let body = desc.trim()
@@ -1109,13 +1114,13 @@ function subjectPhrase(slot: LabeledSlot): string {
 
 function shotSizeEn(raw?: string): string {
   const t = String(raw || '')
-  if (/特写/.test(t)) return 'close-up'
-  if (/中近/.test(t)) return 'medium close-up'
-  if (/近景/.test(t)) return 'close-up'
-  if (/中全|全景/.test(t)) return 'medium-wide shot'
-  if (/中景/.test(t)) return 'medium shot'
-  if (/大远/.test(t)) return 'extreme wide shot'
-  if (/远景/.test(t)) return 'wide shot'
+  if (/特写|클로즈업/.test(t)) return 'close-up'
+  if (/中近|중근경/.test(t)) return 'medium close-up'
+  if (/近景|근경/.test(t)) return 'close-up'
+  if (/中全|全景|중원경|전경/.test(t)) return 'medium-wide shot'
+  if (/中景|중경/.test(t)) return 'medium shot'
+  if (/大远|대원경/.test(t)) return 'extreme wide shot'
+  if (/远景|원경/.test(t)) return 'wide shot'
   if (/medium close-up|close-up|wide shot|medium shot|medium-wide/i.test(t)) {
     return t.replace(/[㐀-鿿].*$/, '').trim() || 'medium shot'
   }
@@ -1124,9 +1129,9 @@ function shotSizeEn(raw?: string): string {
 
 function angleEn(raw?: string): string {
   const t = String(raw || '')
-  if (/过肩/.test(t)) return 'over-the-shoulder'
-  if (/俯/.test(t)) return 'slight high angle'
-  if (/仰/.test(t)) return 'slight low angle'
+  if (/过肩|오버숄더|over.the.shoulder/i.test(t)) return 'over-the-shoulder'
+  if (/俯|하이 앵글|high angle/i.test(t)) return 'slight high angle'
+  if (/仰|로우 앵글|low angle/i.test(t)) return 'slight low angle'
   if (/45|侧/.test(t)) return 'framed from a slight side angle'
   return 'framed from a slight three-quarter angle'
 }
@@ -1191,12 +1196,12 @@ function mapAmbience(text?: string): string {
 
 function purposeEn(raw?: string): string {
   const t = String(raw || '')
-  if (/钩子|开场|建立/.test(t)) return 'This beat establishes the space and the first visible tension.'
-  if (/对峙|冲突/.test(t)) return 'This beat holds a confrontation; bodies stay charged, not idle.'
-  if (/反应/.test(t)) return 'This beat is a reaction: face and breath change with what just happened.'
-  if (/揭示/.test(t)) return 'This beat reveals new information through look and body, not exposition.'
-  if (/转场/.test(t)) return 'This beat bridges the moment; motion and eyeline carry us forward.'
-  if (/收口|结束/.test(t)) return 'This beat lands the scene; hold the last expression and let the frame breathe.'
+  if (/钩子|开场|建立|도입|상황 설정|hook|opening/.test(t)) return 'This beat establishes the space and the first visible tension.'
+  if (/对峙|冲突|대치|갈등|conflict/.test(t)) return 'This beat holds a confrontation; bodies stay charged, not idle.'
+  if (/反应|반응|reaction/.test(t)) return 'This beat is a reaction: face and breath change with what just happened.'
+  if (/揭示|공개|드러남|reveal/.test(t)) return 'This beat reveals new information through look and body, not exposition.'
+  if (/转场|전환|transition/.test(t)) return 'This beat bridges the moment; motion and eyeline carry us forward.'
+  if (/收口|结束|마무리|ending/.test(t)) return 'This beat lands the scene; hold the last expression and let the frame breathe.'
   return ''
 }
 
@@ -1239,7 +1244,7 @@ function descriptionFromNotes(input: H3PromptInput): string {
         ? 'push'
         : /慢拉|拉远|拉开/.test(notedMove)
           ? 'pull'
-          : /上摇|俯仰/.test(notedMove)
+          : /上摇|俯仰|틸트|tilt/i.test(notedMove)
             ? 'tilt'
             : /横摇|摇镜|横移/.test(notedMove)
               ? 'pan'
@@ -1297,26 +1302,26 @@ Keep faces, hair and clothes locked to the speaker pictures. One person speaks a
   return roster ? `${roster}\n\n${body}` : body
 }
 
-/** 空台词套话、脏稿或缺图号身份时，打开节点/出视频要重写。 */
+/** 빈 대사, 불완전한 형식, 이미지 매핑 누락을 감지해 프롬프트를 다시 작성한다. */
 export function compiledH3PromptNeedsRebuild(text: string | undefined): boolean {
   const t = String(text || '').trim()
   if (!t) return true
   if (isLifelessH3Prompt(t)) return true
-  if (/<d>\s*\[(?:Chinese|English|Japanese|Korean)\]\s*(?:无|没有|无对白|无台词|none|N\/A)\s*<\/d>/i.test(t)) {
+  if (/<d>\s*\[(?:Chinese|English|Japanese|Korean)\]\s*(?:无|没有|无对白|无台词|없음|대사 없음|none|N\/A)\s*<\/d>/i.test(t)) {
     return true
   }
   if (/says(?: in an off-screen voiceover)?:\s*<d>\s*\[Chinese\]\s*无\s*<\/d>/i.test(t)) return true
   if (/Person 1 \(S1\) in Place 1\.\s*The camera holds a static shot\.\s*Gaze stays on the scene/i.test(t)) {
     return true
   }
-  // 只有人物名单、没有 [Shot 1] 的空壳，或还在用旧的「图1 是人设」而没有 (S1) 绑定
+  // 인물 목록만 있거나 내부 샷 또는 인물 식별자 매핑이 빠진 초안을 찾는다.
   if (/integrated_multimodal_description\s*:/i.test(t) && !/\[Shot\s*1\]/i.test(t)) return true
   if (/subject_definitions\s*:/i.test(t) && !/\[Shot\s*1\]/i.test(t)) return true
   if (/is this person's character design/i.test(t) && !/\(S1\)\s+is\b/.test(t)) return true
   return false
 }
 
-/** 中文场面被清掉以后，如果正文里几乎没有英文镜头，就不能只剩人物名单。 */
+/** 한자 설명을 정리한 뒤 장면 연출 없이 인물 목록만 남는지 확인한다. */
 function shotProseTooThin(desc: string): boolean {
   if (!/\[Shot\s*1\]/i.test(desc)) return true
   const prose = stripCjkOutsideSpokenTags(desc)
@@ -1342,13 +1347,13 @@ function isGenericActionDump(desc: string): boolean {
 
 type DialogueCue = { text: string; speaker?: string }
 
-/** 保留“谁说哪句”。旧逻辑只保留台词文字，多角色时模型无法建立独占口型。 */
+/** 어떤 화자가 어떤 대사를 말하는지 연결해 인물별 입 모양을 만들 수 있게 한다. */
 function dialogueCuesForPrompt(input: H3PromptInput): DialogueCue[] {
   const wanted = spokenLinesForPrompt(input)
   const raw = `${input.voiceover || ''}\n${input.prompt || ''}`
   return wanted.map((text) => {
     const escaped = escapeRegExp(text)
-    const name = `(?:「([^」]{1,24})」|([\\u3400-\\u9fffA-Za-z][\\u3400-\\u9fffA-Za-z0-9 _-]{0,12})(?:[（(][^）)\\n]{0,16}[）)])?)`
+    const name = `(?:「([^」]{1,24})」|([\\u3400-\\u9fff가-힣A-Za-z][\\u3400-\\u9fff가-힣A-Za-z0-9 _-]{0,12})(?:[（(][^）)\\n]{0,16}[）)])?)`
     const tagged = raw.match(
       new RegExp(`${name}\\s*(?:说|说道|问|喊|叫|答|says?y?|asks?|shouts?|replies?)?\\s*[：:]?\\s*(?:<d>\\s*\\[[^\\]]*\\]\\s*)?${escaped}`, 'i')
     )
@@ -1361,18 +1366,18 @@ function dialogueCuesForPrompt(input: H3PromptInput): DialogueCue[] {
 function dialogueTurnIssue(desc: string, expected: DialogueCue[]): string {
   if (!expected.length) return ''
   const tags = [...String(desc || '').matchAll(/<d>\s*\[[^\]]*\]\s*([\s\S]*?)<\/d>/gi)]
-  if (tags.length !== expected.length) return `台词标签数量应为 ${expected.length}，实际为 ${tags.length}`
+  if (tags.length !== expected.length) return `Expected ${expected.length} dialogue tags but found ${tags.length}.`
   for (let i = 0; i < tags.length; i += 1) {
     const index = tags[i].index || 0
     const lead = desc.slice(Math.max(0, index - 260), index)
     if (!/\(S\d+\)[^.\n]{0,180}\b(?:says?|asks?|shouts?|replies?|exclaims?|yells?|whispers?)\b[^.\n]{0,120}[:，,]?\s*$/i.test(lead)) {
-      return `第 ${i + 1} 句台词没有紧邻的唯一说话人 (S#) 和说话动作`
+      return `Line ${i + 1} needs exactly one speaker (S#) and a speech verb immediately before the tag.`
     }
   }
   return ''
 }
 
-/** 识别旧版“按模板填词”的无生机成片稿。 */
+/** 이전 템플릿의 일반 문구만 사용한 프롬프트를 식별한다. */
 export function isLifelessH3Prompt(text: string | undefined): boolean {
   const t = String(text || '')
   if (!t.trim()) return true
@@ -1395,11 +1400,11 @@ export function validateH3Prompt(prompt: string, expectedDialogue?: string): H3P
   const issues: string[] = []
   const hasI2va = /integrated_multimodal_description\s*:/i.test(prompt)
   const hasR2va = /subject_definitions\s*:/i.test(prompt) && /detailed_description\s*:/i.test(prompt)
-  if (!hasI2va && !hasR2va) issues.push('缺少 detailed_description 或 integrated_multimodal_description')
+  if (!hasI2va && !hasR2va) issues.push('detailed_description 또는 integrated_multimodal_description이 없습니다.')
   if (hasR2va) {
-    if (!/summary\s*:/i.test(prompt)) issues.push('Ref2VA 缺少 summary')
-    if (!/retention_analysis\s*:/i.test(prompt)) issues.push('Ref2VA 缺少 retention_analysis')
-    if (!/\[reference generation\]/i.test(prompt)) issues.push('summary 必须以 [reference generation] 开头')
+    if (!/summary\s*:/i.test(prompt)) issues.push('Ref2VA에 summary가 없습니다.')
+    if (!/retention_analysis\s*:/i.test(prompt)) issues.push('Ref2VA에 retention_analysis가 없습니다.')
+    if (!/\[reference generation\]/i.test(prompt)) issues.push('summary는 [reference generation]으로 시작해야 합니다.')
   }
   if (
     hasI2va &&
@@ -1410,51 +1415,53 @@ export function validateH3Prompt(prompt: string, expectedDialogue?: string): H3P
     !/Identity reference only, not the first frame/i.test(prompt) &&
     !/图\s*1\s*[/：:=是]/i.test(prompt)
   ) {
-    issues.push('I2VA 缺少首帧对齐句：For the target video, at 0.00 seconds into the target video, <Picture 1> (from [Shot 1]) is fully referenced.')
+    issues.push('I2VA에 시작 프레임 정렬 문장이 없습니다. For the target video, at 0.00 seconds into the target video, <Picture 1> (from [Shot 1]) is fully referenced.')
   }
-  if (!/overall_soundscape\s*:/i.test(prompt)) issues.push('缺少 overall_soundscape')
-  if (!/non_diegetic_music\s*:/i.test(prompt)) issues.push('缺少 non_diegetic_music')
+  if (!/overall_soundscape\s*:/i.test(prompt)) issues.push('overall_soundscape가 없습니다.')
+  if (!/non_diegetic_music\s*:/i.test(prompt)) issues.push('non_diegetic_music이 없습니다.')
   if (isLifelessH3Prompt(prompt)) {
-    issues.push('镜头稿仍是机械时间槽或存在静态/运镜冲突，缺少由剧情动作驱动的镜头语言')
+    issues.push('샷이 기계적으로 등분됐거나 카메라 고정과 움직임이 충돌합니다. 이야기 속 동작에 맞게 샷을 구성하세요.')
   }
-  if (!/\[Shot\s*1\]/i.test(prompt)) issues.push('正文必须以 [Shot 1] 开镜，且第一镜不加时间戳')
+  if (!/\[Shot\s*1\]/i.test(prompt)) issues.push('본문은 [Shot 1]로 시작하고 첫 샷에는 타임스탬프를 넣지 마세요.')
   if (/\[Shot\s*1\][^\n]*At\s+\d{2}:\d{2}/i.test(prompt)) {
-    issues.push('[Shot 1] 不得加时间戳；后续镜才写 [Shot 2] At 00:03.000')
+    issues.push('[Shot 1]에는 타임스탬프를 넣지 마세요. 이후 샷부터 [Shot 2] At 00:03.000 형식을 사용하세요.')
   }
   if (/from\s+\d+(?:\.\d+)?s?\s+to\s+\d+(?:\.\d+)?s/i.test(prompt)) {
-    issues.push('H3 正文不要写 From 0.00s to …；用连续叙事写开幅、动作起幅、发展和收住')
+    issues.push('H3 본문에서 From 0.00s to … 형식을 사용하지 마세요. 첫 화면, 동작의 시작과 전개, 마무리를 이어서 쓰세요.')
   }
   if (/【环境光影】|【画面演进】|【角色声音签名】/.test(prompt)) {
-    issues.push('混入了中文分区，H3 不认这套格式')
+    issues.push('H3가 인식하지 못하는 중국어 섹션이 들어 있습니다.')
   }
-  if (/\bThis shot is\s*\./i.test(prompt)) issues.push('镜头标题形成残句 This shot is.')
-  if (/\bLocation facts\s*:/i.test(prompt)) issues.push('场景资料被重复追加为 Location facts')
+  if (/\bThis shot is\s*\./i.test(prompt)) issues.push('샷 제목이 불완전한 문장인 This shot is.로 남았습니다.')
+  if (/\bLocation facts\s*:/i.test(prompt)) issues.push('장면 정보가 Location facts에 중복으로 추가됐습니다.')
   if (/(?:台词|对白|旁白|口播)\s*[：:]\s*[^：:\n]{0,16}\s*[：:]\s*(?:$|\n|Location facts)/i.test(prompt)) {
-    issues.push('正文残留空台词标签；台词只能出现在 d 标签内')
+    issues.push('본문에 빈 대사 태그가 있습니다. 대사는 d 태그 안에만 넣으세요.')
   }
 
   const expectedLines = spokenCueLines(expectedDialogue || '')
   const expectedJoined = expectedLines.join(' ') || sanitizeDialogue(expectedDialogue || '')
-  const tagged = [...prompt.matchAll(/<d>\s*\[(?:Chinese|English|Japanese|Korean)\]\s*([\s\S]*?)<\/d>/gi)].map((m) =>
-    m[1].replace(/\s+/g, ' ').trim()
-  )
+  const tagged = [...prompt.matchAll(/<d>\s*\[(Chinese|English|Japanese|Korean)(?:,[^\]]*)?\]\s*([\s\S]*?)<\/d>/gi)].map((m) => ({
+    language: m[1].toLowerCase(),
+    line: m[2].replace(/\s+/g, ' ').trim()
+  }))
   if (expectedJoined) {
-    if (!/<d>\s*\[Chinese\]/i.test(prompt) && /[㐀-鿿]/.test(expectedJoined)) {
-      issues.push('中文台词/旁白必须写成 <d>[Chinese] 原词</d>')
-    }
     const wanted = expectedLines.length ? expectedLines : [expectedJoined]
-    if (wanted.some((line) => !tagged.some((t) => t === line))) {
-      issues.push('台词必须写在 <d>[Chinese] 原词</d> 里，且与口播原文一致')
+    const hasIncorrectTag = wanted.some((line) => {
+      const language = detectDialogueLanguage(line) === 'Korean' ? 'korean' : 'chinese'
+      return !tagged.some((tag) => tag.line === line && tag.language === language)
+    })
+    if (hasIncorrectTag) {
+      issues.push('대사는 원문을 그대로 유지하고 대사 언어에 맞는 <d> 태그에 넣으세요.')
     }
-    if (tagged.some((line) => !wanted.some((e) => e === line))) {
-      issues.push('d 标签里出现了不该朗读的内容')
+    if (tagged.some((tag) => !wanted.includes(tag.line))) {
+      issues.push('d 태그에 읽지 않아야 할 내용이 들어 있습니다.')
     }
     const outsideTags = prompt.replace(/<d>\s*\[[^\]]+\]\s*[\s\S]*?<\/d>/gi, '')
     if (wanted.some((line) => line.length >= 4 && outsideTags.includes(line))) {
-      issues.push('台词原文在 d 标签外重复出现')
+      issues.push('대사 원문이 d 태그 밖에서 반복됩니다.')
     }
   } else if (tagged.length) {
-    issues.push('无对白镜头不得出现 <d> 台词标签')
+    issues.push('대사 없는 샷에는 <d> 태그를 넣지 마세요.')
   }
   return { valid: issues.length === 0, issues }
 }
@@ -1468,7 +1475,7 @@ function resolvePromptInput(input: H3PromptInput, source: string): H3PromptInput
   return input
 }
 
-/** 按官方模式出最终提示词：多模态参考六段，首帧/首尾帧/尾帧/纯文本走三段加对齐句。中文场记不得进正文。 */
+/** 멀티모달 참조는 여섯 구역을 쓰고 나머지 공식 모드는 세 구역과 필요한 정렬 문구를 쓴다. */
 export function composeH3VideoPrompt(input: H3PromptInput): string {
   const source = stripFrameLead(input.prompt || '')
   const resolved = resolvePromptInput(input, source)
@@ -1559,8 +1566,8 @@ function parseH3PromptJson(content: string): { parsed: H3PromptJson; truncated: 
 }
 
 /**
- * 只有真正的接口故障才应中断优化。模型偶发的 JSON、措辞或导演格式问题
- * 都可以由本地编译器降级成可提交稿，不能让用户因为质量启发式规则而卡住。
+ * API 자체 오류는 최적화를 중단한다. 모델의 JSON, 표현, 연출 형식 문제는
+ * 로컬 컴파일러로 보완해 제출 가능한 프롬프트를 반환한다.
  */
 function isLLMRequestFailure(error: unknown): boolean {
   const message = error instanceof Error ? error.message : String(error || '')
@@ -1569,7 +1576,7 @@ function isLLMRequestFailure(error: unknown): boolean {
   )
 }
 
-/** 把中文场记编译成 H3 官方英文：integrated_multimodal_description + 内部切镜；失败则回退模板。 */
+/** 현장 기록을 H3 공식 영문 형식과 내부 샷으로 변환한다. 실패하면 기본 템플릿을 사용한다. */
 export async function compileH3OfficialPrompt(input: H3PromptInput): Promise<string> {
   const resolved: H3PromptInput = { ...input, forceIntegrated: input.forceIntegrated === true }
   const source = stripFrameLead(resolved.prompt || '')
@@ -1588,16 +1595,17 @@ export async function compileH3OfficialPrompt(input: H3PromptInput): Promise<str
       messages: [
         {
           role: 'system',
-          content: `You write MiniMax / Seedance shot-video prompts. Output JSON only:
+          // H3 영상 연출은 영어로 쓰고 대사는 원문 언어와 화자 번호를 유지한다.
+          content: `You write MiniMax / Seedance shot-video prompts. Write final generation prose in English. Preserve spoken lines verbatim in their original language, using [Korean] for Korean dialogue and [Chinese] for Chinese dialogue. Do not translate on-screen text that the user requires in Korean (한국어). Output JSON only:
 {"integrated_multimodal_description":"...","overall_soundscape":"..."}
 
 This is ONE generated clip. The field format is fixed, but the filmmaking is NOT a fill-in template. Read the dramatic event first, then author the shot around its unique action and emotional causality.
 
 Required output structure:
-1) START by copying the speaker lock verbatim. (S1) is permanently the first character picture, (S2) the second. Never renumber S by dialogue order, and never write 图1 or "this person's character design" instead of (S#).
-(S1) is 「中文名」 / <Picture 1>. Lock face, hair, body, age and outfit. Identity reference only, not the first frame.
-(S2) is 「中文名」 / <Picture 2>. Lock face, hair, body, age and outfit. Identity reference only, not the first frame.
-<Picture 3> is the location 「场景名」. Lock space, materials, weather and light.
+1) START by copying the speaker lock verbatim. (S1) is permanently the first character picture, (S2) the second. Never renumber S by dialogue order, and never write “Picture 1” or "this person's character design" instead of (S#).
+(S1) is 「character name」 / <Picture 1>. Lock face, hair, body, age and outfit. Identity reference only, not the first frame.
+(S2) is 「character name」 / <Picture 2>. Lock face, hair, body, age and outfit. Identity reference only, not the first frame.
+<Picture 3> is the location 「location name」. Lock space, materials, weather and light.
 Only one (S#) speaks at a time. Everyone else keeps their lips completely closed.
 These images are identity/location locks, NOT first frames. Do not write "Picture 1 is the first frame" or "Picture 1 aligns with 0.00 seconds".
 
@@ -1607,13 +1615,13 @@ These images are identity/location locks, NOT first frames. Do not write "Pictur
 
 4) Camera movement must be motivated by what the audience needs to discover. State where the camera begins, what action or reveal makes it move, what foreground/background parallax or focus change occurs, and where it lands. The supplied camera family is only a preference, not a command. Static is valid only when stillness creates tension; do not repeat a static-camera sentence in every beat. Never combine “no pan, tilt, or zoom” with a push, pull, pan, tilt, or arc.
 
-5) Direct performance through observable behavior and progression, not emotion labels: weight in the steps, a delayed glance, fingers missing the switch, breath catching, shoulders releasing, jaw tightening, or attention shifting to a sound. Derive the exact emotion from this beat; never turn every 怒 into “cold and controlled,” and never use generic instructions such as “faces show a specific reaction,” “play the emotional change,” or “hold the last expression and let the frame breathe.”
+5) Direct performance through observable behavior and progression, not emotion labels: weight in the steps, a delayed glance, fingers missing the switch, breath catching, shoulders releasing, jaw tightening, or attention shifting to a sound. Derive the exact emotion from this beat; never turn every expression of anger into “cold and controlled,” and never use generic instructions such as “faces show a specific reaction,” “play the emotional change,” or “hold the last expression and let the frame breathe.”
 
 6) Treat each reference character according to the state described in the scene: living body, carved statue, portrait, reflection, shadow, off-screen voice, hidden presence, or absent identity reference. A character reference does NOT prove that a full living person is physically present. Do not duplicate a referenced identity as both a person and a prop unless the action explicitly shows a transformation.
 
 7) Dialogue ONLY inside <d>. Each trusted line is spoken once, by its own (S#), in its own time range. Never let two people talk at once, and never let a second person repeat the line. Use exactly:
-(S1) says: <d>[Chinese] 原词</d> Only (S1) speaks in this shot. (S2) keeps their lips completely closed and makes no voice.
-The tag contains ONLY the spoken words. Never dump 场记, timestamps, style, picture labels, or Camera language into <d>. A bare <d> tag is forbidden. The listener stays in the blocking with a closed mouth. Do not split a clip merely because its dialogue is fast when the user's timing explicitly fits it.
+(S1) says: <d>[Korean] 제 말을 들어 주세요.</d> Only (S1) speaks in this shot. (S2) keeps their lips completely closed and makes no voice.
+The tag contains ONLY the spoken words. Never put continuity notes, timestamps, style, picture labels, or Camera language into <d>. A bare <d> tag is forbidden. The listener stays in the blocking with a closed mouth. Do not split a clip merely because its dialogue is fast when the user's timing explicitly fits it.
 
 Timeline writing standard:
 - Use the user's timing when supplied; otherwise divide the full duration according to action and dialogue, never into generic equal thirds.
@@ -1629,9 +1637,9 @@ Rules:
 - Preserve the user's event. Expand only what is already explicitly implied by the script, and never invent a different incident or new characters.
 - STYLE LOCK: when reference pictures are supplied, their art style is authoritative. Match the reference pictures' rendering (medium, palette, texture, character design) exactly. Ignore the Style line above if it conflicts; never switch the referenced subject to a different medium such as live-action, CG, or a generic "cinematic" look.
 - Write direct, decisive filmmaking prose like a director describing the finished moving image. The format is a container, not a prose template.
-- English for action, camera, light, performance. Chinese is allowed ONLY inside <d> and inside 「source names」 in the speaker lock. Any other Chinese is deleted, so a Chinese scene description will ship as an empty roster. Write the actual blocking in English: who is left/right, what they hold, what a prop does over time.
+- Write action, camera, lighting, and performance in English. Preserve dialogue in its original language inside <d> and preserve 「source names」 in the speaker lock. Write the blocking in English, including who is left or right, what they hold, and how a prop changes over time. Preserve explicitly requested Korean on-screen text.
 - In action prose, call people (S1), (S2) exactly as the speaker lock defines them. Do not invent a new S number per line. Do not anonymize a known character as “the man.” Recurring props keep the (P#) and <Picture N> written in the lock. When a hand touches that object, name that picture.
-- Spoken lines already extracted below are the ONLY dialogue. If the list is empty, write No dialogue. No lips moving. NEVER invent speech from 场记, timestamps, style, or the speaker lock. Never put 无 or director notes inside a d tag.
+- Spoken lines already extracted below are the ONLY dialogue. If the list is empty, write No dialogue. No lips moving. NEVER invent speech from continuity notes, timestamps, style, or the speaker lock. Never put “none” or director notes inside a d tag.
 - MUST COPY the speaker-lock block below verbatim at the start of integrated_multimodal_description. Do not invent, omit, or reorder (S1)/(S2)/<Picture N>.
 - overall_soundscape names the script's real sounds (chip crunch, cushion rustle, room tone). Do not write a generic sentence such as "close breath stay synchronized with the picture. Spoken words appear only inside the d tag."
 - Delivery format is chosen by the app, not by you. Write the shot body only. Multimodal reference (R2VA) is wrapped into six sections: subject_definitions, summary, retention_analysis, detailed_description, overall_soundscape, non_diegetic_music. First-frame (I2VA), first-and-last-frame (FL2VA), last-frame (L2VA) and text-only (T2VA) stay three fields, with the official alignment line added outside your JSON. Do not emit those headers yourself.
@@ -1654,12 +1662,12 @@ MUST COPY this speaker lock verbatim (identity/location lock, not first frames):
 ${pictureRoster(resolved) || 'no extra pictures'}
 Voice mode: ${cueLines.length ? resolved.voiceMode || 'dialogue' : 'none — no trusted spoken lines; do NOT invent dialogue'}
 Character voice (this speaker's own timbre, kept verbatim as delivery inside each <d> bracket; do not reinterpret or translate it away): ${resolved.speakerVoice || '(not set — infer a natural timbre that fits the character)'}
-Spoken lines already extracted (quotes / 台词 / 口播栏 only; director notes are NOT speech):
+Spoken lines already extracted (quotes, dialogue, or narration fields only; director notes are NOT speech):
 ${cueLines.length ? cueLines.map((line, i) => `${i + 1}. ${line}`).join('\n') : '(none — write No dialogue. No lips moving.)'}
 Dialogue ownership recovered from the source (each item is one exclusive turn; preserve this order):
 ${dialogueCues.length ? dialogueCues.map((cue, i) => `${i + 1}. (${speakerCode(resolved, cue.speaker)}) speaker=${cue.speaker || 'unassigned'} | words=${cue.text}`).join('\n') : '(none)'}
 Sound notes: ${englishOrOmit(resolved.audioDescription) || '(from the node text)'}
-NODE MATERIAL TO DIRECT (source of truth for event, props, blocking and continuity; 场记/时长/画风 are not speech):
+NODE MATERIAL TO DIRECT (source of truth for event, props, blocking and continuity; continuity notes, duration, and visual style are not speech):
 ${source || '(perform the beat in this location)'}`
         }
       ],
@@ -1691,11 +1699,12 @@ ${source || '(perform the beat in this location)'}`
         messages: [
           {
             role: 'system',
-            content: `Rewrite a rejected shot-video prompt as JSON only: {"integrated_multimodal_description":"...","overall_soundscape":"..."}.
+            // H3 초안의 구조와 연출을 고치면서 대사 원문을 보존한다.
+            content: `Rewrite a rejected shot-video prompt as JSON only. Write final generation prose in English and preserve all spoken lines verbatim. Use [Korean] for Korean dialogue and [Chinese] for Chinese dialogue. Output schema: {"integrated_multimodal_description":"...","overall_soundscape":"..."}.
 The rejected draft was lifeless because it used a reusable timing template, repeated static-camera instructions, or failed to preserve the actual event.
-Write the moving image itself. Preserve the exact speaker lock and trusted dialogue. (S1) is the first character picture for the whole clip. Subject universe lock: only subjects present in the source material and reference pictures may appear — never add new characters, animals, or plot events, and never turn idioms or fables into literal content. The visual style must match the reference pictures exactly. Build a concrete cause-and-effect action chain with named props, motivated camera changes, observable performance, environmental reaction, and a visible final state. Give each spoken line its own time range. Never create generic opening/middle/hold slots. Never treat a statue, portrait, reflection, hidden presence, or off-screen identity as a living body. English action prose; Chinese only inside 「names」 and trusted <d> dialogue. A Chinese scene body will be deleted.
+Write the moving image itself. Preserve the exact speaker lock and trusted dialogue. (S1) is the first character picture for the whole clip. Subject universe lock: only subjects present in the source material and reference pictures may appear — never add new characters, animals, or plot events, and never turn idioms or fables into literal content. The visual style must match the reference pictures exactly. Build a concrete cause-and-effect action chain with named props, motivated camera changes, observable performance, environmental reaction, and a visible final state. Give each spoken line its own time range. Never create generic opening/middle/hold slots. Never treat a statue, portrait, reflection, hidden presence, or off-screen identity as a living body. Write English action prose; preserve Korean or Chinese names and trusted <d> dialogue verbatim. A Chinese scene body will be deleted.
 
-Dialogue is exclusive turn-taking. Immediately before every <d>, write the stable (S#) and says/asks/replies. Form: (S1) says: <d>[Chinese] 原词</d> Only (S1) speaks in this shot. (S2) keeps their lips completely closed. Bare <d> tags are forbidden. Do not split the clip merely because the delivery is fast.
+Dialogue is exclusive turn-taking. Immediately before every <d>, write the stable (S#) and says/asks/replies. Form: (S1) says: <d>[Korean] 제 말을 들어 주세요.</d> Only (S1) speaks in this shot. (S2) keeps their lips completely closed. Bare <d> tags are forbidden. Do not split the clip merely because the delivery is fast.
 
 Rebuild the prompt as a concise cinematic timeline, not a four-line outline and not a dense screenplay paragraph. For every range write 2–4 filmable sentences covering framing or one motivated camera move, active body action and eyeline, a trigger-based facial change, listener blocking/reaction, and dialogue when present. Preserve foreground/background and left/right positions, keep the camera axis continuous, prevent anyone from staring into the lens, and use only story-relevant props, light and environmental motion. Every range must visibly advance the event. End once with the full ${durationText(resolved)}-second completion sentence.`
           },
@@ -1732,10 +1741,10 @@ ${desc || '(empty)'}`
       desc = String(parsed.integrated_multimodal_description || parsed.detailed_description || '').trim()
       sound = String(parsed.overall_soundscape || '').trim()
     }
-    // 第二稿不再被质量启发式规则硬拦截。它们适合触发一次修稿，但不适合
-    // 判定用户完全无法继续；模型稿只要有正文，就交给后面的确定性清洗器。
+    // 품질 규칙은 한 번의 수정 요청을 유도하는 데 사용한다.
+    // 두 번째 원고에 본문이 있으면 규칙 기반 정리 단계에 전달한다.
     if (!desc) return composeH3VideoPrompt(resolved)
-    // 台词以入口 cueLines / voiceover 为准；禁止因模型乱写 <d> 就强行改成 dialogue
+    // 대사는 cueLines 또는 voiceover에서 가져온다. 모델이 추가한 태그로 대사 모드를 바꾸지 않는다.
     const trusted = spokenLinesForPrompt(resolved)
     const resolvedWithSpeech: H3PromptInput = {
       ...resolved,
@@ -1762,6 +1771,6 @@ ${desc || '(empty)'}`
     if (error instanceof DOMException && error.name === 'AbortError') throw error
     if (!isLLMRequestFailure(error)) return composeH3VideoPrompt(resolved)
     const reason = error instanceof Error ? error.message : String(error || '')
-    throw new Error(`没有生成可用的电影化镜头稿：${reason || '请重试'}`)
+    throw new Error(`사용 가능한 영상 샷 프롬프트를 생성하지 못했습니다. ${reason || '다시 시도하세요.'}`)
   }
 }

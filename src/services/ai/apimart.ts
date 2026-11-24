@@ -1,9 +1,9 @@
 /**
- * APIMart 内置协议。用户只填接口地址和 API Key。
- * 默认地址 https://api.aishuch.com
- * 图片：POST /v1/images/generations
- * 视频：POST /v1/videos/generations（Grok Imagine 1.5 字段）
- * 查询：GET /v1/tasks/{task_id}?language=zh
+ * APIMart 내장 연동. 사용자는 API 주소와 키를 입력한다.
+ * 기본 주소 https://api.aishuch.com
+ * 이미지 POST /v1/images/generations
+ * 영상 POST /v1/videos/generations(Grok Imagine 1.5 필드)
+ * 조회 GET /v1/tasks/{task_id}?language=zh
  */
 
 import { t as translate } from '@/i18n'
@@ -16,7 +16,7 @@ export const APIMART_VIDEO_MODEL = 'grok-imagine-1.5-video-ext'
 const VIDEO_SIZES = new Set(['16:9', '9:16', '1:1', '3:2', '2:3'])
 const RELAY_RATIOS = ['1:1', '16:9', '9:16', '4:3', '3:4', '3:2', '2:3', '21:9', '5:2'] as const
 
-/** 上游不接受 aspect_ratio=auto，只接受固定比例。 */
+/** 공급자 API는 aspect_ratio에 고정 비율을 요구한다. */
 export function concreteAspectRatio(raw?: string, width?: number, height?: number): string {
   const ratio = String(raw || '').trim()
   if ((RELAY_RATIOS as readonly string[]).includes(ratio)) return ratio
@@ -42,7 +42,7 @@ export function isApimartEndpoint(baseUrl?: string, provider?: string): boolean 
   return isApimartHost(baseUrl || '')
 }
 
-/** APIMart 和其他中转站的生图格式相同：提交 /v1/images/generations，再查任务。官方生图和本机 ComfyUI 除外。 */
+/** APIMart와 중계 API는 이미지 생성 요청을 보낸 뒤 작업을 조회한다. 공식 이미지 API와 로컬 ComfyUI는 별도 경로를 사용한다. */
 export function isRelayImageEndpoint(baseUrl?: string, provider?: string): boolean {
   if (isApimartEndpoint(baseUrl, provider)) return true
   if (provider && provider !== 'custom') return false
@@ -84,7 +84,7 @@ function blobToDataUrl(blob: Blob): Promise<string> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader()
     reader.onload = () => resolve(String(reader.result || ''))
-    reader.onerror = () => reject(new Error('参考图读取失败'))
+    reader.onerror = () => reject(new Error(translate('apimartService.referenceRead')))
     reader.readAsDataURL(blob)
   })
 }
@@ -206,7 +206,7 @@ async function downloadMedia(
   authorization: string,
   signal?: AbortSignal
 ): Promise<{ blob: Blob; mimeType: string }> {
-  // 结果文件在图床上。带上生图用的 Bearer，或 Accept: application/json，图床会回 400。
+  // 결과 파일은 별도 이미지 호스트에 있다. 생성용 Bearer 또는 JSON Accept 헤더를 보내면 400이 반환된다.
   const load = (auth?: string) =>
     providerHttp(url, {
       method: 'GET',
@@ -223,7 +223,7 @@ async function downloadMedia(
   }
   if (!resp.ok) {
     const detail = (await resp.text()).replace(/\s+/g, ' ').trim().slice(0, 180)
-    throw new Error(detail ? `结果下载失败 HTTP ${resp.status} ${detail}` : `结果下载失败 HTTP ${resp.status}`)
+    throw new Error(detail ? `결과 다운로드에 실패했습니다. HTTP ${resp.status} ${detail}` : `결과 다운로드에 실패했습니다. HTTP ${resp.status}`)
   }
   const blob = await resp.blob()
   const mimeType = blob.type || (url.includes('.mp4') ? 'video/mp4' : 'image/png')
@@ -241,7 +241,7 @@ async function pollTask(opts: {
   const deadline = Date.now() + (opts.kind === 'video' ? 20 * 60_000 : 8 * 60_000)
   const url = `${opts.root}/v1/tasks/${encodeURIComponent(opts.taskId)}?language=zh`
   while (Date.now() < deadline) {
-    if (opts.signal?.aborted) throw new Error('已取消')
+    if (opts.signal?.aborted) throw new DOMException(translate('canvasRunner.aborted'), 'AbortError')
     const resp = await providerHttp(url, {
       method: 'GET',
       headers: { Authorization: opts.authorization, Accept: 'application/json' },
@@ -257,15 +257,15 @@ async function pollTask(opts: {
     }
     if (status === 'completed' || status === 'succeeded' || status === 'success') {
       const media = resultUrls(json, opts.kind)[0]
-      if (!media) throw new Error('任务已完成，但没有返回图片或视频地址')
-      opts.onProgress?.('正在下载结果...')
+      if (!media) throw new Error('작업이 완료됐지만 이미지나 영상 주소가 반환되지 않았습니다.')
+      opts.onProgress?.(translate('apimartService.download'))
       return downloadMedia(media, opts.authorization, opts.signal)
     }
-    const label = Number.isFinite(progress) ? `${Math.round(progress)}%` : status || '处理中'
-    opts.onProgress?.(`生成中 ${label}`)
+    const label = Number.isFinite(progress) ? `${Math.round(progress)}%` : status || translate('apimartService.processing')
+    opts.onProgress?.(translate('apimartService.generating', { status: label }))
     await new Promise((resolve) => setTimeout(resolve, 3000))
   }
-  throw new Error('等待生成结果超时')
+  throw new Error('생성 결과를 기다리는 시간이 초과됐습니다.')
 }
 
 async function postJson(root: string, path: string, authorization: string, body: Record<string, unknown>, signal?: AbortSignal) {
@@ -285,7 +285,7 @@ async function postJson(root: string, path: string, authorization: string, body:
 
 function dataUriToBlob(uri: string): { blob: Blob; mimeType: string } {
   const match = uri.match(/^data:([^;,]+)?(;base64)?,(.*)$/s)
-  if (!match) throw new Error('图片数据无法解析')
+  if (!match) throw new Error('이미지 데이터를 해석할 수 없습니다.')
   const mimeType = match[1] || 'image/png'
   const payload = match[3] || ''
   if (match[2]) {
@@ -365,7 +365,7 @@ function isCancelled(error: unknown, signal?: AbortSignal): boolean {
   return name === 'AbortError' || /已取消|任务已取消/i.test(message)
 }
 
-/** 这个地址没有上传接口时记住，后面的参考图不再重复打它。 */
+/** 업로드 API가 없는 주소를 기억하고 이후 참조 이미지에 같은 요청을 반복하지 않는다. */
 const uploadUnsupported = new Set<string>()
 
 async function uploadReferenceImage(
@@ -376,7 +376,7 @@ async function uploadReferenceImage(
 ): Promise<string> {
   const file = dataUriToBlob(await referenceDataUrl(blob))
   const bytes = new Uint8Array(await file.blob.arrayBuffer())
-  if (bytes.byteLength > 20 * 1024 * 1024) throw new Error('参考图超过 20MB，无法上传')
+  if (bytes.byteLength > 20 * 1024 * 1024) throw new Error('참조 이미지가 20MB를 초과해 업로드할 수 없습니다.')
   const part = multipartFile(bytes, 'reference.jpg', file.mimeType || 'image/jpeg')
   const resp = await providerHttp(`${root}/v1/uploads/images`, {
     method: 'POST',
@@ -388,7 +388,7 @@ async function uploadReferenceImage(
   })
   const json = await readJson(resp)
   const url = String(json?.url || json?.data?.url || '').trim()
-  if (!/^https?:\/\//i.test(url)) throw new Error('上传参考图没有返回可用地址')
+  if (!/^https?:\/\//i.test(url)) throw new Error('참조 이미지 업로드 응답에 사용할 수 있는 주소가 없습니다.')
   return url
 }
 
@@ -399,14 +399,14 @@ async function referenceImageDataUrls(
 ): Promise<string[]> {
   const urls: string[] = []
   for (let i = 0; i < blobs.length; i++) {
-    if (signal?.aborted) throw new Error('已取消')
-    onProgress?.(`准备参考图 ${i + 1}/${blobs.length}...`)
+    if (signal?.aborted) throw new DOMException(translate('canvasRunner.aborted'), 'AbortError')
+    onProgress?.(translate('apimartService.prepareRefs', { current: i + 1, total: blobs.length }))
     urls.push(await referenceDataUrl(blobs[i]))
   }
   return urls
 }
 
-/** 先走上传接口。接口不存在或上传失败时，改为把图直接交给生成接口。 */
+/** 먼저 업로드 API를 호출한다. API가 없거나 업로드에 실패하면 생성 요청에 이미지를 넣는다. */
 async function referenceImageUrls(
   root: string,
   authorization: string,
@@ -421,15 +421,15 @@ async function referenceImageUrls(
     try {
       const urls: string[] = []
       for (let i = 0; i < list.length; i++) {
-        if (signal?.aborted) throw new Error('已取消')
-        onProgress?.(`上传参考图 ${i + 1}/${list.length}...`)
+        if (signal?.aborted) throw new DOMException(translate('canvasRunner.aborted'), 'AbortError')
+        onProgress?.(translate('apimartService.uploadRefs', { current: i + 1, total: list.length }))
         urls.push(await uploadReferenceImage(root, authorization, list[i], signal))
       }
       return urls
     } catch (error) {
       if (isCancelled(error, signal)) throw error
       uploadUnsupported.add(root)
-      onProgress?.('上传接口不可用，改为直接提交参考图...')
+      onProgress?.(translate('apimartService.uploadFallback'))
     }
   }
   return referenceImageDataUrls(list, signal, onProgress)
@@ -456,12 +456,12 @@ async function imageFromSubmit(
   const ready = await mediaFromJson(json, 'image', authorization, signal)
   if (ready) return ready
   const taskId = taskIdOf(json)
-  if (!taskId) throw new Error('提交成功但没有返回 task_id')
-  onProgress?.('已提交，正在查询...')
+  if (!taskId) throw new Error('작업을 제출했지만 task_id를 반환하지 않았습니다.')
+  onProgress?.(translate('apimartService.submitted'))
   return pollTask({ root, taskId, authorization, kind: 'image', signal, onProgress })
 }
 
-/** gpt-image 的参考图必须走编辑接口，把文件本身传上去。文生图接口会丢掉 image_urls。 */
+/** gpt-image 참조 파일은 편집 API에 직접 업로드한다. 텍스트→이미지 API는 image_urls를 무시한다. */
 async function postImageEdits(opts: {
   root: string
   authorization: string
@@ -481,11 +481,11 @@ async function postImageEdits(opts: {
     textPart('response_format', 'url')
   ]
   for (let i = 0; i < opts.images.length; i++) {
-    if (opts.signal?.aborted) throw new Error('已取消')
-    opts.onProgress?.(`准备参考图 ${i + 1}/${opts.images.length}...`)
+    if (opts.signal?.aborted) throw new DOMException(translate('canvasRunner.aborted'), 'AbortError')
+    opts.onProgress?.(translate('apimartService.prepareRefs', { current: i + 1, total: opts.images.length }))
     const file = dataUriToBlob(await referenceDataUrl(opts.images[i]))
     const bytes = new Uint8Array(await file.blob.arrayBuffer())
-    if (bytes.byteLength > 20 * 1024 * 1024) throw new Error('参考图超过 20MB，无法提交')
+    if (bytes.byteLength > 20 * 1024 * 1024) throw new Error('참조 이미지가 20MB를 초과해 제출할 수 없습니다.')
     parts.push({
       name: 'image',
       filename: `reference-${i + 1}.jpg`,
@@ -494,7 +494,7 @@ async function postImageEdits(opts: {
     })
   }
   const part = multipartBody(parts)
-  opts.onProgress?.(`提交参考图（${opts.images.length} 张）...`)
+  opts.onProgress?.(translate('apimartService.sendRefs', { count: opts.images.length }))
   const resp = await providerHttp(`${opts.root}/v1/images/edits`, {
     method: 'POST',
     headers: { Authorization: opts.authorization, Accept: 'application/json' },
@@ -545,7 +545,7 @@ export async function apimartGenerateImage(opts: {
       const message = error instanceof Error ? error.message : String(error ?? '')
       if (/size|尺寸/.test(message)) return await edit(ratio)
       if (!missingImageEdits(error)) throw error
-      opts.onProgress?.('编辑接口不可用，改为在生成请求里带上参考图...')
+      opts.onProgress?.(translate('apimartService.editFallback'))
     }
   }
   const imageUrls = await referenceImageUrls(root, authorization, refs, 15, opts.signal, opts.onProgress)
@@ -561,7 +561,7 @@ export async function apimartGenerateImage(opts: {
     body.image_urls = imageUrls
   }
   opts.onProgress?.(
-    imageUrls.length ? `提交图生图任务（${imageUrls.length} 张参考）...` : '提交文生图任务...'
+    imageUrls.length ? translate('apimartService.imageImage', { count: imageUrls.length }) : translate('apimartService.textImage')
   )
   const json = await postJson(root, '/v1/images/generations', authorization, body, opts.signal)
   return imageFromSubmit(json, root, authorization, opts.signal, opts.onProgress)
@@ -613,13 +613,13 @@ export async function apimartGenerateVideo(opts: {
       if (/^[A-Za-z_][A-Za-z0-9_]*$/.test(field) && /audio/i.test(field)) body[field] = opts.generateAudio
     }
     if (imageUrls.length) body.image_urls = imageUrls
-    opts.onProgress?.('提交视频任务...')
+    opts.onProgress?.(translate('apimartService.video'))
     const submitted = await postJson(root, '/v1/videos/generations', authorization, body, opts.signal)
     taskId = taskIdOf(submitted)
-    if (!taskId) throw new Error('提交成功但没有返回 task_id')
+    if (!taskId) throw new Error('작업을 제출했지만 task_id를 반환하지 않았습니다.')
     await opts.onTaskSubmitted?.(taskId)
   }
-  opts.onProgress?.('已提交，正在查询...')
+  opts.onProgress?.(translate('apimartService.submitted'))
   const media = await pollTask({
     root,
     taskId,

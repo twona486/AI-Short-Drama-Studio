@@ -1,37 +1,41 @@
 # UI 한글화 용어집
 
-화면에서는 다음 표현을 사용해요.
-
-- 숏드라마
-- 스토리보드
-- 샷
-- 더빙
-- 자막
-- 이미지 생성
-- 이미지→영상
-- 캐릭터
-- 대본
-- 챕터
-- 회차
-- 캔버스
-- 워크스페이스
-- 내레이션
-- 디지털 휴먼
-- 에이전트
-- 연결 도우미
-- 워크플로
-- 참조 이미지
-- 시작·끝 프레임
-- 키프레임
-- 스토리 개요판 (샷의 전개를 여러 칸에 담은 참조 이미지)
-- 선협 판타지
-- 이미지·오디오 립싱크
-- 프롬프트
-- 리소스 라이브러리
-- 에셋 라이브러리
-- 타임라인
-- 클립
-- 영상에 자막 합성
+| 한국어 UI | 영어 |
+| --- | --- |
+| 숏드라마 | short drama |
+| 스토리보드 | storyboard |
+| 샷 | shot |
+| 더빙 | dubbing |
+| 자막 | subtitles |
+| 이미지 생성 | image generation |
+| 이미지→영상 | image-to-video |
+| 캐릭터 | character |
+| 대본 | script |
+| 챕터 | chapter |
+| 회차 | episode |
+| 캔버스 | canvas |
+| 워크스페이스 | workspace |
+| 내레이션 | narration |
+| 디지털 휴먼 | digital human |
+| 에이전트 | agent |
+| 연결 도우미 | setup assistant |
+| 워크플로 | workflow |
+| 참조 이미지 | reference image |
+| 시작·끝 프레임 | first and last frames |
+| 키프레임 | keyframe |
+| 스토리 개요판 (샷의 전개를 여러 칸에 담은 참조 이미지) | story storyboard panel |
+| 선협 판타지 | cultivation fantasy |
+| 이미지·오디오 립싱크 | image and audio lip sync |
+| 프롬프트 | prompt |
+| 리소스 라이브러리 | resource library |
+| 에셋 라이브러리 | asset library |
+| 타임라인 | timeline |
+| 클립 | clip |
+| 영상에 자막 합성 | burn-in subtitles |
+| 4면 설정 이미지 | four-view character sheet |
+| 장면 기준 이미지 | scene anchor image |
+| 샷 이미지 | shot image |
+| 화면 밖 음성 | off-screen voiceover |
 
 ## UI 말투 규칙
 

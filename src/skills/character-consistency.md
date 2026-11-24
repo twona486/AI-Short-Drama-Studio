@@ -1,41 +1,38 @@
 ---
 name: character-consistency
-description: 锁人物与场景，先出四视图和场景锚点图，再给分镜配图。
-triggers: 人设,角色,主体,四视图,三视图,设定图,一致性,换脸,场景,底板,空镜,锚点图
+description: Lock characters and locations with four-view sheets and scene anchor images before making shot images.
+triggers: 人设,角色,主体,四视图,三视图,设定图,一致性,换脸,场景,底板,空镜,锚点图,캐릭터 설정,캐릭터,피사체,4면 설정 이미지,3면 설정 이미지,설정 이미지,일관성,얼굴 변경,장면,빈 장면,기준 이미지,character sheet,location anchor,character design
 ---
 
-# 人设与场景（别换脸）
+# Character and location consistency
 
-短视频最容易翻车的是：第一镜还是那个人，第三镜变成另一个人。先锁身份，再画画。
+Before drawing shots, lock identities so people remain recognizable throughout the short film.
 
-## 顺序
+## Order
 
-1. 分镜里已经列出的 subjects / scenes，不要另起一套。
-2. 没四视图的主体用 `generate_sheet`。场景没锚点图用 `generate_scene`。
-3. 缺的多就 `generate_all_sheets` / `generate_all_scenes`。
-4. 四视图、场景锚点图没齐之前，先不要画故事看板，更不要 `generate_shot_image`。
+1. Use the existing subjects and scenes from the storyboard.
+2. Use `generate_sheet` for missing character sheets and `generate_scene` for missing location anchors.
+3. If many are missing, use `generate_all_sheets` and `generate_all_scenes`.
+4. Complete character and location references before generating storyboard panels or calling `generate_shot_image`.
 
-## 四视图要什么
+## Character sheets
 
-一张图四格：面部特写、全身正面、全身侧面、全身背面。锁同一张脸、同一套衣服。
+Make one image with four panels: face close-up, full-body front, full-body side, and full-body back. Preserve the same face and clothing.
 
-- 用户点了什么画风，就用什么材料画。
-- 手绘 / 材料类画风：按该媒介画，禁止摄影棚真人四视图。
-- 无论写实还是手绘：四视图背景必须是无缝纯白（#FFFFFF），禁止灰色影棚、渐变、地面或风景。
-- 用户丢了参考图：按图里的脸和衣服来，禁止「优化五官」。
+- Use the user's specified rendering medium. For hand-drawn or material-specific styles, use that medium; do not generate live-action studio photography instead.
+- Use a seamless pure-white background (#FFFFFF) for any medium. Exclude gray studio backgrounds, gradients, ground, and scenery.
+- If the user supplied an image, match the reference face and clothes. Do not optimize the facial features.
 
-外貌描述写具体：年龄段、发际线、衣服颜色和款式、鞋、配饰。不要「英俊潇洒」。
+Describe age range, hairline, colors and styles of clothing, shoes, and accessories. Avoid vague compliments.
 
-## 场景锚点图要什么
+## Location anchors
 
-一张图四宫格，不是一张宽风景：
-1. 全景空镜
-2. 主锚特写（门、台、锅、电梯……）
-3. 地面 / 站位区
-4. 光源或次锚
+Use a four-panel image with these views:
+1. Wide, unoccupied view
+2. Close-up of the main anchor, such as a door, worktop, pan, or elevator
+3. Ground and blocking area
+4. Light source or secondary anchor
 
-人还没进来。没有人脸、路人、剪影、动物、字幕。四格必须是同一地点、同一时段。后续配图只借用这些锚，不要把四宫格画进成片。
+Keep the location and time consistent. Exclude faces, people, silhouettes, animals, and subtitles. Later shots use these physical anchors without reproducing the grid. For video, send character design images, the location image, and the storyboard panel. Do not send a composited character-and-location still. Later shots stay on the same ground and retain the same time of day.
 
-出视频时把本镜角色设计图、场景图和故事看板交给 H3。不要传人物+场景配图。
-
-后边每个分镜都要站在这块地板上拍，光线时段别自己改成黄昏又改成正午。
+Write final generation prompts in English and preserve explicitly requested Korean on-screen text. Write user-facing descriptions in Korean (한국어).

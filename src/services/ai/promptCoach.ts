@@ -1,5 +1,5 @@
 /**
- * 图生视频画布：按用户原文扩写节点提示词，补画面层次，不另起故事，不改格式。
+ * 원문의 이야기와 형식을 유지하며 이미지→영상 노드의 화면 묘사를 보완한다.
  */
 import { callLLM, getAIMode } from './client'
 import { parseJsonRobust, stripModelWrappers } from '@/utils/jsonRepair'
@@ -36,7 +36,7 @@ function unique(items: string[]): string[] {
   return out
 }
 
-/** 原文里必须原样留下的标题、节拍和指代。 */
+/** 그대로 유지해야 하는 원문의 제목, 구간 및 참조 */
 export function extractFormatAnchors(text: string): string[] {
   const t = String(text || '')
   const anchors: string[] = []
@@ -68,12 +68,12 @@ function formatBreakReason(original: string, next: string): string | null {
   const origAnchors = extractFormatAnchors(original)
   if (!origAnchors.length) {
     if (H3_HEADINGS.test(next) && !H3_HEADINGS.test(original)) {
-      return '扩写把原文改成了另一套分段格式'
+      return '프롬프트를 확장하면서 원문의 섹션 구조가 바뀌었습니다.'
     }
     return null
   }
   const missing = origAnchors.filter((anchor) => !hasAnchor(next, anchor))
-  if (missing.length) return `扩写丢掉了原格式：${missing.slice(0, 8).join('、')}`
+  if (missing.length) return `프롬프트 확장 중 원문의 표식이 사라졌습니다. ${missing.slice(0, 8).join('、')}`
   return null
 }
 
@@ -100,40 +100,40 @@ function mockExpand(input: OptimizeNodePromptInput): OptimizeNodePromptResult {
   const base = input.currentPrompt.trim()
   if (!base) {
     return {
-      prompt: input.kind === 'video' ? '一条连续镜头。写清谁在做什么、光从哪来。' : '一张能看清主体和光线的静帧。',
-      note: '演示模式：原文为空，只给了占位。'
+      prompt: input.kind === 'video' ? 'One continuous shot. Specify who does what and where the light comes from.' : 'A still frame with clearly visible subjects and lighting.',
+      note: '데모 모드입니다. 원문이 비어 있어 임시 문구를 넣었습니다.'
     }
   }
-  return { prompt: base, note: '演示模式：不改格式，原文原样保留。' }
+  return { prompt: base, note: '데모 모드입니다. 원문과 형식을 그대로 유지했습니다.' }
 }
 
 function formatRules(input: OptimizeNodePromptInput, current: string): string {
-  const kindLabel = input.kind === 'video' ? '图生视频' : '文生图 / 图生图'
+  const kindLabel = input.kind === 'video' ? 'image-to-video' : 'text-to-image / image-to-image'
   const duration = input.kind === 'video' ? Math.max(1, Math.round(input.duration || 8)) : 0
   const anchors = extractFormatAnchors(current)
   const anchorLine = anchors.length
-    ? `原文必须保留的标记：${anchors.join('、')}`
-    : '原文没有分段标题。不要给它套 MiniMax 六段或任何新模板。'
+    ? `Required source markers: ${anchors.join('、')}`
+    : 'The source has no section headings. Do not add the MiniMax six-section format or any other template.'
 
   const shotBlock =
     input.kind === 'video'
-      ? `这是连续 ${duration} 秒的一条镜头：只加厚开幅、动作怎么起、怎么收，不要切镜，不要新按秒切段。原文里已有的秒标记原样保留。`
-      : '这是静帧：只加厚已经能看见的画面，不要写时间流逝。'
+      ? `This is one continuous ${duration}-second shot. Expand only the opening image, onset of action, and ending. Do not cut or add new time ranges. Preserve the original timing marks.`
+      : 'This is a still frame. Add only visible details, with no passage of time.'
 
-  return `你是提示词润色助手。只加厚原文里已有的画面，绝对不改变格式。
-任务类型：${kindLabel}。
-格式铁律：
+  return `Improve the visual details already present in the prompt. Preserve its format.
+Task type: ${kindLabel}.
+Required format rules
 - ${anchorLine}
-- 标题、分段、[Shot]、图1=、0.00-2.00 这类标记的名字和顺序都不能改。
-- 禁止把自由段落改成六段，也禁止把已有分段拆掉、合并或改名。
-- 只在原有段落内部写得更具体：眉眼嘴、手、身体、光、材质、声音。
-- 台词、人名、服装、场景限制、参考图指代一律不动。
-- 原来用中文的句子继续中文，原来用英文的句子继续英文，不要整段互译。
+- Preserve the names and order of headings, sections, [Shot], legacy numbered picture labels, and ranges such as 0.00-2.00.
+- Do not convert free-form prose to six sections, delete or combine existing sections, or rename them.
+- Within existing sections, make eyebrows, eyes, mouth, hands, body, light, materials, and sound more concrete.
+- Preserve dialogue, names, wardrobe, scene constraints, and reference image identifiers.
+- Write the final generation prompt in English. Keep Korean (한국어) dialogue, narration, and explicitly requested on-screen text verbatim. Retain existing format markers.
 ${shotBlock}
-硬性要求：
-- 没写的剧情不要编。
-- 禁止套话，禁止分析过程。prompt 只能是给生成模型看的全文。
-只输出 JSON：{"prompt":"扩写后的全文","note":"改了什么，一两句中文"}`
+Required content rules
+- Do not invent plot details absent from the source.
+- Avoid boilerplate and reasoning. The prompt field must contain only the complete prompt for the generation model.
+Return JSON only: {"prompt":"Complete refined generation prompt in English","note":"One or two sentences in Korean (한국어) explaining what changed"}.`
 }
 
 async function askOnce(
@@ -152,19 +152,19 @@ async function askOnce(
       { role: 'system', content: formatRules(input, current) },
       {
         role: 'user',
-        content: `节点：${input.nodeLabel}
+        content: `Node ${input.nodeLabel}
 
-当前提示词：
-${current || '（空）'}
+Current prompt
+${current || '(empty)'}
 
-用户补充：
-${hint || '（没有额外要求，按更有画面感来扩，但不要改格式）'}
+Additional user request
+${hint || '(None. Keep the format and make the visuals more vivid.)'}
 
-剧情参考：
-${script ? script.slice(0, 6000) : '（无）'}
+Story reference
+${script ? script.slice(0, 6000) : '(none)'}
 ${extra}
 
-直接给出扩写后的全文。格式必须与当前提示词一致。`
+Return the full expanded prompt. Preserve the format of the current prompt.`
       }
     ]
   })
@@ -179,14 +179,14 @@ function readPrompt(content: string): { prompt: string; note: string } | null {
     }
     const prompt = String(parsed.prompt || parsed.optimizedPrompt || '').trim()
     if (prompt.length >= 8 && !isReasoningDump(prompt)) {
-      return { prompt, note: String(parsed.note || '已按原文加厚画面，格式未改。').trim() }
+      return { prompt, note: String(parsed.note || '원문 형식에 맞춰 화면 묘사를 구체화했습니다.').trim() }
     }
   } catch {
     /* ignore */
   }
   const fallback = stripModelWrappers(content).trim()
   if (fallback.length >= 8 && !isReasoningDump(fallback) && fallback[0] !== '{') {
-    return { prompt: fallback, note: '模型没按 JSON 返回，已尽量保留扩写正文。' }
+    return { prompt: fallback, note: '모델이 JSON을 반환하지 않아 확장한 프롬프트 본문을 가능한 한 보존했습니다.' }
   }
   return null
 }
@@ -199,35 +199,35 @@ export async function optimizeNodePrompt(
   const hint = input.userHint?.trim() || ''
   const script = input.script?.trim() || ''
   if (!current && !hint && !script) {
-    throw new Error('先在节点里写一句要生成什么，或贴一段剧情参考。')
+    throw new Error('먼저 노드에 생성할 내용을 한 문장으로 쓰거나 이야기 참조 자료를 붙여 넣으세요.')
   }
   if (getAIMode() === 'mock') return mockExpand(input)
   if (!current) {
-    throw new Error('先在节点里写下提示词。扩写只加厚原文，不会另起一套格式。')
+    throw new Error('먼저 노드에 프롬프트를 작성하세요. 원문의 형식을 유지한 채 기존 내용을 구체화합니다.')
   }
 
-  onProgress?.('正在按原文格式加厚提示词…')
+  onProgress?.('원문의 형식에 맞춰 프롬프트를 구체화하는 중…')
   const first = await askOnce(input, current, hint, script)
   let result = readPrompt(first.content)
-  let breakReason = result ? formatBreakReason(current, result.prompt) : '没有得到可用提示词'
+  let breakReason = result ? formatBreakReason(current, result.prompt) : '사용 가능한 프롬프트를 얻지 못했습니다.'
 
   if (result && !breakReason) return result
 
-  onProgress?.('上次改了格式，正在按原文结构重写…')
+  onProgress?.('이전 응답의 형식이 바뀌어 원문의 구조로 다시 작성하는 중…')
   const retry = await askOnce(
     input,
     current,
     hint,
     script,
-    `\n上次结果不合格：${breakReason || '格式被改了'}。必须用原文的标题和分段，只加厚内容，不要换模板。`
+    `\nThe previous response failed the format check. Keep the original headings and sections exactly as written and elaborate only on their content. Use the original format.`
   )
   result = readPrompt(retry.content)
   if (!result || isReasoningDump(result.prompt)) {
-    throw new Error('扩写写成了分析过程，没有得到提示词。请换一个模型或再试一次。')
+    throw new Error('모델이 프롬프트 대신 분석 과정을 반환했습니다. 다른 모델을 선택하거나 다시 시도하세요.')
   }
   breakReason = formatBreakReason(current, result.prompt)
   if (breakReason) {
-    throw new Error(`${breakReason}。原文格式必须保留，请再试一次。`)
+    throw new Error(`${breakReason} 원문의 형식을 유지해 다시 시도하세요.`)
   }
   return result
 }

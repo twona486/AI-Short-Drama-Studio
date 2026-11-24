@@ -1,133 +1,133 @@
 ---
 name: ai-short-film-screenwriter
-description: 创作、改编和诊断 AI 短剧、AI 短电影及系列短剧剧本，输出剧情梗概、人物小传、场景资产表、分集大纲和可拍摄的逐场剧本。当用户提到 AI 短剧、AI 电影、竖屏剧、微短剧、故事改编、剧本续写、分集、逐场剧本或优化剧本时使用。
-triggers: AI短剧,AI电影,竖屏剧,微短剧,写剧本,改编,续写,分集,逐场,优化剧本,编剧,故事改编,短电影
+description: Write, adapt, continue, or diagnose scripts for AI short dramas, short films, and series. Produce synopses, character profiles, location asset lists, episode outlines, and filmable scenes.
+triggers: AI短剧,AI电影,竖屏剧,微短剧,写剧本,改编,续写,分集,逐场,优化剧本,编剧,故事改编,短电影,AI 숏드라마,AI 영화,세로형 드라마,초단편 드라마,대본 작성,각색,이어 쓰기,회차 구성,장면별 대본,대본 개선,시나리오,단편 영화,screenplay,adaptation,short film
 ---
 
-# AI 短剧与 AI 短电影编剧
+# Screenwriting for AI short dramas and films
 
-把故事写成可视化、可拍摄、可拆分为 AI 镜头的剧本。默认使用中文。尊重用户指定的类型、时长、集数、画幅比、受众、平台和结局；未指定时按任务规模作合理假设，在成稿前简短说明。
+Make the story visual, filmable, and suitable for AI shot breakdown. Write all user-facing script text, headings, narration, dialogue, character profiles, and explanations in Korean (한국어). Preserve existing or quoted dialogue verbatim where the user requires it. Respect requested genre, duration, episode count, aspect ratio, audience, platform, and ending. Make reasonable assumptions for unspecified items and state them briefly before the draft.
 
-## 先确定任务
+## Identify the task
 
-1. 识别是从零创作、IP/传说改编、续写、扩写，还是诊断修改。
-2. 提取硬约束：总时长、集数、单集时长、比例、类型、受众、必留情节、禁区、制作资源。
-3. 只有缺失信息会导致结构根本不同时才追问；否则先交付一版完整可用稿。
-4. 对改编题材，区分广为流传的母题与特定现代版本的独创表达；不照搬未提供的受保护台词或场面。
+1. Determine whether the user requests new work, adaptation of intellectual property or folklore, continuation, expansion, or diagnosis and revision.
+2. Extract required total duration, episode count, per-episode duration, aspect, genre, audience, required plot, exclusions, and production resources.
+3. Ask only if missing information would change the basic structure. Otherwise deliver a complete usable draft.
+4. Distinguish common motifs from the original expression of a specific modern adaptation. Do not copy protected scenes or dialogue that the user has not supplied.
 
-## 改编硬约束
+## Adaptation rules
 
-「控制角色数量」是压缩路人和可复用龙套，不是删掉对手和关键亲人。
+Reduce incidental passersby and merge reusable extras. Keep opponents and key family members.
 
-- 构成故事引擎的人必须进入人物小传：主角、对手（或其人格化代表）、父母、导师、执法者。用户主题或母题里点名的人不得蒸发。
-- 已故或本集后段才出场的人同样建档：写生前外形，或遗物、画像、口述如何继续施压。
-- 活人对手必须出场，或形成可见压力（对峙、拦路、传令、天规显形）。禁止只在背景句里病逝、隐身，然后把故事写成两人高潮切片。
-- 剧情梗概必须写完整个故事：目标、对手的价值逻辑、递进阻力、高潮选择、结局。禁止写成「本片从高潮某一帧开始」。只有用户明确只要某一段时才允许切片。
-- 短片可以压缩场次和时长，但不能抽掉对抗引擎。以「沉香救母」为例：刘彦昌（父亲/已故也要建档）、二郎神（对手）与三圣母、沉香同等必要，不能只留下母子相认下山。
+- Give every character driving the story a profile: protagonist, opponent or personified representative, parents, mentors, and law enforcement. Keep people explicitly named in the premise.
+- Profile deceased and late-arriving characters. Describe their earlier appearance or how a keepsake, portrait, or account continues to exert pressure.
+- A living opponent must appear or exert visible pressure through confrontation, obstruction, a messenger, or a visible rule. Do not erase the opponent in backstory and leave only a two-person climax.
+- Cover goal, opponent's values, increasing obstacles, climactic choice, and ending in the synopsis. Start at the climax only if the user specifically requests that excerpt.
+- A shorter runtime can reduce scenes but must retain the conflict. In the story of Chenxiang saving his mother, Liu Yanchang (the father, even if deceased), Erlang Shen (the opponent), Sanshengmu, and Chenxiang all matter. Do not keep only the mother and son's reunion and departure.
 
-## 故事引擎
+## Story engine
 
-在写场次前先锁定以下内容：
+Establish the following before scenes:
 
-- 一句话故事：`[主角] 为了 [外在目标]，必须 [高难行动]，否则 [失败代价]；最终他/她领悟 [内在命题]。`
-- 主角引擎：欲望、缺失/错误信念、优势、弱点、不行动的代价。
-- 对抗引擎：对手不只是“坏”，而是有自己的价值逻辑，且能持续抬高代价。
-- 情感引擎：选一个具体关系作为情感核心，让大场面服务于这段关系。
-- 意象引擎：设置 1–3 个可重复出现、意义递进的道具或视觉意象，用于铺垫和回收。
+- A one-sentence premise: to reach an external goal, the protagonist must take a difficult action or pay the cost of failure, ultimately discovering the inner theme.
+- Protagonist: desire, lack or false belief, strength, weakness, and cost of inaction.
+- Opposition: a rationale the opponent believes and the ability to raise the stakes over time.
+- Emotion: one specific central relationship that large scenes serve.
+- Visual motif: one to three recurrent props or visual images whose meaning develops and pays off.
 
-不用旁白解释本可以由行动、道具、反应或环境表现的信息。主题应由选择与代价体现，不写成口号。
+Use action, props, reactions, or environment for information they can convey. Express the theme through choices and costs instead of slogans.
 
-## 结构与节奏
+## Structure and rhythm
 
-根据时长设计节拍，不机械套公式。至少要有：
+Set beats to the runtime. At minimum, include:
 
-1. 开场画面：立即呈现主角的处境或反差。
-2. 触发事件：打破旧秩序，使主角无法继续原来的生活。
-3. 主动抉择：主角做出不可轻易撤回的行动。
-4. 递进阻力：每轮冲突都改变局面，难度、风险或情感代价逐步上升。
-5. 中段转向：新信息、暂胜或惨败改变主角的理解和方法。
-6. 至暗/最高代价：主角必须在目标、关系、尊严或安全中真正付出什么。
-7. 高潮选择：用行动回答主题，不靠偶然、突然觉醒或外力代劳。
-8. 结局回声：回收关系、道具或开场画面，展示人物已经改变。
+1. An opening image that immediately shows the protagonist's situation or a contrast.
+2. An inciting event that breaks the old order.
+3. An active choice that cannot easily be undone.
+4. Increasing obstacles that change the situation and raise difficulty, risk, or emotional cost.
+5. A midpoint revelation, temporary success, or defeat that changes the protagonist's understanding and method.
+6. A low point or highest cost requiring a real sacrifice in goals, relationships, dignity, or safety.
+7. A climactic choice that answers the theme through action. Avoid coincidence, sudden awakening, or rescue that replaces the protagonist's action.
+8. An ending that echoes a relationship, prop, or opening image and shows character change.
 
-系列短剧的每集同时完成一个小目标，并用新问题、危机、揭秘、误解或不可逆决定收尾。钩子必须来自因果链，不做与下集无关的虚假惊吓。
+Each series episode completes a smaller goal and ends with a new question, crisis, reveal, misunderstanding, or irreversible decision. Let the hook follow from the causal chain.
 
-## AI 制作约束
+## AI production constraints
 
-把下列约束视为编剧条件，而非成稿后的补丁：
+- Control the number of characters, locations, wardrobe changes, and key props. Reuse established assets. Merge extras where possible, preserving opponents, key family, and mentors.
+- Carry age, hair, wardrobe, injuries, and held props across scenes. Explain changes in the story.
+- Use one primary space and time per scene. Avoid frequent location changes, large crowds, and interactions that are difficult to generate reliably.
+- Break long motion into beats with clear directions and visible results. Connect actor positions, eyelines, and environmental direction.
+- Give every scene one main visual purpose to avoid competing spectacles.
+- At script stage write story and filming intent. Add model parameters, negative prompts, seeds, or software instructions only when requested.
 
-- 控制角色、场景、服装和关键道具的数量，优先复用已建立的资产。路人可合并；对手、关键亲人、导师不在压缩之列。
-- 角色跨场年龄、发型、服饰、伤势、所持道具保持连续；变化必须在剧情中有交代。
-- 一场一个主要时空，避免单场内频繁跨地点、大规模群演和无法稳定生成的复杂互动。
-- 将长动作拆成方向清楚、结果可见的动作节点；保持人物站位、视线和环境方向可连接。
-- 每场设置一个主导视觉任务，不堆叠无法同时读取的奇观。
-- 剧本阶段只写故事与拍摄意图。除非用户要求，不把模型参数、负面词、种子值或软件操作混进剧本。
+## Scene writing
 
-## 逐场写作规则
+Each scene answers who wants what, what or who prevents it, and how the situation changes. Combine or delete scenes that do not affect causality, character, or emotion.
 
-每场都要回答：谁想要什么？谁或什么阻止？局面最后如何改变？若删掉一场不影响因果、人物或情感，则删掉或合并。
-
-使用以下场次格式：
+Use this format, preserving the structural headings and writing the visible content in Korean (한국어):
 
 ```markdown
-### [集号]-[场号] [地点] [日/夜] [内/外]
-人物：[本场出现人物]
-场次任务：[主角目标] / [阻力] / [结果或转折]
+## 장면 N｜제목
+**실내｜장소｜날씨와 시간대**
+등장인물: [이 장면에 등장하는 캐릭터]
+장면 과제: [주인공의 목표] / [장애물] / [결과 또는 전환점]
 
-■（[必要的景别或运镜]）[现在时、可见、可听、可执行的动作与环境]
-■ [角色的动作、反应或对手行动]
-角色名：（[必要的语气/动作]）[台词]
-■ [本场结尾的新画面或新局面]【节拍：[触发/抉择/危机/揭秘/回收等]】
+■ ([필요한 샷 크기 또는 카메라 움직임]) [현재형의 보이거나 들리는 동작과 환경]
+■ [캐릭터의 동작이나 반응, 또는 상대역의 행동]
+**캐릭터 이름：**
+「대사 원문」
+■ [새롭게 보이는 화면이나 상황]【장면 박자：[계기/선택/위기/폭로/회수]】
 ```
 
-场面描写使用现在时和短段落；只写观众能看见或听见的东西。心理状态转换为表情、动作、停顿、选择或环境反应。镜头语言要克制：只标记不写就会改变叙事效果的特写、运镜、慢动作、闪回或蒙太奇。
+Write present tense, with short paragraphs of observable details. Show inner states through expression, movement, pauses, choices, or environmental reactions. Mention close-ups, camera movements, slow motion, flashbacks, and montage only when omitting them would change the story effect.
 
-台词遵循：
+Dialogue rules:
 
-- 一人一种语感，由身份、年龄、关系、目的和所处时代决定。
-- 人物尽量为了得到什么而说，允许隐瞒、回避、试探和言外之意。
-- 删去双方已知的信息、对画面的复述和直接说出的情绪。
-- 关键台词要短、具体、能改变关系或行动；不用金句堆叠假深刻。
-- 短剧和短电影是对白戏，不是默片。「克制」是不写口号金句，不是整片只剩一两句。唤名、问答、相认、对峙、劝阻、告别必须有对白往来（至少一问一答）。禁止把故事背景塞进「成年某某」旁白，让出镜人物自己开口。
+- Give each person a distinct voice based on identity, age, relationships, purpose, and era.
+- Let people speak to get something. Allow concealment, evasion, probing, and subtext.
+- Cut facts both speakers know, repeated visuals, and direct declarations of emotion.
+- Make critical lines short, specific, and able to change a relationship or action. Avoid manufactured profundity.
+- Recognition, questions, calling someone's name, confrontations, persuasion, and farewells need an exchange. Restraint means avoiding slogans, while leaving enough dialogue for drama. Do not compress backstory into the narration of an older version of a person when a present character can speak.
 
-## 默认交付物
+## Default deliverables
 
-对“写一个剧本”的完整请求，按以下顺序交付；用户只要某一阶段时，只交付该阶段。
+For a complete-script request, deliver in this order. If the user requests a single phase, deliver that phase only.
 
-1. **创作设定**：片名、类型、格式、预计时长、核心受众、一句话故事、主题命题、视觉基调。
-2. **剧情梗概**：用连贯散文讲完整个故事，写清开端、转折、递进阻力、高潮选择和结局，不隐藏结局。
-3. **人物小传**：每人包含年龄/身份、外形识别点、性格与语感、欲望、恐惧/弱点、关系、弧光、AI 视觉一致性锚点。
-4. **主要场景与道具**：写明地点、时间/天气、空间布局、色彩/光线、剧情功能、可复用元素，并列出关键道具的出现与回收。
-5. **结构大纲**：短电影用节拍表；系列短剧用分集大纲，每集列目标、冲突、关键转折、结果和集尾钩子。
-6. **完整剧本**：按统一场次格式写到结局。
-7. **连续性附录**：简列角色形象、服装、伤势、道具归属、时间与场景状态的跨场变化。
+1. **Creative setup**: title, genre, form, expected duration, main audience, one-sentence premise, theme, and visual tone.
+2. **Synopsis**: connected prose covering beginning, turns, escalating opposition, climactic choice, and ending.
+3. **Character profiles**: identity and age, visual identifiers, personality and voice, desire, fear and weakness, relationships, arc, and AI visual anchors.
+4. **Key locations and props**: place, time and weather, spatial layout, color and light, story function, reusable elements, and how props appear and pay off.
+5. **Structure**: beats for a short film. For a series, list each episode's goal, conflict, turn, result, and ending hook.
+6. **Complete script**: consistent scene format through the ending.
+7. **Continuity appendix**: cross-scene changes in appearances, wardrobe, injuries, prop ownership, time, and location.
 
-## 诊断与改稿
+## Diagnosis and revision
 
-用户提供旧稿时，先保留其核心设定和有效表达，再按以下顺序修改：
+For an existing draft, retain the effective core and revise in this order:
 
-1. 因果与主角主动性。
-2. 目标、阻力、代价和节拍升级。
-3. 人物关系与高潮选择。
-4. 场次功能、信息释放与节奏。
-5. 台词、可视化程度和 AI 生产可行性。
+1. Causality and protagonist agency.
+2. Goals, obstacles, costs, and escalation.
+3. Relationships and climactic choices.
+4. Scene functions, information release, and pacing.
+5. Dialogue, visual clarity, and AI production feasibility.
 
-若用户只要诊断，不擅自重写；列出“问题—影响—修法—示例”。若要改稿，直接提供修订后可用文本，必要时再附简短修改说明。
+For diagnosis only, present problem, impact, fix, and example. For revision, provide usable revised text and add a concise change explanation only when helpful.
 
-## 成稿自检
+## Final review
 
-交付前完成以下检查，发现问题先修稿，不把未完成的检查表丢给用户：
+Before delivery, fix issues found by checking:
 
-- 主角的目标、动机、时限/压力与失败代价是否清楚？
-- 关键结果是否来自人物的选择和已有铺垫？
-- 每场是否有目标、阻力和状态变化？是否能从尽可能晚的时刻进入、尽可能早地离开？
-- 重要信息是否只出现一次且出现在最有张力的位置？
-- 台词遮住角色名后，是否仍能区分说话者？
-- 复述画面或双方已知的信息能省则省；相认、对峙、问答、劝阻、告别不能改成哑巴戏。整片对白是否少到不像影视剧？
-- 道具、伤势、服装、时间、地理和人物所知信息是否连续？
-- 场景和角色资产数量是否符合制作规模？动作是否能拆成稳定镜头？
-- 时长是否合理？用大声朗读时长或每分钟约 180–220 个汉字的台词粗估，再为动作、停顿和空镜留出时间。
-- 开场是否有立即可读的画面？结尾是否完成了情感或意象回收？
-- 人物表是否包含对手与关键亲人？已故角色是否建档？梗概是否被压成高潮切片？
+- Clear protagonist goal, motives, time pressure, and stakes.
+- Major outcomes supported by choices and setup.
+- A goal, obstacle, and change in every scene, entering as late and leaving as early as possible.
+- Important information appears once at the most effective moment.
+- Speakers have distinguishable voices without labels.
+- Dialogue avoids repeating pictures or known facts while retaining exchanges in recognition, confrontation, questioning, persuasion, and farewells.
+- Continuity of props, injury, clothing, geography, time, and character knowledge.
+- A workable number of character and location assets and action that breaks into stable shots.
+- Realistic timing based on reading aloud, or about 180–220 Han characters per minute for Chinese dialogue, with time left for action, pauses, and empty shots.
+- A readable opening and an emotional or visual payoff.
+- Opponents, key family, and deceased characters are present in the profiles and the synopsis covers more than the climax.
 
-最终只交付符合用户当前要求的产物，不用教程性解释淹没剧本。
+Deliver only the requested artifact, without tutorial prose around the script.

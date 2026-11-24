@@ -1,11 +1,11 @@
 /**
- * ComfyUI 工作流「输入映射」。
+ * ComfyUI 워크플로의 입력 매핑
  *
- * 为什么要有这一层：
- * 每个工作流的节点命名、连线方式、自定义节点都不一样，靠写死规则（猜 CLIPTextEncode /
- * LoadImage）一碰到非标准工作流就失效 —— 生成时跑的还是工作流里写死的提示词。
- * 所以由助手（已配置的语言模型）读懂节点结构，产出一份映射；生成时代码按映射做确定性注入。
- * 规则（guessInputMap）只在助手不可用或分析失败时兜底。
+ * 워크플로마다 노드와 연결 구조가 다르다.
+ * 고정 규칙으로 CLIPTextEncode나 LoadImage를 찾으면 비표준 워크플로의 입력을 놓칠 수 있다.
+ * 그 경우 워크플로에 저장된 이전 프롬프트가 그대로 사용된다.
+ * 언어 모델이 노드 구조를 읽고 매핑을 만들면 코드는 그 위치에 입력을 넣는다.
+ * 모델을 사용할 수 없거나 분석에 실패할 때만 guessInputMap을 쓴다.
  */
 
 import { parseJsonRobust } from '@/utils/jsonRepair'
@@ -37,13 +37,13 @@ export type ComfyWorkflowKind =
 
 export interface ComfyInputBinding {
   role: ComfyInputRole
-  /** API Format 里的节点 id（字符串键） */
+  /** API 형식 노드 ID(문자열 키) */
   nodeId: string
-  /** 节点 inputs 里的字段名 */
+  /** 노드의 inputs 필드 이름 */
   field: string
-  /** 图片/音频类：upload=先上传到 Comfy 再写文件名（默认）｜path=直接写本地路径｜url=直接写 URL */
+  /** 이미지나 오디오에 upload는 업로드한 파일명, path는 로컬 경로, url은 URL을 사용한다. */
   mediaMode?: 'upload' | 'path' | 'url'
-  /** 助手给的备注 */
+  /** 도우미의 참고 사항 */
   note?: string
 }
 
@@ -52,29 +52,29 @@ export interface ComfyInputMap {
   kind: ComfyWorkflowKind
   summary: string
   bindings: ComfyInputBinding[]
-  /** 助手给使用者的提示（需要什么模型/素材等） */
+  /** 필요한 모델이나 소재 등을 사용자에게 안내하는 설명 */
   notes?: string
-  /** 映射来源：llm=助手分析｜heuristic=规则兜底 */
+  /** llm은 도우미 분석, heuristic은 규칙 기반 결과를 나타낸다. */
   source: 'llm' | 'heuristic'
   analyzedAt?: number
 }
 
 export const COMFY_ROLE_LABEL: Record<ComfyInputRole, string> = {
-  prompt: '正向提示词',
-  negative: '负向提示词',
-  image: '参考图 / 首帧',
-  imageEnd: '尾帧',
-  mask: '蒙版',
-  audio: '音频',
-  seed: '随机种子',
-  width: '宽',
-  height: '高',
-  length: '时长 / 帧数',
-  fps: '帧率',
-  steps: '采样步数',
+  prompt: '긍정 프롬프트',
+  negative: '부정 프롬프트',
+  image: '참조 이미지 / 시작 프레임',
+  imageEnd: '끝 프레임',
+  mask: '마스크',
+  audio: '오디오',
+  seed: '난수 시드',
+  width: '너비',
+  height: '높이',
+  length: '길이 / 프레임 수',
+  fps: '프레임률',
+  steps: '샘플링 단계',
   cfg: 'CFG',
-  strength: '重绘幅度',
-  batch: '批量'
+  strength: '재생성 강도',
+  batch: '배치'
 }
 
 const MEDIA_ROLES: ComfyInputRole[] = ['image', 'imageEnd', 'mask', 'audio']
@@ -94,8 +94,8 @@ function truncate(text: string, max = 80): string {
 }
 
 /**
- * 把节点图压成助手能读懂的简报：id、类型、字段值（长文本截断）、连线引用。
- * 大段提示词原文对判断结构没用，只保留前几十字符足够定位。
+ * 노드 ID, 유형, 축약한 필드 값, 연결 참조를 분석용으로 정리한다.
+ * 노드 구조를 식별하는 데 필요한 앞부분만 남긴다.
  */
 export function summarizeWorkflow(payload: any, maxNodes = 160): string {
   const nodes = payload?.prompt && typeof payload.prompt === 'object' ? payload.prompt : payload
@@ -116,35 +116,36 @@ export function summarizeWorkflow(payload: any, maxNodes = 160): string {
     }
     lines.push(`#${id} ${ct} ${parts.length ? `{ ${parts.join(', ')} }` : '{}'}`)
   }
-  if (entries.length > maxNodes) lines.push(`…（另有 ${entries.length - maxNodes} 个节点已省略）`)
+  if (entries.length > maxNodes) lines.push(`…（노드 ${entries.length - maxNodes}개 생략）`)
   return lines.join('\n')
 }
 
-const ANALYZE_SYSTEM = `你是 ComfyUI 工作流分析器。给你一个 API Format 节点图，判断「外部输入」该写到哪个节点的哪个字段，供程序每次生成时注入。
+// ComfyUI 그래프의 입력 바인딩을 분석하고 설명은 한국어로 반환한다.
+const ANALYZE_SYSTEM = `You are a ComfyUI workflow analyzer. Given an API Format graph, identify the exact node field for each external input so the app can inject the value at generation time.
 
-可选角色（role）：
-- prompt：正向提示词（文本）
-- negative：负向提示词（文本）
-- image：参考图 / 首帧（图片）
-- imageEnd：尾帧（仅首尾帧类工作流才有）
-- mask：蒙版图
-- audio：音频（数字人口播类）
-- seed：随机种子（整数）
-- width / height：宽高（整数）
-- length：时长或帧数
-- fps / steps / cfg / strength / batch：数值参数
+Supported roles:
+- prompt: positive prompt text
+- negative: negative prompt text
+- image: reference image or first frame
+- imageEnd: last frame for first-and-last-frame workflows
+- mask: mask image
+- audio: audio for digital-human narration
+- seed: integer random seed
+- width / height: integer dimensions
+- length: duration or frame count
+- fps / steps / cfg / strength / batch: numeric settings
 
-判断规则：
-1. 只挑真正需要外部注入的字段。模型名、VAE、采样器名这类固定配置不要动。
-2. 正/负提示词必须顺着连线判断：看采样器（KSampler、KSamplerAdvanced、SamplerCustom 等）的 positive / negative 指向哪个文本节点，不要按节点顺序或名字猜。
-3. 文本字段通常是 text，也可能是 prompt / value / string / text_g / text_l，以实际字段为准。
-4. 图片字段通常是 image，也可能是 image_path / url / file / upload。
-5. 被选中的字段必须是字符串或数值，不能是连线引用（形如 ←#6 的那种输入）。
-6. 找不到某个角色就省略，绝不编造节点或字段。
-7. 同一角色若有多个候选（如多个文本编码节点），选真正参与出图的那一个。
+Rules:
+1. Select only fields that need external values. Keep fixed settings such as model names, VAE, and sampler names.
+2. Follow positive and negative links from KSampler, KSamplerAdvanced, SamplerCustom, and similar sampler nodes to the actual text nodes. Do not infer their roles from node order or names.
+3. Use the actual text field: often text, but possibly prompt, value, string, text_g, or text_l.
+4. Use the actual image field: often image, but possibly image_path, url, file, or upload.
+5. Select a string or numeric input, never a link reference such as ←#6.
+6. If a role cannot be located, omit it. Do not invent nodes or fields.
+7. When there are multiple candidates for a role, choose the one actually used in the generation graph.
 
-只输出 JSON，不要解释：
-{"kind":"text-to-image|image-to-image|text-to-video|image-to-video|audio-sync|unknown","summary":"一句话说明这个工作流做什么","bindings":[{"role":"prompt","nodeId":"6","field":"text","mediaMode":"upload","note":"说明"}],"notes":"给使用者的提示，比如需要哪个模型、要准备几张图"}`
+Write summary, binding notes, and notes for the user in Korean (한국어). Return JSON only:
+{"kind":"text-to-image|image-to-image|text-to-video|image-to-video|audio-sync|unknown","summary":"One sentence explaining the workflow","bindings":[{"role":"prompt","nodeId":"6","field":"text","mediaMode":"upload","note":"Explanation"}],"notes":"User guidance, such as required models or reference images"}`
 
 function toBinding(raw: any): ComfyInputBinding | null {
   const role = String(raw?.role || '').trim() as ComfyInputRole
@@ -197,7 +198,7 @@ function parseMapJson(text: string): ComfyInputMap | null {
   }
 }
 
-/** 助手不可用 / 分析失败时的规则兜底：采样器连线反查文本节点 + LoadImage 类节点。 */
+/** 분석을 사용할 수 없으면 샘플러 연결과 LoadImage 계열 노드에서 입력을 추정한다. */
 export function guessInputMap(payload: any): ComfyInputMap {
   const nodes = payload?.prompt && typeof payload.prompt === 'object' ? payload.prompt : payload
   const bindings: ComfyInputBinding[] = []
@@ -210,7 +211,7 @@ export function guessInputMap(payload: any): ComfyInputMap {
   }
   if (nodes && typeof nodes === 'object') {
     const map = nodes as Record<string, any>
-    // 1) 采样器连线反查
+    // 샘플러의 연결을 역추적한다.
     for (const node of Object.values(map)) {
       const inputs = node?.inputs
       if (!inputs || typeof inputs !== 'object') continue
@@ -228,7 +229,7 @@ export function guessInputMap(payload: any): ComfyInputMap {
         }
       }
     }
-    // 2) 兜底：按 CLIPTextEncode 出现顺序
+    // 대체 경로로 CLIPTextEncode가 나타나는 순서를 사용한다.
     if (!bindings.length) {
       const encoders = Object.entries(map).filter(
         ([, n]) =>
@@ -239,7 +240,7 @@ export function guessInputMap(payload: any): ComfyInputMap {
       if (encoders.length) mark('prompt', encoders[0][0], 'text')
       if (encoders.length > 1) mark('negative', encoders[1][0], 'text')
     }
-    // 3) 图片 / 音频输入
+    // 이미지 또는 오디오 입력을 찾는다.
     for (const [id, node] of Object.entries(map)) {
       const ct = String(node?.class_type || '')
       const inputs = node?.inputs
@@ -256,29 +257,29 @@ export function guessInputMap(payload: any): ComfyInputMap {
   return {
     version: 1,
     kind: bindings.some((b) => b.role === 'image') ? 'image-to-image' : 'unknown',
-    summary: bindings.length ? '规则兜底识别（助手分析未生效）' : '未识别到可注入的输入节点',
+    summary: bindings.length ? '규칙으로 추정한 입력 매핑(도우미 분석을 적용할 수 없음)' : '값을 주입할 수 있는 입력 노드를 찾지 못했습니다.',
     bindings,
     source: 'heuristic',
     analyzedAt: Date.now()
   }
 }
 
-/** 让助手读懂工作流并产出输入映射；失败时返回规则兜底结果。 */
+/** 도우미가 입력 매핑을 만들며 실패하면 규칙으로 추정한다. */
 export async function analyzeWorkflowWithLlm(
   payload: any,
   opts: { signal?: AbortSignal; timeoutMs?: number } = {}
 ): Promise<{ map: ComfyInputMap; error?: string }> {
   const brief = summarizeWorkflow(payload)
-  if (!brief) return { map: guessInputMap(payload), error: '工作流为空，无法分析' }
+  if (!brief) return { map: guessInputMap(payload), error: '워크플로가 비어 있어 분석할 수 없습니다.' }
   try {
-    // 延迟引入，避免与 adapters/runtime 形成静态循环依赖
+    // 어댑터와 런타임 사이의 정적 순환 참조를 막기 위해 나중에 가져온다.
     const { callLLM } = await import('./client')
     const resp = await callLLM({
       messages: [
         { role: 'system', content: ANALYZE_SYSTEM },
         {
           role: 'user',
-          content: `节点图：\n${brief}\n\n请输出输入映射 JSON。`
+          content: `Node graph:\n${brief}\n\nReturn the input mapping JSON.`
         }
       ],
       temperature: 0,
@@ -291,7 +292,7 @@ export async function analyzeWorkflowWithLlm(
     if (map && map.bindings.length) return { map }
     return {
       map: guessInputMap(payload),
-      error: map ? '助手没能定位到可注入的输入节点' : '助手返回内容无法解析为映射'
+      error: map ? '도우미가 값을 주입할 입력 노드를 찾지 못했습니다.' : '도우미 응답을 입력 매핑으로 해석할 수 없습니다.'
     }
   } catch (e: any) {
     if (opts.signal?.aborted) throw e
@@ -299,7 +300,7 @@ export async function analyzeWorkflowWithLlm(
   }
 }
 
-/** 反序列化：只保留结构完整的绑定，避免把脏数据存进接入配置。 */
+/** 역직렬화할 때 완전한 바인딩만 연결 설정에 저장한다. */
 export function sanitizeInputMap(raw: unknown): ComfyInputMap | undefined {
   if (!raw || typeof raw !== 'object') return undefined
   const o = raw as Record<string, any>
@@ -329,7 +330,7 @@ export function sanitizeInputMap(raw: unknown): ComfyInputMap | undefined {
   }
 }
 
-/** 丢掉指向不存在节点/字段的绑定，避免生成时写进脏数据。 */
+/** 존재하지 않는 노드나 필드를 가리키는 바인딩을 제거한다. */
 export function validateInputMap(payload: any, map: ComfyInputMap): ComfyInputMap {
   const nodes = payload?.prompt && typeof payload.prompt === 'object' ? payload.prompt : payload
   if (!nodes || typeof nodes !== 'object') return { ...map, bindings: [] }
@@ -346,7 +347,7 @@ export function validateInputMap(payload: any, map: ComfyInputMap): ComfyInputMa
 }
 
 export function describeInputMap(map: ComfyInputMap): string {
-  if (!map?.bindings?.length) return '没有可注入的输入'
+  if (!map?.bindings?.length) return '주입할 수 있는 입력이 없습니다.'
   return map.bindings
     .map((b) => {
       const base = `${COMFY_ROLE_LABEL[b.role]} → #${b.nodeId}.${b.field}`
@@ -356,16 +357,16 @@ export function describeInputMap(map: ComfyInputMap): string {
 }
 
 const KIND_LABEL: Record<ComfyWorkflowKind, string> = {
-  'text-to-image': '文生图',
-  'image-to-image': '图生图',
-  'text-to-video': '文生视频',
-  'image-to-video': '图生视频',
-  'audio-sync': '音频驱动',
-  unknown: '未识别'
+  'text-to-image': '텍스트→이미지',
+  'image-to-image': '이미지→이미지',
+  'text-to-video': '텍스트→영상',
+  'image-to-video': '이미지→영상',
+  'audio-sync': '오디오 기반',
+  unknown: '인식되지 않음'
 }
 
 export function describeWorkflowKind(kind: ComfyWorkflowKind): string {
-  return KIND_LABEL[kind] || '未识别'
+  return KIND_LABEL[kind] || '인식되지 않음'
 }
 
 export interface ComfyInjectValues {
@@ -384,13 +385,13 @@ export interface ComfyInjectValues {
   cfg?: number
   strength?: number
   batch?: number
-  /** 已上传到 Comfy 的文件名，key 为角色 */
+  /** 역할별로 저장한 ComfyUI 업로드 파일명 */
   uploaded?: Partial<Record<ComfyInputRole, string>>
 }
 
 /**
- * 按映射把本次生成的值写进节点。确定性操作，不做任何猜测。
- * 返回实际写入的条数与跳过原因，便于在界面上如实反馈。
+ * 매핑에서 지정한 노드에 이번 생성의 입력값을 넣는다.
+ * 화면에 표시할 실제 입력 수와 건너뛴 사유를 반환한다.
  */
 export function applyComfyInputs(
   payload: any,
@@ -401,23 +402,23 @@ export function applyComfyInputs(
   const skipped: string[] = []
   const list = map?.bindings || []
   if (!list.length) {
-    skipped.push('没有输入映射，工作流将按内部写死的内容运行')
+    skipped.push('입력 매핑이 없어 워크플로에 설정된 고정값을 사용합니다.')
     return { writes, skipped }
   }
   const nodes = payload?.prompt && typeof payload.prompt === 'object' ? payload.prompt : payload
   if (!nodes || typeof nodes !== 'object') {
-    skipped.push('工作流节点图无效')
+    skipped.push('워크플로 노드 그래프가 유효하지 않습니다.')
     return { writes, skipped }
   }
   for (const b of list) {
     const node = (nodes as Record<string, any>)[b.nodeId]
     if (!node?.inputs || typeof node.inputs !== 'object') {
-      skipped.push(`${COMFY_ROLE_LABEL[b.role]}：节点 #${b.nodeId} 不存在`)
+      skipped.push(`${COMFY_ROLE_LABEL[b.role]}의 노드 #${b.nodeId}이 없습니다.`)
       continue
     }
     const raw = (values as any)[b.role]
     if (raw === undefined || raw === null || raw === '') {
-      skipped.push(`${COMFY_ROLE_LABEL[b.role]}：本次没提供该输入`)
+      skipped.push(`${COMFY_ROLE_LABEL[b.role]} 입력이 이번 실행에 제공되지 않았습니다.`)
       continue
     }
     if (isMediaRole(b.role)) {
@@ -431,7 +432,7 @@ export function applyComfyInputs(
     if (isNumericRole(b.role)) {
       const num = Number(raw)
       if (!Number.isFinite(num)) {
-        skipped.push(`${COMFY_ROLE_LABEL[b.role]}：值不是数字`)
+        skipped.push(`${COMFY_ROLE_LABEL[b.role]} 값이 숫자가 아닙니다.`)
         continue
       }
       ;(node.inputs as Record<string, any>)[b.field] = Number.isInteger(num) ? Math.round(num) : num
@@ -444,7 +445,7 @@ export function applyComfyInputs(
   return { writes, skipped }
 }
 
-/** 该映射是否缺某个关键角色（用于生成前提醒） */
+/** 생성 전에 필수 역할이 빠졌는지 확인한다. */
 export function missingRoles(map: ComfyInputMap | undefined): ComfyInputRole[] {
   const roles = new Set((map?.bindings || []).map((b) => b.role))
   const missing: ComfyInputRole[] = []

@@ -1,17 +1,17 @@
 /**
- * IndexedDB 存储 —— 项目和素材都放这里
+ * 프로젝트와 소재를 저장하는 IndexedDB
  *
- * 四个 store：
- * - projects : 项目元数据（不含大文件）
- * - assets   : 素材二进制（按 ID 存 blob）
- * - thumbs   : 缩略图
- * - scripts  : 剧本库（元数据 + Markdown 正文）
+ * 객체 저장소 네 개를 사용한다.
+ * projects는 대용량 파일을 제외한 프로젝트 메타데이터를 저장한다.
+ * assets는 ID별 소재 Blob을 저장한다.
+ * thumbs는 썸네일을 저장한다.
+ * scripts는 대본 메타데이터와 Markdown 본문을 저장한다.
  */
 
 import { toRaw } from 'vue'
 import type { Asset, Project, ScriptDoc } from '@/types'
 
-/** IndexedDB structured clone 不能稳定处理 Vue Proxy，入库前先打成纯对象 */
+/** IndexedDB에 저장하기 전에 Vue 프록시를 일반 객체로 변환한다. */
 function toPlain<T>(value: T): T {
   return JSON.parse(JSON.stringify(toRaw(value)))
 }
@@ -90,7 +90,7 @@ export async function list<T>(store: StoreName): Promise<T[]> {
   })
 }
 
-// ============== 高层封装 ==============
+// 상위 저장 API
 
 export async function saveProject(project: Project): Promise<void> {
   await put('projects', toPlain(project))
@@ -109,7 +109,7 @@ export async function deleteProject(id: string): Promise<void> {
   await del('projects', id)
 }
 
-/** 存素材 */
+/** 소재를 저장한다. */
 export async function saveAsset(
   asset: Asset,
   blob: Blob,
@@ -154,7 +154,7 @@ export async function listLibraryAssets(): Promise<Asset[]> {
   return all.filter((a) => a.library).sort((a, b) => b.createdAt - a.createdAt)
 }
 
-// ============== 剧本库（Web 端） ==============
+// 웹 대본 라이브러리
 
 interface ScriptRecord {
   id: string
@@ -193,7 +193,7 @@ export async function delScript(id: string): Promise<void> {
   await del('scripts', id)
 }
 
-/** 估算存储用量 */
+/** 저장소 사용량을 추정한다. */
 export async function estimateStorage(): Promise<{ usage: number; quota: number }> {
   if (navigator.storage?.estimate) {
     const e = await navigator.storage.estimate()

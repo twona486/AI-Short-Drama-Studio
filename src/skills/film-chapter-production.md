@@ -1,88 +1,87 @@
 ---
 name: film-chapter-production
-description: 把导入的原创电影章节按现实主义制作流程推进为角色设计、场景锚点、彩色故事看板、MiniMax H3 分镜提示词和视频。仅用于 workflowMode=film-chapter 的普通项目，绝不用于视频复刻。
-triggers: 原创电影,电影章节,亲身经历,章节剧本,彩色故事板,四宫格,八宫格,现实主义
+description: Produce character design references, location anchors, color storyboard panels, MiniMax H3 prompts, and video for an original film chapter. Use only for workflowMode=film-chapter outside video remake.
+triggers: 原创电影,电影章节,亲身经历,章节剧本,彩色故事板,四宫格,八宫格,现实主义,오리지널 영화,영화 챕터,실화,챕터 대본,컬러 스토리 개요판,4분할,8분할,사실주의,original film,film chapter,color storyboard,realist film
 ---
 
-# 原创电影章节制作
+# Original film chapter production
 
-只在 `script.workflowMode === film-chapter` 且 `pipelineMode !== remake` 时使用。视频复刻是另一条管线：禁止调用或改写复刻分析、商品替换、抽帧模仿和复刻专用提示词。
+Use only when `script.workflowMode === film-chapter` and `pipelineMode !== remake`. Video remake uses a separate workflow. Do not call or rewrite its analysis, product replacement, frame imitation, or prompts.
 
-## 总原则
+## Principles
 
-- 导入的 Markdown 剧本是事实与叙事边界的唯一来源。先消除旧稿矛盾，再拆镜，禁止擅自续写下一章。
-- 真实、接地气、符合年代。人物像生活里的人，服装、建筑、车辆、招牌、家具和群众状态符合剧本年份与地区。
-- 先锁角色和地点，再出故事看板，再写 H3 提示词和出视频。任何一步不合格，不把错误批量传下去。
-- 每次保存独立版本，不覆盖用户认可的角色图、场景图、看板或视频。
+- The imported Markdown script defines the facts and story boundary. Resolve conflicts with earlier drafts before breaking down shots. Do not continue into the next chapter on your own.
+- Make people believable. Match clothing, architecture, vehicles, signs, furnishings, and crowds to the script's period and region.
+- Lock characters and locations first, then panels, then H3 prompts and videos. Do not send failed assets downstream in bulk.
+- Save each version separately. Preserve user-approved character images, location references, panels, and videos.
 
-## 开工检查
+## Before production
 
-1. 从剧本提取：章节边界、年份、地区、季节、天气、昼夜、身体状态、角色关系、关键道具。
-2. 建立连续性清单：上一镜末态 → 本镜变化 → 下一镜初态。特别检查衣服干湿、污渍、伤痛、饥饿、发型、手中物、人物朝向和地面状态。
-3. 若导入稿与用户后续修订冲突，先更新正式剧本并停下让用户确认。
-4. 用户说“全流程”才批量推进；否则每完成角色、场景或首批镜头后停一次。
+1. Extract chapter boundaries, year, region, season, weather, time of day, physical states, relationships, and key props.
+2. Build a continuity checklist: previous ending → current change → next opening. Check wet or dry clothing, stains, injury, hunger, hair, objects in hand, orientation, and the ground.
+3. If later user edits conflict with the import, update the canonical script and stop for user confirmation.
+4. Batch only on an explicit full-workflow request. Otherwise stop after characters, locations, and the first batch of shots.
 
-## 角色设计规范
+## Character design
 
-- 只为有台词、反复出现或承担关键动作的人建立独立角色。普通路人使用年代人群参考，不逐个设计。
-- 写实角色固定采用 16:9 四栏：左侧约 40% 为正面头肩大特写；右侧依次为全身正面、严格侧面、全身背面；细竖线分隔。
-- 无缝纯白背景（#FFFFFF）、均匀光、全身不裁脚。禁止灰色影棚、渐变或任何环境。四栏必须是同一张脸、年龄、身高、体型、发型、服装和磨损状态。
-- 身份参考优先级最高。服装参考只能改变服装，不得改变脸、年龄或族群。
-- 年龄要通过头身比例、下颌、肩宽、手脚和站姿表达，禁止把少年幼化或成人化。
+- Create individual designs for people with dialogue, recurring appearances, or key actions. Use period crowd references for passersby.
+- Use a 16:9 four-column realistic sheet: the left 40% is a large frontal head-and-shoulders close-up. On the right, show full-body front, strict side, and full-body back, separated by fine vertical lines.
+- Use seamless white (#FFFFFF), even light, and uncropped feet. Exclude gray studio backgrounds, gradients, and settings. Keep face, age, height, build, hair, wardrobe, and wear consistent.
+- Identity references take precedence. Clothing references may change clothing only, without modifying face, age, or ethnicity.
+- Convey age through head-to-body proportions, jaw, shoulders, hands, feet, and stance. Do not make youth look like children or adults.
 
-## 场景锚点规范
+## Location anchors
 
-- 场景图不出现人物。锁建筑结构、入口出口、地面、主锚、光源、天气、年代物件和可站位区域。
-- 同一段连续天气必须跨场保持：下雨就保留湿地、积水、反光、衣物湿润和遮雨设施，不能突然干燥。
-- 群戏场景先规定群众是否坐着、排队或移动。远景易变形时，减少走动者，让群众保持坐姿和微小动作。
+- Keep people out of the location image. Lock the structure, entrances, exits, ground, main anchor, light, weather, period objects, and blocking space.
+- Keep continuous weather across scenes. Carry wet ground, puddles, reflections, damp clothing, and shelter after rain.
+- For crowds, decide who is seated, in line, or moving. In distant views with unstable figures, reduce movement and use seated people with small gestures.
 
-## 故事看板规范
+## Storyboard panels
 
-- 默认生成彩色电影故事看板，不使用通用黑白六格。
-- 单一清晰动作使用 2×2 四宫格；9–10 秒、蒙太奇或多阶段动作使用 4×2 八宫格。
-- 从左上到右下展示同一个镜头或同一短段的时间推进：建立 → 犹豫/准备 → 核心动作 → 反应/结束。
-- 画面使用角色设计图和场景锚点作为强参考。跨格锁定脸、衣服、天气、地面、光源、屏幕方向和道具状态。
-- 正常上色、现实主义电影质感，不加编号、字幕、对白气泡、说明文字或水印。
-- 看板只提供动作和构图；送入视频模型时禁止复制宫格、边框或拼贴。
+- Use color film panels by default rather than a generic black-and-white six-panel sheet.
+- Use 2×2 for a single clear action and 4×2 for a 9–10-second shot, montage, or multi-stage action.
+- Read the same continuous shot or sequence from top left to bottom right: establish → hesitation or preparation → main action → reaction and ending.
+- Use character sheets and scene anchors. Preserve faces, costumes, weather, ground, light, screen direction, and prop state.
+- Use natural color and a realistic film look. Exclude numbers, subtitles, speech bubbles, captions, and watermarks.
+- Use panels for motion and composition only. Do not reproduce their borders, grids, or collage in video.
 
-## 分镜与内容表现
+## Shots and performance
 
-- 每镜 5–10 秒。画布一镜可以有对白往来；发给 H3 时写成内部 `[Shot 1]/[Shot 2]/[Shot 3]`，每句台词一个 d 标签。画外旁白使用 `h3-voiceover`，画中人物闭嘴。
-- 拆镜按戏剧拍点，不要压成十几条短视频口播。蒙太奇把同一意图的连续画面收进 8–10 秒一镜，写成看得见的动作，禁止写「时间流逝」。
-- `videoPrompt` 必须像导演说戏：从0秒到镜头结束按实际拍点分2–5段，每段写当前行动者、动作表情、说话人和原词、其他人物站位视线与反应、运镜与落点。说话者可以在后面。禁止合影看镜头，禁止机械等分填空，不要只写「禁止呆脸空眼」。
-- 改编原则写进每一镜：不拍伤口特写、不拍神像和宗教仪式、不把流浪汉拍成怪物或笑料。善意是端来一盆热水、让出一枚游戏币，不是救世主登场。
-- 运镜先服从情绪与模型稳定性。大全景、复杂建筑、多人背景优先固定镜头；只有叙事需要时才推、拉、摇或跟拍。
-- 选 H3 时按 `h3-prompt-writing` 写 `integrated_multimodal_description` + `overall_soundscape` + `non_diegetic_music`。人设/场景/看板不是 I2VA 首帧。
-- `[Shot 1]` 不加时间戳。后续内部镜写 `[Shot 2] At 00:03.000, ...`。不要写 `From 0.00s to 1.50s`。画布一镜一条成片；成片内部可切镜。运镜写成句内动作，例如 `The camera pushes in with small amplitude at slow speed`。
-- 风格、构图、人物外貌与声线写在 `[Shot 1]` 开头。人物用 `the man (S1)` 这种英文外貌 + 编号，禁止把中文名写进 d 标签外。
-- 对话只放在 `<d>[Chinese] 原词</d>`，每句一个标签。画外音用 `says in an off-screen voiceover` 并让嘴唇闭合。没有台词就明确 `No dialogue. No lips moving.`
-- `non_diegetic_music` 固定 `N/A`。
-- 人多的远景明确：谁能移动、谁必须坐着、是否允许穿越画面。禁止无关人员端菜、走动或抢镜。
-- 负面约束针对本镜风险写，不堆通用词。固定镜头要明确 no pan / no tilt / no zoom / no push-in。
+- Use 5–10 seconds per shot. Dialogue exchanges can stay in a canvas shot. For H3 use internal `[Shot 1]/[Shot 2]/[Shot 3]` as needed and one d tag per line. Use `h3-voiceover` for off-screen narration with closed on-screen mouths.
+- Split by dramatic beats, without flattening a chapter into a list of short narration fragments. Keep one montage intention in an 8–10-second shot and describe visible action, not a generic passage of time.
+- Write `videoPrompt` as English actor direction. Cover the full shot in 2–5 real beats and specify current actor, actions and expressions, speaker and original lines, others' blocking, eyelines and reactions, camera motion and endpoint. A speaker can be in the back. Avoid posing toward the camera, equal divisions, and generic notes about blank expressions.
+- Carry adaptation limits into each shot: avoid wound close-ups, religious icons and rituals, and framing a homeless person as monstrous or ridiculous. Show kindness through ordinary gestures such as bringing warm water or sharing a game token.
+- Choose motion for emotion and model stability. Prefer static wide shots for complex buildings or crowds, and push, pull, pan, or track only when justified.
+- For H3 follow `h3-prompt-writing` and use `integrated_multimodal_description`, `overall_soundscape`, and `non_diegetic_music`. Character and location references and panels are not I2VA first frames.
+- Leave `[Shot 1]` untimed. Use `[Shot 2] At 00:03.000, ...` for later internal cuts, without `From 0.00s to 1.50s`. One canvas shot produces one clip, which can contain internal cuts. Write camera movements in the action, such as `The camera pushes in with small amplitude at slow speed`.
+- Introduce style, framing, appearance, and voice at the start of `[Shot 1]`. Use English descriptions and speaker IDs such as `the man (S1)`.
+- Place dialogue only inside tags in the original language. Use `<d>[Korean] 대사 원문</d>` for Korean or `<d>[Chinese] verbatim line</d>` for Chinese. Use `says in an off-screen voiceover` and specify closed lips for off-screen narration. Without dialogue, write `No dialogue. No lips moving.`
+- Use `N/A` for `non_diegetic_music`.
+- In a distant crowd shot, say who can move, who stays seated, and who can cross the frame. Avoid irrelevant serving, walking, or attention-grabbing actions.
+- Write exclusions for this shot's real risks. A static shot explicitly rules out pan, tilt, zoom, and push-in.
+- Write final model prompts in English and preserve requested Korean (한국어) dialogue, narration, and visible text. Write user-facing descriptions and review notes in Korean (한국어).
 
-## 视频生成与质检
+## Quality checks
 
-逐镜检查：
+For each shot verify the following:
 
-- 阿峰等固定角色是否仍是同一张脸和正确年龄。
-- 衣服、头发、污渍、湿润、伤痛和体力是否承接上一镜。
-- 地点结构、天气、地面和光线有没有跳变。
-- 背景人物、手、碗筷、自行车等是否变形或凭空出现。
-- 动作是否在时长内完成；对白是否说完；非说话者是否闭嘴。
-- 年代中是否混入现代手机、豪车、服装、招牌或整洁程度。
+- Recurring people still have the same faces and correct ages.
+- Wardrobe, hair, dirt, wetness, injuries, and energy follow the prior shot.
+- The location structure, weather, ground, and light stay continuous.
+- Background people, hands, utensils, bikes, and other props do not deform or appear suddenly.
+- Action and dialogue finish within the duration and non-speakers keep their mouths closed.
+- Modern phones, luxury cars, clothes, signage, or an implausibly pristine location do not break the period.
 
-失败时只改一个主要问题并重试，最多两次。两次仍失败就暂停该镜，保留其他合格结果并报告具体原因。
+Fix one main problem per retry and try no more than twice. If both fail, pause that shot, keep successful outputs, and report the reason.
 
-## 批量节奏
+## Batch order
 
-全流程按下面顺序执行：
+1. Lock the canonical script.
+2. Extract characters, locations, shots, and continuity.
+3. Generate and review character design sheets.
+4. Generate and review empty location anchors.
+5. Generate color panels and H3 video for 3–5 representative shots.
+6. After approval, batch remaining panels and videos by location.
+7. Check quality, repair targeted issues, and write to the timeline.
 
-1. 锁定正式剧本。
-2. 提炼人物、场景、分镜与连续性。
-3. 生成并验收角色设计图。
-4. 生成并验收无人场景锚点。
-5. 先做 3–5 个代表性镜头的彩色故事看板和 H3 视频。
-6. 样片通过后，按场景批量生成剩余看板和视频。
-7. 自动质检、针对性返修、写入时间线。
-
-视频复刻项目永远不进入上述流程。
+Never route video remake through this workflow.
