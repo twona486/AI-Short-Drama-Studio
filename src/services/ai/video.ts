@@ -77,7 +77,7 @@ export interface VideoGenInput {
   imageSlots?: H3ImageSlot[]
   onScreenNames?: string[]
   duration: number
-  /** 独立连续拍计划已验证的时长上限；未传时保持原有接入行为。 */
+  /** 연속 촬영 계획에서 검증한 길이 상한이다. 값이 없으면 기존 연결의 규칙을 사용한다. */
   durationLimit?: number
   width: number
   height: number
@@ -721,7 +721,7 @@ async function realWorkflowVideo(
     } catch (error: any) {
       if (isTimeoutAbort(error, submitCtl.signal)) {
         throw new Error(
-          `[video] 提交超时（10 分钟），参考图约 ${referencePayloadMb.toFixed(1)} MB。请检查网络或减小参考图。`
+          `영상 생성 요청이 10분을 넘었어요. 참조 이미지가 약 ${referencePayloadMb.toFixed(1)}MB예요. 네트워크를 확인하거나 이미지 크기를 줄여 주세요.`
         )
       }
       throw new Error(
@@ -848,7 +848,7 @@ async function realWorkflowVideo(
   throw new Error(`[video] 영상 생성 시간이 30분을 초과했습니다.，task_id=${taskId}`)
 }
 
-/** 百炼 wan3.0-video-prime：单张首帧，多张走全能参考（reference_image）。分辨率跟节点选择，文档档位是 480P / 720P / 1080P。 */
+/** Bailian wan3.0-video-prime는 이미지 한 장을 시작 프레임으로, 여러 장을 reference_image로 사용한다. 해상도는 노드의 480P, 720P, 1080P 선택을 따른다. */
 async function realWanVideo(
   input: VideoGenInput,
   onProgress?: (msg: string) => void
@@ -900,8 +900,8 @@ async function realWanVideo(
     }
   }
 
-  const modeLabel = media[0]?.type === 'first_frame' ? '首帧' : `全能参考 ${media.length} 张`
-  onProgress?.(`提交万相任务（${wanQuality}，${modeLabel}，${targetDuration}s）...`)
+  const modeLabel = media[0]?.type === 'first_frame' ? '시작 프레임' : `통합 참조 ${media.length}장`
+  onProgress?.(`Wan에 작업을 요청하는 중… (${wanQuality}, ${modeLabel}, ${targetDuration}초)`)
   const auth = `Bearer ${apiKey}`
   const submitCtl = controlledSignal(input.signal, 10 * 60_000)
   let submitResp: AutodlHttpResult
@@ -919,7 +919,7 @@ async function realWanVideo(
     )
   } catch (error: any) {
     if (isTimeoutAbort(error, submitCtl.signal)) {
-      throw new Error('[video] 万相提交超时（10 分钟），请检查网络或减小参考图')
+      throw new Error('Wan 요청이 10분을 넘었어요. 네트워크를 확인하거나 참조 이미지 크기를 줄여 주세요.')
     }
     throw new Error(`[video] Bailian에 연결할 수 없습니다. ${error?.message || String(error)}`)
   } finally {
@@ -1177,7 +1177,7 @@ async function realZealmanVideo(
   if (!workflow) throw new Error(`[video] 인식할 수 없는 Zealman 워크플로 ${cfg.workflowId || '없음'}`)
 
   if (workflow.mode !== 'fl2va' && [input.imageBlob, ...(input.referenceImages || [])].filter(Boolean).length > workflow.maxImages) {
-    throw new Error(`[video] 当前工作流最多支持 ${workflow.maxImages} 张参考图，请减少参考图后再生成；不能静默丢弃图片，否则人物编号会失效。`)
+    throw new Error(`이 워크플로는 참조 이미지 ${workflow.maxImages}장까지 사용할 수 있어요. 참조 이미지를 줄인 뒤 다시 생성하세요.`)
   }
   const blobs = workflow.mode === 'fl2va'
     ? [input.imageBlob, input.lastFrameBlob].filter((item): item is Blob => Boolean(item))

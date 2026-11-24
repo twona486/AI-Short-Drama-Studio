@@ -68,7 +68,7 @@ assert.equal(validateCapturePlan({
   资产: fixture.assets.map(a => ({ id: a.id, 名称: a.name, 类型: a.kind === 'scene' ? '场景' : '角色', 提示词: a.prompt })),
   场景: fixture.scenes.map(s => ({ id: s.id, 名称: s.name, 原文: s.sourceText, assetIds: s.assetIds.map(id => fixture.assets.find(a => a.id === id).name), 起始画面: s.openingPrompt, 子镜头: s.segments.map(seg => ({ 标题: seg.title, 时长: `${seg.duration}秒`, 提示词: seg.prompt, 起幅: seg.startState, 落幅: seg.endState, 对白: seg.dialogue.map(line => ({ 说话人: line.speaker, 台词: line.text })) })) }))
 }, 15).scenes[0].assetIds[0], 'a')
-assert.throws(() => validateCapturePlan({ title: '只有标题' }, 15), /这次返回的字段是：title/)
+assert.throws(() => validateCapturePlan({ title: '只有标题' }, 15), /받은 필드: title/)
 const leet = JSON.parse(JSON.stringify(fixture).replace('"aesthetic"', '"43sth3t1c"').replace('"assets"', '"4ss3ts"').replace('"scenes"', '"sc3n3s"'))
 assert.equal(validateCapturePlan(leet, 15).scenes.length, 2)
 assert.deepEqual(parseCaptureVerdict('{"ok":true}'), { ok: true, reason: '' })

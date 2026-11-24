@@ -6,7 +6,7 @@
 :root {
   color-scheme: dark;
 
-  /* NEBULA · 深空控制台。首页星图仍用现有 banner，不换图。 */
+  /* NEBULA 어두운 테마. 홈 배경은 기존 배너를 사용한다. */
   --nb-void: #06080b;
   --nb-bg-0: #0a0d12;
   --nb-bg-1: #0e1219;
@@ -126,7 +126,7 @@
   --duration-slow: 320ms;
 }
 
-/* LUMEN · 浅色。与深色同一套变量，由 html[data-theme="light"] 切换。 */
+/* LUMEN 밝은 테마. 어두운 테마와 변수를 공유하며 html[data-theme="light"]로 전환한다. */
 :root[data-theme='light'] {
   color-scheme: light;
   --nb-void: #e8edf4;

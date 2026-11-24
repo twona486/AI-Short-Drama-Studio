@@ -8,7 +8,7 @@ export type DocVideoResolution = '480p' | '720p' | '768p' | '1080p'
 export interface ModelNodeOptions {
   /** 문서에서 지원하는 출력 해상도 옵션. 예를 들어 1K 또는 2K다. */
   imageResolutions?: DocImageResolution[]
-  /** 文档列出的视频分辨率，例如 480P / 720P / 1080P */
+  /** 공식 문서에 명시된 영상 해상도 값. 예: 480P, 720P, 1080P */
   videoResolutions?: DocVideoResolution[]
   /** 모델 문서에 오디오 설정이 있으면 true다. */
   videoAudio?: boolean
@@ -48,7 +48,7 @@ export function docVideoResolutionLabel(value: DocVideoResolution): string {
   return value.replace(/p$/, 'P')
 }
 
-/** 万相文档用 480P / 720P / 1080P。768p 仍按 H3 工作流原来的写法。 */
+/** Wan API에는 480P, 720P, 1080P를 사용한다. H3 워크플로의 768p 표기는 유지한다. */
 export function videoResolutionApiValue(value: DocVideoResolution): string {
   if (value === '768p') return '768p'
   return docVideoResolutionLabel(value)
@@ -102,7 +102,7 @@ function profileMentionsWan(profile?: { name?: string; workflowId?: string } | n
   return /wan/i.test(`${profile?.name || ''} ${profile?.workflowId || ''}`)
 }
 
-/** 文档写了哪些档就显示哪些。没写入选项的万相，按万相 3.0 文档给出 480P / 720P / 1080P。 */
+/** 문서가 지정한 해상도를 표시한다. 옵션이 없는 Wan 모델은 Wan 3.0 문서의 480P, 720P, 1080P를 사용한다. */
 export function videoResolutionChoices(input: {
   model?: VideoGenModel
   profile?: { name?: string; model?: string; workflowId?: string; options?: ModelNodeOptions } | null

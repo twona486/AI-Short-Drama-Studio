@@ -106,18 +106,18 @@ ${videos}`
 // 연결 설정 도구의 입력과 한국어 답변 규칙.
 const SYSTEM = `${settingsSkillRaw}
 
-Return JSON only: { "say": "User-facing message in Korean (한국어)", "actions": [ ... ] }.
+Return JSON only: { "say": "User-facing message in polite conversational Korean", "actions": [ ... ] }.
 Return at most eight actions. If required information is missing, ask in say and return actions=[]. When the documentation provides enough information, produce actions.
 
-可用工具：
-{ "tool": "add_profile", "kind": "vision|image|tts|video|llm", "name": "显示名", "provider": "预设id，可选", "baseUrl": "", "apiKey": "", "model": "", "models": ["可选"], "voice": "tts可选", "workflowId": "video可选", "promptStyle": "scene-narrative|formatted", "stillMode": "identity|keyframe|storyboard，video可选。H3用人设+场景填 identity，其它模型要关键帧填 keyframe", "options": { "imageResolutions": ["1k","2k"], "videoResolutions": ["480p","720p","1080p"], "videoAudio": true, "lastFrameRequired": false, "audioField": "audio" }, "adapter": { "type": "openai-compatible|openai-images|http-custom|comfyui-workflow|comfyui-prompt", "path": "可选", "pollPath": "可选含{id}", "resultJsonPath": "可选", "authHeader": "可选", "authPrefix": "可选，Bearer 或空", "workflowTemplate": "ComfyUI /prompt JSON，可用{{prompt}}{{image}}" } }
-{ "tool": "update_profile", "kind": "…", "id": "profile_id", "name": "可选", "baseUrl": "可选", "apiKey": "可选", "model": "可选", "models": ["可选"], "voice": "可选", "workflowId": "可选", "promptStyle": "可选", "options": "可选，同上", "adapter": "可选，同上" }
-{ "tool": "select_profile", "kind": "…", "id": "…", "model": "可选，设为当前模型" }
-{ "tool": "add_model", "kind": "llm|vision|image|tts", "id": "profile_id，可省略表示当前套", "model": "模型名" }
-{ "tool": "test_connection", "kind": "llm|vision|image|tts|video", "id": "可选，默认当前套" }
-{ "tool": "add_comfyui", "baseUrl": "http://127.0.0.1:8188", "apiKey": "可选", "kinds": ["image","video"], "test": true }
-{ "tool": "list_comfy_workflows", "kind": "image|video", "id": "可选 profile id" }
-{ "tool": "set_workflow_template", "kind": "image|video", "id": "可选", "workflowTemplate": "{...API Format JSON...}", "path": "可选，从 list 结果里的 path 拉取" }
+Available actions:
+{ "tool": "add_profile", "kind": "vision|image|tts|video|llm", "name": "display name", "provider": "optional preset ID", "baseUrl": "", "apiKey": "", "model": "", "models": ["optional"], "voice": "optional for TTS", "workflowId": "optional for video", "promptStyle": "scene-narrative|formatted", "stillMode": "identity|keyframe|storyboard，optional for video; choose identity for H3 cast and scene refs, keyframe when the model needs one", "options": { "imageResolutions": ["1k","2k"], "videoResolutions": ["480p","720p","1080p"], "videoAudio": true, "lastFrameRequired": false, "audioField": "audio" }, "adapter": { "type": "openai-compatible|openai-images|http-custom|comfyui-workflow|comfyui-prompt", "path": "optional", "pollPath": "optional, includes {id}", "resultJsonPath": "optional", "authHeader": "optional", "authPrefix": "optional, Bearer or empty", "workflowTemplate": "ComfyUI /prompt JSON，can use {{prompt}} and {{image}}" } }
+{ "tool": "update_profile", "kind": "…", "id": "profile_id", "name": "optional", "baseUrl": "optional", "apiKey": "optional", "model": "optional", "models": ["optional"], "voice": "optional", "workflowId": "optional", "promptStyle": "optional", "options": "optional, as above", "adapter": "optional, as above" }
+{ "tool": "select_profile", "kind": "…", "id": "…", "model": "optional, select this model" }
+{ "tool": "add_model", "kind": "llm|vision|image|tts", "id": "profile_id，omission uses the current profile", "model": "model name" }
+{ "tool": "test_connection", "kind": "llm|vision|image|tts|video", "id": "optional, defaults to the current profile" }
+{ "tool": "add_comfyui", "baseUrl": "http://127.0.0.1:8188", "apiKey": "optional", "kinds": ["image","video"], "test": true }
+{ "tool": "list_comfy_workflows", "kind": "image|video", "id": "optional profile id" }
+{ "tool": "set_workflow_template", "kind": "image|video", "id": "optional", "workflowTemplate": "{...API Format JSON...}", "path": "optional path from list results" }
 
 Presets (id | name | URL | default model | common models):
 LLM
@@ -131,22 +131,14 @@ ${catalog(TTS_PROVIDERS)}
 Video
 ${catalog(VIDEO_PROVIDERS)}
 
-注意：
-- 用户贴 API 文档或中转地址时：provider 必须是 custom，按文档原文抽 Base URL 和模型名，立刻 add_profile。禁止拒绝。
-- 文档同时含聊天 / 看图 / 生图时，每种 kind 各写一条，可共用同一套 Key 和地址。
-- Base URL 写到 /v1 这一层即可，不要带 /chat/completions 或 /images/generations。
-- 只有用户没给任何文档、只说「帮我配」时，才从上面的大厂预设里选。
-- 视频的 model 若没单独给 workflowId，就当作 workflowId。
-- 配音默认音色 longanhuan_v3.6，用户没提音色就用这个。
-- provider 对得上大厂预设、且用户没另给第三方地址时，用预设补全；用户给的 URL 与预设域名不一致时一律当 custom，不要改写成官方地址。
-- 自建 ComfyUI（如 http://127.0.0.1:8188）：优先用 add_comfyui 一次加生图+视频。用户只说「我的 ComfyUI 在 xxx」或只贴地址时立刻添加，不要追问模型名。
-- 有工作流 JSON 再写入 adapter.workflowTemplate；没有也不要拒绝添加，提醒出片前在设置页适配器粘贴。不要编造 AutoDL 生命周期或假工作流。
-- OpenAI 兼容中转：LLM/视觉用默认；生图若不是 /images/generations，设 adapter.type=http-custom 并填 path、resultJsonPath。
-- 写完接入后，若用户要求「测一下」，调用 test_connection。
-- options 只写文档里明确出现的节点参数，禁止编造。生图文档列出 1K/2K/4K 时，imageResolutions 只收录文档有的档位，写成小写 1k、2k、4k。文档没写分辨率就不要填 imageResolutions。
-- 视频文档列出 480P、720P、768P、1080P 时，videoResolutions 只收录文档有的档位，写成小写 480p、720p、768p、1080p。文档没写视频分辨率就不要填 videoResolutions。
-- 视频文档有音频开关时 videoAudio 才写 true，并把文档里的字段名写入 audioField（必须含 audio，例如 audio 或 generate_audio）。没有音频开关就不要写 videoAudio。
-- 尾帧默认不是必填。只有文档写明尾帧、结束帧或 last frame 必填时，lastFrameRequired 才写 true。文档没提尾帧，就不要写这个字段。`
+Requirements:
+- If the user supplied API documentation or a gateway URL, use provider custom and add the profile using the documented base URL and models. If the document covers chat, image understanding and image generation, add a profile for each covered kind, reusing the given key and address where applicable.
+- Use the base URL through /v1 without /chat/completions or /images/generations. Use presets when the user gives no documentation or when they specify a matching official provider with no third-party address. Never rewrite a custom address to a preset domain.
+- For video, use the model as workflowId when no separate workflowId is given. For TTS, default to longanhuan_v3.6 unless the user requests a voice.
+- For a self-hosted ComfyUI address, use add_comfyui for image and video unless the user restricts the kind. A bare address is sufficient. Store workflowTemplate when API Format JSON is provided. Without it, add the profile and ask the user to paste the workflow before generating. Do not fabricate workflow or AutoDL lifecycle details.
+- For OpenAI-compatible gateways, use default chat or vision handling. For an image route other than /images/generations, use http-custom with path and resultJsonPath. Run test_connection after creating a connection only when the user requests a test.
+- Copy only documented options. Normalize explicitly listed image resolutions to 1k, 2k or 4k and video resolutions to 480p, 720p, 768p or 1080p. Omit the resolution fields if the document does not list them.
+- Include videoAudio only if the API documents an audio toggle and set audioField to its documented name containing audio. Set lastFrameRequired only when the document explicitly requires a last frame.`
 
 function providersFor(kind: SetupKind): ProviderPreset[] {
   if (kind === 'llm') return LLM_PROVIDERS
@@ -749,8 +741,8 @@ export async function runSetupAgentTurn(
   const comfyTplEarly = extractComfyWorkflowTemplate(userText)
   if (comfyMention && !comfyTplEarly && userText.length < 400) {
     onProgress?.({ kind: 'step', step: 'comfy-quick', label: 'add_comfyui', status: 'running' })
-    const onlyVideo = /只要视频|仅视频|只加视频/.test(userText)
-    const onlyImage = /只要生图|仅生图|只加生图|只要出图/.test(userText)
+    const onlyVideo = /只要视频|仅视频|只加视频|영상만|비디오만/.test(userText)
+    const onlyImage = /只要生图|仅生图|只加生图|只要出图|이미지만|이미지 생성만/.test(userText)
     const kinds: Array<'image' | 'video'> = onlyVideo
       ? ['video']
       : onlyImage
@@ -807,7 +799,7 @@ export async function runSetupAgentTurn(
     const fallback = actionsFromDocs(userText)
     if (fallback.length) {
       parsed.actions = fallback
-      if (/无法|不能|不支持|拒绝|配不了/.test(parsed.say)) {
+      if (/无法|不能|不支持|拒绝|配不了|할 수 없|지원하지 않|연결하지 못/.test(parsed.say)) {
         parsed.say = '제공한 문서에 맞춰 사용자 지정 연결을 작성했습니다. API 키는 이 기기에만 저장합니다.'
       }
     }
@@ -849,7 +841,7 @@ export async function runSetupAgentTurn(
         workflowId: 'comfyui-local',
         adapter: { type: 'comfyui-prompt', workflowTemplate: comfyTpl }
       })
-      if (!parsed.say || /无法|不能|拒绝/.test(parsed.say)) {
+      if (!parsed.say || /无法|不能|拒绝|할 수 없|연결하지 못/.test(parsed.say)) {
         parsed.say = '제공한 ComfyUI 워크플로를 adapter.workflowTemplate에 저장했습니다. 로컬 ComfyUI에 해당 모델이 로드됐는지 확인한 뒤 영상을 생성하세요.'
       }
     }

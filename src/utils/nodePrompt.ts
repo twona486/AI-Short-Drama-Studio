@@ -191,10 +191,10 @@ export function subjectSendPrompt(subject: Subject, project: Project): string {
 export function sceneSendPrompt(scene: Scene, project: Project): string {
   const saved = scene.platePrompt?.trim()
   if (saved && /场景锚点图\s*\/\s*四宫格/.test(saved) && containsSceneDramaText(saved)) {
-    throw new Error('场景锚点提示词混入了人物对白或分镜剧情。请在场景分组点击“重新提取”，或手动修改场景和提示词后再生成；原有内容不会自动覆盖。')
+    throw new Error('장면 기준 이미지 프롬프트에 대사나 샷 내용이 들어 있어요. 장면을 다시 추출하거나 장면 설명과 프롬프트를 수정한 뒤 생성하세요.')
   }
   if (!saved && containsSceneDramaText(scene.description)) {
-    throw new Error('场景描述混入了人物对白或分镜剧情。请先重新提取场景，或手动修改场景描述后再生成。')
+    throw new Error('장면 설명에 대사나 샷 내용이 들어 있어요. 장면을 다시 추출하거나 설명을 수정한 뒤 생성하세요.')
   }
   return ensureStyleLock(scene.platePrompt?.trim() || defaultScenePlatePrompt(scene, project), project)
 }
@@ -212,7 +212,7 @@ export function boardSendPrompt(shot: Shot, project: Project): string {
 export function shotImageSendPrompt(shot: Shot, project: Project): string {
   const stored = shot.imagePrompt?.trim() || ''
   if (stored && (shot.voiceover || '').split('\n').some((line) => line.trim().length > 6 && stored.includes(line.trim()))) {
-    throw new Error('关键帧提示词仍夹带口播台词。请先在节点详情中重铺提示词，检查图片对应关系后再生成；原提示词未被覆盖。')
+    throw new Error('키프레임 프롬프트에 대사가 들어 있어요. 노드에서 프롬프트를 수정하고 참조 이미지 매핑을 확인한 뒤 생성하세요.')
   }
   return ensureStyleLock(shot.imagePrompt?.trim() || defaultShotImagePrompt(shot, project), project)
 }

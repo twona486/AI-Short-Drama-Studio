@@ -238,7 +238,7 @@ export interface Script {
   keywords: string[]
   /** 화풍. */
   style: VisualStyle
-  /** 用户后续明确修改的项目画风，优先于原剧本中的旧画风，不改正文。 */
+  /** 사용자가 나중에 바꾼 프로젝트 스타일은 원래 대본의 스타일보다 우선한다. 대본은 보존한다. */
   visualStyleOverride?: string
   /** 영상 화면 비율. */
   aspectRatio: AspectRatio
@@ -356,7 +356,7 @@ export interface ProjectSettings {
    * fl2va는 둘째 샷부터 이전 영상의 끝 프레임과 다음 샷의 참조 이미지를 연결한다.
    */
   h3ShotChainMode?: 'auto' | 'fl2va'
-  /** 创作偏好里的默认视频分辨率。1080p 仅 H3 v5 会真正出到 1080p。万相节点各自选择 480P / 720P / 1080P。 */
+  /** 제작 환경설정의 기본 영상 해상도다. H3에서 1080p 출력은 v5가 지원하며, Wan 노드는 480P, 720P, 1080P를 개별 선택한다. */
   defaultVideoResolution?: import('./canvas').VideoResolution
 }
 
@@ -392,11 +392,11 @@ export interface TimelineClip {
   speed: number
   /** 음량. 범위는 0~1이다. */
   volume: number
-  /** 这段画面上的配音。有值时导出优先叠这段，不再只用分镜口播。 */
+  /** 이 클립의 더빙이다. 설정돼 있으면 내보낼 때 스토리보드의 음성보다 먼저 사용한다. */
   voiceAssetId?: ID
-  /** 配音从音频的哪一秒开始 */
+  /** 더빙의 시작 위치를 초 단위로 나타낸다. */
   voiceSourceIn?: number
-  /** 配音音量 0-1 */
+  /** 더빙 음량 범위는 0~1이다. */
   voiceVolume?: number
   enabled: boolean
 }
@@ -550,11 +550,11 @@ export interface Project {
   playApproved?: boolean
   /** 에이전트 대화, 실행 내역, 자동 진행 선호도를 프로젝트에 저장한다. */
   agentState?: AgentWorkspaceState
-  /** 独立连续拍模式，不写入普通分镜流水线。 */
+  /** 연속 촬영 모드는 기존 스토리보드 제작과 독립적으로 진행한다. */
   continuousCaptureEnabled?: boolean
-  /** 用户明确选择的画风，独立于模型生成的美学描述。 */
+  /** 모델이 작성한 미술 설명과 별개로 사용자가 명시한 스타일이다. */
   visualStylePreference?: string
-  /** 连续拍等待用户确认画风时保留本次剧本。 */
+  /** 연속 촬영에서 스타일 확인을 기다리는 동안 현재 대본을 보관한다. */
   continuousPendingScript?: string
   continuousCapture?: import('@/services/continuous/model').CaptureState
   /**

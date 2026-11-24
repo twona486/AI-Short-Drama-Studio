@@ -375,7 +375,7 @@ export const useProjectStore = defineStore('project', () => {
     touch()
   }
 
-  /** 改提示词只停掉还没回来的旧任务。已经生成的视频留在节点上，下次点生成才按新词重做。 */
+  /** 프롬프트를 수정하면 완료되지 않은 이전 작업만 중지한다. 기존 영상은 보관하고 다음 생성에 새 프롬프트를 쓴다. */
   function setShotVideoPrompt(id: ID, value: string) {
     if (!current.value) return
     const idx = current.value.shots.findIndex((s) => s.id === id)
@@ -492,7 +492,7 @@ export const useProjectStore = defineStore('project', () => {
   }
 
   /** 음성 방식을 바꾸면 이전 영상을 이력으로 옮기고 해당 영상만 다시 생성한다. */
-  /** 修改口播配置不删除现有视频；新设置在用户主动生成时生效。 */
+  /** 더빙 설정을 바꿔도 기존 영상은 유지한다. 사용자가 새로 생성할 때 변경 사항을 적용한다. */
   function setShotAudioMode(id: ID, audioMode: ShotAudioMode) {
     if (!current.value) return
     const idx = current.value.shots.findIndex((s) => s.id === id)
@@ -576,7 +576,7 @@ export const useProjectStore = defineStore('project', () => {
     touch()
   }
 
-  /** 自由生成节点的 prompt 写入口。视频节点改词后保留已有成片；其它节点仍清掉旧输出。 */
+  /** 자유 생성 노드에서 프롬프트를 쓴다. 영상 노드는 기존 영상을 보관하고 다른 노드는 이전 결과를 비운다. */
   function setCanvasNodePrompt(id: string, prompt: string) {
     const node = current.value?.canvas?.nodes.find((n) => n.id === id)
     if (!node || (node.data.prompt ?? '') === prompt) return
@@ -673,7 +673,7 @@ export const useProjectStore = defineStore('project', () => {
         y: src.position.y
       },
       data: {
-        label: type === 'imageGen' ? `图片 ${count}` : type === 'audioGen' ? `音频 ${count}` : `视频 ${count}`,
+        label: type === 'imageGen' ? `이미지 ${count}` : type === 'audioGen' ? `오디오 ${count}` : `영상 ${count}`,
         prompt: src.data.prompt || '',
         referenceAssetIds: [...(src.data.referenceAssetIds ?? [])],
         referenceSourceNodeIds: [...(src.data.referenceSourceNodeIds ?? [])],

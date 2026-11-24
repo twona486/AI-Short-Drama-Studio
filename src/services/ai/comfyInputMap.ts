@@ -1,3 +1,4 @@
+import { t } from '@/i18n'
 /**
  * ComfyUI 워크플로의 입력 매핑
  *
@@ -61,24 +62,15 @@ export interface ComfyInputMap {
   analyzedAt?: number
 }
 
-export const COMFY_ROLE_LABEL: Record<ComfyInputRole, string> = {
-  prompt: '正向提示词',
-  negative: '负向提示词',
-  image: '参考图 / 首帧',
-  imageEnd: '尾帧',
-  mask: '蒙版',
-  audio: '音频',
-  seed: '随机种子',
-  width: '宽',
-  height: '高',
-  length: '时长 / 帧数',
-  megapixels: '分辨率（百万像素）',
-  fps: '帧率',
-  steps: '采样步数',
-  cfg: 'CFG',
-  strength: '재생성 강도',
-  batch: '배치'
+export const COMFY_INPUT_ROLES = [
+  'prompt', 'negative', 'image', 'imageEnd', 'mask', 'audio', 'seed', 'width', 'height',
+  'length', 'megapixels', 'fps', 'steps', 'cfg', 'strength', 'batch'
+] as const satisfies readonly ComfyInputRole[]
+
+export function comfyRoleLabel(role: ComfyInputRole) {
+  return t(`comfyInputRoles.${role}`)
 }
+
 
 const MEDIA_ROLES: ComfyInputRole[] = ['image', 'imageEnd', 'mask', 'audio']
 const NUMERIC_ROLES: ComfyInputRole[] = ['seed', 'width', 'height', 'length', 'megapixels', 'fps', 'steps', 'cfg', 'strength', 'batch']
@@ -126,18 +118,16 @@ export function summarizeWorkflow(payload: any, maxNodes = 160): string {
 // ComfyUI 그래프의 입력 바인딩을 분석하고 설명은 한국어로 반환한다.
 const ANALYZE_SYSTEM = `You are a ComfyUI workflow analyzer. Given an API Format graph, identify the exact node field for each external input so the app can inject the value at generation time.
 
-可选角色（role）：
-- prompt：正向提示词（文本）
-- negative：负向提示词（文本）
-- image：参考图 / 首帧（图片）
-- imageEnd：尾帧（仅首尾帧类工作流才有）
-- mask：蒙版图
-- audio：音频（数字人口播类）
-- seed：随机种子（整数）
-- width / height：宽高（整数）
-- length：沿连线找实际控制生成长度的标量入口；必须附 durationUnit: seconds 或 frames。不要映射视频保存节点的帧率、循环次数、固定采样步数或已经接线的字段。无法确定时省略。
-- megapixels：控制分辨率的百万像素值（例如 ResolutionSelector.megapixels）。
-- fps / steps / cfg / strength / batch：数值参数
+Available roles:
+- prompt or negative: positive or negative prompt text.
+- image: reference image or opening frame.
+- imageEnd: closing frame only when the workflow accepts one.
+- mask: mask image.
+- audio: audio for workflows that accept it, such as talking avatars.
+- seed, width, height: integer seed or dimensions.
+- length: follow graph links to the scalar that controls generated duration. Supply durationUnit as seconds or frames. Exclude output FPS, loop counts, fixed sampling steps and connected fields. Omit it if uncertain.
+- megapixels: resolution in megapixels, such as ResolutionSelector.megapixels.
+- fps, steps, cfg, strength, batch: numerical inputs.
 
 Rules:
 1. Select only fields that need external values. Keep fixed settings such as model names, VAE, and sampler names.
@@ -148,12 +138,12 @@ Rules:
 6. If a role cannot be located, omit it. Do not invent nodes or fields.
 7. When there are multiple candidates for a role, choose the one actually used in the generation graph.
 
-Write summary, binding notes, and notes for the user in Korean (한국어). Return JSON only:
+Write summaries and user-facing notes in natural, polite conversational Korean. Return JSON only:
 {"kind":"text-to-image|image-to-image|text-to-video|image-to-video|audio-sync|unknown","summary":"One sentence explaining the workflow","bindings":[{"role":"prompt","nodeId":"6","field":"text","mediaMode":"upload","note":"Explanation"}],"notes":"User guidance, such as required models or reference images"}`
 
 function toBinding(raw: any): ComfyInputBinding | null {
   const role = String(raw?.role || '').trim() as ComfyInputRole
-  if (!(role in COMFY_ROLE_LABEL)) return null
+  if (!COMFY_INPUT_ROLES.includes(role)) return null
   const nodeId = String(raw?.nodeId ?? raw?.node_id ?? raw?.node ?? '').trim()
   const field = String(raw?.field ?? raw?.input ?? '').trim()
   if (!nodeId || !field) return null
@@ -377,7 +367,7 @@ export function describeInputMap(map: ComfyInputMap): string {
   if (!map?.bindings?.length) return '주입할 수 있는 입력이 없습니다.'
   return map.bindings
     .map((b) => {
-      const base = `${COMFY_ROLE_LABEL[b.role]} → #${b.nodeId}.${b.field}`
+      const base = `${comfyRoleLabel(b.role)} → #${b.nodeId}.${b.field}`
       return b.note ? `${base}（${b.note}）` : base
     })
     .join('；')
@@ -418,7 +408,7 @@ export interface ComfyInjectValues {
   uploadedImages?: Record<string, string>
 }
 
-/** Ref2VA 按连线恢复槽位顺序，并按需扩容；未使用的默认图及连线必须保留。 */
+/** Ref2VA는 실제 연결 순서로 슬롯을 복원하고 필요한 만큼 늘린다. 사용하지 않은 기본 이미지와 연결은 보존한다. */
 export function fitComfyReferenceImages(payload: any, map: ComfyInputMap, count: number): ComfyInputMap {
   const imageBindings = map.bindings.filter(b => b.role === 'image')
   if (!Number.isSafeInteger(count) || count < 1 || count > 9) return map
@@ -436,7 +426,7 @@ export function fitComfyReferenceImages(payload: any, map: ComfyInputMap, count:
   if (!ids.length || imageBindings.some(b => !ids.includes(b.nodeId) || b.field !== 'image')) return map
   if (map.bindings.some(b => b.role !== 'image' && ids.includes(b.nodeId) && b.field === 'image')) return map
   const conditioningInputs = [...new Set(slots.map(slot => slot.inputs))]
-  // 以实际连线补齐旧映射，而不是把导入时保存的映射条数当作上限。
+  // 가져올 때 저장한 매핑 수를 상한으로 삼지 않고 실제 연결로 이전 매핑을 보완한다.
   if (conditioningInputs.some(inputs => {
     const local = slots.filter(slot => slot.inputs === inputs)
     return local.length !== ids.length || local.some((slot, index) =>
@@ -488,12 +478,12 @@ export function applyComfyInputs(
   for (const b of list) {
     const node = (nodes as Record<string, any>)[b.nodeId]
     if (!node?.inputs || typeof node.inputs !== 'object') {
-      skipped.push(`${COMFY_ROLE_LABEL[b.role]}의 노드 #${b.nodeId}이 없습니다.`)
+      skipped.push(`${comfyRoleLabel(b.role)}의 노드 #${b.nodeId}이 없습니다.`)
       continue
     }
     const raw = b.role === 'image' && values.uploadedImages ? values.uploadedImages[`${b.nodeId}:${b.field}`] : (values as any)[b.role]
     if (raw === undefined || raw === null || raw === '') {
-      skipped.push(`${COMFY_ROLE_LABEL[b.role]} 입력이 이번 실행에 제공되지 않았습니다.`)
+      skipped.push(`${comfyRoleLabel(b.role)} 입력이 이번 실행에 제공되지 않았습니다.`)
       continue
     }
     if (isMediaRole(b.role)) {
@@ -501,25 +491,25 @@ export function applyComfyInputs(
       const uploaded = b.role === 'image' && values.uploadedImages ? raw : values.uploaded?.[b.role]
       const value = mode === 'upload' && uploaded ? uploaded : String(raw)
       ;(node.inputs as Record<string, any>)[b.field] = value
-      writes.push(`${COMFY_ROLE_LABEL[b.role]} → #${b.nodeId}.${b.field}`)
+      writes.push(`${comfyRoleLabel(b.role)} → #${b.nodeId}.${b.field}`)
       continue
     }
     if (isNumericRole(b.role)) {
       if (b.role === 'length' && b.durationUnit !== 'seconds' && (b.durationUnit !== 'frames' || !values.fps)) {
-        skipped.push('时长映射未明确单位，或帧数映射缺少帧率')
+        skipped.push('영상 길이의 단위나 프레임률이 빠져 있어요.')
         continue
       }
       const num = b.role === 'length' && b.durationUnit === 'frames' ? Math.round(Number(raw) * values.fps!) : Number(raw)
       if (!Number.isFinite(num)) {
-        skipped.push(`${COMFY_ROLE_LABEL[b.role]} 값이 숫자가 아닙니다.`)
+        skipped.push(`${comfyRoleLabel(b.role)} 값이 숫자가 아닙니다.`)
         continue
       }
       ;(node.inputs as Record<string, any>)[b.field] = Number.isInteger(num) ? Math.round(num) : num
-      writes.push(`${COMFY_ROLE_LABEL[b.role]} → #${b.nodeId}.${b.field} = ${num}`)
+      writes.push(`${comfyRoleLabel(b.role)} → #${b.nodeId}.${b.field} = ${num}`)
       continue
     }
     ;(node.inputs as Record<string, any>)[b.field] = String(raw)
-    writes.push(`${COMFY_ROLE_LABEL[b.role]} → #${b.nodeId}.${b.field}`)
+    writes.push(`${comfyRoleLabel(b.role)} → #${b.nodeId}.${b.field}`)
   }
   return { writes, skipped }
 }

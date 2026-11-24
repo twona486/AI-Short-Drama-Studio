@@ -130,15 +130,15 @@ export interface CanvasNode {
     label?: string
     width?: number
     height?: number
-    /** 画布展示的等比尺寸倍率，与模型分辨率无关。 */
+    /** 캔버스에 표시하는 노드 크기의 비율이다. 모델 해상도에 영향을 주지 않는다. */
     canvasScale?: number
     kind?: string
     prompt?: string
-    /** 连续拍专用节点：使用独立调度，不进入普通生成流程。 */
+    /** 연속 촬영 전용 노드는 독립 대기열에서 실행한다. */
     captureId?: string
-    /** 连续拍计划的执行用 JSON，不在节点上直接展示。 */
+    /** 연속 촬영 계획을 실행할 JSON이다. 노드에서 원시 JSON을 직접 표시하지 않는다. */
     captureJson?: string
-    /** 提交后未取得任务ID时保守停止，避免网络异常造成重复付费。 */
+    /** 제출 뒤 작업 ID를 받지 못하면 중복 과금을 피하도록 자동 요청을 중단한다. */
     captureSubmissionPending?: boolean
     referenceAssetIds?: string[]
     /** 캔버스 연결에서 참조 이미지를 가져오는 상위 노드. 배열 순서대로 이미지 번호를 붙인다. */
@@ -152,7 +152,7 @@ export interface CanvasNode {
     videoProfileId?: string
     /** 영상 참조 방식. 모델을 바꿀 때 저장하며 키프레임 배치를 결정한다. */
     videoStillMode?: VideoStillMode
-    /** 这一镜的视频分辨率。万相可选 480P / 720P / 1080P，H3 v5 可选 768p / 1080p */
+    /** 이 샷의 영상 해상도다. Wan은 480P, 720P, 1080P, H3 v5는 768p와 1080p를 지원한다. */
     videoResolution?: VideoResolution
     /** 노드에서 선택하는 이미지 해상도. 모델 문서에 따라 1K, 2K, 4K를 사용한다. */
     imageResolution?: '1k' | '2k' | '4k'
@@ -164,7 +164,7 @@ export interface CanvasNode {
     lastFrameAssetId?: string
     /** 진행 중인 AutoDL 또는 완샹 작업. 재시도 시 기존 결과를 먼저 조회한다. */
     videoTaskId?: string
-    /** 音频节点选用的 TTS 模型。只有声音复刻类模型才使用参考音频。 */
+    /** 오디오 노드에서 선택한 TTS 모델이다. 음색 복제 모델만 참조 오디오를 사용한다. */
     ttsModel?: string
     referenceAudioAssetId?: string
     clonedVoiceId?: string

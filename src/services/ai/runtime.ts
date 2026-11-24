@@ -33,7 +33,7 @@ export function getLlmConfig() {
   }
 }
 
-/** 设置里打开了视觉开关，并且当前视觉接入填了地址、密钥和模型。 */
+/** 이미지 이해 기능이 켜져 있고 현재 연결의 주소, 키, 모델이 모두 설정돼 있어야 한다. */
 export function visionCallsEnabled(): boolean {
   const config = pick()
   const vision = config?.vision
@@ -119,7 +119,7 @@ export function getVideoConfig(profileId?: string) {
   const d = envDefaults().video
   const settings = pick()
   if (profileId && settings && !settings.videos?.some((profile) => profile.id === profileId)) {
-    throw new Error('此节点原来选用的视频接入已删除，请重新选择模型或工作流。')
+    throw new Error('이 노드에서 사용하던 영상 연결이 삭제됐어요. 모델이나 워크플로를 다시 선택하세요.')
   }
   let s = profileId
     ? settings?.videos?.find((profile) => profile.id === profileId) || settings?.video
@@ -149,7 +149,7 @@ export function getVideoConfig(profileId?: string) {
   const nativeComfy = s?.adapter?.type === 'comfyui-prompt'
   const comfyBaseUrl = (s?.baseUrl || '').trim().replace(/\/+$/, '')
   if (nativeComfy && (!comfyBaseUrl || isAutodlHost(comfyBaseUrl))) {
-    throw new Error('原生 ComfyUI 工作流没有有效的服务器地址。请在「ComfyUI 接入」中重新填写该工作流的 Base URL；不会回退到 AutoDL。')
+    throw new Error('ComfyUI 워크플로의 서버 주소가 올바르지 않아요. ComfyUI 연결에서 API 주소를 다시 입력하세요.')
   }
   return {
     baseUrl: nativeComfy ? comfyBaseUrl : migrateVideoBaseUrl(s?.baseUrl || d.baseUrl),

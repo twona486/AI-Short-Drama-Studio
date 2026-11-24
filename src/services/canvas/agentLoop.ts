@@ -120,7 +120,7 @@ export async function runAgentLoop(rawActions: unknown[], options: AgentLoopOpti
       if (options.signal?.aborted) throw new AgentToolError('작업을 취소했어요.', 'agent', 'cancelled')
       const action = actions.shift()!
       const stepKey = stepKeyOf(action)
-      const stepLabel = `${action.regenerate ? '重新' : ''}${TOOL_LABEL[action.tool] || action.tool}`
+      const stepLabel = `${action.regenerate ? '다시 ' : ''}${TOOL_LABEL[action.tool] || action.tool}`
 
       let preflight
       try {
@@ -242,7 +242,7 @@ export async function runAgentLoop(rawActions: unknown[], options: AgentLoopOpti
           const recovered = prepare(replacement).filter((item) => !alreadyGenerated(item, completed))
           const recoveryEstimate = estimateToolActions(recovered)
           if (budget > 0 && scheduledCalls + recoveryEstimate.calls > budget) {
-            options.onEvent({ kind: 'log', label: '恢复方案超过本轮调用预算，已停止；成功结果保留。' })
+            options.onEvent({ kind: 'log', label: '복구에 필요한 호출 수가 이번 작업 예산을 넘어 멈췄어요. 완료한 결과는 보관했어요.' })
           } else if (recovered.length) {
             scheduledCalls += recoveryEstimate.calls
             scheduledSeconds += recoveryEstimate.seconds

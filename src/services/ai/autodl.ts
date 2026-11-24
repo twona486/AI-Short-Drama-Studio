@@ -13,6 +13,7 @@ export const AUTODL_BASE_URL = VIDEO_AUTODL_ROOT
 
 export interface AutodlWorkflow {
   displayName?: string
+  legacyName?: string
   id: string
   name: string
   mode: 'standard' | 'fl2va' | 'audio-sync' | 'multi-audio'
@@ -59,10 +60,12 @@ export const AUTODL_WORKFLOWS: AutodlWorkflow[] = [
   },
   {
     id: VIDEO_H3_MULTI_AUDIO_WORKFLOW_ID,
-    name: 'H3多图多音频生视频(升级画质)',
+    name: 'H3 이미지·오디오 다중 참조 영상',
+    legacyName: 'H3多图多音频生视频(升级画质)',
+    get displayName() { return translate('autodlSettings.multiAudioName') },
     mode: 'multi-audio',
     maxDuration: 15,
-    note: '多张参考图配合多段音频，画质升级'
+    get note() { return translate('autodlSettings.multiAudioNote') }
   }
 ]
 

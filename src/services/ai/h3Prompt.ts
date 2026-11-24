@@ -164,7 +164,7 @@ export function isMessyH3Prompt(text: string): boolean {
   return /[㐀-鿿]/.test(stripAllowedCjk(t))
 }
 
-/** 允许保留 <d> 台词和用方头括号标记的剧情内屏显原文。 */
+/** <d> 대사와 【】로 표시한 극 중 화면 문구는 원문을 보존한다. */
 function stripAllowedCjk(text: string): string {
   return String(text || '').replace(/<d>\s*\[[^\]]+\]\s*[\s\S]*?<\/d>|【[^】\n]+】/gi, '')
 }
@@ -173,7 +173,7 @@ function cjkOutsideSpokenTags(text: string): boolean {
   return /[㐀-鿿]/.test(stripAllowedCjk(text))
 }
 
-/** 正文仍用英文，保留原语言台词和明确标记的剧情内文字。 */
+/** 본문은 영어로 작성하고 대사와 명시된 극 중 화면 문구는 원문을 보존한다. */
 export function stripCjkOutsideSpokenTags(text: string): string {
   const held: string[] = []
   const mask = (block: string) => {
@@ -675,7 +675,7 @@ function dialogueBlocks(input: H3PromptInput, lines: string[]): string {
     .join('\n\n')
 }
 
-/** 没台词时不要留下说话、嘴唇、对白这些词。H3 会把否定句也当成开口指令，并补英文台词。 */
+/** 대사가 없을 때는 말하기, 입술, 대사 등을 언급하지 않는다. H3는 부정문도 말하기 지시로 해석해 영어 대사를 만들 수 있다. */
 function stripSilentSpeechPriming(text: string): string {
   return text
     .replace(/<d>\s*\[[^\]]*\]\s*[\s\S]*?<\/d>/gi, '')
@@ -1373,7 +1373,7 @@ function isGenericActionDump(desc: string): boolean {
 
 type DialogueCue = { text: string; speaker?: string }
 
-/** 先保存每句的说话人，再清洗台词；支持换行及标点后紧跟下一位角色。 */
+/** 대사를 정리하기 전에 각 줄의 화자를 기록한다. 줄바꿈이나 문장부호 뒤에 바로 다음 화자가 나오는 경우를 지원한다. */
 function labeledVoiceoverCues(value: string): DialogueCue[] {
   const raw = String(value || '').replace(/\r\n?/g, '\n')
   const pattern = /(?:^|\n|(?<=[。！？!?]))\s*(?:\*\*)?([\u3400-\u9fffA-Za-z][\u3400-\u9fffA-Za-z0-9 _-]{0,11})(?:[（(][^）)\n]{0,16}[）)])?\s*[：:](?:\*\*)?\s*/g
@@ -1410,7 +1410,7 @@ function dialogueTurnIssue(desc: string, expected: DialogueCue[]): string {
   const tags = [...String(desc || '').matchAll(/<d>\s*\[[^\]]*\]\s*([\s\S]*?)<\/d>/gi)]
   if (tags.length !== expected.length) return `Expected ${expected.length} dialogue tags but found ${tags.length}.`
   for (let i = 0; i < tags.length; i += 1) {
-    if (sanitizeDialogue(tags[i][1] || '') !== expected[i].text) return `第 ${i + 1} 句台词与原文或顺序不一致`
+    if (sanitizeDialogue(tags[i][1] || '') !== expected[i].text) return `${i + 1}번째 대사가 대본 원문이나 순서와 달라요.`
     const index = tags[i].index || 0
     const lead = desc.slice(Math.max(0, index - 260), index)
     if (!/\(S\d+\)[^.\n]{0,180}\b(?:says?|asks?|shouts?|replies?|exclaims?|yells?|whispers?)\b[^.\n]{0,120}[:，,]?\s*$/i.test(lead)) {
@@ -1429,9 +1429,9 @@ function assertDialogueOwnership(input: H3PromptInput): void {
   const distinct = [...new Set(cues.map((cue) => bareSpeakerName(cue.speaker)).filter(Boolean))]
   if (distinct.length > 1) {
     const missing = distinct.filter((name) => !matchedSpeakerCode(input, name))
-    if (missing.length) throw new Error(`多角色台词无法匹配参考人物：${missing.join('、')}。请确认这些人物已加入本镜并关联人物参考图，然后重新优化。`)
+    if (missing.length) throw new Error(`대사의 화자를 참조 이미지와 연결할 수 없어요. (${missing.join(', ')}) 샷에 인물을 추가하고 참조 이미지를 연결한 뒤 다시 최적화하세요.`)
   } else if (!cues.length && people.length > 1 && !matchedSpeakerCode(input, input.speakerName)) {
-    throw new Error('本镜有多个人物，台词没有标明说话人。请在对白中逐行填写“人物名：台词”，然后重新优化。')
+    throw new Error('여러 인물이 나오지만 대사에 화자가 없어요. 각 줄을 ‘인물 이름: 대사’로 적은 뒤 다시 최적화하세요.')
   }
 }
 
@@ -1666,7 +1666,7 @@ export async function compileH3OfficialPrompt(input: H3PromptInput): Promise<str
 This is ONE generated clip. The field format is fixed, but the filmmaking is NOT a fill-in template. Read the dramatic event first, then author the shot around its unique action and emotional causality.
 
 Required output structure:
-1) START by copying the speaker lock verbatim. (S1) is permanently the first character picture, (S2) the second. Never renumber S by dialogue order, and never write 图1 or "this person's character design" instead of (S#).
+1) START by copying the speaker lock verbatim. (S1) is permanently the first character picture, (S2) the second. Never renumber S by dialogue order, and never write a bare picture number or "this person's character design" instead of (S#).
 (S1) is Person 1 / <Picture 1>. Lock face, hair, body, age and outfit. Identity reference only, not the first frame.
 (S2) is Person 2 / <Picture 2>. Lock face, hair, body, age and outfit. Identity reference only, not the first frame.
 <Picture 3> is the location Place 1. Lock space, materials, weather and light.
@@ -1703,7 +1703,7 @@ Rules:
 - Write direct, decisive filmmaking prose like a director describing the finished moving image. The format is a container, not a prose template.
 - English for action, camera, light, names, places and performance. Preserve the original language inside <d> dialogue and for exact visible diegetic text. Do not use Chinese names as subject labels in action prose. Write the actual blocking in English: who is left/right, what they hold, what a prop does over time.
 - In action prose, call people (S1), (S2) exactly as the speaker lock defines them. Do not invent a new S number per line. Do not anonymize a known character as “the man.” Recurring props keep the (P#) and <Picture N> written in the lock. When a hand touches that object, name that picture.
-- Spoken lines already extracted below are the ONLY dialogue. If the list is empty, do not write dialogue, speech, lips, mouths, voices, or the words "no dialogue". H3 treats those words as a cue to invent English lines. Describe only visible action and ambient sound. NEVER invent speech from 场记, timestamps, style, or the speaker lock. Never put 无 or director notes inside a d tag.
+- Spoken lines already extracted below are the ONLY dialogue. If the list is empty, do not write dialogue, speech, lips, mouths, voices, or the words "no dialogue". H3 treats those words as a cue to invent English lines. Describe only visible action and ambient sound. NEVER invent speech from scene notes, timestamps, style, or the speaker lock. Never put a placeholder meaning “none” or director notes inside a d tag.
 - MUST COPY the speaker-lock block below verbatim at the start of integrated_multimodal_description. Do not invent, omit, or reorder (S1)/(S2)/<Picture N>. If that lock says Picture 1 is the first frame, keep it that way: (S1) is the first character sheet, not Picture 1, and the location plate stays the scene picture named in the lock.
 - overall_soundscape names the script's real sounds (chip crunch, cushion rustle, room tone). Do not write a generic sentence such as "close breath stay synchronized with the picture. Spoken words appear only inside the d tag."
 - Delivery format is chosen by the app, not by you. Write the shot body only. Multimodal reference (R2VA) is wrapped into six sections: subject_definitions, summary, retention_analysis, detailed_description, overall_soundscape, non_diegetic_music. First-frame (I2VA), first-and-last-frame (FL2VA), last-frame (L2VA) and text-only (T2VA) stay three fields, with the official alignment line added outside your JSON. Do not emit those headers yourself.

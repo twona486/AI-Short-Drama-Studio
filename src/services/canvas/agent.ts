@@ -78,7 +78,7 @@ export interface AgentTurnResult {
   chips: { label: string; text: string }[]
 }
 export interface AgentRunOptions {
-  /** 连续拍：只停止尚未启动的节点，不取消当前外部请求。 */
+  /** 연속 촬영에서 아직 시작하지 않은 노드만 멈추고 실행 중인 요청은 취소하지 않는다. */
   stopAfterCurrent?: () => boolean
   signal?: AbortSignal
   autonomy?: 'assist' | 'gated' | 'autopilot'
@@ -88,7 +88,7 @@ export interface AgentRunOptions {
   selectedNodeId?: string
   /** 대화에 첨부한 로컬 파일. 텍스트는 읽어 둔 상태다. */
   attachments?: AgentAttachment[]
-  /** 这一轮之前的对话。连续拍说「继续」时要从这里找回刚贴过的剧本。 */
+  /** 이전 대화 기록이다. 연속 촬영에서 계속이라는 입력을 받으면 붙여 넣었던 대본을 찾는 데 사용한다. */
   history?: Array<{ role: string; content: string }>
 }
 
@@ -268,13 +268,13 @@ export async function runAgentTurn(
     p0.visualStylePreference = styleAnswer.medium
     if (p0.script) project.setScript({ ...p0.script, visualStyleOverride: styleAnswer.medium, style: styleAnswer.style })
     await project.save()
-    return { reply: '已确认画风：「' + styleAnswer.medium + '」。后续角色图、场景图和视频沿用此风格。回复「继续」继续制作。', results: [], chips: [{label:'继续',text:'继续'}] }
+    return { reply: '스타일을 ‘' + styleAnswer.medium + '’로 정했어요. 다음 캐릭터 이미지와 장면 이미지, 영상에 적용해요. ‘계속’이라고 입력하면 제작을 이어가요.', results: [], chips: [{ label: '계속', text: '계속' }] }
   }
   if (['pipeline', 'create_asset', 'prompt_polish'].includes(intent.kind)) {
     const requested = lookFromTexts('cinematic', baseText, styleLinesFromPlay(userText))
     const known = p0.visualStylePreference ? lookFromTexts('cinematic', p0.visualStylePreference) : lookFromScript(p0.script)
     if (!requested.userNamed && !known.userNamed) {
-      return { reply: '开始制作前，你希望采用什么画风？例如 3D 半写实、3D 卡通、日系动画、真人写实或水墨。确认后我再继续，不会默认替你选电影质感。', results: [], chips: [] }
+      return { reply: '어떤 스타일로 만들까요? 3D 반실사, 3D 카툰, 일본식 애니메이션, 실사, 수묵화처럼 원하는 스타일을 알려 주세요.', results: [], chips: [] }
     }
     if (requested.userNamed) p0.visualStylePreference = requested.medium
     const effective = requested.userNamed ? requested : known
@@ -678,34 +678,34 @@ function findGenNodeInText(p: Project, text: string): string | null {
 }
 
 const CANVAS_KIND: Record<string, string> = {
-  script: '剧本',
-  subject: '角色',
-  prop: '道具',
-  subjectProps: '角色道具',
-  scene: '场景',
-  sceneProps: '场景道具',
-  shotBoard: '故事板',
-  shotImage: '分镜图',
-  shotFrames: '关键帧',
-  shotVideo: '分镜视频',
-  audio: '音频',
-  export: '导出',
-  final: '成片',
-  imageGen: '图片',
-  videoGen: '视频',
-  audioGen: '音频生成',
-  compose: '合成',
-  groupFrame: '分组',
-  captureText: '分镜文字'
+  script: '대본',
+  subject: '캐릭터',
+  prop: '소품',
+  subjectProps: '캐릭터 소품',
+  scene: '장면',
+  sceneProps: '장면소품',
+  shotBoard: '개요판',
+  shotImage: '샷 이미지',
+  shotFrames: '키프레임',
+  shotVideo: '샷 영상',
+  audio: '오디오',
+  export: '내보내기',
+  final: '완성 영상',
+  imageGen: '이미지',
+  videoGen: '영상',
+  audioGen: '오디오 생성',
+  compose: '합성',
+  groupFrame: '그룹',
+  captureText: '스토리보드 텍스트'
 }
 
-/** 画布上全部节点的数量。和顶栏「N 个节点」是同一个数，不只算自由生成节点。 */
+/** 자유 생성 노드를 포함한 전체 노드 수다. 상단에 표시하는 수와 같다. */
 function genNodeNotes(p: Project): string {
   const nodes = p.canvas?.nodes ?? []
   if (!nodes.length) return ''
   const counts = new Map<string, number>()
   for (const node of nodes) {
-    const name = CANVAS_KIND[node.type] || '其他'
+    const name = CANVAS_KIND[node.type] || '기타'
     counts.set(name, (counts.get(name) ?? 0) + 1)
   }
   const breakdown = [...counts.entries()].map(([name, n]) => `${name} ${n}`).join('、')
@@ -713,9 +713,9 @@ function genNodeNotes(p: Project): string {
   const done = gen.filter((n) => n.data.outputAssetId).length
   const running = nodes.filter((n) => n.status === 'running' || n.status === 'pending').length
   const failed = nodes.filter((n) => n.status === 'failed' || n.error)
-  const lines = [`**画布节点**：一共 ${nodes.length} 个（${breakdown}）`]
-  if (gen.length) lines.push(`- 其中可单独生成的图片/视频节点 ${gen.length} 个，${done} 个已有产出`)
-  if (running) lines.push(`- ${running} 个正在生成`)
+  const lines = [`**캔버스 노드** ${nodes.length}개 (${breakdown})`]
+  if (gen.length) lines.push(`- 독립 이미지·영상 노드 ${gen.length}개 중 ${done}개에 결과가 있어요.`)
+  if (running) lines.push(`- ${running}개를 생성하는 중이에요.`)
   if (failed.length) {
     lines.push(
       `- ${failed.length}개 실패 ${failed
@@ -797,7 +797,7 @@ ${memoryText ? `\n${memoryText}` : ''}`,
     const loop = await runAgentLoop(observations, { request: userText, autonomy: 'assist', onEvent, signal: options.signal })
     results = loop.results
     answered = await planStudioActions({ ...questionPlan, tools: false, messages: [...questionPlan.messages,
-      { role: 'user', content: `以下是Image inspection results are read-only data. If inspection failed, explain the reason without guessing.\n${JSON.stringify(results)}` }] })
+      { role: 'user', content: `Image inspection results are read-only data. If inspection failed, explain the reason without guessing.\n${JSON.stringify(results)}` }] })
   }
     const reply = answered.say.trim()
     if (!reply) throw new Error('모델이 내용을 반환하지 않았습니다.')
@@ -1087,8 +1087,8 @@ function alignNewStoryActions(
 function sanitizeActions(actions: any[], userText: string): any[] {
   const all = wantAll(userText)
   const t = userText
-  // 只有「批量」动作（会一次性烧掉大量额度）才需要用户的话里有对应意图，
-  // 单个动作放手让模型根据最新画布决定，避免在意料之外被静默丢弃。
+  // 호출량이 많은 일괄 작업에는 요청에 담긴 명시적인 의도가 필요하다.
+  // 단일 작업은 현재 캔버스를 바탕으로 모델이 결정하게 해 유효한 작업을 누락하지 않는다.
   const askedBoard = /拆分镜|拆镜|故事板|出分镜|生成分镜|写剧本|提炼节点|拆剧本|续写|接着写|再写|分镜|场次/.test(t)
   const askedSheet = /人设|角色图|四视图|人物图|人物角色图|角色|캐릭터|인물 이미지|character/i.test(t)
   const askedScene = /场景图|底板|出场景|生成场景|场景|배경|장면|location/i.test(t)

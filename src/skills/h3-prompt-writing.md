@@ -30,7 +30,7 @@ Do not use `Picture 1 aligns with 0.00 seconds` for multimodal reference. Reserv
 
 ## Six sections for multimodal reference
 
-`subject_definitions` 写 `<Subject N> is EnglishName (S#) in <Picture N>`。名字用英文，不要写「中文名」。下面这段镜头正文放进 `detailed_description`，不要再外包一层 `integrated_multimodal_description`。首尾帧 / 首帧 / 尾帧 / 纯文本才用三段，而且对齐句在三段前面。
+In `subject_definitions`, use `<Subject N> is EnglishName (S#) in <Picture N>`. Put the shot direction in `detailed_description` without an enclosing `integrated_multimodal_description` section. Use the three-part format for first-and-last-frame, first-frame, last-frame, and text-only modes. Place any frame alignment statements before the three parts.
 
 ```text
 subject_definitions:

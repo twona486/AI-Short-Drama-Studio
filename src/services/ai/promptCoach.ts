@@ -117,8 +117,8 @@ function formatRules(input: OptimizeNodePromptInput, current: string): string {
 
   const shotBlock =
     input.kind === 'video'
-      ? `目标共 ${duration} 秒，保持用户已有切镜、时间标记和模型格式。在每个原有拍点内写清景别、机位与开幅、焦点、运镜方向和速度及落幅；补具体连续动作、道具或环境反馈、同步声与结束姿势。连续运镜不变成硬切，已有硬切不被省略。屏显原文逐字保留，补清位置、出现时间、停留和避让主体。禁止将具体镜头压成剧情摘要。`
-      : '这是静帧：只加厚已经能看见的画面，不要写时间流逝。'
+      ? `Target a total of ${duration} seconds. Preserve every existing cut, timestamp, and model-specific marker. For each beat, specify shot size, camera position, opening framing, focus, the direction and speed of camera movement, and final framing. Add continuous actions, prop or environmental reactions, synchronized sound, and the ending pose. Preserve continuous moves and existing hard cuts. Keep on-screen text verbatim and specify its position, timing, duration, and how it stays clear of the subject. Do not compress concrete shots into a plot summary.`
+      : 'This is a still frame. Enrich the visible details without describing the passage of time.'
 
   return `Improve the visual details already present in the prompt. Preserve its format.
 Task type: ${kindLabel}.
@@ -133,7 +133,7 @@ ${shotBlock}
 Required content rules
 - Do not invent plot details absent from the source.
 - Avoid boilerplate and reasoning. The prompt field must contain only the complete prompt for the generation model.
-Return JSON only: {"prompt":"Complete refined generation prompt in English","note":"One or two sentences in Korean (한국어) explaining what changed"}.`
+Return JSON only: {"prompt":"Complete refined generation prompt in English","note":"One or two sentences in Korean (한국어) explaining what changed in a polite conversational tone"}.`
 }
 
 async function askOnce(

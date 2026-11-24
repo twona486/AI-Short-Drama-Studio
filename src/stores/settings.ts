@@ -98,7 +98,7 @@ export interface AppSettings {
   vision: ServiceEndpoint
   visions: NamedEndpoint[]
   activeVisionId: string
-  /** 关掉时即使填了地址和密钥，也不会把图发给视觉模型。 */
+  /** 끄면 주소와 키가 있어도 이미지 이해 모델에 이미지를 보내지 않는다. */
   visionEnabled: boolean
   image: ServiceEndpoint
   images: NamedEndpoint[]
@@ -121,16 +121,16 @@ export interface AppSettings {
   music: ServiceEndpoint
   musics: NamedEndpoint[]
   activeMusicId: string
-  /** 用户导入的导演手册。在技能窗口里选中「我的技能」时使用。 */
+  /** 사용자가 가져온 연출 매뉴얼이다. 스킬 메뉴에서 내 스킬을 선택하면 사용한다. */
   directorSkill: DirectorSkillDoc | null
   /**
-   * 画布智能体当前分镜技能。
-   * storyboard-director = 通用；custom = 使用 directorSkill；其余为内置风格或短剧类型。
+   * 캔버스 에이전트가 현재 사용하는 스토리보드 스킬이다.
+   * storyboard-director는 기본, custom은 directorSkill을 사용한다. 나머지는 내장 방식이나 장르다.
    */
   activeStorySkillId: string
   storyStyleId: string
   storyGenreId: string
-  /** 内置短剧对白参考类型。 */
+  /** 내장 숏드라마 대사 참고 유형 */
   scriptReferenceType: string
 }
 
@@ -361,7 +361,7 @@ function hydrateTts(
   return { list, activeId: active.id, active: asTts(active) }
 }
 
-/** 已有 AutoDL Token 时，把后加的内置工作流补进接入列表。 */
+/** AutoDL 토큰이 있으면 추가된 기본 워크플로를 연결 목록에 보완한다. */
 function ensureBuiltinAutodlWorkflows(list: VideoProfile[]): VideoProfile[] {
   const donor = list.find((profile) => isAutodlVideoProfile(profile) && String(profile.apiKey || '').trim())
   const token = String(donor?.apiKey || '').trim()

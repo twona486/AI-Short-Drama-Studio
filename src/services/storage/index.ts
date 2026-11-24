@@ -145,7 +145,7 @@ function canvasCoverId(p: Project): string | undefined {
   return nodes.find(n => (n.type === 'imageGen' || n.type === 'shotImage') && n.data.outputAssetId)?.data.outputAssetId
 }
 
-/** 封面：一图生视频用第一个节点的第一张参考图；否则场景底板 → 人设 → 分镜配图 → 画布上已生成的图 */
+/** 이미지 기반 영상의 표지는 첫 노드의 첫 참조 이미지다. 그 외에는 장면 배경, 인물 시트, 스토리보드 이미지, 캔버스에서 만든 이미지 순으로 찾는다. */
 export function pickCoverAssetId(p: Project): string | undefined {
   if (p.pipelineMode === 'img2video') return firstImg2VideoCoverId(p)
   const plate = (p.scenes ?? []).find((s) => s.plateAssetId)?.plateAssetId

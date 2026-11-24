@@ -52,7 +52,7 @@ The exact video duration window, per-shot limit, verbatim dialogue, and required
 ${skill.body}`
 }
 
-/** 当前选中的分镜技能。通用手册不额外加一层。 */
+/** 현재 선택한 스토리보드 스킬이다. 기본 매뉴얼은 그대로 사용한다. */
 export function activeStorySkillOverlay(): string {
   let styleId = GENERAL_STORY_SKILL_ID
   let genreId = GENERAL_STORY_SKILL_ID
@@ -69,15 +69,15 @@ export function activeStorySkillOverlay(): string {
     if (imported) sections.push(manualText(imported))
   } else {
     const style = storySkillById(styleId)
-    if (style?.group === 'style') sections.push(`【镜头方式：${style.name}】\n${style.body}`)
+    if (style?.group === 'style') sections.push(`Shot style: ${style.name}\n${style.body}`)
   }
   const genre = storySkillById(genreId)
-  if (genre?.group === 'genre') sections.push(`【题材偏好：${genre.name}】\n${genre.body}`)
+  if (genre?.group === 'genre') sections.push(`Genre preference: ${genre.name}\n${genre.body}`)
   if (!sections.length) return ''
-  return `以下是创作倾向而非固定模板。用户明确要求、剧本事实、时长与模型能力优先；不适用时灵活调整，不要强行添加情节。\n\n${sections.join('\n\n')}`
+  return `Use these creative preferences as guidance. Prioritize the user request, script facts, duration and model capabilities. Adapt the guidance without inventing plot events.\n\n${sections.join('\n\n')}`
 }
 
-/** 通用分镜导演手册，再加上当前选中的风格或类型。导入的手册选中时整份替换这一层。 */
+/** 기본 스토리보드 연출 매뉴얼에 선택한 방식이나 장르를 추가한다. 가져온 매뉴얼을 선택하면 이 부분을 해당 매뉴얼로 바꾼다. */
 export function directorPlaybookText(): string {
   const base = getSkillBody('storyboard-director')
   const extra = activeStorySkillOverlay()
@@ -85,13 +85,13 @@ export function directorPlaybookText(): string {
   return `${base}\n\n${extra}`
 }
 
-/** 写剧本、拆镜和出提示词时插入当前技能。通用分镜不加这一层。 */
+/** 대본, 샷, 프롬프트 작성에 현재 스킬을 삽입한다. 기본 스토리보드에는 별도 지침을 추가하지 않는다. */
 export function importedDirectorPrefix(): string {
   const extra = activeStorySkillOverlay()
   return extra ? `${extra}\n\n` : ''
 }
 
-/** 给 H3 英文成片稿用：吸收当前技能的调度写法，输出格式仍是 (S#) 与 <d>。 */
+/** H3 영어 프롬프트에서 스킬의 동선과 연출을 따르되 (S#)와 <d> 형식을 유지한다. */
 export function importedDirectorForH3(): string {
   const extra = activeStorySkillOverlay()
   if (!extra) return ''

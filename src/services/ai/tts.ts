@@ -18,7 +18,7 @@ export interface TTSInput {
   language?: 'Chinese' | 'English' | 'Auto'
   /** 읽을 본문과 별도로 자연어로 말투를 지정한다. */
   instruction?: string
-  /** 节点自选模型。缺省时用当前配音配置。 */
+  /** 노드에서 모델을 따로 선택할 수 있다. 선택하지 않으면 현재 더빙 설정을 사용한다. */
   model?: string
   signal?: AbortSignal
 }
@@ -388,7 +388,7 @@ export async function generateSpeech(input: TTSInput): Promise<TTSOutput> {
   if (/^qwen3-tts/i.test(model) || /^qwen-tts/i.test(model)) {
     try {
       const origin = apiRoot.replace(/\/api\/v1$/i, '')
-      log(`→ multimodal 兜底 (${model}, ${voice})`)
+      log(`→ 다중 모달 대체 연결 (${model}, ${voice})`)
       const blob = await nativeQwen3Speech(
         origin,
         cfg.apiKey,

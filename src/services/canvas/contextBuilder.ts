@@ -12,18 +12,18 @@ export const MAX_DETAIL_SECTIONS = 5
 type SectionKey = 'script' | 'subjects' | 'scenes' | 'shots' | 'canvas'
 
 const SECTION_RULES: { key: SectionKey; test: RegExp }[] = [
-  { key: 'script', test: /剧本|故事|大纲|剧情|续写|题材|梗概|番外|主题|写一|改写|结尾|开头/ },
-  { key: 'subjects', test: /角色|人物|人设|主角|配角|四视图|谁演|性格|名字/ },
-  { key: 'scenes', test: /场景|地点|背景|底板|环境|在哪儿|哪里/ },
+  { key: 'script', test: /剧本|故事|大纲|剧情|续写|题材|梗概|番外|主题|写一|改写|结尾|开头|대본|이야기|개요|줄거리|이어 쓰|각색|결말|도입/ },
+  { key: 'subjects', test: /角色|人物|人设|主角|配角|四视图|谁演|性格|名字|캐릭터|등장인물|주인공|조연|4면|성격|이름/ },
+  { key: 'scenes', test: /场景|地点|背景|底板|环境|在哪儿|哪里|장면|장소|배경|환경|어디/ },
   {
     key: 'shots',
-    test: /分镜|镜|镜头|关键帧|画面|出图|配图|图生视频|视频|配音|口播|台词|旁白|运镜|景别/
+    test: /分镜|镜|镜头|关键帧|画面|出图|配图|图生视频|视频|配音|口播|台词|旁白|运镜|景别|스토리보드|샷|키프레임|영상|더빙|대사|내레이션|카메라|앵글/
   },
-  { key: 'canvas', test: /节点|画布|连线|参考图|选中|整理|删除|布局|生成节点|跑一下|图|是谁/ }
+  { key: 'canvas', test: /节点|画布|连线|参考图|选中|整理|删除|布局|生成节点|跑一下|图|是谁|노드|캔버스|연결선|참고 이미지|선택|정리|삭제|배치|누구/ }
 ]
 
 /** 전체 현황이 필요하면 데이터가 있는 구역을 최대치까지 추가한다. */
-const BROAD_ASK = /全流程|全部|整体|所有|检查|体检|什么问题|怎么样|状态|梳理|盘点/
+const BROAD_ASK = /全流程|全部|整体|所有|检查|体检|什么问题|怎么样|状态|梳理|盘点|전체|모두|검수|점검|어떤 문제|상태/
 
 function selectSections(userText: string, p: Project): SectionKey[] {
   const t = userText

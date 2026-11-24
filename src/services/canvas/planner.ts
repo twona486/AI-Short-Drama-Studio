@@ -31,15 +31,15 @@ export function stepKeyOf(action: AgentToolAction): string {
 }
 
 function stepTitle(action: AgentToolAction): string {
-  const label = `${action.regenerate ? '重新' : ''}${TOOL_LABEL[action.tool] || action.tool}`
-  if (action.tool === 'inspect_canvas_image' && action.referenceIndex) return `${label} · 图${action.referenceIndex}`
+  const label = `${action.regenerate ? '다시 ' : ''}${TOOL_LABEL[action.tool] || action.tool}`
+  if (action.tool === 'inspect_canvas_image' && action.referenceIndex) return `${label} · 참조 이미지 ${action.referenceIndex}`
   if (action.tool === 'optimize_node_prompt' || action.tool === 'update_node' || action.tool === 'run_node') {
     return action.nodeId ? `${label} ${action.nodeId}` : label
   }
   return label
 }
 
-/** 与执行器一致，保留用户计划的顺序，批量重做按目标展示。 */
+/** 실행 순서대로 계획을 표시한다. 일괄 재생성은 대상별로 표시한다. */
 export function buildPlanFromActions(actions: AgentToolAction[], intentLabel: string): AgentPlan {
   const sorted = uniqueActions(expandRegeneration(actions, useProjectStore().current))
   const estimate = estimateToolActions(sorted)

@@ -165,30 +165,30 @@ export function timedBeatCount(text: string): number {
   return ((text || '').match(/\d+(?:\.\d+)?\s*(?:秒|초|s)?\s*[–\-~到至]\s*\d+(?:\.\d+)?\s*(?:秒|초|s)/gi) || []).length
 }
 
-/** 只验收时间轴正文；图号清单和出场锁定不计入细节。 */
+/** 시간 구간 본문을 검증한다. 참조 이미지 목록과 등장인물 정보는 묘사 분량에 포함하지 않는다. */
 export function directorTimelineIssue(text: string, duration?: number): string | null {
   const body = text.split(/\n\s*(?:出场|转场|등장|장면 전환|cast|transition)\s*[:：]/i)[0]
   const ranges = [...body.matchAll(/(?:^|[^\d.])([0-9]+(?:\.[0-9]+)?)\s*(?:秒|초|s)?\s*[-–—~～到至]\s*([0-9]+(?:\.[0-9]+)?)\s*(?:秒|초|s)(?=\s*[）)】：:]|\s|$)/gi)]
-  if (ranges.length < 2) return '缺少分段导演时间轴（至少两段）'
+  if (ranges.length < 2) return '연출 시간 구간을 두 개 이상 적어 주세요.'
   let end = 0
   for (const range of ranges) {
     const start = Number(range[1])
     const next = Number(range[2])
-    if (Math.abs(start - end) > 0.001 || next <= start) return '时间轴有跳秒、重叠或倒序；必须从 0 秒连续覆盖本镜'
+    if (Math.abs(start - end) > 0.001 || next <= start) return '0초부터 샷이 끝날 때까지 시간 구간을 겹치거나 비우지 않고 순서대로 적어 주세요.'
     end = next
   }
-  if (duration && Math.abs(end - duration) > 0.001) return `时间轴止于 ${end} 秒，与本镜 ${duration} 秒不一致`
+  if (duration && Math.abs(end - duration) > 0.001) return `시간 구간이 ${end}초에서 끝나요. 샷 길이인 ${duration}초에 맞춰 주세요.`
   const camera = /景别|特写|近景|中景|全景|远景|微距|机位|俯拍|仰拍|侧拍|过肩|构图|固定|跟拍|跟移|拉远|后撤|推近|焦点|景深|连续拉|沿原轴|镜头(?:慢|缓|匀|向|从|沿|停|不动|保持)|클로즈업|구도|카메라|앵글|초점|트래킹|\b(?:shot|framing|angle|macro|camera|focus|pans?|track(?:s|ing)?|locked.off|wide|close.up|foreground)\b/i
   const beats = ranges.map((range, i) => body.slice(range.index! + range[0].length, ranges[i + 1]?.index ?? body.length)
     .replace(/(?:镜头|샷|beat|shot)\s*\d+\s*[（(【]?/giu, '').trim())
   const length = (beat: string) => beat.replace(/[\s\p{P}]/gu, '').length
-  if (beats.some(beat => length(beat) < 36 || !camera.test(beat))) return '部分拍点只是剧情摘要；逐段补机位或构图、运镜起落与连续动作细节'
+  if (beats.some(beat => length(beat) < 36 || !camera.test(beat))) return '각 구간에 카메라의 위치나 구도, 움직임의 시작과 끝, 이어지는 동작을 적어 주세요.'
   const min = end >= 10 ? 210 : end >= 7 ? 150 : 105
-  if (beats.reduce((sum, beat) => sum + length(beat), 0) < min) return '动态正文缺少可拍细节；补足景别、焦点、动作过程、环境反馈及结束姿势，不要用身份锁定凑字数'
+  if (beats.reduce((sum, beat) => sum + length(beat), 0) < min) return '샷 크기, 초점, 동작 과정, 주변 변화와 마지막 자세를 구체적으로 적어 주세요.'
   return null
 }
 
-/** 自动补写必须逐字保留旧稿中已标明的屏显，不接受缩写或调换次序。 */
+/** 자동 보완 때 명시된 화면 속 문구를 줄이거나 순서를 바꾸지 않고 보존한다. */
 export function preservesScreenText(previous: string, next: string): boolean {
   let from = 0
   for (const [, literal] of previous.matchAll(/【([^】\n]+)】/g)) {
@@ -200,15 +200,15 @@ export function preservesScreenText(previous: string, next: string): boolean {
   return true
 }
 
-/** H3 用英文正文和自己的分镜格式，不套中文时间段校验。 */
+/** H3는 영어 본문과 전용 샷 형식을 사용하므로 기존 중국어 시간 구간 검증을 적용하지 않는다. */
 export function h3DirectorBodyIssue(body: string, duration: number): string | null {
   const prose = body
     .replace(/<d>[\s\S]*?<\/d>/gi, ' ')
     .replace(/Speaker lock \(these labels are the pictures\):[\s\S]*?(?=\d+[:.]\d+|\b(?:at|from)\s+\d+|$)/i, ' ')
   const words = prose.match(/[a-z]+(?:[-'][a-z]+)*/gi)?.length || 0
-  if (words < (duration >= 10 ? 105 : duration >= 7 ? 75 : 45)) return '动态正文过短，须写足连续表演与摄影调度，身份和台词不计入'
+  if (words < (duration >= 10 ? 105 : duration >= 7 ? 75 : 45)) return '연출 설명이 너무 짧아요. 인물 소개와 대사 외에 이어지는 연기와 카메라 동선을 구체적으로 적어 주세요.'
   if (!/\b(?:close[- ]?up|wide shot|medium shot|low[- ]angle|over[- ]the[- ]shoulder|eye[- ]level|framing|foreground|macro|profile)\b/i.test(prose) ||
-      !/\b(?:camera|lens|focus|dolly|tracks?|pans?|tilts?|push(?:es)?|pulls?|locked[- ]off)\b/i.test(prose)) return '动态正文缺少具体景别、机位或运镜焦点'
+      !/\b(?:camera|lens|focus|dolly|tracks?|pans?|tilts?|push(?:es)?|pulls?|locked[- ]off)\b/i.test(prose)) return '연출 설명에 샷 크기, 카메라 위치 또는 초점을 구체적으로 적어 주세요.'
   return null
 }
 

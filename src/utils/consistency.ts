@@ -113,7 +113,7 @@ export interface VideoRefEntry {
   name?: string
 }
 
-/** identity 不要求生成关键帧，但已存在的关键帧可作为多模态参考。 */
+/** identity 모드에서는 키프레임을 새로 만들 필요가 없다. 기존 키프레임이 있으면 다중 참조에 사용할 수 있다. */
 export function collectShotVideoEntries(shot: Shot, project: Project): VideoRefEntry[] {
   const omitted = new Set(shot.omittedRefAssetIds ?? [])
   const stillMode = stillModeForShot(shot, project)

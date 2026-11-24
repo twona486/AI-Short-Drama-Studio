@@ -181,7 +181,7 @@ export function preflightRegisteredTool(raw: unknown): ToolPreflight {
   if (!project) return { state: 'ready' }
 
   if (action.tool === 'extract_cast' && !action.extractStage && !nextExtractStage(project)) {
-    return { state: 'skip', detail: '人物、场景和分镜已经提炼完毕；没有重复提取。重画图片应使用生成工具。' }
+    return { state: 'skip', detail: '캐릭터, 장면과 스토리보드 추출을 마쳤어요. 이미지를 다시 그리려면 생성 도구를 사용하세요.' }
   }
 
   if (action.tool === 'extract_cast' && !(project.script?.playReady && project.script.content?.trim())) {
@@ -194,8 +194,8 @@ export function preflightRegisteredTool(raw: unknown): ToolPreflight {
 
   if (action.tool === 'generate_shot_image') {
     const shot = shotFor(action)
-    if (!shot) throw new AgentToolError(`找不到分镜 ${action.shotId}`, action.tool, 'invalid_action', true)
-    if (shot.imageAssetId && !action.regenerate) return { state: 'skip', detail: `第 ${shot.index + 1} 镜关键帧已经存在` }
+    if (!shot) throw new AgentToolError(`샷을 찾을 수 없어요. (${action.shotId})`, action.tool, 'invalid_action', true)
+    if (shot.imageAssetId && !action.regenerate) return { state: 'skip', detail: `${shot.index + 1}번 샷의 키프레임이 이미 있어요.` }
     if (stillModeForShot(shot, project) !== 'keyframe') {
       return { state: 'skip', detail: `${shot.index + 1}번 샷의 영상 모델에는 키프레임이 필요 없습니다.` }
     }
@@ -237,7 +237,7 @@ export function preflightRegisteredTool(raw: unknown): ToolPreflight {
     if (!shot) throw new AgentToolError(`스토리보드 샷 ${action.shotId}을 찾을 수 없습니다.`, action.tool, 'invalid_action', true)
 
     if (action.tool === 'generate_video') {
-      if (shot.videoAssetId && !action.regenerate) return { state: 'skip', detail: `第 ${shot.index + 1} 镜视频已经存在` }
+      if (shot.videoAssetId && !action.regenerate) return { state: 'skip', detail: `${shot.index + 1}번 샷의 영상이 이미 있어요.` }
       const fl2vaShot = shotUsesFrames(shot, project)
       const stillMode = stillModeForShot(shot, project)
       if (!fl2vaShot && stillMode === 'storyboard' && !shot.boardAssetId) {
@@ -276,8 +276,8 @@ export function preflightRegisteredTool(raw: unknown): ToolPreflight {
     }
 
     if (action.tool === 'generate_audio') {
-      if (!needsExternalTts(shot, project)) return { state: 'skip', detail: `第 ${shot.index + 1} 镜由 H3 负责声音，不需要独立 TTS` }
-      if (shot.audioAssetId && !action.regenerate) return { state: 'skip', detail: `第 ${shot.index + 1} 镜口播已经存在` }
+      if (!needsExternalTts(shot, project)) return { state: 'skip', detail: `${shot.index + 1}번 샷의 음성은 H3에서 만들어요.` }
+      if (shot.audioAssetId && !action.regenerate) return { state: 'skip', detail: `${shot.index + 1}번 샷의 더빙이 이미 있어요.` }
     }
 
     if (action.tool === 'generate_shot_board') {
@@ -286,8 +286,8 @@ export function preflightRegisteredTool(raw: unknown): ToolPreflight {
         return { state: 'skip', detail: `${shot.index + 1}번 샷의 영상 모델에 스토리 개요판이나 키프레임이 필요 없습니다.` }
       }
       if (stillMode === 'keyframe') {
-        if (shot.imageAssetId && !action.regenerate) return { state: 'skip', detail: `第 ${shot.index + 1} 镜关键帧已经存在` }
-      } else if (shot.boardAssetId && !action.regenerate) return { state: 'skip', detail: `第 ${shot.index + 1} 镜故事看板已经存在` }
+        if (shot.imageAssetId && !action.regenerate) return { state: 'skip', detail: `${shot.index + 1}번 샷의 키프레임이 이미 있어요.` }
+      } else if (shot.boardAssetId && !action.regenerate) return { state: 'skip', detail: `${shot.index + 1}번 샷의 개요판이 이미 있어요.` }
       const subjectIds = shot.subjectIds?.length ? shot.subjectIds : (project.subjects ?? []).map((subject) => subject.id)
       const missingFour = (project.subjects ?? []).filter(
         (subject) => subjectIds.includes(subject.id) && !subject.designSheetAssetId
@@ -371,8 +371,8 @@ export function verifyRegisteredTool(raw: unknown): string | null {
     case 'continue_play':
       return project.script?.playReady && project.script.content?.trim() ? null : '전체 대본이 프로젝트에 저장되지 않았습니다.'
     case 'extract_cast':
-      if (action.extractStage === 'scenes') return project.scenes?.length ? null : '场景节点没有成功写入项目'
-      if (action.extractStage === 'shots') return project.shots.length ? null : '分镜节点没有成功写入项目'
+      if (action.extractStage === 'scenes') return project.scenes?.length ? null : '프로젝트에 장면 노드를 넣지 못했어요.'
+      if (action.extractStage === 'shots') return project.shots.length ? null : '프로젝트에 스토리보드 노드를 넣지 못했어요.'
       return (project.subjects ?? []).length ? null : '캐릭터 노드가 프로젝트에 저장되지 않았습니다.'
     case 'generate_sheet': {
       const subject = (project.subjects ?? []).find((item) => item.id === action.subjectId)
@@ -481,7 +481,7 @@ const definitions: ToolDefinition[] = [
     name: 'inspect_canvas_image', phase: 0, timeoutMs: 135_000, required: ['nodeId'], estimate: oneLlm,
     async execute(action, ctx) {
       const { inspectCanvasImage } = await import('./agentMedia')
-      ctx.onLog('正在用视觉模型核对画布图片…')
+      ctx.onLog('이미지 이해 모델로 캔버스 이미지를 확인하는 중…')
       return inspectCanvasImage(action.nodeId!, action.referenceIndex, action.text, ctx.signal)
     }
   },
@@ -497,12 +497,12 @@ const definitions: ToolDefinition[] = [
     async execute(action) {
       const project = useProjectStore()
       const script = project.current?.script
-      if (!script) throw new AgentToolError('当前没有剧本，无法设置项目画风', action.tool, 'invalid_action')
+      if (!script) throw new AgentToolError('대본이 없어요. 대본을 만든 뒤 프로젝트 스타일을 선택하세요.', action.tool, 'invalid_action')
       const visualStyleOverride = action.text!.trim()
       project.setScript({ ...script, visualStyleOverride,
         style: inferVisualStyleFromText(visualStyleOverride) || script.style })
       await project.save()
-      return `已设置项目画风：${visualStyleOverride}。后续生成沿用此风格；未改剧本、台词，也未删除或自动重生已有素材。`
+      return `프로젝트 스타일을 ‘${visualStyleOverride}’로 설정했어요. 다음 생성부터 적용해요.`
     }
   },
   {
@@ -996,7 +996,7 @@ const definitions: ToolDefinition[] = [
       }
 
       if (!blocking.length && !warnings.length) {
-        return `体检通过。剧本、${subjects.length} 个人物、${scenes.length} 个场景、${(p.shots ?? []).length} 个分镜都没问题。画布一共 ${nodes.length} 个节点。`
+        return `대본, 캐릭터 ${subjects.length}명, 장면 ${scenes.length}개, 샷 ${(p.shots ?? []).length}개를 확인했어요. 캔버스에는 노드가 ${nodes.length}개 있어요.`
       }
       const lines: string[] = []
       if (blocking.length) lines.push(`【진행을 막는 문제】\n- ${blocking.join('\n- ')}`)
@@ -1011,14 +1011,14 @@ const definitions: ToolDefinition[] = [
       const node = project.current?.canvas?.nodes.find((item) => item.id === action.nodeId)
       if (!node) throw new Error(`캔버스 노드 ${action.nodeId}을 찾을 수 없습니다.`)
       if (node.type === 'subject' || node.type === 'scene') {
-        if (!action.text?.trim()) throw new AgentToolError('请提供完整的新图片提示词', action.tool, 'invalid_action')
+        if (!action.text?.trim()) throw new AgentToolError('새 이미지 프롬프트 전체를 입력하세요.', action.tool, 'invalid_action')
         if (node.type === 'subject' && node.data.subjectId) {
           project.updateSubject(node.data.subjectId, { sheetPrompt: action.text })
         } else if (node.type === 'scene' && node.data.sceneId) {
           project.updateScene(node.data.sceneId, { platePrompt: action.text })
-        } else throw new AgentToolError('节点缺少人物或场景关联', action.tool, 'invalid_action')
+        } else throw new AgentToolError('노드에 인물이나 장면을 연결하세요.', action.tool, 'invalid_action')
         await project.save()
-        return '图片提示词已更新，旧图片保留；运行此节点后才生成新图。'
+        return '이미지 프롬프트를 바꿨어요. 기존 이미지는 보관하고, 노드를 실행하면 새 이미지를 만들어요.'
       }
       if (node.type !== 'imageGen' && node.type !== 'videoGen') {
         throw new Error('update_node는 자유 이미지·영상 노드에 사용합니다. 스토리보드 샷은 revise_shot으로 수정하세요.')
@@ -1077,7 +1077,7 @@ const definitions: ToolDefinition[] = [
     name: 'remember', phase: 6, timeoutMs: 10_000, required: ['text'], estimate: noCost,
     async execute(action) {
       const { rememberMemory } = await import('@/services/memory/memoryStore')
-      const scope = /项目|本剧|这部/.test(action.text || '') ? 'project' : 'global'
+      const scope = /项目|本剧|这部|이 프로젝트|이 작품/.test(action.text || '') ? 'project' : 'global'
       const entry = await rememberMemory(action.text!, { scope })
       if (!entry) throw new Error('저장할 기억 내용이 없습니다.')
       return `${scope === 'global' ? '장기 기억' : '이 프로젝트의 기억'}에 저장했습니다. ${entry.content}`
@@ -1105,10 +1105,10 @@ export function validateToolAction(raw: unknown): AgentToolAction {
   const definition = registry.get(name)
   if (!definition) throw new AgentToolError(`허용되지 않는 도구입니다. ${name || '이름 없음'}`, name, 'invalid_action')
   if (action.extractStage !== undefined && !['subjects', 'scenes', 'shots'].includes(String(action.extractStage))) {
-    throw new AgentToolError('提炼范围必须为 subjects、scenes 或 shots', name, 'invalid_action')
+    throw new AgentToolError('추출 범위는 subjects, scenes, shots 중 하나여야 해요.', name, 'invalid_action')
   }
   if (action.regenerate !== undefined && typeof action.regenerate !== 'boolean') {
-    throw new AgentToolError('regenerate 必须为布尔值', name, 'invalid_action')
+    throw new AgentToolError('regenerate에는 불리언 값을 사용하세요.', name, 'invalid_action')
   }
   for (const key of definition.required ?? []) {
     if (typeof action[key] !== 'string' || !String(action[key]).trim()) {
@@ -1116,7 +1116,7 @@ export function validateToolAction(raw: unknown): AgentToolAction {
     }
   }
   if (action.referenceIndex !== undefined && (!Number.isSafeInteger(action.referenceIndex) || Number(action.referenceIndex) < 1)) {
-    throw new AgentToolError('参考图编号必须从 1 开始', name, 'invalid_action')
+    throw new AgentToolError('참조 이미지 번호는 1부터 시작해야 해요.', name, 'invalid_action')
   }
   return {
     tool: name,
@@ -1210,15 +1210,15 @@ export function estimateRequestText(text: string): ToolEstimate {
   const plannedShots = Math.max(1, requestedShots || c.images || c.videos || c.audio || 6)
   let calls = 0
   let seconds = 0
-  if (/拆|剧本|分镜|脚本/.test(t)) { calls += 1; seconds += 30 }
-  if (/人设|角色图|四视图/.test(t)) { calls += Math.max(1, c.sheets); seconds += Math.max(1, c.sheets) * 45 }
+  if (/拆|剧本|分镜|脚本|대본|스토리보드/.test(t)) { calls += 1; seconds += 30 }
+  if (/人设|角色图|四视图|캐릭터 시트/.test(t)) { calls += Math.max(1, c.sheets); seconds += Math.max(1, c.sheets) * 45 }
   if (/资产图/.test(t)) { calls += Math.max(1, c.props); seconds += Math.max(1, c.props) * 45 }
-  if (/场景|底板/.test(t)) { calls += Math.max(1, c.scenes); seconds += Math.max(1, c.scenes) * 45 }
+  if (/场景|底板|장면|배경/.test(t)) { calls += Math.max(1, c.scenes); seconds += Math.max(1, c.scenes) * 45 }
   if (/看板|故事看板/.test(t)) { calls += Math.max(1, c.boards); seconds += Math.max(1, c.boards) * 45 }
-  if (/配图|出图|关键帧/.test(t)) { calls += Math.max(1, c.images); seconds += Math.max(1, c.images) * 45 }
-  if (/视频|成片/.test(t)) { calls += Math.max(1, c.videos || c.images); seconds += Math.max(1, c.videos || c.images) * 180 }
-  if (/配音|口播|语音/.test(t)) { calls += Math.max(1, c.audio); seconds += Math.max(1, c.audio) * 20 }
-  if (/全流程|完整流程|全部做完|从头到尾|全套/.test(t)) {
+  if (/配图|出图|关键帧|키프레임/.test(t)) { calls += Math.max(1, c.images); seconds += Math.max(1, c.images) * 45 }
+  if (/视频|成片|영상/.test(t)) { calls += Math.max(1, c.videos || c.images); seconds += Math.max(1, c.videos || c.images) * 180 }
+  if (/配音|口播|语音|더빙|내레이션/.test(t)) { calls += Math.max(1, c.audio); seconds += Math.max(1, c.audio) * 20 }
+  if (/全流程|完整流程|全部做完|从头到尾|全套|전체 과정|처음부터 끝까지/.test(t)) {
     const sheets = c.sheets || 1
     const scenes = c.scenes || 1
     const boards = c.boards || plannedShots

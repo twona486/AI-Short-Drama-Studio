@@ -8,7 +8,8 @@ import {
   describeInputMap,
   describeWorkflowKind,
   guessInputMap,
-  COMFY_ROLE_LABEL,
+  COMFY_INPUT_ROLES,
+  comfyRoleLabel,
   sanitizeInputMap,
   type ComfyInputBinding,
   type ComfyInputRole,
@@ -357,7 +358,7 @@ function clearTemplate() {
         <p>{{ $t('comfyMapping.reviewMapping') }}</p>
         <p class="hint">{{ $t('comfyMapping.referenceSlotsHint') }}</p>
         <div v-for="(binding, index) in editableMap" :key="index" class="mapping-row">
-          <select v-model="binding.role" :aria-label="$t('comfyMapping.role')"><option v-for="(label, key) in COMFY_ROLE_LABEL" :key="key" :value="key">{{ label }}</option></select>
+          <select v-model="binding.role" :aria-label="$t('comfyMapping.role')"><option v-for="role in COMFY_INPUT_ROLES" :key="role" :value="role">{{ comfyRoleLabel(role) }}</option></select>
           <select :value="JSON.stringify([binding.nodeId, binding.field])" :aria-label="$t('comfyMapping.field')" @change="setTarget(binding, $event)"><option :value="JSON.stringify(['',''])" disabled>{{ $t('mediaNodes.chooseField') }}</option><option v-for="option in inputs" :key="option.key" :value="option.key">{{ option.label }}</option></select>
           <select v-if="binding.role === 'length'" v-model="binding.durationUnit" :aria-label="$t('comfyMapping.durationUnit')"><option :value="undefined">{{ $t('comfyMapping.selectUnit') }}</option><option value="seconds">{{ $t('common.seconds') }}</option><option value="frames">{{ $t("mediaNodes.frames") }}</option></select>
           <button type="button" class="mini" @click="editableMap.splice(index, 1)">{{ $t('common.remove') }}</button>

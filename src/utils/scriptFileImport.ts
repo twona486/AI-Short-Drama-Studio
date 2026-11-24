@@ -1,26 +1,30 @@
+import { t } from '@/i18n'
+
 /**
- * 把外部剧本读成 Markdown。
- * 支持 Markdown、TXT、README，以及 Word（.docx / .doc）和 RTF。
+ * 외부 대본을 Markdown으로 읽는다.
+ * Markdown, TXT, README, Word(.docx, .doc) 및 RTF를 지원한다.
  */
 
 const TEXT_EXT = new Set(['md', 'markdown', 'txt', 'text', 'readme'])
 const MARKDOWN_EXT = new Set(['md', 'markdown'])
 const MAX_BYTES = 30 * 1024 * 1024
 
+class ScriptFileError extends Error {}
+
 const EPISODE_LINE =
-  /^(?:第\s*[0-9０-９一二三四五六七八九十百千两]+\s*[集章回幕话]|chapter\s+\d+|ep(?:isode)?\s*\d+)$/i
+  /^(?:第\s*[0-9０-９一二三四五六七八九十百千两]+\s*[集章回幕话]|\d+\s*화|chapter\s+\d+|ep(?:isode)?\s*\d+)$/i
 
 export const SCRIPT_PICK_FILTERS: { name: string; extensions: string[] }[] = [
-  { name: '剧本', extensions: ['md', 'markdown', 'txt', 'text', 'docx', 'doc', 'rtf'] },
-  { name: '所有文件', extensions: ['*'] }
+  { get name() { return t('scriptFiles.scripts') }, extensions: ['md', 'markdown', 'txt', 'text', 'docx', 'doc', 'rtf'] },
+  { get name() { return t('scriptFiles.all') }, extensions: ['*'] }
 ]
 
 export const SCRIPT_PICK_ACCEPT =
   '.md,.markdown,.txt,.text,.doc,.docx,.rtf,text/plain,text/markdown,application/msword,application/rtf,application/vnd.openxmlformats-officedocument.wordprocessingml.document'
 
 export async function scriptTextFromBytes(filename: string, bytes: Uint8Array): Promise<string> {
-  if (!bytes.byteLength) throw new Error('剧本文件是空的')
-  if (bytes.byteLength > MAX_BYTES) throw new Error('文件太大，请先把剧本另存成文本再导入')
+  if (!bytes.byteLength) throw new ScriptFileError(t('scriptFiles.empty'))
+  if (bytes.byteLength > MAX_BYTES) throw new ScriptFileError(t('scriptFiles.tooLarge'))
   const kind = detectKind(filename, bytes)
   try {
     if (kind === 'docx') return plainToScript(await docxToText(bytes))
@@ -29,11 +33,10 @@ export async function scriptTextFromBytes(filename: string, bytes: Uint8Array): 
     if (kind === 'markdown') return decodeBytes(bytes).replace(/^\uFEFF/, '').replace(/\r\n?/g, '\n').trim()
     if (kind === 'text') return plainToScript(decodeBytes(bytes))
   } catch (error) {
-    const message = error instanceof Error ? error.message : ''
-    if (/剧本|Word|文件|密码|格式/.test(message)) throw error
-    throw new Error('这份文件读不出来，请另存成 .docx 或 .txt 再导入')
+    if (error instanceof ScriptFileError) throw error
+    throw new ScriptFileError(t('scriptFiles.unreadable'))
   }
-  throw new Error('不支持的剧本格式。可以导入 Markdown、TXT、README 或 Word（.doc / .docx）')
+  throw new ScriptFileError(t('scriptFiles.unsupported'))
 }
 
 function detectKind(filename: string, bytes: Uint8Array): 'docx' | 'doc' | 'rtf' | 'markdown' | 'text' | '' {
@@ -120,10 +123,10 @@ function hasBadUtf8(bytes: Uint8Array): boolean {
   return false
 }
 
-/** 纯文本收成剧本：单独成行的「第 N 集」变成集标题。 */
+/** 일반 텍스트에서 별도 줄에 있는 회차 번호를 회차 제목으로 바꾼다. */
 function plainToScript(raw: string): string {
   const text = raw.replace(/^\uFEFF/, '').replace(/\r\n?/g, '\n').replace(/\n{3,}/g, '\n\n').trim()
-  if (!text) throw new Error('剧本文件是空的')
+  if (!text) throw new ScriptFileError(t('scriptFiles.empty'))
   const lines = text.split('\n').map((line) => {
     const trimmed = line.trim()
     if (trimmed.length <= 40 && EPISODE_LINE.test(trimmed)) return `## ${trimmed}`
@@ -170,7 +173,7 @@ function safeChar(code: number): string {
 
 async function docxToText(bytes: Uint8Array): Promise<string> {
   const xml = await readZipText(bytes, 'word/document.xml')
-  if (!xml) throw new Error('这份 Word 里没有正文')
+  if (!xml) throw new ScriptFileError(t('scriptFiles.noBody'))
   const lines: string[] = []
   for (const part of xml.split(/<\/w:p>/)) {
     const start = part.lastIndexOf('<w:p')
@@ -243,7 +246,7 @@ async function unzip(bytes: Uint8Array): Promise<Map<string, Uint8Array>> {
   const files = new Map<string, Uint8Array>()
   const view = dataView(bytes)
   const eocd = findEocd(bytes)
-  if (eocd < 0) throw new Error('这份 Word 文件已损坏')
+  if (eocd < 0) throw new ScriptFileError(t('scriptFiles.corrupted'))
   const count = view.getUint16(eocd + 10, true)
   let cursor = view.getUint32(eocd + 16, true)
   for (let i = 0; i < count; i++) {
@@ -258,7 +261,7 @@ async function unzip(bytes: Uint8Array): Promise<Map<string, Uint8Array>> {
     const name = new TextDecoder('utf-8').decode(bytes.subarray(cursor + 46, cursor + 46 + nameLen))
     cursor += 46 + nameLen + extraLen + commentLen
     if (name.endsWith('/')) continue
-    if (flags & 1) throw new Error('这份 Word 有密码，先去掉密码再导入')
+    if (flags & 1) throw new ScriptFileError(t('scriptFiles.password'))
     if (localOff + 30 > bytes.length || view.getUint32(localOff, true) !== 0x04034b50) continue
     const localName = view.getUint16(localOff + 26, true)
     const localExtra = view.getUint16(localOff + 28, true)
@@ -271,7 +274,7 @@ async function unzip(bytes: Uint8Array): Promise<Map<string, Uint8Array>> {
 
 async function inflateZip(method: number, compressed: Uint8Array): Promise<Uint8Array> {
   if (method === 0) return compressed.slice()
-  if (method !== 8) throw new Error('这份 Word 的压缩方式暂不支持')
+  if (method !== 8) throw new ScriptFileError(t('scriptFiles.compression'))
   const stream = new Blob([compressed.slice()]).stream().pipeThrough(new DecompressionStream('deflate-raw'))
   return new Uint8Array(await new Response(stream).arrayBuffer())
 }
@@ -294,16 +297,16 @@ const SKIP_SECTOR = 0xfffffffa
 function docToText(bytes: Uint8Array): string {
   const cfb = readCfb(bytes)
   const word = cfb.get('worddocument')
-  if (!word || word.length < 0x20) throw new Error('这份 Word 里没有正文')
+  if (!word || word.length < 0x20) throw new ScriptFileError(t('scriptFiles.noBody'))
   const view = dataView(word)
-  if (view.getUint16(0, true) !== 0xa5ec) throw new Error('这份 Word 版本太旧，请另存为 .docx 再导入')
+  if (view.getUint16(0, true) !== 0xa5ec) throw new ScriptFileError(t('scriptFiles.oldVersion'))
   const flags = view.getUint16(0x0a, true)
-  if (flags & 0x0100) throw new Error('这份 Word 有密码，先去掉密码再导入')
-  if (flags & 0x8000) throw new Error('这份 Word 被混淆了，请另存为 .docx 再导入')
+  if (flags & 0x0100) throw new ScriptFileError(t('scriptFiles.password'))
+  if (flags & 0x8000) throw new ScriptFileError(t('scriptFiles.obfuscated'))
   const whichTable = (flags & 0x0200) !== 0
   const table = cfb.get(whichTable ? '1table' : '0table')
   const ccpText = word.length >= 0x50 ? view.getUint32(0x4c, true) : 0
-  if (!ccpText) throw new Error('剧本文件是空的')
+  if (!ccpText) throw new ScriptFileError(t('scriptFiles.empty'))
   if (!table || word.length < 0x1aa) return cleanupDocText(scanUtf16(word))
   const fcClx = view.getUint32(0x1a2, true)
   const lcbClx = view.getUint32(0x1a6, true)
@@ -313,7 +316,7 @@ function docToText(bytes: Uint8Array): string {
   if (cleaned.trim()) return cleaned
   const scanned = cleanupDocText(scanUtf16(word))
   if (scanned.trim()) return scanned
-  throw new Error('这份 Word 里没有可读的正文')
+  throw new ScriptFileError(t('scriptFiles.noReadableBody'))
 }
 
 function cleanupDocText(text: string): string {
@@ -388,7 +391,7 @@ function decodeDocBytes(bytes: Uint8Array): string {
     try {
       return new TextDecoder('gbk').decode(bytes)
     } catch {
-      /* 单字节 */
+      /* 단일 바이트 */
     }
   }
   let out = ''
@@ -427,7 +430,7 @@ interface CfbFile {
 
 function readCfb(bytes: Uint8Array): CfbFile {
   const view = dataView(bytes)
-  if (!isOle(bytes) || bytes.length < 512) throw new Error('这份 Word 文件已损坏')
+  if (!isOle(bytes) || bytes.length < 512) throw new ScriptFileError(t('scriptFiles.corrupted'))
   const sectorShift = view.getUint16(0x1e, true)
   const miniShift = view.getUint16(0x20, true)
   const sectorSize = 1 << sectorShift

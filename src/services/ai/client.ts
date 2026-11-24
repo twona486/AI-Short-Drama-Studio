@@ -302,8 +302,8 @@ export async function callLLM(req: LLMRequest): Promise<LLMResponse> {
       }
     }
     if (!content) throw new Error(data.choices?.[0]?.finish_reason === 'length'
-      ? '模型用完了输出额度，但未返回正式答案。请提高网关的输出额度或换用模型。'
-      : '模型未返回正式答案；思考过程不会作为正文使用。请重试或切换模型。')
+      ? '모델이 출력 한도에 도달해 답변을 보내지 못했어요. 게이트웨이의 출력 한도를 늘리거나 모델을 바꿔 주세요.'
+      : '모델이 답변을 보내지 않았어요. 다시 시도하거나 모델을 바꿔 주세요.')
     return {
       content,
       model: data.model ?? model,

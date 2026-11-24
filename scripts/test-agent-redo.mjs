@@ -190,9 +190,9 @@ await test('프로젝트 스타일을 우선하고 기존 대사와 에셋을 �
 })
 await test('추출 범위를 검증하고 잘못된 범위는 거부해요.',()=>{
   globalThis.__agentTest.store.current.scenes=[]
-  assert.match(api.verifyRegisteredTool({tool:'extract_cast',extractStage:'scenes'}),/场景/)
-  assert.throws(()=>api.validateToolAction({tool:'extract_cast',extractStage:'wrong'}),/提炼范围/)
-  assert.throws(()=>api.validateToolAction({tool:'generate_video',shotId:'shot',regenerate:'true'}),/布尔/)
+  assert.match(api.verifyRegisteredTool({tool:'extract_cast',extractStage:'scenes'}),/장면/)
+  assert.throws(()=>api.validateToolAction({tool:'extract_cast',extractStage:'wrong'}),/추출 범위/)
+  assert.throws(()=>api.validateToolAction({tool:'generate_video',shotId:'shot',regenerate:'true'}),/불리언/)
 })
 await test('이미지 이해 모델이 설정돼 있을 때만 지정한 이미지를 읽어요.',async()=>{
   const h=globalThis.__agentTest, p=h.store.current
@@ -201,10 +201,10 @@ await test('이미지 이해 모델이 설정돼 있을 때만 지정한 이미�
   h.blobs={second:new Blob(['actual-image-2'],{type:'image/png'})}
   const action={tool:'inspect_canvas_image',nodeId:'video',referenceIndex:2,text:'核对人物'}
   const before=JSON.stringify(p.canvas)
-  await assert.rejects(api.executeRegisteredTool(action,{onLog:()=>{}}),/配置/)
+  await assert.rejects(api.executeRegisteredTool(action,{onLog:()=>{}}),/설정/)
   assert.equal(h.llm,undefined)
   h.vision={baseUrl:'https://example.com',apiKey:'test-only',model:'vision'}
-  assert.match(await api.executeRegisteredTool(action,{onLog:()=>{}}),/参考图 2/)
+  assert.match(await api.executeRegisteredTool(action,{onLog:()=>{}}),/참조 이미지 2/)
   assert.equal(h.llm[0].provider,'vision')
   assert.equal(h.llm[0].messages[1].content.at(-1).image_url.url,'image:actual-image-2')
   assert.equal(JSON.stringify(p.canvas),before)

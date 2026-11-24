@@ -1,4 +1,4 @@
-/** 只识别明确的人物标签；无法识别的剧本格式不猜测说话人。 */
+/** 명시된 인물 표지만 읽는다. 지원하지 않는 대본 형식에서는 화자를 추측하지 않는다. */
 function cues(text: string, names: string[]): Map<string, string> {
   const result = new Map<string, string>()
   const lines = text.replace(/\*\*/g, '').split(/\r?\n/)
@@ -22,7 +22,7 @@ export function dialogueVerbatimIssues(source: string, shots: Array<{ voiceover?
   const assigned = cues(shots.map((shot) => shot.voiceover || '').join('\n'), names)
   const issues: string[] = []
   for (const [name, words] of original) {
-    if (assigned.get(name) !== words) issues.push(`严重：${name}的分镜台词与剧本原文不一致。逐字恢复该角色原台词及顺序，不能删改或分配给其他角色；时长不足请拆镜。`)
+    if (assigned.get(name) !== words) issues.push(`필수 수정 · ${name}의 대사가 대본과 달라요. 원문과 순서를 복원하고 화자를 유지하세요. 길이가 부족하면 샷을 나눠 주세요.`)
   }
   return issues
 }

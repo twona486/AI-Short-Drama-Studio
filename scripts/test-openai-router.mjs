@@ -20,6 +20,6 @@ assert.equal(normalizeRouterBaseUrl('https://api.example.com/'), 'https://api.ex
 assert.equal(normalizeRouterBaseUrl('https://api.example.com/openai/v1/chat/completions/'), 'https://api.example.com/openai/v1')
 assert.equal(normalizeRouterBaseUrl('http://127.0.0.1:8181/custom'), 'http://127.0.0.1:8181/custom')
 assert.throws(() => normalizeRouterBaseUrl('http://api.example.com/v1'), /HTTPS/)
-assert.throws(() => normalizeRouterBaseUrl('https://api.example.com/v1?key=example'), /查询参数/)
+assert.throws(() => normalizeRouterBaseUrl('https://api.example.com/v1?key=example'), /쿼리 매개변수/)
 
 console.log('통과 · OpenAI 호환 게이트웨이 주소와 추론 출력 분리')

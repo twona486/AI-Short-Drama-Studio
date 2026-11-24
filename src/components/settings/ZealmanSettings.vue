@@ -24,7 +24,7 @@ function apply() {
       (item) => item.provider === 'zealman' && item.workflowId === workflow.id
     )
     const values = {
-      name: workflow.name,
+      name: workflow.displayName,
       baseUrl: normalized,
       apiKey: '',
       workflowId: workflow.id,

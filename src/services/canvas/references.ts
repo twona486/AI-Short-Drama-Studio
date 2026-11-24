@@ -34,7 +34,7 @@ export type NextCanvasLink = 'imageGen' | 'videoGen' | 'audioGen' | 'compose'
 export type PrevCanvasLink = 'script' | 'imageGen' | 'videoGen'
 export type LinkCanvasKind = PrevCanvasLink | NextCanvasLink
 
-/** 这个节点后面能接上的自由节点。图片不能接音频，文本可以带去图片、视频、音频。视频后面可以收进合成节点。 */
+/** 현재 노드 뒤에 연결할 수 있는 노드다. 이미지는 오디오에 연결할 수 없고, 텍스트는 이미지, 영상, 오디오에 전달할 수 있다. 영상은 합성 노드에 연결할 수 있다. */
 export function nextCanvasLinks(node?: CanvasNode): NextCanvasLink[] {
   if (!node) return []
   if (node.type === 'script') return ['imageGen', 'videoGen', 'audioGen']
@@ -43,7 +43,7 @@ export function nextCanvasLinks(node?: CanvasNode): NextCanvasLink[] {
   return []
 }
 
-/** 这个节点前面能接上的节点。视频前面可以是文本或图片，音频前面只有文本。 */
+/** 현재 노드 앞에 연결할 수 있는 노드다. 영상은 텍스트와 이미지를, 오디오는 텍스트만 받을 수 있다. */
 export function prevCanvasLinks(node?: CanvasNode): PrevCanvasLink[] {
   if (!node || node.type === 'script') return []
   if (node.type === 'compose') return ['videoGen']
@@ -59,7 +59,7 @@ export function prevCanvasLinks(node?: CanvasNode): PrevCanvasLink[] {
   return []
 }
 
-/** 新建下游节点时带过去的文字：剧本正文、节点提示词，或角色 / 场景 / 分镜描述。 */
+/** 새 하위 노드로 전달할 텍스트다. 대본, 원래 노드의 프롬프트, 인물이나 장면 또는 샷 설명을 전달한다. */
 export function carryTextFromNode(project: Project, node: CanvasNode): string {
   const clip = (value: string) => value.trim().slice(0, 8000)
   if (node.type === 'script') {
@@ -97,7 +97,7 @@ export function canvasNodeProducesImage(node?: CanvasNode): boolean {
   )
 }
 
-/** 连线参考优先，其后是手工上传/资产库选择的参考图。节点已经按顺序写好全部参考图时，保持这个顺序。 */
+/** 연결 참조를 먼저 쓰고 수동 업로드 또는 라이브러리 참조를 이어 쓴다. 노드에 참조가 순서대로 지정돼 있으면 그 순서를 유지한다. */
 export function resolvedCanvasReferenceAssetIds(project: Project, node?: CanvasNode): ID[] {
   if (!node) return []
   const connected = (node.data.referenceSourceNodeIds ?? [])

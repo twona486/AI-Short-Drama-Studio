@@ -253,16 +253,16 @@ export function shotKeyframePrompt(
     return result.trim()
   }
   const body = visualOnly(shot.visualPrompt || shot.title)
-  const size = shot.shotSize ? `景别：${shot.shotSize}。` : ''
-  const blocking = shot.blocking ? `站位：${shot.blocking}。` : ''
-  const prop = shot.propFocus && shot.propFocus !== '无' ? `关键道具：${shot.propFocus}。` : ''
-  const continuity = shot.continuity ? `动作承接：${shot.continuity}。` : ''
-  const performance = shot.videoPrompt?.trim() ? `动态表演：${visualOnly(shot.videoPrompt)}。` : ''
+  const size = shot.shotSize ? `Shot size: ${shot.shotSize}.` : ''
+  const blocking = shot.blocking ? `Blocking: ${shot.blocking}.` : ''
+  const prop = shot.propFocus && shot.propFocus !== '无' ? `Key prop: ${shot.propFocus}.` : ''
+  const continuity = shot.continuity ? `Action continuity: ${shot.continuity}.` : ''
+  const performance = shot.videoPrompt?.trim() ? `Performance: ${visualOnly(shot.videoPrompt)}.` : ''
   const voiceMode = shot.audioMode ?? 'h3-dialogue'
   const dialogue = shot.voiceover?.trim()
     ? voiceMode === 'h3-voiceover' || voiceMode === 'tts' || voiceMode === 'none'
-      ? '这是画外音镜头。只画人物动作与表情，不绘制对白、字幕或气泡。'
-      : '这是人物交流场景。只通过人物动作、视线与表情表现互动，不绘制台词、字幕或气泡；不要把整场交流都安排给同一个人。'
+      ? 'This shot has off-screen narration. Draw physical actions and expressions without dialogue text, subtitles or speech bubbles.'
+      : 'Show the exchange through actions, gazes and expressions. Keep dialogue text, subtitles and speech bubbles out of the image. Show how each participant responds.'
     : ''
   const camera =
     shot.cameraMovement === 'static'

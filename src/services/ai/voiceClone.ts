@@ -5,7 +5,7 @@ import { normalizeForSpeech } from './tts'
 
 const CLONE_MODEL = 'qwen3-tts-vc-2026-01-22'
 
-/** 音频节点可选的声音复刻模型。选中后才允许上传参考音频。 */
+/** 오디오 노드에서 음색 복제 모델을 선택하면 참조 오디오를 업로드할 수 있다. */
 export const VOICE_CLONE_MODEL = CLONE_MODEL
 
 export function modelAcceptsReferenceAudio(model?: string): boolean {

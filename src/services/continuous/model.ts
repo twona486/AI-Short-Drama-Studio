@@ -36,7 +36,7 @@ export interface CaptureState {
   openingNodes: Record<string, string>
   videoNodes: Record<string, string>
   tailAssets: Record<string, { videoAssetId: string; assetId: string }>
-  /** 已通过生成前对白复核的内容摘要；图片和视频阶段分别验收。 */
+  /** 생성 전 대사 검토를 마친 내용의 요약값이다. 이미지와 영상의 검토 결과를 따로 기록한다. */
   dialoguePreflight?: Partial<Record<'images' | 'videos', string>>
 }
 export const compact = (s: string) => s.replace(/\s+/g, '')
@@ -163,14 +163,14 @@ function normalizeDialogue(value: unknown) {
   return lines.flatMap(item => {
     if (typeof item === 'string') {
       const matched = item.match(/^([^：:]{1,16})[：:](.+)$/)
-      return matched ? [{ speaker: matched[1].trim(), text: matched[2].trim(), delivery: '自然说话' }] : []
+      return matched ? [{ speaker: matched[1].trim(), text: matched[2].trim(), delivery: '자연스러운 말투' }] : []
     }
     const row = asRecord(item)
     if (!row) return []
     const speaker = fieldText(pick(row, ['speaker', 'name', '说话人', '角色', 'role']))
     const text = fieldText(pick(row, ['text', 'line', '台词', 'content', '对白']))
     if (!speaker || !text) return []
-    return [{ speaker, text, delivery: fieldText(pick(row, ['delivery', 'tone', '语气', '表演'])) || '自然说话' }]
+    return [{ speaker, text, delivery: fieldText(pick(row, ['delivery', 'tone', '语气', '表演'])) || '자연스러운 말투' }]
   })
 }
 
@@ -186,14 +186,14 @@ function normalizeScenes(body: Record<string, unknown>, assets: { id: string; na
       const shot = asRecord(segment)
       if (!shot) return []
       const dialogue = normalizeDialogue(pick(shot, ['dialogue', 'lines', '对白', '台词']))
-      const title = fieldText(pick(shot, ['title', '标题', 'name'])) || `镜头${index + 1}`
+      const title = fieldText(pick(shot, ['title', '标题', 'name'])) || `샷 ${index + 1}`
       return [{
         title,
         duration: normalizeDuration(pick(shot, ['duration', 'seconds', '时长', '秒'])),
         prompt: fieldText(pick(shot, ['prompt', '提示词', 'description', '描述'])) || title,
-        startState: fieldText(pick(shot, ['startState', '起幅', 'start'])) || '本段开始',
-        endState: fieldText(pick(shot, ['endState', '落幅', 'end'])) || '本段结束',
-        sound: fieldText(pick(shot, ['sound', '环境音', 'audio'])) || '环境音',
+        startState: fieldText(pick(shot, ['startState', '起幅', 'start'])) || '클립 시작',
+        endState: fieldText(pick(shot, ['endState', '落幅', 'end'])) || '클립 종료',
+        sound: fieldText(pick(shot, ['sound', '环境音', 'audio'])) || '환경음',
         dialogue
       }]
     })
@@ -202,7 +202,7 @@ function normalizeScenes(body: Record<string, unknown>, assets: { id: string; na
       const id = typeof ref === 'string' || typeof ref === 'number' ? fieldText(ref) : fieldText(pick(asRecord(ref) || {}, ['id', 'name', '名称']))
       return id ? [byName.get(compact(id)) || id] : []
     })
-    const name = fieldText(pick(row, ['name', '名称', 'title', '场景名'])) || `场景${index + 1}`
+    const name = fieldText(pick(row, ['name', '名称', 'title', '场景名'])) || `장면 ${index + 1}`
     const sourceText = fieldText(pick(row, ['sourceText', 'source', '原文', 'script', 'text', 'content']))
       || dialogueOf(segments).map(line => `${line.speaker}：${line.text}`).join('\n')
       || name
@@ -211,7 +211,7 @@ function normalizeScenes(body: Record<string, unknown>, assets: { id: string; na
       name,
       sourceText,
       assetIds,
-      openingPrompt: fieldText(pick(row, ['openingPrompt', 'opening', '起始画面', 'firstFrame'])) || segments[0]?.startState || '本场第一秒画面',
+      openingPrompt: fieldText(pick(row, ['openingPrompt', 'opening', '起始画面', 'firstFrame'])) || segments[0]?.startState || '장면의 시작 프레임',
       segments
     }]
   })
@@ -219,27 +219,27 @@ function normalizeScenes(body: Record<string, unknown>, assets: { id: string; na
 
 function formatPlanError(error: z.ZodError): string {
   const parts = error.issues.slice(0, 4).map(issue => {
-    const path = issue.path.map(String).join('.') || '根对象'
-    if (issue.code === 'invalid_type') return `${path} 缺失或类型不对`
-    if (issue.code === 'too_small') return `${path} 太短或数量不够`
-    return `${path} 不符合要求`
+    const path = issue.path.map(String).join('.') || '최상위 객체'
+    if (issue.code === 'invalid_type') return `${path} 항목이 빠졌거나 자료형이 달라요.`
+    if (issue.code === 'too_small') return `${path} 길이 또는 항목 수가 부족해요.`
+    return `${path} 형식이 맞지 않아요.`
   })
-  return `计划字段不符合要求：${parts.join('；')}。顶层必须是 title、aesthetic、assets、scenes。`
+  return `계획 형식이 맞지 않아요. ${parts.join(' ')} 최상위 필드는 title, aesthetic, assets, scenes를 사용해 주세요.`
 }
 
 function normalizeCapturePlan(raw: unknown) {
   const root = asRecord(restoreLeetKeys(raw))
-  if (!root) throw Error('计划不是 JSON 对象。请只输出一个对象，包含 title、aesthetic、assets、scenes。')
+  if (!root) throw Error('계획을 JSON 객체로 받지 못했어요. title, aesthetic, assets, scenes를 포함해야 해요.')
   const body = planBody(root)
   const assets = normalizeAssets(body)
   const scenes = normalizeScenes(body, assets)
   if (!assets || !scenes?.length) {
-    const keys = Object.keys(body).slice(0, 12).join('、') || '无'
-    throw Error(`计划缺少画风、资产或场次。请只输出一个 JSON 对象，顶层使用 title、aesthetic、assets、scenes，不要只写标题，也不要包在 plan、data 或其他字段里。这次返回的字段是：${keys}。`)
+    const keys = Object.keys(body).slice(0, 12).join(', ') || '없음'
+    throw Error(`계획에 스타일, 에셋 또는 장면이 빠졌어요. title, aesthetic, assets, scenes를 최상위 필드로 사용해 주세요. 받은 필드: ${keys}`)
   }
   return {
-    title: fieldText(pick(body, ['title', '标题', 'name'])) || fieldText(pick(root, ['title', '标题'])) || '连续拍',
-    aesthetic: fieldText(pick(body, ['aesthetic', 'style', 'look', 'visualStyle', '画风', '风格', '视觉风格'])) || fieldText(pick(root, ['aesthetic', '画风', '风格'])) || '沿用剧本画风',
+    title: fieldText(pick(body, ['title', '标题', 'name'])) || fieldText(pick(root, ['title', '标题'])) || '연속 촬영',
+    aesthetic: fieldText(pick(body, ['aesthetic', 'style', 'look', 'visualStyle', '画风', '风格', '视觉风格'])) || fieldText(pick(root, ['aesthetic', '画风', '风格'])) || '대본에서 지정한 스타일',
     assets,
     scenes
   }
@@ -250,16 +250,16 @@ export function validateCapturePlan(raw: unknown, max: number): CapturePlan {
   if (!checked.success) throw Error(formatPlanError(checked.error))
   const p = checked.data
   const ids = p.assets.map(a => a.id)
-  if (new Set(ids).size !== ids.length || new Set(p.scenes.map(s => s.id)).size !== p.scenes.length) throw Error('资产或场景 ID 重复')
+  if (new Set(ids).size !== ids.length || new Set(p.scenes.map(s => s.id)).size !== p.scenes.length) throw Error('에셋이나 장면 ID가 중복돼요.')
   const names = p.assets.map(a => `${a.kind}:${compact(a.name)}`)
-  if (new Set(names).size !== names.length) throw Error('同一资产重复定义，请让各场景共用同一个资产 ID')
-  if (ids.some(id => !p.scenes.some(s => s.assetIds.includes(id)))) throw Error('资产清单包含没有场景使用的资产，请删除，避免无效生成')
+  if (new Set(names).size !== names.length) throw Error('같은 에셋이 여러 번 정의돼 있어요. 여러 장면에서 같은 에셋 ID를 사용하세요.')
+  if (ids.some(id => !p.scenes.some(s => s.assetIds.includes(id)))) throw Error('어느 장면에서도 사용하지 않는 에셋이 있어요. 목록에서 빼 주세요.')
   for (const scene of p.scenes) {
-    if (scene.assetIds.some(id => !ids.includes(id))) throw Error(`${scene.name} 引用了未定义资产`)
-    if (!scene.assetIds.some(id => p.assets.find(a => a.id === id)?.kind === 'scene')) throw Error(`${scene.name} 缺少场景资产`)
-    if (scene.assetIds.length > 9) throw Error(`${scene.name} 参考资产超过 9 张，请按实际出场合并道具设定表`)
+    if (scene.assetIds.some(id => !ids.includes(id))) throw Error(`‘${scene.name}’에 정의되지 않은 에셋이 있어요.`)
+    if (!scene.assetIds.some(id => p.assets.find(a => a.id === id)?.kind === 'scene')) throw Error(`‘${scene.name}’에 장면 에셋이 빠졌어요.`)
+    if (scene.assetIds.length > 9) throw Error(`‘${scene.name}’에 참조 에셋이 9장을 넘어요. 실제로 나오는 소품의 참조를 합쳐 주세요.`)
     for (const seg of scene.segments) {
-      if (seg.duration > max) throw Error(`${scene.name} 的片段超过模型 ${max} 秒上限`)
+      if (seg.duration > max) throw Error(`‘${scene.name}’에 모델의 ${max}초 제한을 넘는 클립이 있어요.`)
     }
   }
   return p
@@ -298,7 +298,7 @@ function positiveInt(value: unknown): number | undefined {
   return Number.isInteger(parsed) && parsed >= 1 ? parsed : undefined
 }
 
-/** 逐镜核对结果。整份 ok/reason 不再当成否决；定位不到镜头时放进 unlocated，分镜仍然保留。 */
+/** 샷별 검토 결과다. 전체의 ok/reason만으로 계획을 거부하지 않는다. 샷을 찾을 수 없으면 unlocated에 넣고 스토리보드를 보존한다. */
 export function parseShotReview(content: string): { shots: ShotIssue[]; unlocated: string } | null {
   let parsed: unknown
   try { parsed = parseJsonRobust(content) } catch { return null }
@@ -336,7 +336,7 @@ export function parseShotReview(content: string): { shots: ShotIssue[]; unlocate
   return null
 }
 
-/** 审核结论只认 ok/reason。计划 JSON、缺字段或中文键都尽量收成同一结构；通过时允许不写 reason。 */
+/** ok/reason으로 판정을 읽는다. 계획 JSON, 빠진 필드, 중국어 키도 동일한 구조로 정리하고 통과 판정의 reason은 생략할 수 있다. */
 export function parseCaptureVerdict(content: string): { ok: boolean; reason: string } | null {
   let parsed: unknown
   try { parsed = parseJsonRobust(content) } catch { parsed = undefined }
@@ -348,7 +348,7 @@ export function parseCaptureVerdict(content: string): { ok: boolean; reason: str
     }
   }
   for (const match of String(content || '').matchAll(/\{[^{}]*"(?:ok|pass|passed|approved|通过)"\s*:[\s\S]*?\}/gi)) {
-    try { candidates.push(JSON.parse(match[0])) } catch { /* 局部对象不完整时继续找下一个 */ }
+    try { candidates.push(JSON.parse(match[0])) } catch { /* 객체가 불완전하면 다음 후보를 확인해요. */ }
   }
   for (const item of candidates) {
     if (!item || typeof item !== 'object' || Array.isArray(item)) continue

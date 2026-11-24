@@ -60,7 +60,7 @@ function selection() {
   const profileId = c.defaultVideoModel === 'h3' || model === 'h3-v5' ? autodlVideoProfileId() : c.activeVideoId
   const profile = c.videos.find(v => v.id === profileId)
   if (model !== 'wan-prime' && !profile) throw Error(t('continuousCapture.noVideoProfile'))
-  const name = model === 'wan-prime' ? '万相 3.0 Prime' : `${profile?.name || ''} ${profile?.workflowId || ''}`
+  const name = model === 'wan-prime' ? t('agentChat.wan') : `${profile?.name || ''} ${profile?.workflowId || ''}`
   let max = videoMaxSeconds(model)
   if (model !== 'wan-prime' && profile) {
     const relay = isApimartEndpoint(profile.baseUrl, profile.provider)
@@ -250,7 +250,7 @@ function normalizeShot(content: string, max: number, current: CapturePlan['scene
   const startState = textOf(row.startState ?? row['起幅'])
   const endState = textOf(row.endState ?? row['落幅'])
   const title = textOf(row.title ?? row['标题']) || current.title
-  const sound = textOf(row.sound ?? row['环境音']) || current.sound || '环境音'
+  const sound = textOf(row.sound ?? row['环境音']) || current.sound || t('continuousCapture.ambient')
   if (!Number.isInteger(duration) || duration < 6 || duration > max) return null
   if (prompt.length < 20 || !startState || !endState) return null
   const dialogueRaw = Array.isArray(row.dialogue) ? row.dialogue : Array.isArray(row['对白']) ? row['对白'] as unknown[] : null
@@ -260,7 +260,7 @@ function normalizeShot(content: string, max: number, current: CapturePlan['scene
     const line = item as Record<string, unknown>
     const speaker = textOf(line.speaker ?? line['说话人'])
     const text = textOf(line.text ?? line['台词'])
-    const delivery = textOf(line.delivery ?? line['语气']) || '按原语气'
+    const delivery = textOf(line.delivery ?? line['语气']) || t('continuousCapture.originalDelivery')
     return speaker && text ? [{ speaker, text, delivery }] : []
   })
   if (current.dialogue.length > 0 && dialogue.length === 0) return null
@@ -403,16 +403,16 @@ async function ensureDialogueBeforeGeneration(projectId: string, stage: 'images'
       log(t('continuousCapture.dialogueChecked'))
       return
     }
-    if (attempt) throw Error('台词补充后仍需调整：' + verdict.issues.map((i: any) => String(i.reason || '未说明的问题')).join('；') + '。已修复分镜保留，回复「继续」可重试。')
+    if (attempt) throw Error(t('continuousCapture.dialogueStillNeedsWork', { issues: verdict.issues.map((i: any) => String(i.reason || t('continuousCapture.unspecifiedIssue'))).join(' · ') }))
     for (const issue of verdict.issues) {
       const scene = Number.isInteger(issue.scene) ? capture.plan.scenes[issue.scene - 1] : undefined
       const index = issue.index - 1
       const seg = Number.isInteger(index) ? scene?.segments[index] : undefined
-      if (!scene || !seg || typeof issue.reason !== 'string' || !issue.reason.trim()) throw Error('对白检查发现无法定位的遗漏：' + String(issue.reason || '') + '。请补充剧本或调整分镜后继续。')
+      if (!scene || !seg || typeof issue.reason !== 'string' || !issue.reason.trim()) throw Error(t('continuousCapture.unlocatedDialogue', { reason: String(issue.reason || '') }))
       const id = capture.videoNodes[scene.id + ':' + index]
       const video = node(projectId, id)
-      if (!video || video.data.outputAssetId || video.data.videoTaskId || video.data.captureSubmissionPending) throw Error('场景' + issue.scene + '-' + issue.index + '已经生成或提交，不能自动覆盖：' + issue.reason)
-      log('补充场景' + issue.scene + '-' + issue.index + '的原台词…')
+      if (!video || video.data.outputAssetId || video.data.videoTaskId || video.data.captureSubmissionPending) throw Error(t('continuousCapture.preserveSubmitted', { scene: issue.scene, shot: issue.index, reason: issue.reason }))
+      log(t('continuousCapture.repairingDialogue', { scene: issue.scene, shot: issue.index }))
       const prior = snapshot()
       const fixed = await repairShot(scene, index, issue.reason, capture.maxSeconds, signal)
       checkCurrent(prior)
@@ -473,7 +473,7 @@ async function plan(projectId: string, source: string, instruction: string, log:
       issue = error instanceof Error ? error.message : String(error)
       if (attempt) {
         mark?.fail()
-        throw Error(`分镜没有写完：${issue}。尚未提交图片或视频生成。`)
+        throw Error(t('continuousCapture.incompleteBeforeSubmission', { issue }))
       }
     }
   }
@@ -524,20 +524,20 @@ async function plan(projectId: string, source: string, instruction: string, log:
     const reviewed = await reviewShots(source, s.plan, log, signal)
     if (!reviewed) notes.push(t('continuousCapture.missingShotReview'))
     else {
-      if (reviewed.unlocated) notes.push(`有一条意见没对应到具体镜头，分镜全部保留：${reviewed.unlocated}`)
+      if (reviewed.unlocated) notes.push(t('continuousCapture.unlocatedReview', { reason: reviewed.unlocated }))
       for (const shot of reviewed.shots) {
         const scene = s.plan.scenes[shot.scene - 1]
         const seg = scene?.segments[shot.index - 1]
         const label = t('continuousCapture.shotLabel', { scene: shot.scene, shot: shot.index })
         if (!scene || !seg) {
-          notes.push(`${label} 不在这份分镜里，已跳过：${shot.reason}`)
+          notes.push(t('continuousCapture.skippedReview', { name: label, reason: shot.reason }))
           continue
         }
-        log({ kind: 'think', label: `在改${label}…` })
+        log({ kind: 'think', label: t('continuousCapture.revisingShot', { name: label }) })
         try {
           const fixed = await repairShot(scene, shot.index - 1, shot.reason, selected.maxSeconds, signal)
           if (!fixed) {
-            notes.push(`${label} 先留着原分镜：${shot.reason}`)
+            notes.push(t('continuousCapture.keepShot', { name: label, reason: shot.reason }))
             continue
           }
           scene.segments[shot.index - 1] = fixed
@@ -547,7 +547,7 @@ async function plan(projectId: string, source: string, instruction: string, log:
         } catch (error) {
           signal?.throwIfAborted()
           const message = error instanceof Error ? error.message : String(error)
-          notes.push(`${label} 改的时候中断了，原分镜还在：${message}`)
+          notes.push(t('continuousCapture.interruptedShot', { name: label, reason: message }))
         }
       }
     }
@@ -559,9 +559,9 @@ async function plan(projectId: string, source: string, instruction: string, log:
     }
     mark?.done('review')
     const message = error instanceof Error ? error.message : String(error)
-    notes.push(`逐镜核对没有完成，画布上的分镜可以继续用。${message}`)
+    notes.push(t('continuousCapture.reviewIncomplete', { reason: message }))
   }
-  const tail = notes.length ? `\n\n逐镜核对：\n${notes.join('\n')}` : '\n\n逐镜核对过了，没有要改的镜头。'
+  const tail = notes.length ? t('continuousCapture.reviewNotes', { notes: notes.join('\n') }) : t('continuousCapture.reviewClear')
   return reply(summary(s) + tail)
 }
 
@@ -588,7 +588,7 @@ interface ShotPicture {
   caption: string
 }
 
-/** 只在当前画布的资产图节点里找，不查素材库，也不另找文件。 */
+/** 현재 캔버스의 에셋 이미지 노드에서만 찾는다. 에셋 라이브러리나 다른 파일은 검색하지 않는다. */
 function canvasAssetSheets(projectId: string, capture: CaptureState): SheetCandidate[] {
   const pictures: SheetCandidate[] = []
   for (const [id, nodeId] of Object.entries(capture.assetNodes)) {
@@ -670,7 +670,7 @@ async function askForPictures(input: {
       ? [
           { type: 'text', text: `${input.user}${note}` },
           ...await Promise.all(input.images.map(async item => ([
-            { type: 'text' as const, text: `素材 ${item.id}，Name: ${item.name}` },
+            { type: 'text' as const, text: `Asset ${item.id}, name: ${item.name}` },
             { type: 'image_url' as const, image_url: { url: await blobToChatImageUrl(await canvasAssetBlob(item.assetId), 960) } }
           ]))).then(groups => groups.flat())
         ]
@@ -710,7 +710,7 @@ async function askForPictures(input: {
   throw Error(defect || t('continuousCapture.unknownImageOrder'))
 }
 
-/** 图2 往后是什么，不靠名称规则。没配视觉模型就读名称；配了就看图确认。 */
+/** 두 번째 이후의 참조 이미지에 무엇이 있는지 판단한다. 이미지 이해 모델이 없으면 이름을 읽고, 설정돼 있으면 이미지를 확인한다. */
 async function identifyShotPictures(input: {
   shotText: string
   candidates: SheetCandidate[]
@@ -812,8 +812,8 @@ export async function runCaptureNode(nodeId: string, onLog?: (text: string) => v
           ? ensureCharacterSheetWhiteBackground(n.data.prompt || '')
           : sheet
             ? n.data.prompt || ''
-            : `${s.plan.aesthetic}\n${refs.map((r, i) => `图${i + 1}=${r.name}，Preserve identity, clothing or location.`).join('\n')}\n${n.data.prompt}\n${opening ? 'Output one complete opening frame for the scene, without collages, panels or text.' : ''}`
-        onLog?.(`生成 ${n.data.label}…`)
+            : `${s.plan.aesthetic}\n${refs.map((r, i) => `Picture ${i + 1}: ${r.name}. Preserve identity, clothing or location.`).join('\n')}\n${n.data.prompt}\n${opening ? 'Output one complete opening frame for the scene, without collages, panels or text.' : ''}`
+        onLog?.(t('continuousCapture.generatingNamed', { name: n.data.label }))
         const images = await Promise.all(refs.map(r => imageBlob(r.id)))
         current(projectId)
         const result = await generateImage({ prompt, style: lookFromTexts('cinematic', s.plan.aesthetic).style, ...size, aspectRatio: ratio, referenceImages: images, signal })
@@ -870,12 +870,12 @@ export async function runCaptureNode(nodeId: string, onLog?: (text: string) => v
               ...size,
               aspectRatio: ratio,
               referenceImages: [tail, ...sheets],
-              referenceLabels: ['上一镜真实尾帧', ...repairCast.map(character => `${character.caption}的人物设定`)],
+              referenceLabels: ['Previous actual end frame', ...repairCast.map(character => `Character reference for ${character.caption}`)],
               signal
             }, onLog)
             signal?.throwIfAborted(); current(projectId)
             const saved = await useAssetsStore().add(restored.blob, 'image', 'ai-generated', {
-              filename: `${n.data.label}-接续首帧.png`,
+              filename: `${n.data.label}-시작 프레임.png`,
               projectId,
               prompt
             })
@@ -941,7 +941,7 @@ export async function runCaptureNode(nodeId: string, onLog?: (text: string) => v
         }
         signal?.throwIfAborted(); current(projectId)
         const who = pictures.map(picture => picture.caption)
-        onLog?.(`拍摄 ${n.data.label}（${duration}秒）：图1首帧，${who.map((name, at) => `图${at + 2}${name}`).join('，') || '无其他参考'}`)
+        onLog?.(t('continuousCapture.shootingNamed', { name: n.data.label, seconds: duration, references: who.join(', ') || t('continuousCapture.noOtherReferences') }))
         const frame = await imageBlob(referenceIds[0])
         const references: Blob[] = []
         for (const id of referenceIds.slice(1)) references.push(await canvasAssetBlob(id))
@@ -996,7 +996,7 @@ async function grabLastFrame(projectId: string, nodeId: string | undefined, onLo
   onLog?.(t('continuousCapture.extractLastFrame'))
   const frame = await extractVideoLastFrame(await imageBlob(videoId), { preserveEnding: true })
   const saved = await useAssetsStore().add(frame, 'image', 'extracted', {
-    filename: `${source.data.label || '视频'}-最后一帧.jpg`,
+    filename: `${t('continuousCapture.frameName', { name: source.data.label || t('comfySettings.video') })}.jpg`,
     projectId
   })
   const id = `lastframe_${source.id}`

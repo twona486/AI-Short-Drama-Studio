@@ -13,7 +13,7 @@ function roleColor(name: string, seen: string[]) {
   return ROLE_COLORS[index % ROLE_COLORS.length]
 }
 
-/** 这句台词还没说完：行尾不是句号、问号、叹号或收尾引号。 */
+/** 줄이 마침표, 물음표, 느낌표나 닫는 따옴표로 끝나지 않으면 대사가 이어진 것으로 본다. */
 function speechStillOpen(text: string) {
   const trimmed = text.trim()
   if (!trimmed) return true
@@ -56,7 +56,7 @@ function paintLine(line: string, seen: string[], openDialogue: boolean) {
   return { html: `<span class="sp-act">${escapeHtml(line)}</span>`, openDialogue: false }
 }
 
-/** 把剧本文本画成和原文逐字对齐的彩色行，方便叠在输入框上。 */
+/** 대본 각 글자에 맞춰 색상을 적용하고 입력 영역 위에 겹쳐 표시한다. */
 export function paintScreenplay(source: string) {
   const seen: string[] = []
   let openDialogue = false

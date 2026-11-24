@@ -29,7 +29,7 @@ export async function pickPlayMarkdownFile(): Promise<{ text: string; filename: 
   })
 }
 
-/** 导入剧本：Markdown、TXT、README、Word。取消选择时返回 null。 */
+/** Markdown, TXT, README, Word에서 대본을 가져온다. 파일 선택을 취소하면 null을 반환한다. */
 export async function pickScriptFile(): Promise<{ text: string; filename: string } | null> {
   if (isDesktop()) {
     const paths = await desktop().pickFiles(SCRIPT_PICK_FILTERS)

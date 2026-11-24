@@ -7,7 +7,7 @@ import { t as translate } from '@/i18n'
 import { desktop, isDesktop } from '@/services/desktop'
 import {
   applyComfyInputs,
-  COMFY_ROLE_LABEL,
+  comfyRoleLabel,
   guessInputMap,
   fitComfyReferenceImages,
   isMediaRole,
@@ -915,7 +915,7 @@ export async function comfyPromptGenerate(opts: {
       else uploaded[b.role] = file
     } catch (e: any) {
       throw new Error(
-        `[comfyui] ${COMFY_ROLE_LABEL[b.role]} 업로드에 실패했습니다. ${e?.message || e} 이 워크플로는 먼저 ComfyUI의 input 디렉터리에 자료를 업로드해야 합니다.`
+        `[comfyui] ${comfyRoleLabel(b.role)} 업로드에 실패했습니다. ${e?.message || e} 이 워크플로는 먼저 ComfyUI의 input 디렉터리에 자료를 업로드해야 합니다.`
       )
     }
   }

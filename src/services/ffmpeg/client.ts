@@ -100,7 +100,7 @@ async function pickBestSource(onLog?: (msg: string) => void): Promise<typeof CDN
   return null
 }
 
-/** 当前这次合成的进度回调。后一次调用会换掉上一次，避免旧的弹窗回调一直收日志。 */
+/** 현재 합성의 진행 콜백이다. 다음 요청에서 바꿔 이전 UI의 콜백으로 로그가 계속 전달되지 않게 한다. */
 let progressSink: ((msg: string) => void) | undefined
 
 function reportFfmpeg(msg: string) {
@@ -155,7 +155,7 @@ export async function getFFmpeg(
     })
     ffmpeg.on('progress', ({ progress }) => {
       if (progress > 0) {
-        log(`处理中 ${Math.min(100, Math.round(progress * 100))}%`)
+        log(`처리 중 ${Math.min(100, Math.round(progress * 100))}%`)
       }
     })
 

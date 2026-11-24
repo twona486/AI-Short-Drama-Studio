@@ -503,7 +503,7 @@ export interface PlayLocationDraft {
   props?: string
 }
 
-/** 识别误放进场景环境设定的分镜标题或角色对白。 */
+/** 장면 환경 설정에 잘못 들어간 샷 제목이나 대사를 감지한다. */
 export function containsSceneDramaText(text: string): boolean {
   const value = String(text || '').replace(/\\\*/g, '*')
   return /【\s*镜头\s*[：:]|(?:^|\n)\s*#{2,4}\s*场景\s*[一二三四五六七八九十百\d]+|\*\*\s*[\u3400-\u9fff\s]{1,12}[：:]\s*\*\*|(?:^|\n)\s*[\u3400-\u9fff]{2,6}[（(][^）)\n]{0,16}[）)]\s*[：:]/m.test(value)

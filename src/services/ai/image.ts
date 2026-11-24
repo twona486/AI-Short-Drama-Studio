@@ -118,7 +118,7 @@ function isGptImageModel(model: string): boolean {
 }
 
 const GPT_IMAGE_QUALITY_SUFFIX = 'Reduce noise, speckling, and smearing. Use smooth colors and a clean finish.'
-const PICTURE_CONTROL_SUFFIX = '画面干净，无噪点，色彩均匀'
+const PICTURE_CONTROL_SUFFIX = 'Use a clean image with even colors and no noise.'
 
 function withGptImageQuality(prompt: string, model: string): string {
   const base = String(prompt || '').trim()
@@ -128,12 +128,12 @@ function withGptImageQuality(prompt: string, model: string): string {
   return `${base} ${GPT_IMAGE_QUALITY_SUFFIX}`
 }
 
-/** 所有生图模型提交前都在提示词末尾加上画面控制，节点上保存的原文不改。 */
+/** 이미지 생성 요청 전에 프롬프트 끝에 구도 제어를 추가한다. 노드의 원문은 보존한다. */
 function withPictureControl(prompt: string): string {
   const base = String(prompt || '').trim()
   if (!base) return PICTURE_CONTROL_SUFFIX
-  if (base.includes(PICTURE_CONTROL_SUFFIX)) return base
-  const joiner = /[。！？.!?；;]$/.test(base) ? '' : '。'
+  if (base.includes(PICTURE_CONTROL_SUFFIX) || base.includes('画面干净，无噪点，色彩均匀')) return base
+  const joiner = /[。！？.!?；;]$/.test(base) ? ' ' : '. '
   return `${base}${joiner}${PICTURE_CONTROL_SUFFIX}`
 }
 

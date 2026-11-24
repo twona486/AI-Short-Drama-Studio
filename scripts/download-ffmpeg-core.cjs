@@ -1,5 +1,5 @@
 /**
- * 下载 FFmpeg core 到 src/assets/ffmpeg/
+ * FFmpeg 코어를 src/assets/ffmpeg/에 다운로드한다.
  *
  * 실행 방법
  *   node scripts/download-ffmpeg-core.cjs
@@ -99,7 +99,7 @@ async function main() {
   const args = parseArgs()
   if (args.help) {
     console.log(`
-Download FFmpeg core to public/ffmpeg/.
+FFmpeg 코어를 src/assets/ffmpeg/에 다운로드해요.
 
 Usage:
   node scripts/download-ffmpeg-core.cjs
@@ -155,8 +155,8 @@ Sources:
     }
   }
 
-  console.log(`\n✅ 完成！文件已放到 src/assets/ffmpeg/`)
-  console.log(`\n下一步：重启 npm run dev，FFmpeg 会优先用本地文件。\n`)
+  console.log(`\nFFmpeg 코어를 src/assets/ffmpeg/에 저장했어요.`)
+  console.log(`\n개발 서버를 다시 시작하면 로컬 FFmpeg 코어를 먼저 사용해요.\n`)
 }
 
 main().catch((e) => {

@@ -27,7 +27,7 @@ function isValueStart(ch: string): boolean {
 
 const THINK_TAG = 'think|thinking|reasoning|analysis'
 
-/** 去掉思考标签。没闭合的标签裁到正式稿开始处，裁不到就整段丢掉。 */
+/** 추론 태그를 제거한다. 태그가 닫히지 않으면 최종 응답 시작점까지 잘라 내고, 시작점이 없으면 전체를 버린다. */
 export function stripThinkTags(content: string): string {
   const closed = new RegExp(`<(?:${THINK_TAG})\\b[^>]*>[\\s\\S]*?<\\/(?:${THINK_TAG})>`, 'gi')
   const untilDeliverable = new RegExp(
@@ -55,7 +55,7 @@ function isDeliverableLine(line: string): boolean {
   )
 }
 
-/** 这一句是在讲自己怎么写，不是给视频模型看的画面。 */
+/** 이 문장은 작성 방법을 설명하는 메타 문장이다. 영상 모델에 줄 화면 설명에서 제외한다. */
 function isReasoningLine(line: string): boolean {
   const t = line.trim()
   if (!t || isDeliverableLine(t)) return false
@@ -105,8 +105,8 @@ function trimReasoningParagraphs(text: string): string {
 }
 
 /**
- * 模型有时把思考过程写进要保存的提示词。
- * 只删标签、开头和结尾的自述，不动中间已经写成的镜头正文。
+ * 모델이 저장할 프롬프트에 추론 과정을 섞어 쓰는 경우가 있다.
+ * 태그와 앞뒤의 작업 설명만 제거한다. 가운데의 샷 본문은 보존한다.
  */
 export function stripReasoningLeak(text: string): string {
   let s = stripThinkTags(text)

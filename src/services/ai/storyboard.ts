@@ -921,7 +921,7 @@ function buildShotWorkBatches(play: string, targetBatches?: number): ShotWorkBat
 }
 
 function verbatimSplitRule(verbatim?: boolean): string {
-  if (!verbatim) return '【对白原文锁定】只拆分镜，不改已有剧本的台词。逐字保留每句原词、说话人和顺序；时长不足则拆镜，不得删减、润色或改派给其他角色。videoPrompt 只描述表演，台词统一以 voiceover 为准。\n'
+  if (!verbatim) return 'Split into shots while keeping every line, speaker and order verbatim. Split a shot if the dialogue does not fit. Use videoPrompt for performance and voiceover for the actual dialogue.\n'
   return `[Imported script: break down without rewriting] This is the user's complete script. Do not polish, rephrase, extend, or alter lines. Do not turn dialogue into narration or narration into dialogue. Copy the original spoken words verbatim into voiceover. Use only specified people, actions, and locations in visualPrompt and videoPrompt. Do not add events, props, reactions, or outcomes. Preserve shot order from the script.\n`
 }
 
@@ -947,7 +947,7 @@ async function generateShotWorkBatch(
   )
   const budgetLine =
     totalShotBudget && totalShotBudget > 0
-      ? `\n【镜头与时长预算】全片目标 ${targetDurationSec || '?'} 秒，允许上下浮动 ${DURATION_TOLERANCE_SEC} 秒，建议约 ${totalShotBudget} 镜。本段最多 ${limit} 镜；按照剧情和对白自然安排，优先合并同一场景的连续动作与对话，不为凑镜数增加空镜。${durationCap ? `本段总时长约 ${durationCap} 秒。` : ''}`
+      ? `\nTarget runtime: ${targetDurationSec || '?'}s with tolerance of ${DURATION_TOLERANCE_SEC}s. Aim for ${totalShotBudget} shots total and at most ${limit} in this excerpt. Combine continuous action and dialogue in the same setting where possible. Do not add silent shots to reach the count.${durationCap ? `Excerpt runtime: about ${durationCap}s.` : ''}`
       : ''
   const parseBatch = (content: string): Record<string, unknown>[] => {
     try {
@@ -983,13 +983,13 @@ Return JSON: {"shots":[{"title":"short Korean title","purpose":"dramatic functio
         },
         {
           role: 'user',
-          content: `工作包：${batch.label}
-已有人物：${subjectNames.join('、') || '（按原文识别）'}
-已有地点：${sceneNames.join('、') || '（按原文识别）'}
-当前视频模型单镜最长 ${shotDurationLimit(input)} 秒。每镜 duration 在 ${MIN_SHOT_SEC}–${shotDurationLimit(input)} 秒内，依据剧情和对白调整。${durationCap ? `本段总时长约 ${durationCap} 秒。` : ''}同一地点、同一人物、同一连续行动能在上限内拍完时，优先合成一个完整镜头。${budgetLine}
-${directives ? `\n全片约束（只用于保真）：\n${directives}\n` : ''}
-${batch.previousHint ? `上一工作包末尾（只用于承接，不要重复拍）：\n${batch.previousHint}\n` : ''}
-本工作包剧本原文：
+          content: `Work batch: ${batch.label}
+Established cast: ${subjectNames.join('、') || '(use source text)'}
+Established locations: ${sceneNames.join('、') || '(use source text)'}
+Use ${MIN_SHOT_SEC}–${shotDurationLimit(input)}s per shot, depending on action and dialogue.${durationCap ? `Excerpt runtime: about ${durationCap}s.` : ''}Keep continuous action by the same cast in one location together when it fits the model limit.${budgetLine}
+${directives ? `\nFilm-wide continuity constraints:\n${directives}\n` : ''}
+${batch.previousHint ? `Previous batch ending for continuity only; do not repeat it:\n${batch.previousHint}\n` : ''}
+Script excerpt:
 ${batch.excerpt}
 ${batch.nextHint ? `\n다음 작업 묶음의 시작(끝 상태를 정하는 데만 사용하고 미리 촬영하지 않음)\n${batch.nextHint}` : ''}`
         }
@@ -1029,8 +1029,8 @@ ${batch.nextHint ? `\n다음 작업 묶음의 시작(끝 상태를 정하는 데
       try {
         const revision = await callLLM({
           messages: [
-            { role: 'system', content: `你是摄影指导，只局部扩写不合格镜头的 videoPrompt。${DIRECTOR_TIMELINE_SPEC}\n以本镜原有剧情和剧本原文为准。不得借用相邻镜剧情，不得修改镜数、人物、场景、时长和对白，不得改动或新增屏显台词。只返回 JSON：{"shots":[{"index":0,"videoPrompt":"…"}]}；index 使用输入原值。` },
-            { role: 'user', content: `剧本片段：\n${batch.excerpt}\n视觉约束：\n${directives}\n待修镜头：\n${JSON.stringify(weak)}` }
+            { role: 'system', content: `Expand only videoPrompt for the supplied shots. ${DIRECTOR_TIMELINE_SPEC}\nStay within each shot and preserve the shot count, cast, settings, duration, dialogue and literal on-screen text. Return JSON only: {"shots":[{"index":0,"videoPrompt":"…"}]}. Keep each original index.` },
+            { role: 'user', content: `Script excerpt:\n${batch.excerpt}\nVisual constraints:\n${directives}\nShots to revise:\n${JSON.stringify(weak)}` }
           ],
           model, temperature: 0.2, maxTokens: Math.max(1600, weak.length * 1000),
           signal: input.signal, timeoutMs: SHOT_EXPAND_TIMEOUT_MS
@@ -1045,7 +1045,7 @@ ${batch.nextHint ? `\n다음 작업 묶음의 시작(끝 상태를 정하는 데
         }
       } catch (error) {
         if (input.signal?.aborted) throw error
-        log(`⚠ 分镜工作包 ${batch.index + 1} 动态正文补写未完成，保留可编辑初稿`)
+        log(`⚠ 스토리보드 묶음 ${batch.index + 1}의 연출을 보완하지 못해 초안을 보관했어요.`)
       }
     }
     return { shots, model: response.model }
@@ -1643,13 +1643,13 @@ ${extractPlayForSceneStage(play)}`
                 !containsSceneDramaText([scene.name, scene.description, scene.mainAnchor, scene.anchors, scene.lighting].filter(Boolean).join('\n'))
               )
             },
-            '场景结果无效：请输出非空 scenes 数组，地点描述只包含无人环境，禁止分镜、人物动作和对白。若地点不明确请标为待确认，不要用剧情标题冒充地点。',
+            'Return a nonempty scenes array. Describe unoccupied locations without shot directions, action or dialogue. Mark unknown locations for confirmation and do not substitute episode titles.',
             sceneUser
           )
         } catch (error) {
           if (isAbortError(error) && !isTimeoutAbort(error)) throw error
           if (!playScenes.length) throw error
-          onProgress?.('模型未完成场景提炼，先保留剧本中明确标注的地点；环境细节请人工补充。')
+          onProgress?.('장면 추출을 완료하지 못했어요. 대본에 명시된 장소를 보관했으니 배경의 세부 사항을 입력해 주세요.')
           scenePart = { raw: { scenes: playScenes }, model: parallelModel }
         }
       }
@@ -1673,7 +1673,7 @@ ${extractPlayForSceneStage(play)}`
       onProgress?.(`✓ 저장된 장면 ${input.existingScenes?.length || 0}개에서 이어서 작업합니다.`)
     }
 
-    onProgress?.('第 3/3 步：根据剧情和视频模型规划分镜…')
+    onProgress?.('3/3단계 · 대본과 영상 모델을 바탕으로 스토리보드를 작성하는 중…')
     const subjectNames = (Array.isArray(subjectPart.raw?.subjects) ? subjectPart.raw.subjects : [])
       .map((item: { name?: unknown }) => String(item?.name || '').trim())
       .filter(Boolean)
@@ -1688,12 +1688,12 @@ ${extractPlayForSceneStage(play)}`
     const totalShotBudget = slices.length
     const wholePlay = play.length <= SHORT_PLAY_MAX_CHARS && (!totalShotBudget || totalShotBudget <= SHORT_PLAY_MAX_SHOTS)
     const workBatches = wholePlay
-      ? [{ index: 0, label: '完整剧情', excerpt: play }]
+      ? [{ index: 0, label: '전체 이야기', excerpt: play }]
       : buildShotWorkBatches(play, totalShotBudget || undefined)
     if (!workBatches.length) throw new Error('대본 본문이 비어 있어 샷을 나눌 수 없습니다.')
     onProgress?.(
       wholePlay
-        ? '剧情适合整体策划：一次完成分镜，优先保留对白并合并连续动作…'
+        ? '대사 원문을 보존하고 이어지는 동작을 한 샷에 담아 전체 스토리보드를 작성하는 중…'
         : slices.length
         ? `목표 길이 ${targetDurationSec}초, 샷당 최대 ${maxShotSec}초 → 작업 그룹 ${workBatches.length}개(${slices.join(' + ')}초)`
         : `${workBatches.length}개 그룹으로 나눴어요. 그룹당 최대 ${SHOTS_PER_BATCH}개 샷을 배정해 ${Math.min(SHOT_BATCH_CONCURRENCY, workBatches.length)}개 그룹을 동시에 처리해요…`
@@ -1826,10 +1826,10 @@ ${extractPlayForSceneStage(play)}`
     }
 
     let rawShots = batchShots.flatMap((rows) => rows || [])
-    // 保留模型返回的全部镜头，避免截断时丢失后半段对白或剧情。
+    // 뒷부분의 대사나 사건을 누락하지 않도록 모델이 반환한 샷을 모두 보관한다.
     if (totalShotBudget && rawShots.length > totalShotBudget) {
       onProgress?.(
-        `⚠ 模型给出 ${rawShots.length} 镜，超过建议预算 ${totalShotBudget} 镜，保留全部内容供检查`
+        `⚠ 모델이 샷 ${rawShots.length}개를 보내 권장 수 ${totalShotBudget}개를 넘었어요. 확인할 수 있도록 모두 보관했어요.`
       )
     }
     if (!rawShots.length) {
@@ -1897,23 +1897,23 @@ ${extractPlayForSceneStage(play)}`
       parallelModel,
       onProgress
     )
-    const pacingIssues = storyboardQualityIssues(parsed, input).filter(issue => issue.startsWith('连续长无对白') || issue.startsWith('严重：系统面板'))
+    const pacingIssues = storyboardQualityIssues(parsed, input).filter(issue => issue.startsWith('긴 무대사 구간') || issue.startsWith('필수 수정 · 시스템 패널'))
     if (pacingIssues.length) {
-      onProgress?.('正在检查并修订系统面板原文与无对白镜头节奏…')
+      onProgress?.('시스템 패널의 원문과 대사가 없는 구간을 확인하는 중…')
       try {
         const repairInput = { ...input, targetDurationSec: targetDurationSec || input.targetDurationSec }
         const repaired = await repairStoryboardOnce(parsed, repairInput, parallelModel, pacingIssues)
         const issues = storyboardQualityIssues(repaired, repairInput)
-        if (repaired.shots.length && !issues.some(issue => issue.startsWith('严重') || issue.startsWith('连续长无对白'))) parsed = repaired
+        if (repaired.shots.length && !issues.some(issue => issue.startsWith('필수 수정') || issue.startsWith('긴 무대사 구간'))) parsed = repaired
       } catch (error) {
         if (input.signal?.aborted) throw error
-        log(`⚠ 无对白节奏修订失败，保留初稿：${(error as Error).message}`)
+        log(`⚠ 대사가 없는 구간을 조정하지 못해 초안을 보관했어요. ${(error as Error).message}`)
       }
     }
     const warnings = storyboardQualityIssues(parsed, input)
     if (warnings.length) {
-      log(`⚠ 并行提炼完成，保留可编辑稿并提示 ${warnings.length} 项：${warnings.join('；')}`)
-      onProgress?.(`分镜已生成，有 ${warnings.length} 项建议检查：${warnings.slice(0, 3).join('；')}${warnings.length > 3 ? '；其他建议见日志' : ''}`)
+      log(`⚠ 스토리보드 초안을 보관했어요. 확인할 항목 ${warnings.length}개 · ${warnings.join(' · ')}`)
+      onProgress?.(`스토리보드를 만들었어요. 검토할 항목 ${warnings.length}개 · ${warnings.slice(0, 3).join(' · ')}${warnings.length > 3 ? ' · 나머지는 로그에서 확인하세요.' : ''}`)
     } else {
       onProgress?.('캐릭터, 장면, 스토리보드를 추출하고 연결했습니다.')
     }
@@ -2311,11 +2311,11 @@ export function storyboardQualityIssues(
   const screenText = compact(result.shots.map(shot => shot.videoPrompt || '').join('\n'))
   const systemCues = [...(input.content || '').matchAll(/【([^】]+)】/g)]
     .map(match => compact(match[1]))
-    .filter(line => /^(?:系统(?:提示|通知|播报)?[：:]|检测到|身份[：:]|危机警报[：:]|生存法则[：:]|任务(?:提示|发布)[：:]|倒计时[：:])/.test(line))
+    .filter(line => /^(?:系统(?:提示|通知|播报)?[：:]|检测到|身份[：:]|危机警报[：:]|生存法则[：:]|任务(?:提示|发布)[：:]|倒计时[：:]|시스템(?: 알림| 안내| 방송)?[：:]|신원[：:]|생존 규칙[：:]|카운트다운[：:]|system(?: notice| notification)?[：:]|countdown[：:])/i.test(line))
   let offset = 0
   for (const cue of systemCues) {
     const found = screenText.indexOf(cue, offset)
-    if (found < 0) issues.push(`严重：系统面板缺少原文或顺序错误：「${cue}」。在 videoPrompt 中逐字写明显示内容和出现时机。`)
+    if (found < 0) issues.push(`필수 수정 · 시스템 패널의 화면 문구가 빠졌거나 순서가 달라요. ‘${cue}’와 표시 시점을 videoPrompt에 적어 주세요.`)
     else offset = found + cue.length
   }
   issues.push(...dialogueVerbatimIssues(input.content || '', result.shots, (result.subjects || []).map((subject) => subject.name)))
@@ -2372,15 +2372,15 @@ export function storyboardQualityIssues(
     for (let i = 1; i < result.shots.length; i++) {
       const [a, b] = [result.shots[i - 1], result.shots[i]]
       if (!a.voiceover?.trim() && !b.voiceover?.trim() && a.duration >= 8 && b.duration >= 8) {
-        issues.push(`连续长无对白：第 ${i}、${i + 1} 镜分别为 ${a.duration}、${b.duration} 秒。检查是否遗漏原台词；保留原词和说话人，将无对白动作并入相邻对白镜或压短。不得编造台词或删除关键事件。`)
+        issues.push(`긴 무대사 구간 · ${i}번과 ${i + 1}번 샷은 각각 ${a.duration}초, ${b.duration}초예요. 빠진 대사가 있는지 확인하고 화자와 원문을 보존하세요. 말 없는 동작은 이웃한 대사 샷에 합치거나 줄이고, 새 대사를 쓰거나 사건을 삭제하지 마세요.`)
       }
     }
   }
   if (sourceHasDialogue && result.shots.length >= 3 && voicedShots.length < Math.ceil(result.shots.length * 0.7)) {
-    issues.push('无台词镜头偏多：请检查原剧本对白是否遗漏，优先合并连续动作与对话，只保留少量确有叙事作用的无台词镜头。')
+    issues.push('대사가 없는 샷이 많아요. 빠진 대사가 있는지 확인하고 이어지는 동작과 대화를 한 샷에 담아 주세요.')
   }
   if (sourceHasDialogue && result.shots.some((shot, index) => index > 0 && !shot.voiceover?.trim() && !result.shots[index - 1].voiceover?.trim())) {
-    issues.push('出现连续无台词镜头，请检查是否能与相邻对白镜头合并；不要为减少镜头删掉原文内容。')
+    issues.push('대사가 없는 샷이 이어져요. 앞뒤의 대사 샷과 합칠 수 있는지 확인하고 대본 원문을 보존하세요.')
   }
   const compactShot = (text: string) => text.replace(/\s|[，。！？、,.!?；;：:]/g, '').toLowerCase()
   for (let index = 1; index < result.shots.length; index++) {
@@ -2391,7 +2391,7 @@ export function storyboardQualityIssues(
     const dialogue = compactShot(current.voiceover || '')
     const priorDialogue = compactShot(previous.voiceover || '')
     if ((visual.length >= 20 && visual === priorVisual) || (dialogue.length >= 8 && dialogue === priorDialogue)) {
-      issues.push(`第 ${index} 镜与第 ${index + 1} 镜画面或对白重复，请核对剧情并合并或改正。`)
+      issues.push(`${index}번과 ${index + 1}번 샷의 화면이나 대사가 겹쳐요. 대본을 확인하고 합치거나 고쳐 주세요.`)
     }
   }
   const looksLikeAd = AD_COPY.test(`${input.topic || ''}\n${input.content || ''}`)
@@ -2576,8 +2576,8 @@ function pickBoundScene(
 function stampCastNames(prompt: string, chars: Subject[]): string {
   const body = (prompt || '').trim()
   if (!chars.length) return body
-  const line = `出场：${chars.map((c) => c.name).join('、')}。主体的外形和已有特征与各自参考图一致，不新增未指定角色。`
-  if (body.includes('出场：') && chars.every((c) => body.includes(c.name))) return body
+  const line = `Cast: ${chars.map((c) => c.name).join(', ')}. Match stable appearance to each reference. Include only this cast.`
+  if (/(?:出场|등장|Cast)\s*[:：]/i.test(body) && chars.every((c) => body.includes(c.name))) return body
   return body ? `${body}\n${line}` : line
 }
 

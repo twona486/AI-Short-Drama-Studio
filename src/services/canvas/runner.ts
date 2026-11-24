@@ -244,7 +244,7 @@ function nodeActivityLabel(node: CanvasNode, p: NonNullable<ReturnType<typeof us
     case 'audio':
       return translate('canvasRunner.narrationLabel', { shot: shotNo(node.data.shotId) })
     case 'audioGen':
-      return '合成音频'
+      return '오디오 합성'
     case 'export':
     case 'final':
       return translate('canvasRunner.assemble')
@@ -1223,7 +1223,7 @@ export async function grabVideoLastFrameNode(
   })
 
   const frameNodeId = `lastFrame:${node.id}`
-  const label = shot ? `第 ${shot.index + 1} 镜 · 尾帧` : `${node.data.label || '视频'} · 尾帧`
+  const label = shot ? `${shot.index + 1}번 샷 · 끝 프레임` : `${node.data.label || '영상'} · 끝 프레임`
   const existing = p.canvas.nodes.find((n) => n.id === frameNodeId)
   if (existing) {
     const old = existing.data.outputAssetId
@@ -1537,7 +1537,7 @@ export async function generateShotVideo(shot: Shot, onProgress?: (msg: string) =
   if (officialPrompt !== shot.compiledVideoPrompt) {
     project.setShotVideoPrompt(shot.id, officialPrompt)
     await project.save()
-    onProgress?.('已按实际参考图顺序更新节点中的图片对应关系')
+    onProgress?.('실제 참조 이미지 순서에 맞춰 노드의 이미지 매핑을 갱신했어요.')
   }
   onProgress?.('노드의 전체 프롬프트로 영상을 생성하는 중…')
   const slotNames = packed.map((entry, index) =>
@@ -1629,7 +1629,7 @@ export async function rewriteShotPerformance(shot: Shot, signal?: AbortSignal): 
   return optimizeShotVideoPrompt(shot, signal, performance)
 }
 
-/** 选了 H3 时，把节点原文编译成官方英文稿。多图参考是六段，首尾帧是对齐句加三段。 */
+/** H3에서는 노드 원문을 공식 영어 형식으로 바꾼다. 다중 참조는 여섯 구역, 시작과 끝 프레임은 첫 정렬 지시와 세 구역을 사용한다. */
 async function compileH3NodePrompt(input: {
   source: string
   referenceIds?: string[]
@@ -1654,7 +1654,7 @@ async function compileH3NodePrompt(input: {
 }): Promise<string> {
   if (input.mode === 'R2VA') {
     return optimizeH3FullReference({ source: input.source, duration: input.duration, dialogue: input.voiceover, aesthetic: input.aesthetic, signal: input.signal,
-      references: (input.referenceIds || []).map((id, index) => ({ id, name: input.imageSlots[index]?.sourceName || input.imageSlots[index]?.name || `图${index + 1}`, kind: input.imageSlots[index]?.kind || 'extra' })) })
+      references: (input.referenceIds || []).map((id, index) => ({ id, name: input.imageSlots[index]?.sourceName || input.imageSlots[index]?.name || `Picture ${index + 1}`, kind: input.imageSlots[index]?.kind || 'extra' })) })
   }
   const spoken = (input.voiceover || '').trim()
   const compiled = (
@@ -1682,16 +1682,16 @@ async function compileH3NodePrompt(input: {
     })
   ).trim()
   const visible = stripReasoningLeak(compiled)
-  if (!visible) throw new Error('模型只返回了思考过程，没有提示词')
+  if (!visible) throw new Error('모델이 추론 과정만 보내고 프롬프트를 보내지 않았어요.')
   const body = visible.match(/integrated_multimodal_description:\s*([\s\S]*?)(?=\n\s*overall_soundscape:|$)/i)?.[1] || ''
   const issue = h3DirectorBodyIssue(body, input.duration)
   if (issue || !preservesScreenText(withVideoReferenceBlock(input.source, []), body)) {
-    throw new Error(`H3 首尾帧提示词优化未通过：${issue || '屏显原文缺失或顺序被改动'}。原提示词已保留。`)
+    throw new Error(`H3 시작·끝 프레임 프롬프트를 최적화하지 못했어요. ${issue || '화면 문구가 빠졌거나 순서가 바뀌었어요.'} 기존 프롬프트를 보관했어요.`)
   }
   return visible
 }
 
-/** 万相等非 H3 模型：只交原文，只要模型返回的正文。 */
+/** Wan 같은 H3 이외 모델에는 원문만 전달하고 응답의 본문만 사용한다. */
 async function rewritePromptText(input: {
   source: string
   pictures?: string
@@ -1708,13 +1708,13 @@ async function rewritePromptText(input: {
     messages: [
       {
         role: 'system',
-        content: `${importedDirectorPrefix()}你在为当前选用的视频模型优化提示词：${input.modelName || '用户选择的视频模型'}。按该模型适合的自然语言视频描述组织内容；不要套用其他模型专有格式，不要强行使用 MiniMax H3 的六段结构或标签。只输出改写后的提示词正文，不要 JSON，不要解释，不要标题。
+        content: `${importedDirectorPrefix()}Optimize this prompt for ${input.modelName || 'the selected video model'}. Write only English video direction suited to that model. Avoid other models' proprietary sections and tags, such as the H3 six-section format. Return only the revised prompt, without JSON, a title, or explanations.
 ${DIRECTOR_TIMELINE_SPEC}
-当前片段 ${input.duration} 秒，画幅 ${input.aspectRatio || '以节点为准'}。保留已有的拍摄细节、画风、人物、动作和对白，不把导演稿缩成总结；不新增人物、事件或台词。图片对应表由程序添加，不在正文重复。每句台词必须保留原词、原说话人和顺序，逐人分别标注；无法确定说话人时不要猜测。`
+Duration: ${input.duration}s. Aspect ratio: ${input.aspectRatio || 'use the node setting'}. Preserve the existing direction, visual style, cast, action, and exact dialogue with original speakers and order. Do not summarize the direction or add new characters, events or lines. Image assignments come from the runtime. Do not guess speakers.`
       },
       {
         role: 'user',
-        content: `${input.pictures ? `实际参考图顺序：\n${input.pictures}\n\n` : ''}${input.dialogue ? `原始对白及说话人（逐句保留）：\n${input.dialogue}\n\n` : ''}原文：\n${input.source}${issue ? `\n上一次未通过：${issue}。请完整重写正文。` : ''}`
+        content: `${input.pictures ? `Submitted reference image order:\n${input.pictures}\n\n` : ''}${input.dialogue ? `Original dialogue and speakers:\n${input.dialogue}\n\n` : ''}Source:\n${input.source}${issue ? `\nPrevious validation issue: ${issue}. Rewrite the entire prompt.` : ''}`
       }
     ],
     temperature: 0.5,
@@ -1727,12 +1727,12 @@ ${DIRECTOR_TIMELINE_SPEC}
       .replace(/^```(?:json|text|markdown)?\s*/i, '')
       .replace(/\s*```$/, '')
   )
-    issue = resp.finishReason === 'length' ? '输出被截断' :
+    issue = resp.finishReason === 'length' ? '응답이 중간에 끊겼어요.' :
       directorTimelineIssue(text, input.duration) ||
-      (!preservesScreenText(withVideoReferenceBlock(input.source, []), text) ? '屏显原文缺失或顺序被改动' : '')
+      (!preservesScreenText(withVideoReferenceBlock(input.source, []), text) ? '화면 문구가 빠졌거나 순서가 바뀌었어요.' : '')
     if (!issue) return text
   }
-  throw new Error(`未写出可用的导演分镜：${issue}。原提示词已保留。`)
+  throw new Error(`연출 프롬프트를 만들지 못했어요. ${issue} 기존 프롬프트를 보관했어요.`)
 }
 
 /** 노드에 저장된 프롬프트를 모델로 보내고 본문을 반환한다. */
@@ -1785,17 +1785,17 @@ export async function optimizeShotVideoPrompt(shot: Shot, signal?: AbortSignal, 
     })
   } else {
     const pictures = imageSlots
-      .map((slot) => `图片${slot.index}：${slot.sourceName || slot.name}`)
+      .map((slot) => `Picture ${slot.index}: ${slot.sourceName || slot.name}`)
       .join('\n')
-    compiled = await rewritePromptText({ source, pictures, modelName: videoModel === 'wan-prime' ? '万相 3.0 Prime' : [profile?.name, profile?.workflowId].filter(Boolean).join(' / '), dialogue: shot.voiceover, duration: clampVideoDuration(shot.duration, videoModel), aspectRatio: shotNodeAspect(p, shot.id, 'shotVideo'), signal })
+    compiled = await rewritePromptText({ source, pictures, modelName: videoModel === 'wan-prime' ? 'Wan 3.0 Prime' : [profile?.name, profile?.workflowId].filter(Boolean).join(' / '), dialogue: shot.voiceover, duration: clampVideoDuration(shot.duration, videoModel), aspectRatio: shotNodeAspect(p, shot.id, 'shotVideo'), signal })
   }
   const currentShot = refreshShot(shot.id)
   const currentProfile = videoProfileById(canvasVideoNodeForShot(currentShot)?.data.videoProfileId || currentShot.videoProfileId)
   if (currentProfile?.id !== profile?.id || currentProfile?.workflowId !== profile?.workflowId || canvasVideoModelForShot(currentShot) !== videoModel) {
-    throw new Error('优化期间视频模型已变更，请重新优化提示词')
+    throw new Error('최적화 중 영상 모델이 바뀌었어요. 다시 최적화하세요.')
   }
   if ((currentShot.compiledVideoPrompt || '').trim() !== box || (currentShot.videoPrompt || '').trim() !== performance || JSON.stringify(packVideoRefEntries(collectShotVideoEntries(currentShot, project.current!))) !== JSON.stringify(packed)) {
-    throw new Error('优化期间提示词或参考图已变更，请重新优化')
+    throw new Error('최적화 중 프롬프트나 참조 이미지가 바뀌었어요. 다시 최적화하세요.')
   }
   compiled = withVideoReferenceBlock(compiled, packed)
   if (rewrittenPerformance) project.updateShot(shot.id, { videoPrompt: rewrittenPerformance })
@@ -1897,22 +1897,22 @@ export async function generateFreeformAudio(
   const assets = useAssetsStore()
   const p = project.current
   const node = p?.canvas?.nodes.find((n) => n.id === nodeId)
-  if (!p || !node || node.type !== 'audioGen') throw new Error('找不到音频节点')
+  if (!p || !node || node.type !== 'audioGen') throw new Error('오디오 노드를 찾을 수 없어요.')
   const text = spokenTextOnly(node.data.prompt || '').trim() || (node.data.prompt || '').trim()
-  if (!text) throw new Error('先写下要说的内容')
+  if (!text) throw new Error('말할 내용을 먼저 적어 주세요.')
   const model = node.data.ttsModel?.trim() || useSettingsStore().config.tts.model
   const wantsClone = modelAcceptsReferenceAudio(model)
   let blob: Blob
   if (wantsClone) {
     if (!node.data.referenceAudioAssetId && !node.data.clonedVoiceId) {
-      throw new Error('这个模型需要参考音频，请先上传一段声音样本')
+      throw new Error('이 모델에 사용할 목소리 샘플을 먼저 업로드하세요.')
     }
     let voiceId = node.data.clonedVoiceId
     let voiceModel = node.data.clonedVoiceModel || 'qwen3-tts-vc-2026-01-22'
     if (!voiceId) {
-      onProgress?.('复刻参考音色…')
+      onProgress?.('참조 음색을 복제하는 중…')
       const sample = await assets.getBlob(node.data.referenceAudioAssetId!)
-      if (!sample) throw new Error('参考音频读取失败，请重新上传')
+      if (!sample) throw new Error('참조 오디오를 읽지 못했어요. 다시 업로드하세요.')
       const cloned = await cloneVoiceFromSample(
         sample,
         `node${nodeId.replace(/[^a-z0-9]/gi, '').slice(-10) || 'voice'}`,
@@ -1923,10 +1923,10 @@ export async function generateFreeformAudio(
       project.patchCanvasNode(nodeId, { clonedVoiceId: voiceId, clonedVoiceModel: voiceModel })
       await project.save()
     }
-    onProgress?.('按参考音色合成…')
+    onProgress?.('참조 음색으로 합성하는 중…')
     blob = await synthesizeClonedSpeech(text, voiceId, voiceModel, signal)
   } else {
-    onProgress?.('合成音频…')
+    onProgress?.('오디오 합성…')
     const result = await generateSpeech({
       text,
       model,
@@ -2776,7 +2776,7 @@ export async function generateFreeformVideo(
   } else {
     for (const id of ids) {
       const b = (await assets.getBlob(id)) || (await library.getBlob(id))
-      if (!b) throw new Error(`第 ${blobs.length + 1} 张参考图读取失败，请重新添加后再生成。`)
+      if (!b) throw new Error(`참조 이미지 ${blobs.length + 1}번을 읽지 못했어요. 다시 추가한 뒤 생성하세요.`)
       blobs.push(b)
     }
   }
@@ -2862,18 +2862,18 @@ export async function optimizeFreeformVideoPrompt(nodeId: string, signal?: Abort
     })
   } else {
     const pictures = slotEntries
-      .map((entry, index) => `图片${index + 1}：${entry.name || '参考图'}`)
+      .map((entry, index) => `Picture ${index + 1}: ${entry.name || 'Reference image'}`)
       .join('\n')
-    compiled = await rewritePromptText({ source, pictures, modelName: videoModel === 'wan-prime' ? '万相 3.0 Prime' : [profile?.name, profile?.workflowId].filter(Boolean).join(' / '), duration: clampVideoDuration(node.data.duration, videoModel, 8), aspectRatio: canvasNodeAspect(node, p.settings.aspectRatio), signal })
+    compiled = await rewritePromptText({ source, pictures, modelName: videoModel === 'wan-prime' ? 'Wan 3.0 Prime' : [profile?.name, profile?.workflowId].filter(Boolean).join(' / '), duration: clampVideoDuration(node.data.duration, videoModel, 8), aspectRatio: canvasNodeAspect(node, p.settings.aspectRatio), signal })
     compiled = withVideoReferenceBlock(compiled, slotEntries)
   }
   const currentNode = project.current?.canvas?.nodes.find((item) => item.id === nodeId)
   const currentProfile = videoProfileById(currentNode?.data.videoProfileId)
   if (!currentNode || currentProfile?.id !== profile?.id || currentProfile?.workflowId !== profile?.workflowId || normalizeVideoGenModel(currentNode.data.videoModel) !== videoModel) {
-    throw new Error('优化期间视频模型已变更，请重新优化提示词')
+    throw new Error('최적화 중 영상 모델이 바뀌었어요. 다시 최적화하세요.')
   }
   if ((currentNode.data.prompt || '').trim() !== source || JSON.stringify(canvasReferenceSlotEntries(project.current!, currentNode)) !== JSON.stringify(slotEntries)) {
-    throw new Error('优化期间提示词或参考图已变更，请重新优化')
+    throw new Error('최적화 중 프롬프트나 참조 이미지가 바뀌었어요. 다시 최적화하세요.')
   }
   project.setCanvasNodePrompt(nodeId, compiled)
   await project.save()
