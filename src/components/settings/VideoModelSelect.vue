@@ -47,8 +47,8 @@ function onPick(v: string) {
 
 <template>
   <ParamSelect :label="label" max-width="260px" :model-value="value" @update:model-value="onPick">
-    <option v-if="missingProfile" value="__missing__" disabled>原工作流已删除，请重新选择</option>
-    <optgroup v-if="comfyWorkflows.length" label="ComfyUI 工作流">
+    <option v-if="missingProfile" value="__missing__" disabled>{{ $t('mediaNodes.missingWorkflow') }}</option>
+    <optgroup v-if="comfyWorkflows.length" :label="$t('mediaNodes.comfyWorkflow')">
       <option v-for="p in comfyWorkflows" :key="p.id" :value="p.id">{{ p.name }}</option>
     </optgroup>
     <optgroup v-if="otherProfiles.length" :label="$t('common.configuredVideo')">

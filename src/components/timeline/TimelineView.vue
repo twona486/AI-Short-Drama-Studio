@@ -175,10 +175,10 @@ function startPlayheadDrag(evt: MouseEvent) {
   <div class="tlbody">
     <div class="tlnames">
       <div class="ruler-sp"></div>
-      <div class="tlname"><i class="sw text"></i>叠加层</div>
-      <div class="tlname"><i class="sw video"></i>主视频</div>
+      <div class="tlname"><i class="sw text"></i>{{ $t('timelineTracks.overlay') }}</div>
+      <div class="tlname"><i class="sw video"></i>{{ $t('timelineTracks.mainVideo') }}</div>
       <div class="tlname"><i class="sw voice"></i>{{ $t('common.voiceover') }}</div>
-      <div class="tlname"><i class="sw audio"></i>背景音乐</div>
+      <div class="tlname"><i class="sw audio"></i>{{ $t('timelineTracks.bgm') }}</div>
     </div>
     <div class="lanes">
       <div class="timeline-content" :style="{ width: totalWidth + 'px' }" @click="seekFromPointer">
@@ -196,7 +196,7 @@ function startPlayheadDrag(evt: MouseEvent) {
         <div
           class="playhead"
           :style="{ left: Math.max(0, Math.min(totalDuration, playhead || 0)) * PX_PER_SECOND + 'px' }"
-          title="拖动竖线定位，右键片段按竖线剪切"
+          :title="$t('timelineTracks.playheadHint')"
           @click.stop
         >
           <span class="playhead-cap" @mousedown="startPlayheadDrag" />
@@ -238,7 +238,7 @@ function startPlayheadDrag(evt: MouseEvent) {
             <div class="clip-handle left" :title="$t('timeline.trimStart')" @mousedown="(e) => startTrim(clip, 'left', e)" />
             <div class="clip-handle right" :title="$t('timeline.trimEnd')" @mousedown="(e) => startTrim(clip, 'right', e)" />
           </div>
-          <div v-if="clips.length === 0" class="lane-empty">从左侧片段加入，或用更多里的重建时间线</div>
+          <div v-if="clips.length === 0" class="lane-empty">{{ $t('timelineTracks.emptyTimeline') }}</div>
         </div>
         <div class="lane">
           <button
@@ -270,10 +270,10 @@ function startPlayheadDrag(evt: MouseEvent) {
     </div>
     <Teleport to="body">
       <div v-if="menu" class="trim-menu-backdrop" @click.self="menu = null" @contextmenu.prevent.self="menu = null" @keydown.esc="menu = null">
-        <div class="trim-menu" :style="{ left: menu.x + 'px', top: menu.y + 'px' }" aria-label="片段裁剪">
-          <small>{{ canTrim ? '以当前播放头为裁剪点' : '请先将竖线移到片段内部' }}</small>
-          <button type="button" :disabled="!canTrim" @click="applyTrim('left')">向左裁剪 · 去掉前段</button>
-          <button type="button" :disabled="!canTrim" @click="applyTrim('right')">向右裁剪 · 去掉后段</button>
+        <div class="trim-menu" :style="{ left: menu.x + 'px', top: menu.y + 'px' }" :aria-label="$t('timelineTracks.trimClip')">
+          <small>{{ canTrim ? $t('timelineTracks.playheadCut') : $t('timelineTracks.movePlayhead') }}</small>
+          <button type="button" :disabled="!canTrim" @click="applyTrim('left')">{{ $t('timelineTracks.trimLeft') }}</button>
+          <button type="button" :disabled="!canTrim" @click="applyTrim('right')">{{ $t('timelineTracks.trimRight') }}</button>
         </div>
       </div>
     </Teleport>

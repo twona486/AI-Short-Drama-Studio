@@ -240,9 +240,9 @@ function patchAdapter(
     <template v-else-if="module === 'vision'">
       <button type="button" class="vision-switch" role="switch" :aria-checked="settings.config.visionEnabled" :class="{ on: settings.config.visionEnabled }" @click="settings.update({ visionEnabled: !settings.config.visionEnabled })">
         <span class="vision-switch-track" aria-hidden="true"><span /></span>
-        <span>{{ settings.config.visionEnabled ? '视觉模型已开启' : '视觉模型未开启' }}</span>
+        <span>{{ settings.config.visionEnabled ? $t('mediaNodes.visionOn') : $t('mediaNodes.visionOff') }}</span>
       </button>
-      <p class="hint">打开后，看图、确认参考图是谁、以及画面核对才会调用视觉模型。关掉就只用语言模型看图片名称。</p>
+      <p class="hint">{{ $t('mediaNodes.visionHint') }}</p>
       <ProfileLibrary
         :title="$t('studioSettings.savedVision')"
         :hint="$t('studioSettings.savedVisionHint')"
@@ -453,7 +453,7 @@ function patchAdapter(
         </div>
         </details>
         <h3 class="api-title">{{ $t('studioSettings.remoteApi') }}</h3>
-        <p class="hint">大厂官方接口和中转站填写在这里；本机工作流请在左侧「ComfyUI 接入」配置。</p>
+        <p class="hint">{{ $t('mediaNodes.remoteHint') }}</p>
         <p v-if="settings.config.video.provider === 'apimart'" class="hint">
           {{ $t('studioSettings.apimartVideo') }}
         </p>

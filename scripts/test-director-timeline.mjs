@@ -30,4 +30,4 @@ assert.equal(preservesScreenText('【第一条】【第二条】', '【第二条
 assert.equal(preservesScreenText('【16:9｜3D 卡通动画风格】', '新的分镜正文'), true)
 assert.match(h3DirectorBodyIssue('[Shot 1] Macro close-up. The camera pulls back and the ant climbs out.', 15), /过短/)
 assert.equal(h3DirectorBodyIssue(`[Shot 1] A ground-level macro close-up catches the ant's foreleg folding toward its shell and scraping back across the wet leaf. The camera holds level for the first movement, then pulls straight back without cutting, keeping focus on the trembling foot while the crushed edge of the leaf and the pit gradually emerge. The ant digs its front legs into a crease and draws the shell forward. At the rim the frame stops widening. The rear legs settle into the mulch and a loose leaf slips back into the pit with a quiet scrape. A translucent panel appears at screen left and holds clear of the ant's head.`, 15), null)
-console.log('通过：动态分镜细节、时间覆盖与屏显原文回归测试')
+console.log('통과 · 스토리보드 세부 묘사, 시간 구간 및 화면 문구 보존')

@@ -154,7 +154,7 @@ async function onValidateAndSave() {
     toast.error(parsed.detail)
     return
   }
-  // 先落盘模板，再让助手分析映射（分析失败也至少保住了工作流本身）
+  // Keep the workflow template even if assisted mapping fails.
   inspectLocally(parsed.template)
 }
 
@@ -180,7 +180,7 @@ function onSaveMapJson() {
     const obj = validateInputMap(JSON.parse(props.adapter?.workflowTemplate || '{}'), candidate)
     mapInfo.value = obj
     emit('patch', { ...(props.adapter || {}), inputMap: obj })
-    status.value = `映射已更新：${describeInputMap(obj)}`
+    status.value = translate('mediaNodes.updatedMapping', { summary: describeInputMap(obj) })
     toast.success(props.draftOnly ? translate('comfyMapping.confirmBeforeSave') : translate('comfyMapping.savedMap'))
   } catch (e: any) {
     toast.error(translate('comfyWorkflowPanel.invalidMapping', { p0: e?.message || e }))
@@ -358,8 +358,8 @@ function clearTemplate() {
         <p class="hint">{{ $t('comfyMapping.referenceSlotsHint') }}</p>
         <div v-for="(binding, index) in editableMap" :key="index" class="mapping-row">
           <select v-model="binding.role" :aria-label="$t('comfyMapping.role')"><option v-for="(label, key) in COMFY_ROLE_LABEL" :key="key" :value="key">{{ label }}</option></select>
-          <select :value="JSON.stringify([binding.nodeId, binding.field])" :aria-label="$t('comfyMapping.field')" @change="setTarget(binding, $event)"><option :value="JSON.stringify(['',''])" disabled>选择节点字段</option><option v-for="option in inputs" :key="option.key" :value="option.key">{{ option.label }}</option></select>
-          <select v-if="binding.role === 'length'" v-model="binding.durationUnit" :aria-label="$t('comfyMapping.durationUnit')"><option :value="undefined">{{ $t('comfyMapping.selectUnit') }}</option><option value="seconds">{{ $t('common.seconds') }}</option><option value="frames">帧</option></select>
+          <select :value="JSON.stringify([binding.nodeId, binding.field])" :aria-label="$t('comfyMapping.field')" @change="setTarget(binding, $event)"><option :value="JSON.stringify(['',''])" disabled>{{ $t('mediaNodes.chooseField') }}</option><option v-for="option in inputs" :key="option.key" :value="option.key">{{ option.label }}</option></select>
+          <select v-if="binding.role === 'length'" v-model="binding.durationUnit" :aria-label="$t('comfyMapping.durationUnit')"><option :value="undefined">{{ $t('comfyMapping.selectUnit') }}</option><option value="seconds">{{ $t('common.seconds') }}</option><option value="frames">{{ $t("mediaNodes.frames") }}</option></select>
           <button type="button" class="mini" @click="editableMap.splice(index, 1)">{{ $t('common.remove') }}</button>
         </div>
         <button type="button" class="mini" @click="editableMap.push({ role: 'prompt' as ComfyInputRole, nodeId: '', field: '' })">{{ $t('comfyMapping.addMapping') }}</button>

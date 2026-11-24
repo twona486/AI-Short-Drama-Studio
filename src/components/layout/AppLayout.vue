@@ -5,7 +5,7 @@ import TopBar from './TopBar.vue'
 import StepNav from './StepNav.vue'
 
 const route = useRoute()
-/** 剧本管理是独立页，不走经典步骤侧栏 */
+/** The script library has its own layout. */
 const showSteps = computed(() => route.name !== 'scripts')
 </script>
 

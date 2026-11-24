@@ -364,7 +364,7 @@ function addShotToTimeline(shot: Shot, preview = true) {
   }
   project.addClip(newClip)
   if (preview) {
-    toast.success(`已加入：${shot.title}`)
+    toast.success(translate('editTimeline.addedShot', { title: shot.title }))
     void focusClip(newClip.id)
   }
 }
@@ -379,7 +379,7 @@ function addAllShots() {
   }
   const first = timeline.value[0]
   if (first) void focusClip(first.id)
-  if (added) toast.success(`已加入 ${added} 个片段`)
+  if (added) toast.success(translate('editTimeline.addedClips', { count: added }))
 }
 
 function appendMissingShots() {
@@ -566,7 +566,7 @@ async function assignVoice(assetId?: string) {
     try {
       meta = await assets.adopt(assetId, 'audio', { projectId: project.current.id })
     } catch (error: any) {
-      toast.error(`配音读取失败：${error?.message || '素材无效'}`)
+      toast.error(translate('editTimeline.readVoiceFailed', { reason: error?.message || translate('editTimeline.invalidAsset') }))
       return
     }
   }
@@ -614,7 +614,7 @@ async function importVoice() {
     })
     await assignVoice(asset.id)
   } catch (error: any) {
-    toast.error(`导入配音失败：${error?.message || String(error)}`)
+    toast.error(translate('editTimeline.importVoiceFailed', { reason: error?.message || String(error) }))
   } finally {
     importingVoice.value = false
   }
@@ -764,7 +764,7 @@ const importedClips = computed(() => {
 })
 
 function noteComposeProgress(msg: string) {
-  const matched = /处理中\s+(\d+(?:\.\d+)?)%/.exec(msg)
+  const matched = /(?:处理中|처리 중|Processing)\s+(\d+(?:\.\d+)?)%/i.exec(msg)
   if (!matched) return
   previewProgress.value = Math.min(100, Math.round(Number(matched[1])))
 }
@@ -1075,7 +1075,7 @@ function goBack() {
         <div class="tlwrap">
           <div class="tltool">
             <span class="kicker">{{ $t('common.timeline') }}</span>
-            <span class="badge">{{ timeline.length }} 段</span>
+            <span class="badge">{{ $t('editTimeline.clipCount', { count: timeline.length }) }}</span>
             <span class="badge">{{ timecode(timelineEnd) }}</span>
             <button type="button" class="tl-act" @click="addTextOverlay">{{ $t('edit.text') }}</button>
             <button type="button" class="tl-act" :disabled="!canTrimSelected" @click="trimSelected('left')">{{ $t('editTimeline.trimStart') }}</button>

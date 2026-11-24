@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { t as localized } from '@/i18n'
 import { confirmAction } from '@/utils/confirmAction'
 import { t as translate } from '@/i18n'
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
@@ -61,7 +62,7 @@ async function openScriptLibrary(ev?: Event) {
   try {
     await scripts.refresh()
   } catch (error: any) {
-    toast.error(error?.message || '读取剧本库失败')
+    toast.error(error?.message || localized('mediaNodes.scriptReadFailed'))
   } finally {
     libraryLoading.value = false
   }
@@ -79,7 +80,7 @@ async function selectLibraryScript(id: string) {
     if (requestId !== libraryRequestId || !libraryOpen.value) return
     libraryEpisodes.value = parseScriptDoc(content).episodes
   } catch (error: any) {
-    if (requestId === libraryRequestId) toast.error(error?.message || '读取剧本集数失败')
+    if (requestId === libraryRequestId) toast.error(error?.message || localized('mediaNodes.episodeReadFailed'))
   } finally {
     if (requestId === libraryRequestId) libraryLoading.value = false
   }
@@ -91,7 +92,7 @@ async function useLibraryScript() {
   if (!doc || index === null || libraryLoading.value) return
   const episode = libraryEpisodes.value[index]
   if (!episode?.content.trim()) {
-    toast.warn('这一集还没有正文，请选择有内容的集数')
+    toast.warn(localized('mediaNodes.noEpisodeContent'))
     return
   }
   libraryLoading.value = true
@@ -100,7 +101,7 @@ async function useLibraryScript() {
     const content = serializeScriptDoc({ title, preamble: '', episodes: [episode] })
     if (await applyImportedMarkdown(content, `${title}.md`)) libraryOpen.value = false
   } catch (error: any) {
-    toast.error(error?.message || '读取剧本失败')
+    toast.error(error?.message || localized('mediaNodes.couldNotReadScript'))
   } finally {
     libraryLoading.value = false
   }
@@ -266,7 +267,7 @@ async function approvePlay(ev: Event) {
 async function applyImportedMarkdown(text: string, filename: string) {
   if (!project.current) return false
   const existing = (project.current.script?.content || '').trim()
-  if (existing && !confirm('导入会替换当前剧本正文，确定吗？')) return false
+  if (existing && !confirm(localized('mediaNodes.replaceCurrentScript'))) return false
   try {
     const script = scriptFromImportedPlay(project.current, text, filename)
     project.setScript(script)
@@ -474,8 +475,8 @@ async function generateThis(ev: Event, kind: 'play' | 'extract' | 'continue' = '
         <div class="empty-cards">
           <button type="button" class="empty-card" :disabled="generating" @click="openScriptLibrary">
             <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 4.5h11a2 2 0 0 1 2 2v13H6.5A2.5 2.5 0 0 1 4 17V6a1 1 0 0 1 1-1.5Z" /><path d="M4 17a2.5 2.5 0 0 1 2.5-2.5H18M8 8h6M8 11h6" /></svg>
-            <strong>从剧本库选择</strong>
-            <span>从剧本管理中心选择要拍摄的集数</span>
+            <strong>{{ $t('mediaNodes.chooseScript') }}</strong>
+            <span>{{ $t('mediaNodes.chooseScriptHint') }}</span>
           </button>
           <button type="button" class="empty-card" :disabled="generating" @click="importMarkdown">
             <svg viewBox="0 0 24 24" aria-hidden="true">
@@ -538,27 +539,27 @@ async function generateThis(ev: Event, kind: 'play' | 'extract' | 'continue' = '
       <div v-if="libraryOpen" class="script-library-backdrop" @click.self="libraryOpen = false" @keydown.esc="libraryOpen = false">
         <section class="script-library-dialog" role="dialog" aria-modal="true" aria-labelledby="script-library-title" @mousedown.stop @click.stop>
           <header class="script-library-head">
-            <div><strong id="script-library-title">从剧本库选择</strong><p>先选剧本，再选择本次拍摄的集数；只会载入这一集。</p></div>
+            <div><strong id="script-library-title">{{ $t('mediaNodes.chooseScript') }}</strong><p>{{ $t('mediaNodes.chooseEpisodeHint') }}</p></div>
             <button type="button" class="sdoc-btn" :aria-label="$t('common.close')" @click="libraryOpen = false">✕</button>
           </header>
-          <p v-if="libraryLoading" class="script-library-empty">正在读取剧本…</p>
-          <p v-else-if="!scripts.docs.length" class="script-library-empty">剧本库还是空的，请先在剧本管理中心创建或导入剧本。</p>
+          <p v-if="libraryLoading" class="script-library-empty">{{ $t('mediaNodes.readingScripts') }}</p>
+          <p v-else-if="!scripts.docs.length" class="script-library-empty">{{ $t('mediaNodes.emptyLibrary') }}</p>
           <div v-else class="script-library-list">
             <button v-for="doc in scripts.docs" :key="doc.id" type="button" class="script-library-item" :class="{ on: librarySelected === doc.id }" @click="selectLibraryScript(doc.id)">
-              <strong>{{ doc.title }}</strong><span>{{ doc.episodeCount }} 集 · {{ doc.totalWords }} 字</span>
+              <strong>{{ doc.title }}</strong><span>{{ $t('scriptDesk.counts', { episodes: doc.episodeCount, words: doc.totalWords }) }}</span>
             </button>
           </div>
           <div v-if="librarySelected && !libraryLoading && libraryEpisodes.length" class="script-library-episodes">
-            <strong>选择集数</strong>
+            <strong>{{ $t('mediaNodes.chooseEpisode') }}</strong>
             <div class="script-library-episode-list">
               <button v-for="(episode, index) in libraryEpisodes" :key="index" type="button" class="script-library-item" :class="{ on: libraryEpisodeIndex === index }" :disabled="!episode.content.trim()" @click="libraryEpisodeIndex = index">
-                <strong>{{ episode.title || `第 ${index + 1} 集` }}</strong><span>{{ episode.content.trim() ? `${episode.content.replace(/\s/g, '').length} 字` : '暂无正文' }}</span>
+                <strong>{{ episode.title || $t('scriptDesk.episodesOnly', { count: index + 1 }) }}</strong><span>{{ episode.content.trim() ? $t('scriptDesk.characters', { count: episode.content.replace(/\s/g, '').length }) : $t('mediaNodes.noBody') }}</span>
               </button>
             </div>
           </div>
           <footer class="script-library-foot">
             <button type="button" class="sdoc-btn" @click="libraryOpen = false">{{ $t('common.cancel') }}</button>
-            <button type="button" class="sdoc-btn primary" :disabled="libraryEpisodeIndex === null || libraryLoading" @click="useLibraryScript">使用这一集</button>
+            <button type="button" class="sdoc-btn primary" :disabled="libraryEpisodeIndex === null || libraryLoading" @click="useLibraryScript">{{ $t('mediaNodes.useEpisode') }}</button>
           </footer>
         </section>
       </div>

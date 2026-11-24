@@ -169,20 +169,20 @@ async function confirm() {
     for (const id of picked.value) {
       const template = galleryTemplates.find(item => item.id === id)
       if (!template) { ids.push(id); continue }
-      const filename = `图库模板-${template.title}.jpg`
+      const filename = translate('mediaNodes.galleryFilename', { name: template.title })
       const existing = assets.all.find(asset => asset.kind === 'image' && asset.filename === filename && asset.prompt === template.id && asset.projectId === project.current?.id)
       if (existing) { ids.push(existing.id); continue }
       const response = await fetch(template.url)
-      if (!response.ok) throw new Error(`无法读取「${template.title}」，请重试。`)
+      if (!response.ok) throw new Error(translate('mediaNodes.galleryReadError', { name: template.title }))
       const blob = await response.blob()
-      if (!blob.type.startsWith('image/')) throw new Error(`「${template.title}」不是有效图片。`)
+      if (!blob.type.startsWith('image/')) throw new Error(translate('mediaNodes.galleryInvalidImage', { name: template.title }))
       const asset = await assets.add(blob, 'image', 'uploaded', { filename, prompt: template.id, projectId: project.current?.id })
       ids.push(asset.id)
     }
     emit('confirm', ids)
     emit('close')
   } catch (error) {
-    importError.value = error instanceof Error ? error.message : '图库模板导入失败，请重试。'
+    importError.value = error instanceof Error ? error.message : translate('mediaNodes.galleryImportFailed')
   } finally {
     importing.value = false
   }
@@ -220,7 +220,7 @@ function labelOf(a: Asset) {
           <div v-if="showTabs" class="tabs">
             <button type="button" :class="{ on: tab === 'page' }" @click="tab = 'page'">{{ pageTabLabel }}</button>
             <button type="button" :class="{ on: tab === 'library' }" @click="tab = 'library'">{{ $t('common.assetLibrary') }}</button>
-            <button v-if="kind === 'image' || kind === 'all'" type="button" :class="{ on: tab === 'templates' }" @click="tab = 'templates'">图库模板</button>
+            <button v-if="kind === 'image' || kind === 'all'" type="button" :class="{ on: tab === 'templates' }" @click="tab = 'templates'">{{ $t('upstreamHome.galleryTemplates') }}</button>
           </div>
           <div v-if="showTabs && tab === 'library'" class="folder-rail">
             <button
@@ -288,11 +288,11 @@ function labelOf(a: Asset) {
           </div>
 
           <footer class="foot">
-            <span class="count">已选 {{ picked.size }} 项</span>
+            <span class="count">{{ $t('upstreamHome.selectedCount', { count: picked.size }) }}</span>
             <span v-if="importError" role="alert">{{ importError }}</span>
             <GradientButton type="ghost" :disabled="importing" @click="emit('close')">{{ $t('common.cancel') }}</GradientButton>
             <GradientButton :disabled="picked.size === 0 || importing" @click="confirm">
-              {{ importing ? '正在导入…' : $t('common.useSelection') }}
+              {{ importing ? $t('mediaNodes.galleryImporting') : $t('common.useSelection') }}
             </GradientButton>
           </footer>
         </div>

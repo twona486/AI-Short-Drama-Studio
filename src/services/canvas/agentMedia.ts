@@ -63,7 +63,7 @@ export async function inspectCanvasImage(nodeId: string, index: number | undefin
 }
 
 export function isTailContinuationRequest(text: string): boolean {
-  return /尾帧|最后\s*(?:一|1)\s*帧|末帧/.test(text) && /续拍|继续|往下拍|接着拍|延续|接下去/.test(text)
+  return /尾帧|最后\s*(?:一|1)\s*帧|末帧|끝 프레임|마지막 프레임/.test(text) && /续拍|继续|往下拍|接着拍|延续|接下去|이어(?:서)?|계속/.test(text)
 }
 
 export async function createTailContinuation(nodeId: string, request: string, signal?: AbortSignal, onLog?: (message: string) => void) {

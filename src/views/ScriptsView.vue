@@ -92,13 +92,13 @@ const scriptMode = ref<'source' | 'preview'>('source')
 const caret = ref({ line: 1, col: 1 })
 const episodeChars = computed(() => (draft.value?.content || '').replace(/\s/g, '').length)
 const savedLabel = computed(() => {
-  if (saving.value) return '保存中'
-  if (dirty.value) return '未保存'
+  if (saving.value) return translate('scriptDesk.saving')
+  if (dirty.value) return translate('scriptDesk.unsaved')
   const ts = activeDoc.value?.updatedAt
-  if (!ts) return '已保存'
+  if (!ts) return translate('scriptDesk.saved')
   const d = new Date(ts)
   const pad = (n: number) => String(n).padStart(2, '0')
-  return `已保存 ${pad(d.getHours())}:${pad(d.getMinutes())}`
+  return translate('scriptDesk.savedTime', { time: `${pad(d.getHours())}:${pad(d.getMinutes())}` })
 })
 const otherDocs = computed(() => scripts.docs.filter((doc) => doc.id !== activeId.value))
 
@@ -446,7 +446,7 @@ async function writeStoryPlan(brief: string, revision = false) {
   const id = activeId.value
   if (!id || !llmModel.value || episodeWriting.value) return
   const oldPlan = revision ? storyPlan.value : null
-  if (!brief.trim() && !oldPlan) { toast.warn('请先描述题材、人物或故事想法'); return }
+  if (!brief.trim() && !oldPlan) { toast.warn(translate('scriptDesk.describeStory')); return }
   writingPhase.value = 'outline'
   const controller = startWriting()
   const request = brief.trim() || oldPlan?.brief || ''
@@ -457,7 +457,7 @@ async function writeStoryPlan(brief: string, revision = false) {
       timeoutMs: 300_000, signal: controller.signal,
       messages: [
         { role: 'system', content: `${importedDirectorPrefix()}${SHORT_DRAMA_WRITING_RULES}\nPlan an outline and an episode directory for the entire short drama. Do not write episode scripts yet. Respect the requested number of episodes, durations, genre and ending. For an unspecified count, suggest eight episodes and explain in the outline that the count can change. Each episode needs a dramatic task, evolving conflict and a hook for the next episode. Preserve causal and character continuity. Use natural, polite conversational Korean for audience-facing prose. Output only valid JSON without code fences: {"outline":"synopsis, cast, relationships, world rules and emotional arc","episodes":[{"title":"Korean episode title","summary":"Korean episode progression and ending"}]}.\n${scriptReferenceBrief(settings.config.scriptReferenceType, request)}` },
-        { role: 'user', content: `${revision && oldPlan ? `原大纲：${oldPlan.outline}\n原分集目录：${JSON.stringify(oldPlan.episodes)}\n修改要求：` : '创作需求：'}${request}` }
+        { role: 'user', content: `${revision && oldPlan ? `Previous outline: ${oldPlan.outline}\nPrevious episode directory: ${JSON.stringify(oldPlan.episodes)}\nRequested revision: ` : 'Writing brief: '}${request}` }
       ]
     })
     assertScriptCompletion(resp)
@@ -465,14 +465,14 @@ async function writeStoryPlan(brief: string, revision = false) {
     const outline = typeof parsed?.outline === 'string' ? parsed.outline.trim() : ''
     const rows = Array.isArray(parsed?.episodes) ? parsed.episodes : []
     const planned = rows.map((row: any) => ({ title: String(row?.title || '').trim(), summary: String(row?.summary || '').trim() }))
-    if (!outline || !planned.length || planned.length > 100 || planned.some((row: { title: string; summary: string }) => !row.title || !row.summary)) throw new Error('大纲格式不完整，请重试或减少单次规划的集数。')
-    if (controller.signal.aborted || activeId.value !== id) throw new Error('写作已取消或已切换剧本')
-    await saveStoryPlan(id, { brief: revision && oldPlan ? `${oldPlan.brief}\n修改：${request}` : request, outline, episodes: planned, stage: 'outline-review', nextIndex: 0 })
+    if (!outline || !planned.length || planned.length > 100 || planned.some((row: { title: string; summary: string }) => !row.title || !row.summary)) throw new Error(translate('scriptDesk.invalidOutline'))
+    if (controller.signal.aborted || activeId.value !== id) throw new Error(translate('scriptDesk.writeInterrupted'))
+    await saveStoryPlan(id, { brief: revision && oldPlan ? `${oldPlan.brief}\nRevision: ${request}` : request, outline, episodes: planned, stage: 'outline-review', nextIndex: 0 })
     episodeHint.value = ''
     planEditing.value = true
-    addWritingMessage(id, { role: 'assistant', content: `已整理故事大纲和 ${planned.length} 集目录。请先检查、修改，确认后我再写第一集。`, episode: -1, time: Date.now() })
+    addWritingMessage(id, { role: 'assistant', content: translate('scriptDesk.outlineReady', { count: planned.length }), episode: -1, time: Date.now() })
   } catch (error: any) {
-    const message = controller.signal.aborted ? '本次大纲生成已取消。' : `大纲生成未完成：${error?.message || '请重试'}`
+    const message = controller.signal.aborted ? translate('scriptDesk.outlineCanceled') : translate('scriptDesk.outlineFailed', { reason: error?.message || translate('scriptDesk.retry') })
     if (activeId.value === id) addWritingMessage(id, { role: 'assistant', content: message, episode: -1, time: Date.now() })
     toast.warn(message)
   } finally { finishWriting() }
@@ -488,25 +488,26 @@ async function writePlannedEpisode() {
   if (saveTimer) { clearTimeout(saveTimer); saveTimer = null }
   flushDraft()
   const parsed = parseScriptDoc(markdown.value)
-  if (index > parsed.episodes.length) { toast.warn('集数目录已改变，请先检查剧本。'); return }
-  if (index > 0 && parsed.episodes.slice(0, index).some((item) => !item.content.trim())) { toast.warn('前面有尚未完成的集数，请先补全再继续。'); return }
+  if (index > parsed.episodes.length) { toast.warn(translate('scriptDesk.episodeListChanged')); return }
+  if (index > 0 && parsed.episodes.slice(0, index).some((item) => !item.content.trim())) { toast.warn(translate('scriptDesk.finishEarlier')); return }
   const existing = parsed.episodes[index]?.content.trim() || ''
-  if (existing && !confirm(`第 ${index + 1} 集已有正文。继续会用 AI 结果替换这一集，确定吗？`)) return
   const snapshot = markdown.value
-  const prior = parsed.episodes.slice(0, index).map((ep, i) => `第${i + 1}集 ${ep.title}\n${ep.content}`).join('\n\n')
+  if (existing && !await confirmAction(translate('scriptDesk.replaceEpisode', { number: index + 1 }))) return
+  if (activeId.value !== id || markdown.value !== snapshot || episodeWriting.value) return
+  const prior = parsed.episodes.slice(0, index).map((ep, i) => `Episode ${i + 1}: ${ep.title}\n${ep.content}`).join('\n\n')
   writingPhase.value = 'episode'
   const controller = startWriting()
-  addWritingMessage(id, { role: 'assistant', content: `开始写第 ${index + 1} 集：${episode.title}。完成后会等你确认。`, episode: index, time: Date.now() })
+  addWritingMessage(id, { role: 'assistant', content: translate('scriptDesk.writingStarted', { number: index + 1, title: episode.title }), episode: index, time: Date.now() })
   try {
     const resp = await callLLM({ model: llmModel.value, disableThinking: true, temperature: 0.6, useProviderOutputLimit: true, timeoutMs: 300_000, signal: controller.signal,
       messages: [
         { role: 'system', content: `${importedDirectorPrefix()}${SHORT_DRAMA_WRITING_RULES}\nWrite the complete requested episode in natural Korean. Follow the approved outline and completed episodes. Carry forward relationships, time, location, props and unresolved conflicts. Preserve supplied dialogue and visible text unless the user requests changes. Edit only this episode.\n${SCREENPLAY_FORMAT_RULES}\n${scriptReferenceBrief(settings.config.scriptReferenceType, plan.brief, plan.outline, episode.summary)}` },
-        { role: 'user', content: `用户创作需求：${plan.brief}\n已确认大纲：${plan.outline}\n完整分集目录：${JSON.stringify(plan.episodes)}\n已完成前文${prior.length > 30000 ? '（仅显示最近部分，更早剧情请参考分集目录）' : ''}：\n${prior.slice(-30000) || '（第一集）'}\n当前要写：第 ${index + 1} 集 ${episode.title}\n本集任务：${episode.summary}\n${existing ? `需要替换的原正文：\n${existing}` : ''}` }
+        { role: 'user', content: `Writing brief: ${plan.brief}\nApproved outline: ${plan.outline}\nFull episode directory: ${JSON.stringify(plan.episodes)}\nCompleted episodes${prior.length > 30000 ? ' (recent excerpt; refer to the outline for earlier episodes)' : ''}：\n${prior.slice(-30000) || '(first episode)'}\nEpisode to write: ${index + 1} · ${episode.title}\nEpisode goal: ${episode.summary}\n${existing ? `Existing episode to replace: \n${existing}` : ''}` }
       ] })
     assertScriptCompletion(resp)
     const body = normalizeScreenplayBody(String(resp.content || ''))
-    if (!body) throw new Error('模型没有返回正文')
-    if (controller.signal.aborted || activeId.value !== id || markdown.value !== snapshot) throw new Error('剧本已切换或正文发生变化，结果未覆盖原文，请重试。')
+    if (!body) throw new Error(translate('scriptDesk.emptyResponse'))
+    if (controller.signal.aborted || activeId.value !== id || markdown.value !== snapshot) throw new Error(translate('scriptDesk.documentChanged'))
     if (index === parsed.episodes.length) parsed.episodes.push({ title: episode.title, content: body })
     else parsed.episodes[index] = { title: episode.title, content: body }
     const updated = serializeScriptDoc(parsed)
@@ -519,11 +520,11 @@ async function writePlannedEpisode() {
       await saveStoryPlan(id, reviewPlan)
     } catch {
       if (activeId.value === id) storyPlan.value = reviewPlan
-      toast.warn('本集正文已保存，但创作进度保存失败；请检查存储后再确认下一集。')
+      toast.warn(translate('scriptDesk.progressSaveFailed'))
     }
-    addWritingMessage(id, { role: 'assistant', content: `第 ${index + 1} 集已写入正文。请检查并修改，确认后我再写下一集。`, episode: index, time: Date.now() })
+    addWritingMessage(id, { role: 'assistant', content: translate('scriptDesk.reviewEpisode', { number: index + 1 }), episode: index, time: Date.now() })
   } catch (error: any) {
-    const message = controller.signal.aborted ? '本集写作已取消，正文未更改。' : `本集写作未完成：${error?.message || '请重试'}`
+    const message = controller.signal.aborted ? translate('scriptDesk.episodeCanceled') : translate('scriptDesk.episodeFailedReason', { reason: error?.message || translate('scriptDesk.retry') })
     if (activeId.value === id) addWritingMessage(id, { role: 'assistant', content: message, episode: index, time: Date.now() })
     toast.warn(message)
   } finally { finishWriting() }
@@ -532,29 +533,29 @@ async function writePlannedEpisode() {
 async function confirmStoryPlan() {
   const plan = storyPlan.value
   if (!plan || !activeId.value || episodeWriting.value) return
-  if (!plan.outline.trim() || plan.episodes.some((episode) => !episode.title.trim() || !episode.summary.trim())) { toast.warn('请先补全大纲和每集内容'); return }
+  if (!plan.outline.trim() || plan.episodes.some((episode) => !episode.title.trim() || !episode.summary.trim())) { toast.warn(translate('scriptDesk.completeOutline')); return }
   try {
     await saveStoryPlan(activeId.value, { ...plan, stage: 'ready', nextIndex: 0 })
     planEditing.value = false
     episodeHint.value = ''
     await writePlannedEpisode()
-  } catch (error: any) { toast.error(error?.message || '保存大纲失败') }
+  } catch (error: any) { toast.error(error?.message || translate('scriptDesk.outlineSaveFailed')) }
 }
 
 async function savePlanDraft() {
   if (!storyPlan.value || !activeId.value || episodeWriting.value) return
   try {
     await saveStoryPlan(activeId.value, { ...storyPlan.value, episodes: storyPlan.value.episodes.map((item) => ({ ...item })) })
-    toast.success('大纲草稿已保存')
-  } catch (error: any) { toast.error(error?.message || '保存大纲失败') }
+    toast.success(translate('scriptDesk.outlineSaved'))
+  } catch (error: any) { toast.error(error?.message || translate('scriptDesk.outlineSaveFailed')) }
 }
 
 async function confirmEpisodeAndContinue() {
   const plan = storyPlan.value
   const id = activeId.value
   if (!plan || !id || episodeWriting.value || plan.stage !== 'episode-review') return
-  if (draft.value && draft.value.index !== plan.nextIndex) { toast.warn(`请先切换到第 ${plan.nextIndex + 1} 集检查正文`); return }
-  if (!draft.value?.content.trim()) { toast.warn('这一集正文为空，请先补全'); return }
+  if (draft.value && draft.value.index !== plan.nextIndex) { toast.warn(translate('scriptDesk.inspectEpisode', { number: plan.nextIndex + 1 })); return }
+  if (!draft.value?.content.trim()) { toast.warn(translate('scriptDesk.episodeEmpty')); return }
   if (saveTimer) { clearTimeout(saveTimer); saveTimer = null }
   markdown.value = updateEpisode(markdown.value, draft.value.index, { title: draft.value.title, content: draft.value.content })
   try {
@@ -564,18 +565,18 @@ async function confirmEpisodeAndContinue() {
     const nextIndex = plan.nextIndex + 1
     if (nextIndex >= plan.episodes.length) {
       await saveStoryPlan(id, { ...plan, nextIndex, stage: 'complete' })
-      addWritingMessage(id, { role: 'assistant', content: '全部分集已确认完成。', episode: -1, time: Date.now() })
+      addWritingMessage(id, { role: 'assistant', content: translate('scriptDesk.allDone'), episode: -1, time: Date.now() })
       return
     }
     await saveStoryPlan(id, { ...plan, nextIndex, stage: 'ready' })
     await writePlannedEpisode()
-  } catch (error: any) { toast.error(error?.message || '保存失败，请重试') }
+  } catch (error: any) { toast.error(error?.message || translate('scriptDesk.saveFailed')) }
 }
 
 function obviousWriterChat(hint: string) {
   const text = hint.trim()
-  return /^(?:你好|您好|嗨|hi|hello|hey|在吗|在不在|谢谢|谢了|辛苦了?|哈哈+|嗯+|哦+|啊+|好的|好呀|早安|晚安|你是谁|你能干什么|你能做什么)[\s!！。.~～?？]*$/i.test(text)
-    || /^(?:先别写|别写了|先不要写|等一下|等会儿|暂停|不用了|算了)[\s!！。]*$/.test(text)
+  return /^(?:你好|您好|嗨|hi|hello|hey|在吗|在不在|谢谢|谢了|辛苦了?|哈哈+|嗯+|哦+|啊+|好的|好呀|早安|晚安|你是谁|你能干什么|你能做什么|안녕|안녕하세요|고마워요|감사해요|감사합니다|누구세요|잘 지냈어요)[\s!！。.~～?？]*$/i.test(text)
+    || /^(?:先别写|别写了|先不要写|等一下|等会儿|暂停|不用了|算了|잠깐|잠시만요|멈춰 주세요|아직 쓰지 마세요)[\s!！。]*$/.test(text)
 }
 
 async function classifyWriterIntent(hint: string, signal: AbortSignal): Promise<'chat' | 'write'> {
@@ -598,7 +599,7 @@ async function classifyWriterIntent(hint: string, signal: AbortSignal): Promise<
     return /^write\b/i.test(String(resp.content || '').trim()) ? 'write' : 'chat'
   } catch (error: any) {
     if (signal.aborted) throw error
-    return /(?:请|帮我|把).{0,12}(?:写|改|续)|^(?:写|改|续|扩|润色|重写|生成|创作|补)/.test(hint) ? 'write' : 'chat'
+    return /(?:请|帮我|把).{0,12}(?:写|改|续)|^(?:写|改|续|扩|润色|重写|生成|创作|补)|써 주세요|다듬어 주세요|고쳐 주세요|작성해 주세요|이어 써/.test(hint) ? 'write' : 'chat'
   }
 }
 
@@ -612,7 +613,7 @@ async function replyAsWriter(hint: string) {
   const recent = writingMessages.value
     .filter((message) => message.episode === current.index || message.episode < 0)
     .slice(-8)
-    .map((message) => `${message.role === 'user' ? '用户' : '助手'}：${message.content}`)
+    .map((message) => `${message.role === 'user' ? 'User' : 'Assistant'}：${message.content}`)
     .join('\n')
   const plan = storyPlan.value
   try {
@@ -629,7 +630,7 @@ async function replyAsWriter(hint: string) {
         },
         {
           role: 'user',
-          content: `剧本：${activeDoc.value?.title || '未命名剧本'}\n当前：第 ${current.index + 1} 集 ${current.title}\n创作进度：${plan ? plan.stage : '没有整剧大纲'}\n已有正文节选：\n${current.content.trim().slice(0, 800) || '（空）'}\n最近对话：\n${recent || '（无）'}\n\n用户刚说：${hint}`
+          content: `Script: ${activeDoc.value?.title || 'Untitled script'}\nCurrent episode: ${current.index + 1} · ${current.title}\nWriting progress: ${plan ? plan.stage : 'No series outline'}\nExisting excerpt: \n${current.content.trim().slice(0, 800) || '(empty)'}\nRecent conversation: \n${recent || '(none)'}\n\nCurrent message: ${hint}`
         }
       ]
     })
@@ -637,7 +638,7 @@ async function replyAsWriter(hint: string) {
     if (controller.signal.aborted || activeId.value !== id) return
     addWritingMessage(id, {
       role: 'assistant',
-      content: text || '我在。想改这一集，直接说要改哪里。',
+      content: text || translate('scriptDesk.assistantFallback'),
       episode: current.index,
       time: Date.now()
     })
@@ -646,7 +647,7 @@ async function replyAsWriter(hint: string) {
     if (activeId.value === id) {
       addWritingMessage(id, {
         role: 'assistant',
-        content: controller.signal.aborted ? '已取消。' : `没接上：${error?.message || '请再发一次'}`,
+        content: controller.signal.aborted ? translate('scriptDesk.canceled') : translate('scriptDesk.responseFailed', { reason: error?.message || translate('scriptDesk.sendAgain') }),
         episode: current.index,
         time: Date.now()
       })
@@ -664,7 +665,7 @@ async function writeCurrentEpisode() {
   }
   const hint = episodeHint.value.trim()
   const existing = draft.value.content.trim()
-  if (writingHistoryLoading.value) { toast.warn('正在读取对话记录，请稍候'); return }
+  if (writingHistoryLoading.value) { toast.warn(translate('scriptDesk.loadingMessages')); return }
   if (storyPlan.value?.stage === 'outline-review' && /^\s*(?:确认|通过|开始写|可以|下一步|확인|좋아요|작성 시작|다음 단계)\s*[。！!]*$/.test(hint)) { await confirmStoryPlan(); return }
   if (storyPlan.value?.stage === 'episode-review' && /^\s*(?:确认|通过|继续|下一集|可以|下一步|확인|좋아요|계속|다음 화|다음 단계)\s*[。！!]*$/.test(hint)) { await confirmEpisodeAndContinue(); return }
   if (hint) {
@@ -684,14 +685,16 @@ async function writeCurrentEpisode() {
     }
   }
   if (storyPlan.value?.stage === 'outline-review' && hint && writingMode.value !== 'episode') { await writeStoryPlan(hint, true); return }
-  const wantsSeries = writingMode.value === 'series' || (writingMode.value === 'auto' && (/(?:整部|整剧|全集|分集大纲|分集目录|多集)|(?:写|创作|策划|生成).{0,30}(?:短剧|剧本)(?!.*(?:本集|这一集|当前集))/.test(hint) || (!existing && /题材|科幻|悬疑|古装|都市|甜宠|穿越|重生|家庭伦理/.test(hint) && !/本集|这一集|当前集/.test(hint))))
+  const wantsSeries = writingMode.value === 'series' || (writingMode.value === 'auto' && (/(?:整部|整剧|全集|分集大纲|分集目录|多集|시리즈|전체 대본|전체 개요|회차별 개요)|(?:写|创作|策划|生成).{0,30}(?:短剧|剧本)(?!.*(?:本集|这一集|当前集))/.test(hint) || (!existing && /题材|科幻|悬疑|古装|都市|甜宠|穿越|重生|家庭伦理/.test(hint) && !/本集|这一集|当前集/.test(hint))))
   if (wantsSeries && hint) {
-    if (storyPlan.value && !confirm('重新规划会替换当前大纲，已写好的剧本正文不会删除。继续吗？')) return
+    const active = activeId.value
+    if (storyPlan.value && !await confirmAction(translate('scriptDesk.replaceOutline'))) return
+    if (activeId.value !== active || episodeWriting.value) return
     await writeStoryPlan(hint)
     return
   }
   if (!hint && !existing) {
-    toast.warn('先写一句要求，或留一点已有正文')
+    toast.warn(translate('scriptDesk.requestFirst'))
     return
   }
   const conversation = writingMessages.value.filter((message) => message.episode === draft.value?.index && message.role === 'user').slice(-6)
@@ -702,7 +705,7 @@ async function writeCurrentEpisode() {
   episodeAbort = new AbortController()
   const targetDocId = activeDoc.value?.id
   const targetDraft = draft.value
-  if (targetDocId) addWritingMessage(targetDocId, { role: 'user', content: hint || '请根据已有正文写完整这一集。', episode: targetDraft.index, time: Date.now() })
+  if (targetDocId) addWritingMessage(targetDocId, { role: 'user', content: hint || translate('scriptDesk.completeEpisode'), episode: targetDraft.index, time: Date.now() })
   try {
     const resp = await callLLM({
       model: llmModel.value,
@@ -719,28 +722,28 @@ async function writeCurrentEpisode() {
         },
         {
           role: 'user',
-          content: `剧本：${activeDoc.value?.title || '未命名剧本'}\n这一集：${draft.value.title}\n此前本集的用户写作要求（仅供上下文参考，当前要求优先）：\n${conversation.map((item) => item.content).join('\n') || '（无）'}\n已有正文：\n${existing || '（空）'}\n\n当前要求：${hint || '把这一集写完整，保留已有情节。'}`
+          content: `Script: ${activeDoc.value?.title || 'Untitled script'}\nEpisode: ${draft.value.title}\nPrevious directions for context only. Prioritize the current request: \n${conversation.map((item) => item.content).join('\n') || '(none)'}\nExisting body: \n${existing || '(empty)'}\n\nCurrent request: ${hint || 'Complete this episode while preserving the existing events.'}`
         }
       ]
     })
     assertScriptCompletion(resp)
     const text = normalizeScreenplayBody(String(resp.content || ''))
-    if (!text) throw new Error('模型没有返回内容')
-    if (episodeAbort.signal.aborted) throw new Error('已取消')
+    if (!text) throw new Error(translate('scriptDesk.noContent'))
+    if (episodeAbort.signal.aborted) throw new Error(translate('scriptDesk.canceledShort'))
     if (activeDoc.value?.id !== targetDocId || draft.value !== targetDraft) {
-      toast.warn('写作期间切换了剧本或集数，结果未覆盖当前正文，请回到原集重试。')
+      toast.warn(translate('scriptDesk.changedDuringWriting'))
       return
     }
     draft.value.content = text
-    if (targetDocId) addWritingMessage(targetDocId, { role: 'assistant', content: '已完成本集正文，内容已写入中间编辑区。可以继续提出修改要求。', episode: targetDraft.index, time: Date.now() })
+    if (targetDocId) addWritingMessage(targetDocId, { role: 'assistant', content: translate('scriptDesk.episodeWritten'), episode: targetDraft.index, time: Date.now() })
     episodeHint.value = ''
     scheduleFlush()
-    toast.success('这一集写好了')
+    toast.success(translate('scriptDesk.episodeSuccess'))
   } catch (e: any) {
     const msg = e?.message ?? String(e)
-    if (episodeAbort?.signal.aborted) toast.warn('已取消')
-    else toast.error(msg || '写这一集失败')
-    if (targetDocId && activeId.value === targetDocId) addWritingMessage(targetDocId, { role: 'assistant', content: episodeAbort?.signal.aborted ? '本次写作已取消，正文未更改。' : `本次写作未完成：${msg || '请重试'}`, episode: targetDraft.index, time: Date.now() })
+    if (episodeAbort?.signal.aborted) toast.warn(translate('scriptDesk.canceledShort'))
+    else toast.error(msg || translate('scriptDesk.episodeFailed'))
+    if (targetDocId && activeId.value === targetDocId) addWritingMessage(targetDocId, { role: 'assistant', content: episodeAbort?.signal.aborted ? translate('scriptDesk.writingCanceled') : translate('scriptDesk.writingIncomplete', { reason: msg || translate('scriptDesk.retry') }), episode: targetDraft.index, time: Date.now() })
   } finally {
     if (episodeTimer) clearInterval(episodeTimer)
     episodeTimer = undefined
@@ -758,7 +761,7 @@ async function importScript() {
   try {
     picked = await pickScriptFile()
   } catch (e: any) {
-    toast.error(e?.message ?? '导入失败')
+    toast.error(e?.message ?? translate('scriptDesk.importFailed'))
     return
   }
   if (!picked) return
@@ -1035,7 +1038,7 @@ onMounted(async () => {
               <div v-if="episodeWriting && writingPhase !== 'chat'" class="episode-writing-overlay" role="status" aria-live="polite">
                 <span class="episode-writing-spinner" aria-hidden="true" />
                 <strong>{{ writingPhase === 'outline' ? $t('scriptDesk.outlining') : $t('scriptDesk.writingEpisode') }}</strong>
-                <span>已等待 {{ episodeElapsed }} 秒 · {{ writingPhase === 'outline' ? $t('scriptDesk.reviewAfter') : $t('scriptDesk.insertAfter') }}</span>
+                <span>{{ $t('scriptDesk.elapsed', { seconds: episodeElapsed }) }} · {{ writingPhase === 'outline' ? $t('scriptDesk.reviewAfter') : $t('scriptDesk.insertAfter') }}</span>
                 <button type="button" class="mini-btn" @click="cancelEpisodeWrite">{{ $t('scripts.cancelGeneration') }}</button>
               </div>
             </div>
@@ -1056,18 +1059,18 @@ onMounted(async () => {
           <p v-if="writingHistoryLoading" class="writing-note">{{ $t('scriptDesk.loadingHistory') }}</p>
           <p v-if="writingHistoryError" class="writing-note">{{ $t('scriptDesk.historyError') }}</p>
           <div v-for="(message, i) in writingMessages" :key="`${message.time}-${i}`" class="writing-message" :class="message.role">
-            <span>{{ message.role === 'user' ? $t('scriptDesk.you') : $t('scriptDesk.writerShort') }} · 第 {{ message.episode + 1 }} 集</span>
+            <span>{{ message.role === 'user' ? $t('scriptDesk.you') : $t('scriptDesk.writerShort') }}<template v-if="message.episode >= 0"> · {{ $t('scriptDesk.episodesOnly', { count: message.episode + 1 }) }}</template></span>
             <p>{{ message.content }}</p>
           </div>
           <div v-if="episodeWriting" class="writing-message assistant writing-pending" role="status">
-            <span>{{ $t('scriptDesk.writerShort') }}</span><p><i class="writing-pulse" /> {{ writingPhase === 'outline' ? $t('scriptDesk.outliningShort') : writingPhase === 'chat' ? $t('scriptDesk.replying') : $t('scriptDesk.writingShort') }}，已等待 {{ episodeElapsed }} 秒</p>
+            <span>{{ $t('scriptDesk.writerShort') }}</span><p><i class="writing-pulse" /> {{ writingPhase === 'outline' ? $t('scriptDesk.outliningShort') : writingPhase === 'chat' ? $t('scriptDesk.replying') : $t('scriptDesk.writingShort') }}，{{ $t('scriptDesk.elapsed', { seconds: episodeElapsed }) }}</p>
           </div>
           <section v-if="storyPlan" class="story-plan">
             <div class="story-plan-heading"><strong>{{ $t('scriptDesk.outlineSize', { count: storyPlan.episodes.length }) }}</strong><button type="button" :disabled="episodeWriting" @click="planEditing = !planEditing">{{ planEditing ? $t('common.collapse') : $t('scriptDesk.viewOutline') }}</button></div>
-            <p class="story-plan-status">{{ storyPlan.stage === 'outline-review' ? '等待确认大纲' : storyPlan.stage === 'episode-review' ? `第 ${storyPlan.nextIndex + 1} 集等待确认` : storyPlan.stage === 'complete' ? '全部分集已确认' : `准备写第 ${storyPlan.nextIndex + 1} 集` }}</p>
+            <p class="story-plan-status">{{ storyPlan.stage === 'outline-review' ? $t('scriptDesk.awaitOutline') : storyPlan.stage === 'episode-review' ? $t('scriptDesk.awaitEpisode', { number: storyPlan.nextIndex + 1 }) : storyPlan.stage === 'complete' ? $t('scriptDesk.allConfirmed') : $t('scriptDesk.episodeReady', { number: storyPlan.nextIndex + 1 }) }}</p>
             <div v-if="planEditing" class="story-plan-content">
               <label>{{ $t('scriptDesk.outlineAndCast') }}<textarea v-model="storyPlan.outline" :readonly="storyPlan.stage !== 'outline-review' || episodeWriting" rows="7" /></label>
-              <label v-for="(episode, index) in storyPlan.episodes" :key="index">第 {{ index + 1 }} 集<input v-model="episode.title" :readonly="storyPlan.stage !== 'outline-review' || episodeWriting" /><textarea v-model="episode.summary" :readonly="storyPlan.stage !== 'outline-review' || episodeWriting" rows="3" /></label>
+              <label v-for="(episode, index) in storyPlan.episodes" :key="index">{{ $t('scriptDesk.episodesOnly', { count: index + 1 }) }}<input v-model="episode.title" :readonly="storyPlan.stage !== 'outline-review' || episodeWriting" /><textarea v-model="episode.summary" :readonly="storyPlan.stage !== 'outline-review' || episodeWriting" rows="3" /></label>
               <p v-if="storyPlan.stage === 'outline-review'">{{ $t('scriptDesk.editOutlineHint') }}</p>
               <button v-if="storyPlan.stage === 'outline-review'" type="button" class="story-plan-save" :disabled="episodeWriting" @click="savePlanDraft">{{ $t('scriptDesk.saveOutlineDraft') }}</button>
             </div>
@@ -1094,7 +1097,7 @@ onMounted(async () => {
           </div>
           <label class="writing-mode"><span>{{ $t('scriptDesk.writingMode') }}</span><select v-model="writingMode" :disabled="episodeWriting"><option value="auto">{{ $t('scriptDesk.auto') }}</option><option value="series">{{ $t('scriptDesk.series') }}</option><option value="episode">{{ $t('scriptDesk.singleEpisode') }}</option></select></label>
           <textarea v-model="episodeHint" class="writing-input" :placeholder="$t('scriptDesk.askPlaceholder')" :disabled="episodeWriting" @keydown.ctrl.enter.prevent="writeCurrentEpisode" />
-          <div class="writing-actions"><span>{{ $t('scriptDesk.sendHint') }}</span><button v-if="episodeWriting" class="writing-send cancel" type="button" @click="cancelEpisodeWrite">{{ $t('scripts.cancelGeneration') }}</button><button v-else class="writing-send" type="button" :disabled="writingHistoryLoading" @click="writeCurrentEpisode">发送 ✦</button></div>
+          <div class="writing-actions"><span>{{ $t('scriptDesk.sendHint') }}</span><button v-if="episodeWriting" class="writing-send cancel" type="button" @click="cancelEpisodeWrite">{{ $t('scripts.cancelGeneration') }}</button><button v-else class="writing-send" type="button" :disabled="writingHistoryLoading" @click="writeCurrentEpisode">{{ $t("agentChat.send") }}</button></div>
         </div>
       </aside>
       </div>

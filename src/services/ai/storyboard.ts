@@ -972,15 +972,14 @@ async function generateShotWorkBatch(
           role: 'system',
           content: `${importedDirectorPrefix()}${verbatimSplitRule(input.verbatim)}You are the film storyboard team for this excerpt only. Break it into 1–${limit} consecutive filmable shots. Never exceed ${limit} shots.${budgetLine}
 
-画面必须有生命：明确起幅里人物和关键物处于什么状态，什么事件触发动作，人物怎样连续行动和反应，摄影机为什么移动、最后落在哪里。不要用“固定镜头、轻微自然晃动、保持表情、让画面呼吸”这类模板填空；只有剧情确实需要静止时才用 static。运镜必须服务于空间揭示、人物关系或情绪变化。
-忠实覆盖本段所有可见动作与对白，不另编故事。对白逐字放进 voiceover，格式“人物名：原台词”；剧本明确写旁白/画外音时使用 h3-voiceover，否则出镜说话使用 h3-dialogue。没有对白或画外音才写空字符串和 none。
+Give each shot a visible opening state, trigger, action, reaction, camera motivation and final frame. Use static framing only when motivated. Preserve the excerpt's actions and verbatim dialogue. Put speaker and original line in voiceover. Use h3-voiceover for explicitly off-screen narration, h3-dialogue for on-screen delivery, and an empty line with none when silent.
 ${SHORT_DRAMA_SHOT_RULES}
 ${SYSTEM_CUE_RULES}
-短剧以对白和行动共同推进：原文有对白时，优先让多数镜头承载原文台词；必要的无台词过渡优先控制在 2–4 秒，不要连续安排两个接近 10 秒的无对白镜头。把能并入对白镜的表情、走位或动作并进去；关键动作确实需要留长时，也不要再紧接一个长无对白镜。原文没有对白或用户明确要求无声时不得编造台词。同场景连续的问答和反应可在一个模型允许的镜头中完成；每镜必须推进新的动作、信息或情绪，禁止为同一动作重复生成镜头。保留全部原文台词，不得为了减少镜数删词。
-visualPrompt 是最有代表性的关键帧静态画面；videoPrompt 是具体、连续、可执行的动态图生视频时间轴，从0秒到本镜结束按实际拍点分2–5段。每段写清谁行动、谁说话、其他人如何占位和反应、表情变化以及一个有动机的运镜，并让环境中的风、雨、烟、衣摆、光影或道具有合理反馈。不要复述 visualPrompt，不要机械等分时间。
+When the source contains dialogue, let most shots carry it. Keep necessary silent transitions near two to four seconds. Avoid consecutive nearly ten-second silent shots. Combine nearby reactions and movement into a dialogue shot when appropriate. Add shots rather than dropping source lines. Preserve genuinely silent source passages. Every shot needs new action, information or emotion.
+Use visualPrompt for a representative still. Write videoPrompt as two to five timed, executable English beats from zero to the end. Include the active speaker, listeners' position and response, expression, camera motion and meaningful environment reactions such as cloth, rain or light. Avoid repeating the still or dividing time evenly by default.
 ${DIRECTOR_TIMELINE_SPEC}
-每镜要写清景别和人物空间关系。人物看场景内的人或物，不看镜头。
-优先输出 JSON：{"shots":[{"title":"3-8字","purpose":"戏剧作用","shotSize":"景别变化","visualPrompt":"电影关键帧画面","videoPrompt":"220-650字、从0秒覆盖到结束的2-5段电影化时间轴","duration":6,"audioDescription":"同步现场声","voiceover":"人物名：原台词或空字符串","audioMode":"h3-dialogue|h3-voiceover|none","cameraMovement":"push|pull|pan|tilt|static|orbit","subjectNames":["人物短名"],"sceneName":"已有地点短名"}]}。shots 数组只能有 1–${limit} 项。若不能输出 JSON，也可按“镜头 N / 画面 / 内容 / 时长 / 声音 / 口播”返回；系统可以解析。${retry ? '上一轮没有可解析镜头；这次直接交付，不要写思考过程。' : ''}`
+Write titles, purpose, labels and sound notes in polite conversational Korean, with English visual and video prompts. Keep every actor's eyeline inside the scene.
+Return JSON: {"shots":[{"title":"short Korean title","purpose":"dramatic function","shotSize":"framing","visualPrompt":"still-frame prompt","videoPrompt":"timed English motion prompt","duration":6,"audioDescription":"synchronized physical sound","voiceover":"speaker: exact source line, or empty","audioMode":"h3-dialogue|h3-voiceover|none","cameraMovement":"push|pull|pan|tilt|static|orbit","subjectNames":["source name"],"sceneName":"established location"}]}. Return 1–${limit} shots. If plain text is necessary, use Shot N, Image, Action, Duration, Sound and Dialogue. ${retry ? 'The previous reply could not be parsed. Return the shots directly.' : ''}`
         },
         {
           role: 'user',
@@ -1256,14 +1255,9 @@ async function extractShotOutline(
       ? '대본에 맞춰 스토리보드의 동작, 대사, 촬영 제외 항목을 정리하고 있어요…'
       : '대본을 바탕으로 스토리보드의 화면, 길이, 소리를 먼저 정리하고 있어요…'
   )
-  const shortSystem = `${importedDirectorPrefix()}你是分镜导演。只写一份能拍的场记，像聊天里列镜头那样短、快。
+  const shortSystem = `${importedDirectorPrefix()}Write concise shootable notes in script order. One framing can cover a single-space exchange or several short lines by the same speaker.
 ${SHORT_DRAMA_SHOT_RULES}
-按剧本顺序拆镜。同一空间的对白往来可以留在一镜；同一人连续短句可留在一镜。
-每镜写：标题（括号里写景别或运镜）、画面（2–4 句看见的动作）、内容（这一镜演什么）、时长、声音。
-有对白时必须加一行「口播：人物名：原词」，剧本里的对白原词一条都不能丢。没有对白的纯空镜/赶路镜才不写口播。
-禁止把故事背景改写成「成年某某」旁白。
-禁止 JSON、禁止思考过程、禁止 continuity / blocking / 美学设定。
-严格按下述格式，镜头之间空一行：
+Give each shot a short Korean title, framing and sound notes, then English Image and Action fields with concrete visible movement. Include exact duration and a Dialogue: Speaker: original line when the script contains speech. Omit the field for genuinely silent shots. Do not use an older narrator to retell the background. Do not include JSON, reasoning or extra continuity, blocking or aesthetic fields. Leave one blank line between shots and follow this example.
 
 Shot 1: 한밤중의 질주 (원경→중경)
 Image: At 11 p.m., a silvery band of light crosses the shallows by the village entrance. Niulang rushes out of the brush carrying a bamboo basket on a shoulder pole. Two children jolt and grip the rim.
@@ -1352,12 +1346,10 @@ async function expandOneShot(
       messages: [
         {
           role: 'system',
-          content: `${importedDirectorPrefix()}你是分镜节点填写员。只把下面这一条场记扩成画布字段，不改故事、不改时长、不改画面原意。
-口播必须用场记里的原词；场记写了对白而你输出空字符串视为不合格。同一空间的对白往来可以留在一镜。只有场记标明画外音/旁白时才用 audioMode=h3-voiceover。
-必须写 videoPrompt：从0秒到本镜结束按实际剧情拍点分2–5段。每段先写当前行动者、具体动作和表情，再写说话者与原词，并交代其他出场人物站在近处还是后面、身体朝哪、眼睛看谁、如何非语言反应；最后写这一段的合理运镜和落点。说话者可以在后面，前面的人侧对或回头看他。禁止合影看镜头，禁止只在结尾加「不要看镜头」。
+          content: `${importedDirectorPrefix()}Expand only this shot note into canvas fields. Preserve the story, duration and intended visual action. Copy the exact dialogue into voiceover, with h3-voiceover only for explicit off-screen delivery. Describe the action and staging in two to five timed beats, including each current actor, original speaker, nonverbal reactions, orientation, depth, eyeline and motivated camera motion. Foreground listeners may turn sideways or look back toward a speaker. Avoid posed frontal groups.
 ${DIRECTOR_TIMELINE_SPEC}
-${film ? '本镜必须能在剧本原文里找到对应拍点。蒙太奇要写成看得见的连续动作。剧本写了不拍的，写进 videoPrompt 末尾一句。善意是普通人做的小事。' : ''}
-只输出一个 JSON 对象：{"title":"3-8字","purpose":"钩子/说明/反应/揭示/转场/收口","shotSize":"景别","blocking":"每个人：近处或后面、身体朝向、相对谁站","eyeline":"每个人看谁或看什么，禁止看镜头","continuity":"上一镜末态 → 本镜变化 → 下一镜初态","propFocus":"道具或无","visualPrompt":"中文静帧画面","videoPrompt":"中文220-650字可执行时间轴：从0秒覆盖到结束，分2-5段写当前行动者、动作表情、说话人与原词、其他人物占位反应、运镜落点、同步声音","audioDescription":"现场声音","voiceover":"人物名：台词，无则空","audioMode":"h3-dialogue|h3-voiceover|tts|none","speakerHint":"声线与情绪","duration":6,"cameraMovement":"push|pull|pan|tilt|static|orbit","subjectNames":["短名"],"sceneName":"地点原名"}`
+${film ? 'Use only beats in the source. Describe montage as visible action. Preserve explicit visual exclusions. Show kindness through ordinary actions.' : ''}
+Write user-facing descriptions in natural Korean and generation prompts in English. Return one JSON object: {"title":"short Korean title","purpose":"dramatic function","shotSize":"framing","blocking":"each character's position, depth and orientation","eyeline":"where each character looks","continuity":"prior ending → this visible change → next opening","propFocus":"prop or none","visualPrompt":"English still prompt","videoPrompt":"English time-coded direction from zero to end","audioDescription":"physical sound","voiceover":"speaker: verbatim line or empty","audioMode":"h3-dialogue|h3-voiceover|tts|none","speakerHint":"voice and mood","duration":6,"cameraMovement":"push|pull|pan|tilt|static|orbit","subjectNames":["source name"],"sceneName":"source location"}`
         },
         {
           role: 'user',
@@ -1554,10 +1546,8 @@ ${productNote}
 Write one voicePrompt in English for every person, covering age and gender, timbre (raspy, bright, slow, nasal, or similar), speed and intensity, emotional tone, and an appropriate accent or speaking habit. Use one consistent voice in the entire film. For animal and other, use an empty string.
 Output JSON only: {"subjects":[{"name":"Short name","kind":"person|animal|other","description":"Specific physical identity, excluding location","role":"Identity, dramatic function, and aliases","stateVariants":"Changes in this episode, or none","voicePrompt":"English vocal qualities and delivery, empty for non-person subjects","fromReference":false}]}. Before returning, verify a record for every ###, separate people who speak, act, or are seen, and a voicePrompt for every person.`
 
-    const sceneSystem = `你是场景与视觉设定提炼子智能体。只提炼本集会拍到的**地点**，不写人物，不拆分镜。
-地点来源优先：剧本「## 环境与场景」下的地点；其次场记行「内景｜地点｜天气」或「外景｜地点｜」。没有明确场记时从正文的空间线索判断，若剧本没有说明具体地点，只写“未明确地点的室内/室外”并注明待补充，不要虚构。场次标题如「近身缝合」「未尽之言」通常是剧情标题，不能直接当地点；同一地点只建一条。
-scene.name 用地点短名（如旧仓房、公益饭堂院子），不要用「场景一」。
-每个地点只写无人时的空间、地面、建筑、天气、光和年代物件。description、mainAnchor、anchors、lighting 中严禁复制人物动作、台词、镜头说明、场次标题或故事情节。只保留原文能支持的环境信息，不得编造材质、陈设或昼夜；未明确的写待确认。主锚必须是场景内实际存在的静态物件或建筑，不是事件名称；不明确时写“待确定”。
+    const sceneSystem = `Extract only physical filming locations used in this episode. First use the script's environment and locations section, then explicit interior or exterior scene headings, then details in the body. Mark an unspecified interior or exterior as pending confirmation. Do not treat an event title as a place. Deduplicate locations and use a short location name, not a scene number.
+Describe unoccupied space, ground, architecture, weather, light and period objects supported by the script. Keep people, plot, action and dialogue out of the description, anchors and lighting. Mark unknown materials, furnishings or day/night state for confirmation. Use an actual fixed object or structure as the main anchor, or mark it pending. Write user-facing descriptions in natural Korean.
 ${productNote}
 ${stylePriority}
 Return JSON only: {"aesthetic":"Overall tone of the film","h3Aesthetic":"English production aesthetic with concrete lighting, material, color and camera qualities","styleBrief":"Conflict and visual hook for this episode","colorPalette":"Visible colors","lightingNote":"Time and light source","scenes":[{"name":"Short location name","description":"At least 80 characters about the unoccupied space, ground, architecture, weather, movement, and lighting","mainAnchor":"Primary visual anchor","anchors":"Wide view; main anchor; ground and blocking area; light source or secondary anchor","lighting":"Time and light source"}]}

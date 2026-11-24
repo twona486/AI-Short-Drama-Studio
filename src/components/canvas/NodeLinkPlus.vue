@@ -12,7 +12,7 @@ function open(ev: MouseEvent, side: 'prev' | 'next') {
   <button
     type="button"
     class="plus plus-in node-plus nodrag nopan nowheel"
-    title="在前面添加节点"
+    :title="$t('canvasContext.addBefore')"
     @pointerdown.stop
     @mousedown.prevent.stop="open($event, 'prev')"
   >
@@ -21,7 +21,7 @@ function open(ev: MouseEvent, side: 'prev' | 'next') {
   <button
     type="button"
     class="plus plus-out node-plus nodrag nopan nowheel"
-    title="在后面添加节点"
+    :title="$t('canvasContext.addAfter')"
     @pointerdown.stop
     @mousedown.prevent.stop="open($event, 'next')"
   >

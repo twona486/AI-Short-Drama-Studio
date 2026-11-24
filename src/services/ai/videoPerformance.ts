@@ -1,3 +1,4 @@
+import { t } from '@/i18n'
 import type { Scene, Shot, Subject } from '@/types'
 import { callLLM, getAIMode } from './client'
 import { getVideoPromptStyle } from './runtime'
@@ -117,7 +118,7 @@ ${(opts.shot.visualPrompt || '').slice(0, 400)}`
     const rich = stripFrameLead(String(parsed.videoPrompt || ''))
     if (!rich || rich === (opts.shot.visualPrompt || '').trim() || isVideoPerformanceTemplate(rich) ||
         directorTimelineIssue(rich, opts.shot.duration) || !preservesScreenText(own, rich)) {
-      if (opts.force) throw new Error('重写稿仍缺少完整时间轴或可拍细节，或改动了屏显原文；已保留原稿。')
+      if (opts.force) throw new Error(t('aiError.invalidRewrite'))
       return own || current
     }
     return rich

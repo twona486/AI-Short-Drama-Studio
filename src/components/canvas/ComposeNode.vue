@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { t as localized } from '@/i18n'
 import { computed, ref, watch } from 'vue'
 import { Handle, Position } from '@vue-flow/core'
 import { useAssetsStore, useProjectStore, useToastStore } from '@/stores'
@@ -63,10 +64,10 @@ async function compose() {
   if (busy.value) return
   const clips = incoming.value.filter((item) => videoAssetId(item))
   if (!clips.length) {
-    toast.warn(incoming.value.length ? '接到这里的视频还没生成' : '先把视频节点接到合成节点上')
+    toast.warn(incoming.value.length ? localized('mediaNodes.missingClip') : localized('mediaNodes.connectVideoNode'))
     return
   }
-  busy.value = '准备片段…'
+  busy.value = localized('mediaNodes.preparingClips')
   try {
     const segments = []
     let width = 0
@@ -84,7 +85,7 @@ async function compose() {
       segments.push({ blob, sourceIn: 0, duration })
     }
     if (!segments.length) {
-      toast.warn('接到这里的视频还没生成')
+      toast.warn(localized('mediaNodes.missingClip'))
       return
     }
     const size = width && height ? { width, height } : outputSize()
@@ -92,25 +93,25 @@ async function compose() {
       const v = Math.max(2, Math.round(n))
       return v % 2 === 0 ? v : v - 1
     }
-    busy.value = '正在合成…'
+    busy.value = localized('mediaNodes.composing')
     const blob = await concatVideos(segments, {
       width: even(size.width),
       height: even(size.height),
       fps: 30,
       onProgress: (msg) => {
-        busy.value = msg || '正在合成…'
+        busy.value = msg || localized('mediaNodes.composing')
       }
     })
     const asset = await assets.add(blob, 'video', 'ai-generated', {
-      filename: '合成.mp4',
+      filename: localized('mediaNodes.filename'),
       projectId: project.current?.id,
-      prompt: clips.map((item) => item.data.label || '视频').join(' + ')
+      prompt: clips.map((item) => item.data.label || localized('mediaNodes.video')).join(' + ')
     })
     project.assignCanvasNodeAsset(props.id, asset.id)
     previewUrl.value = (await assets.getUrl(asset.id)) || ''
-    toast.success('视频已合成')
+    toast.success(localized('mediaNodes.composed'))
   } catch (e) {
-    toast.error(e instanceof Error ? e.message : '合成失败')
+    toast.error(e instanceof Error ? e.message : localized('mediaNodes.composeFailed'))
   } finally {
     busy.value = ''
   }
@@ -123,21 +124,21 @@ async function compose() {
     <Handle id="in" type="target" :position="Position.Left" class="hndl" />
 
     <div v-if="selected" class="toolbar-wrap nodrag nowheel" @mousedown.stop @click.stop>
-      <button type="button" class="go" :disabled="!!busy" @click="compose">{{ hasOutput ? $t('pipelineNode.composeAgain') : '合成视频' }}</button>
+      <button type="button" class="go" :disabled="!!busy" @click="compose">{{ hasOutput ? $t('pipelineNode.composeAgain') : $t('mediaNodes.composeVideo') }}</button>
     </div>
 
     <div class="media">
       <video v-if="previewUrl" class="player nodrag nowheel" :src="previewUrl" controls @mousedown.stop />
       <button v-else type="button" class="ph nodrag" :disabled="!!busy" @click.stop="compose">
         <span class="mark" aria-hidden="true"></span>
-        <span>{{ incoming.length ? `${readyCount}/${incoming.length} 段可合成` : '把视频接到这里' }}</span>
+        <span>{{ incoming.length ? $t('mediaNodes.readyToCompose', { ready: readyCount, count: incoming.length }) : $t('mediaNodes.connectVideo') }}</span>
       </button>
       <NodeBusyOverlay v-if="busy" :label="busy" />
     </div>
 
     <div class="name">
       <span class="kind">{{ $t('pipelineNode.composite') }}</span>
-      <span class="title">{{ incoming.length ? `${incoming.length} 段` : '成片' }}</span>
+      <span class="title">{{ incoming.length ? $t('mediaNodes.composeClipCount', { count: incoming.length }) : $t('mediaNodes.output') }}</span>
     </div>
 
     <Handle id="out" type="source" :position="Position.Right" class="hndl" />

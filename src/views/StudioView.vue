@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { confirmAction } from '@/utils/confirmAction'
 import { t as translate } from '@/i18n'
 import { computed, defineComponent, h, markRaw, nextTick, onMounted, onUnmounted, ref, watch, type Component } from 'vue'
 import { useRouter } from 'vue-router'
@@ -322,7 +323,7 @@ function onBoxSelect(event?: MouseEvent) {
     return
   }
   const texts = picked.filter(isPickText)
-  if (texts.length > 1) toast.info('文字一次只带第一段，删除会带上全部选中的节点')
+  if (texts.length > 1) toast.info(translate('canvasContext.multiText'))
   selectionIds.value = picked.map((node) => node.id)
   const nodes = texts.length > 1
     ? picked.filter((node) => !texts.slice(1).some((text) => text.id === node.id))
@@ -332,15 +333,15 @@ function onBoxSelect(event?: MouseEvent) {
   const text = texts[0]
   const actions: Array<{ id: string; label: string }> = []
   if (videos.length >= 2 && !images.length) {
-    actions.push({ id: 'compose', label: '合成视频' }, { id: 'download', label: '批量下载' })
+    actions.push({ id: 'compose', label: translate('canvasContext.composeVideo') }, { id: 'download', label: translate('canvasContext.downloadAll') })
   } else if (images.length && videos.length === 1) {
-    actions.push({ id: 'attach', label: '加入参考图' })
+    actions.push({ id: 'attach', label: translate('canvasContext.attachReference') })
   } else if (images.length && !videos.length) {
-    actions.push({ id: 'video', label: '添加视频节点' }, { id: 'image', label: '生图节点' })
+    actions.push({ id: 'video', label: translate('canvasContext.addVideo') }, { id: 'image', label: translate('canvasContext.generateImage') })
   } else if (videos.length === 1 && text && !images.length) {
-    actions.push({ id: 'attach', label: '加入文字' })
+    actions.push({ id: 'attach', label: translate('canvasContext.attachText') })
   } else if (videos.length >= 2) {
-    actions.push({ id: 'compose', label: '合成视频' }, { id: 'download', label: '批量下载' })
+    actions.push({ id: 'compose', label: translate('canvasContext.composeVideo') }, { id: 'download', label: translate('canvasContext.downloadAll') })
   }
   placeSelectionMenu(event, actions)
 }
@@ -379,14 +380,14 @@ function composeSelection() {
     id,
     type: 'compose',
     position: { x: last.position.x + 280, y: last.position.y },
-    data: { label: '合成' },
+    data: { label: translate('canvasContext.compose') },
     status: 'idle'
   })
   connectNodes(videos.map((node) => [node.id, id]))
   selectedId.value = id
   selectionMenu.value = null
   selectionIds.value = []
-  toast.success(`已把 ${videos.length} 段视频接到合成节点`)
+  toast.success(translate('canvasContext.clipsConnected', { count: videos.length }))
 }
 
 async function downloadSelection() {
@@ -399,13 +400,13 @@ async function downloadSelection() {
     const url = URL.createObjectURL(blob)
     const link = document.createElement('a')
     link.href = url
-    link.download = `${(node.data.label || '视频').replace(/[\\/:*?"<>|]/g, ' ')}.mp4`
+    link.download = `${(node.data.label || translate('comfySettings.video')).replace(/[\\/:*?"<>|]/g, ' ')}.mp4`
     link.click()
     URL.revokeObjectURL(url)
     saved += 1
     await new Promise((resolve) => setTimeout(resolve, 180))
   }
-  toast[saved ? 'success' : 'warn'](saved ? `开始下载 ${saved} 个视频` : '这些视频还没有成片')
+  toast[saved ? 'success' : 'warn'](saved ? translate('canvasContext.downloadStarted', { count: saved }) : translate('canvasContext.noOutput'))
 }
 
 function addFromSelection(type: 'imageGen' | 'videoGen') {
@@ -421,7 +422,7 @@ function addFromSelection(type: 'imageGen' | 'videoGen') {
     position: nextFreeformPosition(project.current.canvas?.nodes ?? [], { source: anchor, place: 'after' }),
     status: 'idle',
     data: {
-      label: type === 'videoGen' ? `视频 ${count}` : `图片 ${count}`,
+      label: type === 'videoGen' ? translate('canvasContext.videoN', { count }) : translate('canvasContext.imageN', { count }),
       prompt: text ? carryTextFromNode(project.current, text) : '',
       referenceAssetIds: [],
       referenceSourceNodeIds: images.map((node) => node.id),
@@ -438,7 +439,7 @@ function addFromSelection(type: 'imageGen' | 'videoGen') {
   selectedId.value = id
   selectionMenu.value = null
   selectionIds.value = []
-  toast.success(type === 'videoGen' ? `已添加视频节点，带上 ${images.length} 张参考图` : `已添加生图节点，带上 ${images.length} 张参考图`)
+  toast.success(type === 'videoGen' ? translate('canvasContext.videoReferencesAdded', { count: images.length }) : translate('canvasContext.imageReferencesAdded', { count: images.length }))
 }
 
 function attachSelection() {
@@ -466,12 +467,12 @@ function attachSelection() {
   selectionIds.value = []
   toast.success(
     added && prompt
-      ? `已把 ${added} 张图和文字加入这个视频`
+      ? translate('canvasContext.imagesAndTextAdded', { count: added })
       : added
-        ? `已把 ${added} 张图加入参考`
+        ? translate('canvasContext.imagesAdded', { count: added })
         : prompt
-          ? '已把文字加入这个视频'
-          : '这些图已经在参考里了'
+          ? translate('canvasContext.textAttached')
+          : translate('canvasContext.referencesExist')
   )
 }
 
@@ -729,13 +730,13 @@ function canDeleteNode(id: string | null | undefined): boolean {
 
 function duplicateNode(id: string | null | undefined) {
   if (!id) {
-    toast.warn('请先选中要复制的图片、视频或音频节点')
+    toast.warn(translate('canvasContext.selectDuplicate'))
     return
   }
   const nid = project.duplicateCanvasNode(id)
   closeCtxMenu()
   if (!nid) {
-    toast.warn('只能复制图片、视频或音频节点')
+    toast.warn(translate('canvasContext.duplicateKinds'))
     return
   }
   selectedId.value = nid
@@ -745,30 +746,34 @@ function duplicateNode(id: string | null | undefined) {
   })
 }
 
-function deleteSelection() {
+async function deleteSelection() {
   const ids = selectionIds.value.filter((id) => canDeleteNode(id))
   if (!ids.length || !project.current) return
-  if (!confirm(`删除选中的 ${ids.length} 个节点？`)) return
+  const projectId = project.current.id
+  if (!await confirmAction(translate('canvasContext.deleteCount', { count: ids.length }))) return
+  if (project.current?.id !== projectId) return
   for (const id of ids) deleteCtxNode(id, { skipConfirm: true, quiet: true })
   if (selectedId.value && ids.includes(selectedId.value)) selectedId.value = null
   selectionMenu.value = null
   selectionIds.value = []
   removeSelectedNodes(getSelectedNodes.value.filter((node) => ids.includes(node.id)))
-  toast.success(`已删除 ${ids.length} 个节点`)
+  toast.success(translate('canvasContext.deletedCount', { count: ids.length }))
 }
 
-function deleteCtxNode(id: string | null | undefined, options?: { skipConfirm?: boolean; quiet?: boolean }) {
+async function deleteCtxNode(id: string | null | undefined, options?: { skipConfirm?: boolean; quiet?: boolean }) {
   if (!id || !project.current) return
   const n = project.current.canvas?.nodes.find((x) => x.id === id)
   if (!n || !canDeleteNode(id)) {
     closeCtxMenu()
     return
   }
-  if (!options?.skipConfirm && !confirm('删除这个节点？')) {
+  const projectId = project.current.id
+  if (!options?.skipConfirm && !await confirmAction(translate('canvasContext.confirmDelete'))) {
     closeCtxMenu()
     return
   }
   const p = project.current
+  if (!p || p.id !== projectId) return
   if (n.type === 'prop') {
     const pid = n.data.propId
     if (pid) {
@@ -813,7 +818,7 @@ function deleteCtxNode(id: string | null | undefined, options?: { skipConfirm?: 
   }
   if (selectedId.value === id) selectedId.value = null
   closeCtxMenu()
-  if (!options?.quiet) toast.success('已删除节点')
+  if (!options?.quiet) toast.success(translate('canvasContext.nodeDeleted'))
 }
 
 function keepSpaceForSelection(e: KeyboardEvent) {
@@ -840,7 +845,7 @@ function openNodeLinkMenu(nodeId: string, x: number, y: number, side: 'prev' | '
   const node = project.current?.canvas?.nodes.find((item) => item.id === nodeId)
   const links = side === 'prev' ? prevCanvasLinks(node) : nextCanvasLinks(node)
   if (!links.length) {
-    toast.warn(side === 'prev' ? '这个节点前面没有能接上的节点' : '这个节点后面没有能接上的节点')
+    toast.warn(side === 'prev' ? translate('canvasContext.noneBefore') : translate('canvasContext.noneAfter'))
     return
   }
   selectedId.value = nodeId
@@ -913,7 +918,7 @@ function addFreeform(type: 'imageGen' | 'videoGen' | 'audioGen') {
     type,
     position: { x: pos.x, y: pos.y },
     data: {
-      label: type === 'imageGen' ? `图片 ${count}` : type === 'audioGen' ? `音频 ${count}` : `视频 ${count}`,
+      label: type === 'imageGen' ? translate('canvasContext.imageN', { count }) : type === 'audioGen' ? translate('canvasContext.audioN', { count }) : translate('canvasContext.videoN', { count }),
       prompt: anchor && project.current ? carryTextFromNode(project.current, anchor) : '',
       referenceAssetIds: [],
       referenceSourceNodeIds: inheritsSource && anchorId ? [anchorId] : [],
@@ -948,7 +953,7 @@ function addFreeform(type: 'imageGen' | 'videoGen' | 'audioGen') {
   }
   selectedId.value = id
   closeCtxMenu()
-  toast.success(type === 'videoGen' ? '已添加视频节点' : type === 'audioGen' ? '已添加音频节点' : '已添加图片节点')
+  toast.success(type === 'videoGen' ? translate('canvasContext.videoAdded') : type === 'audioGen' ? translate('canvasContext.audioAdded') : translate('canvasContext.imageAdded'))
   nextTick(() => {
     fitView({ nodes: [id], padding: 0.35, duration: 280 })
   })
@@ -1008,7 +1013,7 @@ function addLinkedText() {
   }
   selectedId.value = scriptId
   closeCtxMenu()
-  toast.success(existing ? '文本节点已接到前面' : '已在前面添加文本节点')
+  toast.success(existing ? translate('canvasContext.textConnected') : translate('canvasContext.textAdded'))
   nextTick(() => fitView({ nodes: [scriptId], padding: 0.35, duration: 280 }))
 }
 
@@ -1028,7 +1033,7 @@ function addCompose() {
       id,
       type: 'compose',
       position: pos,
-      data: { label: '合成' },
+      data: { label: translate('canvasContext.compose') },
       status: 'idle'
     })
     compose = project.current.canvas?.nodes.find((node) => node.id === id)
@@ -1049,7 +1054,7 @@ function addCompose() {
         edges: [...project.current.canvas.edges, edge]
       })
     }
-    toast.success(linked ? '这个视频已经在合成节点里' : created ? '已添加合成节点' : '已添加到合成节点')
+    toast.success(linked ? translate('canvasContext.videoInComposition') : created ? translate('canvasContext.compositionAdded') : translate('canvasContext.addedToComposition'))
   }
   selectedId.value = compose.id
   closeCtxMenu()
@@ -1170,7 +1175,7 @@ async function newCanvas() {
   try {
     const now = new Date()
     const pad = (n: number) => String(n).padStart(2, '0')
-    const label = `新项目 ${now.getMonth() + 1}-${now.getDate()} ${pad(now.getHours())}:${pad(now.getMinutes())}`
+    const label = translate('canvasContext.newProjectName', { date: `${now.getMonth() + 1}-${now.getDate()} ${pad(now.getHours())}:${pad(now.getMinutes())}` })
     const p = await project.createNamed(label)
     p.pipelineMode = 'standard'
     p.script = {
@@ -1220,8 +1225,8 @@ function goClassic() {
         @blur="commitRename"
         autofocus
       />
-      <button v-else class="project-name nodrag" type="button" title="修改项目名" @click="startRename">
-        {{ project.current?.name || '画布' }}
+      <button v-else class="project-name nodrag" type="button" :title="$t('canvasContext.rename')" @click="startRename">
+        {{ project.current?.name || $t('canvasContext.canvas') }}
       </button>
       <span class="dim">{{
         $t('studio.counts', { p0: project.current?.shots.length || 0, p1: project.current?.canvas?.nodes.length || 0 })
@@ -1341,7 +1346,7 @@ function goClassic() {
           <Controls position="bottom-left" :show-interactive="false" />
         </VueFlow>
         <div v-if="!project.current?.canvas?.nodes.length" class="empty-hint">
-          在左边说一句话让我开工，或在空白处右键添加图片 / 视频 / 音频 / 剧本 / 角色 / 道具 / 场景 / 分镜
+          {{ $t('canvasContext.canvasIntro') }}
         </div>
       </div>
       <Teleport to="body">
@@ -1387,7 +1392,7 @@ function goClassic() {
               @mousedown.prevent.stop="addLinkedText"
             >
               <CtxMenuIcon name="script" />
-              文本节点
+              {{ $t('canvasContext.textNode') }}
             </button>
             <button
               v-if="ctxMenu.links?.includes('imageGen')"
@@ -1395,7 +1400,7 @@ function goClassic() {
               @mousedown.prevent.stop="addFreeform('imageGen')"
             >
               <CtxMenuIcon name="image" />
-              图片节点
+              {{ $t('canvasContext.imageNode') }}
             </button>
             <button
               v-if="ctxMenu.links?.includes('videoGen')"
@@ -1403,7 +1408,7 @@ function goClassic() {
               @mousedown.prevent.stop="addFreeform('videoGen')"
             >
               <CtxMenuIcon name="video" />
-              视频节点
+              {{ $t('canvasContext.videoNode') }}
             </button>
             <button
               v-if="ctxMenu.links?.includes('audioGen')"
@@ -1411,7 +1416,7 @@ function goClassic() {
               @mousedown.prevent.stop="addFreeform('audioGen')"
             >
               <CtxMenuIcon name="audio" />
-              音频节点
+              {{ $t('canvasContext.audioNode') }}
             </button>
             <button
               v-if="ctxMenu.links?.includes('compose')"
@@ -1419,7 +1424,7 @@ function goClassic() {
               @mousedown.prevent.stop="addCompose"
             >
               <CtxMenuIcon name="compose" />
-              合成节点
+              {{ $t('canvasContext.composeNode') }}
             </button>
           </template>
           <template v-else>
@@ -1433,7 +1438,7 @@ function goClassic() {
           </button>
           <button type="button" @mousedown.prevent.stop="addFreeform('audioGen')">
             <CtxMenuIcon name="audio" />
-            {{ ctxMenu.nodeId ? '追加音频节点' : '添加音频节点' }}
+            {{ ctxMenu.nodeId ? $t('canvasContext.appendAudio') : $t('canvasContext.addAudio') }}
           </button>
           <div class="ctx-sep" />
           <button type="button" @mousedown.prevent.stop="addScriptNode">

@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { t } from '@/i18n'
 import { computed, ref } from 'vue'
 import { Handle, Position } from '@vue-flow/core'
 import { useProjectStore } from '@/stores'
@@ -39,12 +40,12 @@ const shotCount = computed(() => plan.value?.plan.scenes.reduce((sum, scene) => 
 const nextStep = computed(() => {
   const state = plan.value
   if (!state) return ''
-  if (state.phase === 'complete') return '已经拍完'
-  if (state.phase === 'videos') return '接下来按场开拍'
+  if (state.phase === 'complete') return t('timelineTracks.complete')
+  if (state.phase === 'videos') return t('timelineTracks.shootScenes')
   const scene = state.plan.scenes[state.sceneIndex || 0]
-  return scene ? `接下来准备「${scene.name}」` : '接下来开拍'
+  return scene ? t('continuousCapture.preparingScene', { name: scene.name }) : t('timelineTracks.shoot')
 })
-const kindLabel: Record<string, string> = { character: '人物', prop: '道具', scene: '场景' }
+const kindLabel = computed<Record<string, string>>(() => ({ character: t('timelineTracks.character'), prop: t('timelineTracks.prop'), scene: t('timelineTracks.scene') }))
 function assetsOf(ids: string[]) {
   const assets = plan.value?.plan.assets || []
   return ids.map(id => assets.find(asset => asset.id === id)).filter((asset): asset is { id: string; name: string; kind: string } => Boolean(asset))
@@ -67,9 +68,8 @@ async function copy() {
     </header>
     <div v-if="plan" class="sheet nodrag nowheel">
       <p class="overview">
-        <span>成片约 {{ Math.floor(seconds / 60) }} 分 {{ seconds % 60 }} 秒</span>
-        <span>{{ plan.plan.scenes.length }} 场</span>
-        <span>{{ shotCount }} 个镜头</span>
+        <span>{{ $t('continuousCapture.duration', { minutes: Math.floor(seconds / 60), seconds: seconds % 60 }) }}</span>
+        <span>{{ $t('continuousCapture.sceneStats', { scenes: plan.plan.scenes.length, shots: shotCount }) }}</span>
       </p>
       <p class="next">{{ nextStep }}</p>
       <p v-if="plan.plan.aesthetic" class="look">{{ plan.plan.aesthetic }}</p>
@@ -77,19 +77,19 @@ async function copy() {
         <li v-for="(scene, index) in plan.plan.scenes" :key="scene.id" :class="{ current: plan.phase !== 'complete' && index === (plan.sceneIndex || 0) && plan.phase !== 'videos' }">
           <div class="scene-head">
             <strong>{{ index + 1 }}. {{ scene.name }}</strong>
-            <span>{{ scene.segments.reduce((n, seg) => n + seg.duration, 0) }} 秒</span>
+            <span>{{ $t('continuousCapture.seconds', { count: scene.segments.reduce((n, seg) => n + seg.duration, 0) }) }}</span>
           </div>
-          <p class="beats">{{ scene.segments.map(seg => `${seg.duration}秒`).join(' + ') }}</p>
+          <p class="beats">{{ scene.segments.map(seg => $t('continuousCapture.seconds', { count: seg.duration })).join(' + ') }}</p>
           <p v-if="assetsOf(scene.assetIds).length" class="cast">
-            <span v-for="asset in assetsOf(scene.assetIds)" :key="asset.id">{{ kindLabel[asset.kind] || '素材' }} {{ asset.name }}</span>
+            <span v-for="asset in assetsOf(scene.assetIds)" :key="asset.id">{{ kindLabel[asset.kind] || $t('timelineTracks.asset') }} {{ asset.name }}</span>
           </p>
           <p v-for="(line, lineIndex) in linesOf(scene)" :key="lineIndex" class="line">{{ line.speaker }}：{{ line.text }}</p>
         </li>
       </ol>
-      <p v-if="plan.modelName" class="model">{{ plan.modelName }} · 单段 {{ Math.min(6, plan.maxSeconds || 6) }}–{{ plan.maxSeconds }} 秒</p>
+      <p v-if="plan.modelName" class="model">{{ plan.modelName }} · {{ $t('timelineTracks.clipRange', { min: Math.min(6, plan.maxSeconds || 6), max: plan.maxSeconds }) }}</p>
     </div>
-    <textarea v-else v-model="plain" class="nodrag nowheel" aria-label="分镜文本" />
-    <footer>{{ plan ? '计划存在节点里，对话里说继续才会往下做' : '连续拍分镜 · 在对话中确认或重新规划' }}</footer>
+    <textarea v-else v-model="plain" class="nodrag nowheel" :aria-label="$t('timelineTracks.shotText')" />
+    <footer>{{ plan ? $t('timelineTracks.planHint') : $t('timelineTracks.shotHint') }}</footer>
     <Handle id="out" type="source" :position="Position.Right" />
   </section>
 </template>

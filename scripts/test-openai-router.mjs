@@ -22,4 +22,4 @@ assert.equal(normalizeRouterBaseUrl('http://127.0.0.1:8181/custom'), 'http://127
 assert.throws(() => normalizeRouterBaseUrl('http://api.example.com/v1'), /HTTPS/)
 assert.throws(() => normalizeRouterBaseUrl('https://api.example.com/v1?key=example'), /查询参数/)
 
-console.log('通过：OpenAI 兼容网关地址与思考正文分离')
+console.log('통과 · OpenAI 호환 게이트웨이 주소와 추론 출력 분리')

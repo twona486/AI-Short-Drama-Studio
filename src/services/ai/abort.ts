@@ -1,5 +1,4 @@
 import { t } from '@/i18n'
-import zh from '@/locales/zh'
 
 /** 완성 대본과 노드 추출의 긴 JSON 응답에는 2분 이상 걸릴 수 있다. */
 export const PLAY_LLM_TIMEOUT_MS = 480_000
@@ -29,13 +28,13 @@ export function isTimeoutAbort(e: unknown, signal?: AbortSignal): boolean {
   const reason = signal?.reason
   if (errName(reason) === 'TimeoutError' || /请求超过/.test(errMessage(reason))) return true
   if (errName(e) === 'TimeoutError') return true
-  return /请求超过|模型超过 \d+ 秒/.test(errMessage(e))
+  return /请求超过|模型超过 \d+ 秒|모델이 \d+초 안에 응답을 완료하지 못했어요/.test(errMessage(e))
 }
 
 export function llmAbortError(e: unknown, signal?: AbortSignal, timeoutMs = 120_000): Error {
   if (isTimeoutAbort(e, signal)) {
     const sec = Math.max(1, Math.round(timeoutMs / 1000))
-    return new Error(`模型超过 ${sec} 秒未完成请求，请重试。`)
+    return new Error(t('aiError.requestTimeout', { seconds: sec }))
   }
   if (signal?.aborted || isAbortError(e)) {
     return new DOMException('작업을 취소했어요.', 'AbortError')
@@ -44,8 +43,8 @@ export function llmAbortError(e: unknown, signal?: AbortSignal, timeoutMs = 120_
 }
 
 export function friendlyAiError(e: unknown): string {
-  if (isAbortError(e) && !isTimeoutAbort(e)) return '已取消'
-  return errMessage(e).replace(/^Error invoking remote method '[^']+':\s*(?:Error:\s*)?/i, '').trim() || '生成失败'
+  if (isAbortError(e) && !isTimeoutAbort(e)) return t('common.cancelled')
+  return errMessage(e).replace(/^Error invoking remote method '[^']+':\s*(?:Error:\s*)?/i, '').trim() || t('aiError.generationFailed')
 }
 
 export function shouldToastAiError(e: unknown): boolean {

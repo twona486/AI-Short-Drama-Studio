@@ -12,7 +12,7 @@ const mocks = {
     export const callLLM=async req=>{const h=globalThis.h;h.requests.push(req);const system=req.messages[0].content;
     if(system.startsWith('Audit dialogue before generation.')){h.preflightCalls=(h.preflightCalls||0)+1;return {content:JSON.stringify(h.preflightReviews?.shift() ?? {ok:true,issues:[]})}};
     if(system.startsWith('Edit only this shot.'))return {content:JSON.stringify(h.repairs?.shift() ?? {invalid:true})};const review=system.startsWith('Independently review individual shots');
-    if(system.includes('图几是什么')||system.includes('你看图确认参考图身份'))return {content:JSON.stringify({pictures:[{id:'a',role:'character',caption:'阿默'},{id:'b',role:'character',caption:'阿青'},{id:'room',role:'scene',caption:'室内'}]})};
+    if(system.startsWith('Identify reference pictures')||system.startsWith('Check the visual identity'))return {content:JSON.stringify({pictures:[{id:'a',role:'character',caption:'阿默'},{id:'b',role:'character',caption:'阿青'},{id:'room',role:'scene',caption:'室内'}]})};
     return {content:JSON.stringify(review ? h.reviews?.shift() ?? {ok:true,reason:''} : h.responses.shift()||h.fixture)}};`,
   '@/services/ai/image': `export const generateImage=async req=>{globalThis.h.images.push(req);globalThis.h.afterImage?.();return {blob:new Blob(['image'],{type:'image/png'})}};`,
   '@/services/ai/video': `export const generateVideo=async req=>{const h=globalThis.h;h.videos.push(req);await req.onTaskSubmitted('task-'+h.videos.length);if(h.failVideo){h.failVideo=false;throw Error('polling interrupted')}h.afterVideo?.();return {blob:new Blob(['video-'+h.videos.length],{type:'video/mp4'})}};`,
@@ -103,13 +103,13 @@ assert.match(cup.data.prompt, /Exclude people/)
 assert.match(cup.data.prompt, /Exclude people, settings/)
 h = reset()
 await turn('你好')
-assert.equal(h.requests.length, 0, '打招呼只识别意图，不制定计划')
+assert.equal(h.requests.length, 0, '인사는 의도만 분류하고 계획을 세우지 않아요.')
 assert.equal(h.store.current.continuousCapture, undefined)
 h = reset()
 await turn('分析剧本')
 const plannedRequests = h.requests.length
 await turn('这个大概要拍多久')
-assert.equal(h.requests.length, plannedRequests, '询问时长不重新规划，也不生成')
+assert.equal(h.requests.length, plannedRequests, '길이 질문은 다시 계획하거나 생성하지 않아요.')
 assert.equal(h.images.length, 0)
 h = reset()
 for (const mutate of [p => p.scenes[0].segments[0].duration = 5, p => p.scenes[0].segments[0].duration = 16, p => p.assets.push(p.assets[0])]) {
@@ -122,7 +122,7 @@ assert.equal(h.requests[0].timeoutMs, 600000)
 assert.equal(h.requests[0].useProviderOutputLimit, true)
 let s = h.store.current.continuousCapture
 assert.equal(h.store.current.canvas.nodes.filter(n => n.type === 'captureText').length, 4)
-await assert.rejects(() => runCaptureNode(s.assetNodes.a), /确认/)
+await assert.rejects(() => runCaptureNode(s.assetNodes.a), /확인/)
 await turn('不要继续')
 assert.equal(h.images.length, 0)
 await turn('继续')
@@ -135,18 +135,18 @@ assert.equal(h.videos.length, 0, 'video needs its own approval')
 await turn('继续')
 assert.equal(h.videos.length, 3)
 assert.equal(h.videos[0].referenceImages.length, 3, 'first frame is followed by selected identity and scene sheets')
-assert.match(h.videos[0].prompt, /图1.*首帧/)
-assert.match(h.videos[0].prompt, /图2是阿默/)
-assert.match(h.videos[0].prompt, /图3是阿青/)
-assert.match(h.videos[0].prompt, /图4是室内/)
+assert.match(h.videos[0].prompt, /Picture 1 is the first frame/)
+assert.match(h.videos[0].prompt, /Picture 2 is 阿默/)
+assert.match(h.videos[0].prompt, /Picture 3 is 阿青/)
+assert.match(h.videos[0].prompt, /Picture 4 is 室内/)
 assert.equal(h.tails, 1, 'only same-scene continuation extracts a tail')
 assert.equal(h.images.length, 7, 'same-scene tail is repaired once before the next shot')
 const repair = h.images[6]
 assert.equal(repair.referenceImages.length, 3, 'repair uses the tail plus both character sheets')
-assert.match(repair.prompt, /高清修复/)
+assert.match(repair.prompt, /Restore Picture 1 at high resolution/)
 assert.ok(repair.prompt.includes(s.plan.aesthetic), 'tail repair includes the current drama aesthetic verbatim')
-assert.match(repair.prompt, /不得擅自改变画风/)
-assert.match(repair.prompt, /保留原有风格化造型/)
+assert.match(repair.prompt, /Do not change the style/)
+assert.match(repair.prompt, /preserve the original stylized design/)
 assert.match(repair.prompt, /阿默/)
 assert.match(repair.prompt, /阿青/)
 assert.match(await repair.referenceImages[0].text(), /^tail:video-/)
@@ -157,13 +157,13 @@ await turn('继续')
 assert.equal(h.videos.length, 3, 'completed outputs not resubmitted')
 const requestsBeforeGrab = h.requests.length
 const grabbed = await runContinuousTurn('帮我截取最后一帧的图', () => {}, { selectedNodeId: s.videoNodes['s1:1'] })
-assert.match(grabbed.reply, /尾帧/)
+assert.match(grabbed.reply, /끝 프레임/)
 assert.equal(h.videos.length, 3, 'grabbing a frame does not start another shoot')
 assert.equal(h.requests.length, requestsBeforeGrab, 'grabbing a frame does not plan or generate')
 assert.equal(h.tails, 2)
 const frameNode = h.store.current.canvas.nodes.find(n => n.id === `lastframe_${s.videoNodes['s1:1']}`)
 assert.ok(frameNode?.data.outputAssetId)
-assert.match((await runContinuousTurn('帮我截取最后一帧的图', () => {}, {})).reply, /先选中/)
+assert.match((await runContinuousTurn('帮我截取最后一帧的图', () => {}, {})).reply, /완성된 영상 노드를 선택/)
 assert.equal(h.store.current.shots.length, 0, 'ordinary pipeline untouched')
 assert.equal(h.store.current.script.content, source)
 const planNode = h.store.current.canvas.nodes.find(n => n.id === `${s.id}-plan`)
@@ -188,17 +188,17 @@ assert.ok(h.store.current.continuousCapture)
 h = reset()
 h.reviews = [{ ok: true }]
 await turn('分析剧本')
-assert.equal(h.requests.length, 2, '通过结论可以不带 reason')
+assert.equal(h.requests.length, 2, '통과한 결과의 reason은 생략할 수 있어요.')
 assert.ok(h.store.current.continuousCapture)
 h = reset()
 h.reviews = [{ shots: [{ scene: 1, index: 1, ok: false, reason: '第一场对白串人' }] }]
 h.repairs = [{ title: '交谈', duration: 8, prompt: '中景固定。阿默把这句你好说完，阿青听着，镜头停在两人脸上，不再串到下一句。', startState: '门口站立', endState: '说完你好', sound: '鸟鸣', dialogue: [{ speaker: '阿默', text: '你好。', delivery: '自然说话' }] }]
 const revised = await turn('分析剧本')
-assert.match(revised.reply, /场景1-1 已改/)
+assert.match(revised.reply, /장면 1-1을 수정했어요/)
 assert.match(revised.reply, /第一场对白串人/)
 assert.equal(h.requests.length, 3)
 assert.ok(h.store.current.continuousCapture)
-const repaired = h.store.current.canvas.nodes.find(n => n.data.label === '场景1-1')
+const repaired = h.store.current.canvas.nodes.find(n => n.data.label === '장면 1-1')
 assert.equal(repaired.data.duration, 8)
 assert.match(repaired.data.prompt, /说完你好/)
 assert.equal(h.images.length + h.videos.length, 0)
@@ -214,7 +214,7 @@ assert.ok(pending.data.videoTaskId)
 await turn('继续')
 assert.ok(h.videos[1].resumeTaskId, 'retry polls previous task')
 assert.equal(h.images.length, 7, 'retry keeps the asset images and only repairs the continuation tail')
-assert.match(h.images[6].prompt, /高清修复/)
+assert.match(h.images[6].prompt, /Restore Picture 1 at high resolution/)
 
 h = reset(); h.isH3 = true
 await turn('分析剧本'); await turn('继续'); await turn('继续')
@@ -229,7 +229,7 @@ assert.match(h.videos[0].prompt, /integrated_multimodal_description/)
 assert.match(h.videos[0].prompt, /overall_soundscape/)
 
 h = reset(); h.store.current.script = null
-assert.match((await turn('开始')).reply, /没有剧本|已有剧本/)
+assert.match((await turn('开始')).reply, /대본이 없어요|대본을 캔버스/)
 assert.equal(h.requests.length, 0)
 h = reset(); h.config.videos[0].name = 'seedance2.5'
 // 30 seconds must reach the generation layer, not the ordinary 15-second clamp.
@@ -244,13 +244,13 @@ h = reset(); await turn('分析剧本'); await turn('继续'); await turn('继�
 s = h.store.current.continuousCapture
 const uncertain = h.store.current.canvas.nodes.find(n => n.id === s.videoNodes['s1:0'])
 uncertain.data.captureSubmissionPending = true
-await assert.rejects(() => turn('继续'), /停止自动重提/)
+await assert.rejects(() => turn('继续'), /자동 재요청을 멈췄어요/)
 assert.equal(h.videos.length, 0)
 await turn('确认重新提交')
 assert.equal(h.videos.length, 3)
 
 h = reset(); await turn('分析剧本'); h.store.current.script.content += '\n新场景'
-assert.match((await turn('继续')).reply, /剧本改过了/)
+assert.match((await turn('继续')).reply, /대본이 바뀌었어요/)
 assert.equal(h.images.length, 0)
 
 h = reset(); await turn('分析剧本'); await turn('继续'); await turn('继续')
@@ -275,7 +275,7 @@ assert.equal(h.preflightCalls, 3, 'video stage independently rechecks the full s
 h = reset(); await turn('分析剧本')
 h.preflightReviews = [{ok:false,issues:[missing]}]
 h.repairs = [{invalid:true}]
-await assert.rejects(()=>turn('继续'), /补充暂未完成/)
+await assert.rejects(()=>turn('继续'), /대사를 보완하지 못했어요/)
 assert.equal(h.images.length + h.videos.length, 0)
 h.preflightReviews = [{ok:true,issues:[]}]
 await turn('继续')
@@ -285,7 +285,7 @@ h = reset(); await turn('分析剧本')
 let stop = false
 h.afterImage = () => { stop = true }
 const paused = await runContinuousTurn('继续', ()=>{}, {stopAfterCurrent:()=>stop})
-assert.match(paused.reply, /已停止后续/)
+assert.match(paused.reply, /남은 노드 처리를 멈췄어요/)
 assert.equal(h.images.length, 1, 'current node finishes, later image nodes do not start')
 assert.ok(h.store.current.canvas.nodes.find(n=>n.id===h.store.current.continuousCapture.assetNodes.a).data.outputAssetId)
 h.afterImage = undefined
@@ -295,7 +295,7 @@ h = reset(); await turn('分析剧本'); await turn('继续'); await turn('继�
 stop = false
 h.afterVideo = () => { stop = true }
 const videoPaused = await runContinuousTurn('继续', ()=>{}, {stopAfterCurrent:()=>stop})
-assert.match(videoPaused.reply, /已停止后续/)
+assert.match(videoPaused.reply, /남은 노드 처리를 멈췄어요/)
 assert.equal(h.videos.length, 1)
 assert.equal(h.store.current.continuousCapture.phase, 'videos')
 h.afterVideo = undefined

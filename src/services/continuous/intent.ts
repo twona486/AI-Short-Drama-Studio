@@ -29,7 +29,7 @@ function ruleIntent(text: string, hasPlan: boolean, hasScriptPaste: boolean): Ca
   const t = text.trim()
   if (!t) return 'chat'
   if (isDirectNodeShortcut(t)) return 'node'
-  if (t === '确认重新提交' || isCaptureApproval(t)) return 'approve'
+  if (/^(?:确认重新提交|재요청 확인)$/.test(t) || isCaptureApproval(t)) return 'approve'
   if (/^(?:重新规划|다시 계획|계획 다시)/.test(t)) return 'revise'
   if (/从头开始拍|从头拍|指定开始拍|指定开拍/.test(t)) return hasPlan ? 'approve' : 'plan'
   if (/^(?:你好|您好|嗨|hi|hello|hey|在吗|在不在|谢谢|谢了|辛苦了?|哈哈+|嗯+|哦+|你是谁|你能干什么|你能做什么)[\s!！。.~～?？]*$/i.test(t)) return 'chat'
@@ -38,8 +38,8 @@ function ruleIntent(text: string, hasPlan: boolean, hasScriptPaste: boolean): Ca
   if (/多久|几分钟|多少秒|多少个镜头|多少场|要什么资产|需要什么|要拍什么/.test(t)) return hasPlan ? 'status' : 'question'
   if (/[吗呢？?]$/.test(t) && !/生成|开始|继续|规划|开拍/.test(t)) return 'question'
   if (hasPlan && /改计划|改场次|重排整场|重拆剧本|重做计划/.test(t)) return 'revise'
-  if (!hasPlan && (hasScriptPaste || /分析|规划|制定|连续拍/.test(t) || t === '开始')) return 'plan'
-  if (hasPlan && /分析剧本|看下计划|当前计划/.test(t)) return 'status'
+  if (!hasPlan && (hasScriptPaste || /分析|规划|制定|连续拍|대본 분석|연속 촬영|계획/.test(t) || t === '开始')) return 'plan'
+  if (hasPlan && /分析剧本|看下计划|当前计划|대본 분석|촬영 계획 보기|현재 계획/.test(t)) return 'status'
   return null
 }
 

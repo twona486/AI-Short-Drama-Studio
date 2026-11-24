@@ -45,9 +45,6 @@ type FeedItem =
   | { id: string; type: 'msg'; role: 'user' | 'assistant'; content: string }
   | { id: string; type: 'run'; rows: TraceRow[] }
 
-const WELCOME =
-  '我是这张画布的创作搭档，两种用法都行：\n\n- **一句话开工**：说「写一个修仙短剧，8 个分镜」或「画一张黄昏的海边」，我直接建节点、写提示词、跑生成\n- **自己拼**：在画布空白处右键添加图片 / 视频 / 音频 / 剧本 / 角色 / 道具 / 场景 / 分镜，点选节点后让我改提示词、重跑\n\n我也带本地记忆——说「记住…」以后一直生效。想一次做到底就说「全流程」，否则我做一步停一步等你确认。'
-
 const feed = ref<FeedItem[]>([
   { id: 'welcome', type: 'msg', role: 'assistant', content: translate('agentChat.welcome') }
 ])
@@ -79,8 +76,8 @@ async function toggleContinuous() {
   project.setCanvas(rebuildCanvasGraph(project.current, true))
   await project.save()
   chips.value = continuousEnabled.value
-    ? [{ label: project.current.continuousCapture ? '查看连续拍计划' : '分析已有剧本', text: '查看连续拍计划' }]
-    : [{ label: '看看进度', text: '现在画布什么情况' }]
+    ? [{ label: project.current.continuousCapture ? translate('agentWorkspace.viewPlan') : translate('agentWorkspace.analyzeScript'), text: translate('agentWorkspace.viewPlan') }]
+    : [{ label: translate('agentWorkspace.progress'), text: translate('agentWorkspace.progressRequest') }]
 }
 let offActivity: (() => void) | undefined
 const settings = useSettingsStore()
@@ -126,7 +123,7 @@ let controller: AbortController | null = null
 const stopQueued = ref(false)
 const continuousTurn = ref(false)
 
-/* ── 生成配置：比例 / 图像模型 / 视频模型 / 分辨率，选好即生效 ── */
+// Generation preferences apply to new nodes as soon as they change.
 const ASPECT_OPTIONS: { value: AspectRatio; label: string }[] = [
   { value: '16:9', get label() { return translate('agentChat.landscape') } },
   { value: '9:16', get label() { return translate('agentChat.portrait') } },
@@ -186,8 +183,8 @@ const activeGenreId = computed(() => settings.config.storyGenreId || GENERAL_STO
 const activeStorySkillId = computed(() => skillTab.value === 'genre' ? activeGenreId.value : activeStyleId.value)
 const importedSkill = computed(() => settings.config.directorSkill)
 const activeStorySkillName = computed(() => {
-  const style = activeStyleId.value === CUSTOM_STORY_SKILL_ID ? importedSkill.value?.name || '我的技能' : STORY_SKILLS.find((skill) => skill.id === activeStyleId.value)?.name || '通用分镜'
-  const genre = STORY_SKILLS.find((skill) => skill.id === activeGenreId.value)?.name || '不限题材'
+  const style = activeStyleId.value === CUSTOM_STORY_SKILL_ID ? importedSkill.value?.name || translate('agentWorkspace.mySkill') : STORY_SKILLS.find((skill) => skill.id === activeStyleId.value)?.name || translate('agentWorkspace.genericSkill')
+  const genre = STORY_SKILLS.find((skill) => skill.id === activeGenreId.value)?.name || translate('agentWorkspace.anyGenre')
   return `${style} · ${genre}`
 })
 
@@ -241,7 +238,7 @@ async function saveImportedSkill(picked: { text: string; filename: string } | nu
   settings.update({ directorSkill: doc })
   settings.selectStorySkill(CUSTOM_STORY_SKILL_ID)
   await settings.flush()
-  toast.success(`已导入技能「${doc.name}」。写剧本和拆分镜会按它来。`)
+  toast.success(translate('agentWorkspace.skillImported', { name: doc.name }))
 }
 
 async function importStorySkill() {
@@ -249,7 +246,7 @@ async function importStorySkill() {
   try {
     await saveImportedSkill(await pickDirectorSkillFile())
   } catch (err: any) {
-    toast.error(err?.message || '导入技能失败')
+    toast.error(err?.message || translate('agentWorkspace.importFailed'))
   } finally {
     importingSkill.value = false
   }
@@ -260,7 +257,7 @@ async function importStorySkillFolder() {
   try {
     await saveImportedSkill(await pickDirectorSkillFolder())
   } catch (err: any) {
-    toast.error(err?.message || '导入技能失败')
+    toast.error(err?.message || translate('agentWorkspace.importFailed'))
   } finally {
     importingSkill.value = false
   }
@@ -270,7 +267,7 @@ async function clearImportedSkill() {
   settings.update({ directorSkill: null })
   settings.selectStorySkill(GENERAL_STORY_SKILL_ID)
   await settings.flush()
-  toast.success('已清除导入的技能，回到通用分镜')
+  toast.success(translate('agentWorkspace.clearedSkill'))
 }
 
 const currentAspectRatio = computed<AspectRatio>(
@@ -361,9 +358,9 @@ const currentVideoResolution = computed<VideoResolution>(() => {
 })
 const videoResolutionHint = computed(() => {
   const values = preferenceResolutionChoices.value
-  if (values.includes('480p')) return '万相可选 480P、720P、1080P。这里选的档位会交给新的视频节点，单个节点仍可再改。'
-  if (values.includes('1080p')) return '1080p 只在 H3 v5 上出到 1080p。'
-  return '当前模型按 768p 出片。'
+  if (values.includes('480p')) return translate('agentWorkspace.wanResolutions')
+  if (values.includes('1080p')) return translate('agentWorkspace.h3Resolution')
+  return translate('agentWorkspace.defaultResolution')
 })
 watch(preferenceResolutionChoices, (choices) => {
   if (!project.current || !choices.length) return
@@ -419,8 +416,8 @@ const selectedGenNode = computed(() => {
   return n
 })
 const selectedKindLabel = computed(() =>
-  selectedGenNode.value?.type === 'videoGen' ? '图生视频' : selectedGenNode.value ? '生图' :
-    ['shotVideo', 'compose', 'final', 'export'].includes(props.selectedNode?.type || '') ? '视频' : '画布节点'
+  selectedGenNode.value?.type === 'videoGen' ? translate('agentWorkspace.imageToVideo') : selectedGenNode.value ? translate('agentWorkspace.imageGeneration') :
+    ['shotVideo', 'compose', 'final', 'export'].includes(props.selectedNode?.type || '') ? translate('agentWorkspace.video') : translate('agentWorkspace.canvasNode')
 )
 const canContinueSelected = computed(() => ['videoGen', 'shotVideo', 'compose', 'final', 'export'].includes(props.selectedNode?.type || ''))
 const polishChips = [
@@ -650,7 +647,7 @@ async function sendText(text: string) {
     }
     const result = props.selectedNode && isDirectNodeShortcut(t)
       ? {
-          reply: await (onProgress({ kind: 'intent', label: '改当前节点' }), runSelectedNodeShortcut(t, props.selectedNode, turnController.signal, (label) => onProgress({ kind: 'log', label }))),
+          reply: await (onProgress({ kind: 'intent', label: translate('agentWorkspace.editSelected') }), runSelectedNodeShortcut(t, props.selectedNode, turnController.signal, (label) => onProgress({ kind: 'log', label }))),
           results: [],
           chips: []
         }
@@ -702,7 +699,7 @@ async function sendText(text: string) {
 function cancel() {
   if (continuousTurn.value) {
     stopQueued.value = true
-    log.value = '已请求停止后续，当前节点完成后暂停…'
+    log.value = translate('agentWorkspace.stopPending')
     return
   }
   controller?.abort()
@@ -757,7 +754,7 @@ function visibleRows(rows: TraceRow[]) {
         <button v-for="c in selectedGenNode ? polishChips : []" :key="c.label" type="button" @click="sendText(c.text)">
           {{ c.label }}
         </button>
-        <button v-if="canContinueSelected" type="button" @click="sendText('用这个节点最后一帧继续往下拍')">用末帧续拍</button>
+        <button v-if="canContinueSelected" type="button" @click="sendText($t('agentWorkspace.continueFromTailRequest'))">{{ $t('agentWorkspace.continueFromTail') }}</button>
       </div>
     </section>
 
@@ -804,7 +801,7 @@ function visibleRows(rows: TraceRow[]) {
         v-for="c in chips"
         :key="c.text + c.label"
         type="button"
-        :class="{ go: c.text === '继续' || c.label.startsWith('继续') }"
+        :class="{ go: /^(?:继续|계속)/.test(c.text) || /^(?:继续|계속)/.test(c.label) }"
         @click="sendText(c.text)"
       >
         {{ c.label }}
@@ -812,7 +809,7 @@ function visibleRows(rows: TraceRow[]) {
     </div>
 
     <form class="composer" @submit.prevent="send">
-      <p v-if="continuousEnabled" class="capture-hint">选中节点后，上面的快捷方式只改这一镜。开始拍、从头开始拍才动整场。</p>
+      <p v-if="continuousEnabled" class="capture-hint">{{ $t('agentWorkspace.captureHint') }}</p>
       <p v-if="!continuousEnabled && input.trim() && estimate.calls" class="estimate">
         {{ $t('agentChat.estimated') }} {{ estimate.calls }} {{ $t('common.requestCountEstimate') }} {{ Math.max(1, Math.ceil(estimate.seconds / 60)) }} {{ $t('common.minutes') }}
       </p>
@@ -827,7 +824,7 @@ function visibleRows(rows: TraceRow[]) {
           v-model="input"
           rows="5"
           :disabled="busy"
-          :placeholder="continuousEnabled ? '粘贴完整剧本或附加剧本文件；已有剧本可直接说「分析剧本」。确认计划后回复「继续」。' : $t('agentChat.placeholder')"
+          :placeholder="continuousEnabled ? $t('agentWorkspace.capturePlaceholder') : $t('agentChat.placeholder')"
           @keydown.enter.exact.prevent="send"
         />
         <div class="bar">
@@ -885,38 +882,38 @@ function visibleRows(rows: TraceRow[]) {
                 >
                   {{ $t('agentChat.imagePreferences') }}
                 </button>
-                <button type="button" :class="{ on: prefTab === 'knowledge' }" @click="prefTab = 'knowledge'">写作知识库</button>
+                <button type="button" :class="{ on: prefTab === 'knowledge' }" @click="prefTab = 'knowledge'">{{ $t('agentWorkspace.writingReferences') }}</button>
                 <button type="button" :class="{ on: prefTab === 'comfyui' }" @click="prefTab = 'comfyui'">ComfyUI</button>
               </div>
               <div v-if="prefTab === 'comfyui'" class="pref-comfy">
-                <label>图片工作流
+                <label>{{ $t('agentWorkspace.imageWorkflow') }}
                   <select class="pref-select" :disabled="!comfyImages.length" :value="comfyImages.some(p => p.id === settings.config.activeImageId) ? settings.config.activeImageId : ''" @change="pickImage(($event.target as HTMLSelectElement).value)">
-                    <option value="" disabled>{{ comfyImages.length ? '选择 ComfyUI 图片工作流' : '暂无图片工作流' }}</option>
+                    <option value="" disabled>{{ comfyImages.length ? $t('agentWorkspace.chooseImageWorkflow') : $t('agentWorkspace.noImageWorkflow') }}</option>
                     <option v-for="p in comfyImages" :key="p.id" :value="p.id">{{ p.name }}</option>
                   </select>
                 </label>
-                <label>视频工作流
+                <label>{{ $t('agentWorkspace.videoWorkflow') }}
                   <select class="pref-select" :disabled="!comfyVideos.length" :value="!videoDefault && comfyVideos.some(p => p.id === settings.config.activeVideoId) ? settings.config.activeVideoId : ''" @change="pickVideo(($event.target as HTMLSelectElement).value)">
-                    <option value="" disabled>{{ comfyVideos.length ? '选择 ComfyUI 视频工作流' : '暂无视频工作流' }}</option>
+                    <option value="" disabled>{{ comfyVideos.length ? $t('agentWorkspace.chooseVideoWorkflow') : $t('agentWorkspace.noVideoWorkflow') }}</option>
                     <option v-for="p in comfyVideos" :key="p.id" :value="p.id">{{ p.name }}</option>
                   </select>
                 </label>
-                <p v-if="!comfyImages.length || !comfyVideos.length" class="pref-hint">可在「设置 → ComfyUI」导入工作流。</p>
+                <p v-if="!comfyImages.length || !comfyVideos.length" class="pref-hint">{{ $t('agentWorkspace.importWorkflowHint') }}</p>
               </div>
               <div v-else-if="prefTab !== 'knowledge'" class="pref-body">
                 <div class="pref-models">
                   <p class="pref-k">{{ $t('agentChat.modelSelection') }}</p>
                   <template v-if="prefTab === 'video'">
-                    <select v-model="videoChoice" class="pref-select" aria-label="选择视频模型">
-                      <optgroup label="内置工作流">
+                    <select v-model="videoChoice" class="pref-select" :aria-label="$t('agentWorkspace.chooseVideoModel')">
+                      <optgroup :label="$t('agentWorkspace.builtInWorkflow')">
                         <option v-for="w in VIDEO_WORKFLOW_OPTIONS" :key="w.value" :value="`workflow:${w.value}`">{{ w.name }}</option>
                       </optgroup>
                       <optgroup v-if="videoProfiles.length" :label="$t('common.configuredVideo')">
                         <option v-for="p in videoProfiles" :key="p.id" :value="`profile:${p.id}`">{{ videoProfileTag(p) ? `${videoProfileTag(p)} · ${p.name}` : p.name }}</option>
                       </optgroup>
-                      <option v-if="!videoProfiles.length && !videoDefault" value="profile:">请选择视频模型</option>
+                      <option v-if="!videoProfiles.length && !videoDefault" value="profile:">{{ $t('agentWorkspace.chooseVideoModelHint') }}</option>
                     </select>
-                    <p class="pref-k pref-k-gap">视频分辨率</p>
+                    <p class="pref-k pref-k-gap">{{ $t('agentWorkspace.videoResolution') }}</p>
                     <div class="res-row">
                       <button
                         v-for="r in preferenceResolutionChoices"
@@ -932,8 +929,8 @@ function visibleRows(rows: TraceRow[]) {
                     <p class="pref-hint">{{ videoResolutionHint }}</p>
                   </template>
                   <template v-else>
-                    <select v-model="imageChoice" class="pref-select" aria-label="选择图像模型">
-                      <option v-if="!imageProfiles.length" value="">请先在设置中添加图像模型</option>
+                    <select v-model="imageChoice" class="pref-select" :aria-label="$t('agentWorkspace.chooseImageModel')">
+                      <option v-if="!imageProfiles.length" value="">{{ $t('agentWorkspace.addImageModel') }}</option>
                       <option v-for="p in imageProfiles" :key="p.id" :value="p.id">{{ p.name }} · {{ p.model }}</option>
                     </select>
                   </template>
@@ -957,8 +954,8 @@ function visibleRows(rows: TraceRow[]) {
                 </div>
               </div>
               <div v-else class="knowledge-preference">
-                <p class="pref-k">选择写作知识库</p>
-                <p class="pref-hint">写剧本时参考内置写作方法和原创对白示例；自动匹配按题材关键词选择，与剧本管理同步。</p>
+                <p class="pref-k">{{ $t('agentWorkspace.chooseReferences') }}</p>
+                <p class="pref-hint">{{ $t('agentWorkspace.referenceHint') }}</p>
                 <div class="knowledge-grid"><button v-for="item in SCRIPT_REFERENCE_OPTIONS" :key="item.value" type="button" class="knowledge-option" :class="{ on: scriptReferenceType === item.value }" @click="scriptReferenceType = item.value">{{ item.label }}</button></div>
               </div>
               </div>
@@ -971,7 +968,7 @@ function visibleRows(rows: TraceRow[]) {
               class="bar-btn pref-btn"
               :class="{ on: activeStyleId !== GENERAL_STORY_SKILL_ID || activeGenreId !== GENERAL_STORY_SKILL_ID }"
               :disabled="busy"
-              :title="`技能：${activeStorySkillName}`"
+              :title="$t('agentWorkspace.activeSkill', { name: activeStorySkillName })"
               @click.stop="toggleSkillPanel"
             >
               <svg viewBox="0 0 24 24" class="pref-icon" aria-hidden="true">
@@ -988,9 +985,9 @@ function visibleRows(rows: TraceRow[]) {
                 @click.stop
               >
                 <div class="pref-tabs">
-                  <button type="button" :class="{ on: skillTab === 'style' }" @click="skillTab = 'style'">分镜方式</button>
-                  <button type="button" :class="{ on: skillTab === 'genre' }" @click="skillTab = 'genre'">题材与内容</button>
-                  <button type="button" :class="{ on: skillTab === 'mine' }" @click="skillTab = 'mine'">我的</button>
+                  <button type="button" :class="{ on: skillTab === 'style' }" @click="skillTab = 'style'">{{ $t('agentWorkspace.shotStyle') }}</button>
+                  <button type="button" :class="{ on: skillTab === 'genre' }" @click="skillTab = 'genre'">{{ $t('agentWorkspace.genre') }}</button>
+                  <button type="button" :class="{ on: skillTab === 'mine' }" @click="skillTab = 'mine'">{{ $t('agentWorkspace.mine') }}</button>
                 </div>
                 <div class="skill-body">
                   <button
@@ -1002,8 +999,8 @@ function visibleRows(rows: TraceRow[]) {
                     <span class="pref-radio" />
                     <img v-if="storyIcon(GENERAL_STORY_SKILL_ID)" class="skill-icon" :src="storyIcon(GENERAL_STORY_SKILL_ID)" alt="" />
                     <span class="pref-model-text">
-                      <b>{{ skillTab === 'genre' ? '不限题材' : '通用分镜' }}</b>
-                      <small>{{ skillTab === 'genre' ? '跟随用户要求，不指定题材。' : '按故事需要选择镜头方式。' }}</small>
+                      <b>{{ skillTab === 'genre' ? $t('agentWorkspace.anyGenre') : $t('agentWorkspace.genericSkill') }}</b>
+                      <small>{{ skillTab === 'genre' ? $t('agentWorkspace.followGenre') : $t('agentWorkspace.followStyle') }}</small>
                     </span>
                   </button>
                   <template v-if="skillTab === 'style'">
@@ -1051,13 +1048,13 @@ function visibleRows(rows: TraceRow[]) {
                       <span class="pref-radio" />
                       <span class="pref-model-text">
                         <b>{{ importedSkill.name }}</b>
-                        <small>{{ importedSkill.filename || '导入的 SKILL.md' }}</small>
+                        <small>{{ importedSkill.filename || $t('agentWorkspace.importedFilename') }}</small>
                       </span>
                     </button>
-                    <p v-else class="pref-empty">还没有导入。可以放一份 SKILL.md 或 README.md。</p>
+                    <p v-else class="pref-empty">{{ $t('agentWorkspace.noImported') }}</p>
                     <div class="skill-acts">
                       <button type="button" class="skill-act" :disabled="importingSkill" @click="importStorySkill">
-                        {{ importingSkill ? $t('common.reading') : importedSkill ? '更换技能' : '导入技能' }}
+                        {{ importingSkill ? $t('common.reading') : importedSkill ? $t('agentWorkspace.replaceSkill') : $t('agentWorkspace.importSkill') }}
                       </button>
                       <button
                         v-if="isDesktop()"
@@ -1071,7 +1068,7 @@ function visibleRows(rows: TraceRow[]) {
                       <button v-if="importedSkill" type="button" class="skill-act danger" @click="clearImportedSkill">{{ $t('common.clear') }}</button>
                     </div>
                   </template>
-                  <p class="pref-hint">分镜方式与题材可以同时选择。写剧本、拆分镜和优化视频提示词时作为建议参考；用户要求和剧本内容优先。</p>
+                  <p class="pref-hint">{{ $t('agentWorkspace.combineHint') }}</p>
                 </div>
               </div>
             </Teleport>
@@ -1084,11 +1081,11 @@ function visibleRows(rows: TraceRow[]) {
             type="button"
             class="icon-act stop"
             :class="{ 'stop-queue': continuousTurn }"
-            :title="continuousTurn ? '停止后续节点，当前节点完成后暂停' : $t('common.stop')"
-            :aria-label="continuousTurn ? '停止后续节点' : $t('common.stop')"
+            :title="continuousTurn ? $t('agentWorkspace.stopAfterCurrent') : $t('common.stop')"
+            :aria-label="continuousTurn ? $t('agentWorkspace.stopNext') : $t('common.stop')"
             @click="cancel"
           >
-            <span v-if="continuousTurn">{{ stopQueued ? '等待当前完成' : '停止后续' }}</span>
+            <span v-if="continuousTurn">{{ stopQueued ? $t('agentWorkspace.waitingCurrent') : $t('agentWorkspace.stopFollowing') }}</span>
             <svg viewBox="0 0 24 24" aria-hidden="true">
               <rect x="7" y="7" width="10" height="10" rx="1.5" />
             </svg>

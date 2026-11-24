@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { t as localized } from '@/i18n'
 import { confirmAction } from '@/utils/confirmAction'
 import { t as translate } from '@/i18n'
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
@@ -91,7 +92,7 @@ const title = computed(() => {
   const shotId = node.value?.data.shotId
   const shot = shotId ? project.current?.shots.find((item) => item.id === shotId) : undefined
   if (isVideo.value && shot?.title) return shot.title
-  return node.value?.data.label || (isVideo.value ? '视频' : '图片')
+  return node.value?.data.label || (isVideo.value ? localized('mediaNodes.videoLabel') : localized('mediaNodes.image'))
 })
 const prompt = computed({
   get: () => node.value?.data.prompt ?? '',
@@ -186,7 +187,7 @@ const generateAudio = computed({
   get: () => Boolean(node.value?.data.generateAudio),
   set: (v: boolean) => project.patchCanvasNode(props.id, { generateAudio: v })
 })
-const videoKindLabel = computed(() => (isVideo.value ? '' : '图片生成'))
+const videoKindLabel = computed(() => (isVideo.value ? '' : localized('mediaNodes.imageGeneration')))
 const isH3Fl2va = computed(() => isH3Video.value && h3GenMode.value === 'fl2va')
 const durationOptions = computed(() => videoDurationOptions(videoModel.value))
 const duration = computed({

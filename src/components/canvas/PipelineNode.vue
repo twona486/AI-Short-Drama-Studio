@@ -1144,7 +1144,7 @@ const cropStyle = computed(() => ({
       </template>
       <div v-else-if="type === 'shotFrames'" class="frame-pair">
         <div class="fp-cell">
-          <img v-if="frameUrls.start" :src="frameUrls.start" alt="起始帧" :draggable="false" @dragstart.prevent />
+          <img v-if="frameUrls.start" :src="frameUrls.start" :alt="$t('mediaNodes.startFrame')" :draggable="false" @dragstart.prevent />
           <div v-else class="fp-ph">＋</div>
           <span class="fp-tag">{{ $t('pipelineNode.start') }}</span>
           <button
@@ -1156,7 +1156,7 @@ const cropStyle = computed(() => ({
         </div>
         <span class="fp-arrow">→</span>
         <div class="fp-cell">
-          <img v-if="frameUrls.end" :src="frameUrls.end" alt="结束帧" :draggable="false" @dragstart.prevent />
+          <img v-if="frameUrls.end" :src="frameUrls.end" :alt="$t('mediaNodes.endFrame')" :draggable="false" @dragstart.prevent />
           <div v-else class="fp-ph">＋</div>
           <span class="fp-tag">{{ $t('pipelineNode.end') }}</span>
           <button

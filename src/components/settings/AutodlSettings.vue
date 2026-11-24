@@ -89,8 +89,8 @@ function apply() {
       <div class="workflow-list">
         <article v-for="workflow in AUTODL_WORKFLOWS" :key="workflow.id">
           <strong>{{ workflow.name }}</strong>
-          <span>{{ workflow.mode === 'fl2va' ? '首尾帧' : workflow.mode === 'audio-sync' ? '口播' : workflow.mode === 'multi-audio' ? '多图多音频' : '图生视频' }}</span>
-          <small>{{ workflow.note }} · 最长 {{ workflow.maxDuration }} 秒</small>
+          <span>{{ workflow.mode === 'fl2va' ? $t('mediaNodes.startFrame') + ' / ' + $t('mediaNodes.endFrame') : workflow.mode === 'audio-sync' ? $t('mediaNodes.autoDlAudioSync') : workflow.mode === 'multi-audio' ? $t('mediaNodes.autoDlMultiAudio') : $t('agentWorkspace.imageToVideo') }}</span>
+          <small>{{ workflow.note }} · {{ $t('mediaNodes.autoDlDuration', { seconds: workflow.maxDuration }) }}</small>
         </article>
       </div>
     </section>

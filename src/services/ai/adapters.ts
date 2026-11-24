@@ -741,13 +741,13 @@ async function uploadComfyMedia(opts: {
   let res = await upload(path)
   if ((res.status === 404 || res.status === 405) && !/\/api$/i.test(base)) {
     path = '/api/upload/image'
-    opts.onProgress?.('使用 ComfyUI /api 上传入口重试…')
+    opts.onProgress?.(translate('comfyMapping.uploadRetry'))
     res = await upload(path)
   }
   const text = await res.text()
   if (!res.ok) {
     const target = new URL(joinUrl(base, path))
-    throw new Error(`[comfyui] 上传素材失败（POST ${target.origin}${target.pathname}，HTTP ${res.status}）。请核对当前节点选中工作流的服务器地址与代理上传路由。`)
+    throw new Error(translate('comfyMapping.uploadFailed', { url: target.origin + target.pathname, status: res.status }))
   }
   let json: any = {}
   try {
@@ -870,7 +870,7 @@ export async function comfyPromptGenerate(opts: {
     inputMap = { ...inputMap, bindings: [...inputMap.bindings.filter((b) => b.role !== 'length'), knownDuration] }
   }
   if (opts.kind === 'video' && opts.duration && !inputMap.bindings.some((b) => b.role === 'length' && (b.durationUnit === 'seconds' || (b.durationUnit === 'frames' && fps)))) {
-    throw new Error('[comfyui] 未找到明确的时长入口，已停止提交，避免使用工作流默认时长。请在 ComfyUI 接入中检查时长映射和单位。')
+    throw new Error(translate('comfyMapping.durationMappingMissing'))
   }
   const mediaSources: Partial<Record<ComfyInputRole, string>> = {
     image: opts.imageDataUrl,
@@ -884,13 +884,13 @@ export async function comfyPromptGenerate(opts: {
   if (opts.kind === 'video') inputMap = fitComfyReferenceImages(payload, inputMap, imageSources.length)
   const imageBindings = inputMap.bindings.filter(b => b.role === 'image')
   if (opts.kind === 'video' && imageSources.length > imageBindings.length) {
-    throw new Error(`[comfyui] 本次提供 ${imageSources.length} 张参考图，但工作流只有 ${imageBindings.length} 个可用参考图槽位，无法接收全部图片。请增加参考图映射或减少图片；不会静默丢弃素材。`)
+    throw new Error(translate('comfyMapping.referenceCapacity', { count: imageSources.length, slots: imageBindings.length }))
   }
-  // 槽位数是容量，不是必填数量。仅替换前 N 个，剩余默认黑图/固定素材保持原样。
+  // Replace supplied slots in order and leave defaults in the remaining slots.
   const suppliedImageBindings = imageBindings.slice(0, imageSources.length)
   const imageInputs = inputMap.bindings.filter(b => b.role === 'image' || b.role === 'imageEnd' || b.role === 'mask')
   if (new Set(imageInputs.map(b => JSON.stringify([b.nodeId, b.field]))).size !== imageInputs.length) {
-    throw new Error('[comfyui] 多张图片映射到了同一个节点字段，请在接入设置中检查图片映射。')
+    throw new Error(translate('comfyMapping.duplicateImageBinding'))
   }
   for (const b of inputMap.bindings) {
     if (!isMediaRole(b.role)) continue
@@ -939,10 +939,10 @@ export async function comfyPromptGenerate(opts: {
   if (suppliedImageBindings.some(b => {
     const expected = uploadedImages[`${b.nodeId}:${b.field}`]
     return !expected || payload.prompt?.[b.nodeId]?.inputs?.[b.field] !== expected
-  })) throw new Error('[comfyui] 本次参考图未全部写入工作流，已停止提交。')
-  if (suppliedImageBindings.length) opts.onProgress?.(`已上传或传入并核对 ${suppliedImageBindings.length} 张参考图，按顺序替换前 ${suppliedImageBindings.length} 个槽位`)
+  })) throw new Error(translate('comfyMapping.incompleteImageBindings'))
+  if (suppliedImageBindings.length) opts.onProgress?.(translate('comfyMapping.checkedReferences', { count: suppliedImageBindings.length }))
   const retainedImageCount = imageBindings.length - suppliedImageBindings.length
-  if (retainedImageCount) opts.onProgress?.(`其余 ${retainedImageCount} 个参考图槽位保留工作流默认图片，请确保默认图片已存在于 ComfyUI 中`)
+  if (retainedImageCount) opts.onProgress?.(translate('comfyMapping.keptDefaultImages', { count: retainedImageCount }))
   if (!writes.length) {
     const miss = missingRoles(inputMap)
     throw new Error(
@@ -977,7 +977,7 @@ export async function comfyPromptGenerate(opts: {
   }
 
   const started = Date.now()
-  // 本地模型出视频经常超过 10 分钟，结果轮询放到 30 分钟。
+  // Allow up to 30 minutes for local video generation.
   const timeoutMs = opts.kind === 'video' ? 30 * 60_000 : 6 * 60_000
   while (Date.now() - started < timeoutMs) {
     if (opts.signal?.aborted) throw new DOMException('작업을 취소했어요.', 'AbortError')
@@ -1071,7 +1071,7 @@ export async function comfyPromptGenerate(opts: {
     }
     opts.onProgress?.('ComfyUI에서 생성하는 중…')
   }
-  throw new Error(opts.kind === 'video' ? '[comfyui] 等待结果超时（30 分钟）' : '[comfyui] 等待结果超时')
+  throw new Error(opts.kind === 'video' ? translate('comfyMapping.videoWaitTimeout') : translate('comfyMapping.waitTimeout'))
 }
 
 export interface ConnectionTestResult {

@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { t } from '@/i18n'
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import AspectRatioSeg from '@/components/common/AspectRatioSeg.vue'
 import DocAudioToggle from '@/components/common/DocAudioToggle.vue'
@@ -28,7 +29,7 @@ const root = ref<HTMLElement | null>(null)
 
 const summary = computed(() => {
   const resolution = props.resolutions.length ? docVideoResolutionLabel(props.resolution) : ''
-  return [resolution, props.aspect, `${props.duration}秒`].filter(Boolean).join(' · ')
+  return [resolution, props.aspect, t('continuousCapture.seconds', { count: props.duration })].filter(Boolean).join(' · ')
 })
 
 function onDocPointer(event: PointerEvent) {
@@ -49,11 +50,11 @@ onBeforeUnmount(() => document.removeEventListener('pointerdown', onDocPointer, 
 <template>
   <div ref="root" class="vset" :class="{ plain }" @pointerdown.stop @mousedown.stop @click.stop>
     <button v-if="!plain" type="button" class="vset-btn" @click="open = !open">
-      <span>视频设置</span>
+      <span>{{ $t('mediaNodes.videoSettings') }}</span>
       <b>{{ summary }}</b>
     </button>
     <div v-if="plain || open" class="vset-pop">
-      <p class="vset-title">视频设置</p>
+      <p class="vset-title">{{ $t('mediaNodes.videoSettings') }}</p>
       <div v-if="resolutions.length" class="vset-block">
         <span>{{ $t('common.resolutionLabel') }}</span>
         <div class="vset-seg">
@@ -69,13 +70,13 @@ onBeforeUnmount(() => document.removeEventListener('pointerdown', onDocPointer, 
         </div>
       </div>
       <div class="vset-block">
-        <span>画幅</span>
+        <span>{{ $t('mediaNodes.aspect') }}</span>
         <AspectRatioSeg compact :model-value="aspect" @update:model-value="emit('update:aspect', $event)" />
       </div>
       <div class="vset-block">
         <span>{{ $t('common.length') }}</span>
         <select class="vset-select" :value="duration" @change="emit('update:duration', Number(($event.target as HTMLSelectElement).value))">
-          <option v-for="n in durations" :key="n" :value="n">{{ n }} 秒</option>
+          <option v-for="n in durations" :key="n" :value="n">{{ $t('continuousCapture.seconds', { count: n }) }}</option>
         </select>
       </div>
       <div v-if="showAudio" class="vset-block">

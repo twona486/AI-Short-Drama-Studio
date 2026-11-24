@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { t } from '@/i18n'
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch, type Component } from 'vue'
 import { useVueFlow } from '@vue-flow/core'
 import { useProjectStore, useToastStore } from '@/stores'
@@ -68,7 +69,7 @@ function end(event: PointerEvent) {
   move(event)
   const sameProject = project.current?.id === drag?.projectId
   cleanup()
-  if (sameProject) void project.save().catch(() => toast.error('节点尺寸保存失败，请重试保存项目'))
+  if (sameProject) void project.save().catch(() => toast.error(t('mediaNodes.resizeFailed')))
 }
 function cancel() {
   if (drag && node.value && project.current?.id === drag.projectId) {
@@ -87,7 +88,7 @@ onBeforeUnmount(() => { cancel(); observer?.disconnect(); cancelAnimationFrame(r
     <template v-if="selected || resizing">
       <span class="resize-outline" aria-hidden="true" />
       <button v-for="corner in corners" :key="corner" type="button" class="corner nodrag nopan nowheel" :class="corner"
-        :aria-label="`${({ nw: '左上', ne: '右上', sw: '左下', se: '右下' })[corner]}角缩放节点`" title="拖动等比缩放节点（不改变生成分辨率）"
+        :aria-label="$t('mediaNodes.resizeCorner', { corner: $t(`mediaNodes.${corner}`) })" :title="$t('mediaNodes.resizeHint')"
         @pointerdown.stop.prevent="start(corner, $event)" @mousedown.stop @click.stop @dblclick.stop />
     </template>
   </div>

@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { t as localized } from '@/i18n'
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { Handle, Position, useVueFlow } from '@vue-flow/core'
 import { useAssetsStore, useProjectStore, useSettingsStore, useToastStore } from '@/stores'
@@ -50,9 +51,9 @@ const prompt = computed({
 const outputId = computed(() => node.value?.data.outputAssetId || props.data.outputAssetId || '')
 const generating = computed(() => isNodeRunning(props.id) || node.value?.status === 'running')
 const hasAsset = computed(() => Boolean(outputId.value))
-const title = computed(() => node.value?.data.label || props.data.label || '音频')
+const title = computed(() => node.value?.data.label || props.data.label || localized('mediaNodes.audio'))
 const failMsg = computed(() =>
-  node.value?.status === 'failed' ? node.value.error || '生成失败' : ''
+  node.value?.status === 'failed' ? node.value.error || localized('mediaNodes.generationFailed') : ''
 )
 const modelOptions = computed(() => {
   const profile =
@@ -105,7 +106,7 @@ watch(
       return
     }
     refUrl.value = (await assets.getUrl(id)) || ''
-    refName.value = assets.getMeta(id)?.filename || '参考音频'
+    refName.value = assets.getMeta(id)?.filename || localized('mediaNodes.referenceAudio')
   },
   { immediate: true }
 )
@@ -117,7 +118,7 @@ onBeforeUnmount(() => {
 })
 
 function modelLabel(id: string) {
-  if (id === VOICE_CLONE_MODEL || modelAcceptsReferenceAudio(id)) return `${id} · 可参考音频`
+  if (id === VOICE_CLONE_MODEL || modelAcceptsReferenceAudio(id)) return `${id} · ${localized('mediaNodes.referenceSupported')}`
   return id
 }
 
@@ -132,17 +133,17 @@ async function pickAudioFile(limitMb: number) {
   try {
     file = (await pickLocalFiles({ kind: 'audio', multiple: false }))[0]
   } catch (e: any) {
-    toast.error(e?.message || '读取音频失败')
+    toast.error(e?.message || localized('mediaNodes.readAudioFailed'))
     return
   }
   if (!file) return
   const looksAudio = file.type.startsWith('audio/') || /\.(mp3|wav|m4a|aac|flac|ogg)$/i.test(file.name)
   if (!looksAudio) {
-    toast.error('请选择音频文件')
+    toast.error(localized('mediaNodes.chooseAudio'))
     return
   }
   if (file.size > limitMb * 1024 * 1024) {
-    toast.error(`音频不能超过 ${limitMb} MB`)
+    toast.error(localized('mediaNodes.audioTooLarge', { size: limitMb }))
     return
   }
   return file
@@ -165,9 +166,9 @@ async function uploadOutput() {
       nodeType: 'audioGen'
     })
     await project.save()
-    toast.success('音频已上传')
+    toast.success(localized('mediaNodes.audioUploaded'))
   } catch (e: any) {
-    toast.error(e?.message || '上传失败')
+    toast.error(e?.message || localized('mediaNodes.uploadFailed'))
   } finally {
     uploading.value = false
   }
@@ -196,9 +197,9 @@ async function pickRef() {
       nodeType: 'audioGen'
     })
     await project.save()
-    toast.success('参考音频已上传，生成时会按这段声音复刻')
+    toast.success(localized('mediaNodes.referenceUploaded'))
   } catch (e: any) {
-    toast.error(e?.message || '上传失败')
+    toast.error(e?.message || localized('mediaNodes.uploadFailed'))
   } finally {
     uploading.value = false
   }
@@ -217,20 +218,20 @@ function removeRef() {
     clonedVoiceModel: undefined,
     nodeType: 'audioGen'
   })
-  toast.success('已移除参考音频')
+  toast.success(localized('mediaNodes.referenceRemoved'))
 }
 
 async function generate() {
   if (generating.value) return
   if (!prompt.value.trim()) {
-    toast.warn('先写下要说的内容')
+    toast.warn(localized('mediaNodes.enterSpeech'))
     return
   }
   if (acceptsRef.value && !refId.value && !node.value?.data.clonedVoiceId) {
-    toast.warn('这个模型需要先上传参考音频')
+    toast.warn(localized('mediaNodes.referenceRequired'))
     return
   }
-  busyLabel.value = '合成音频…'
+  busyLabel.value = localized('mediaNodes.generatingAudio')
   try {
     await runCanvasNode(props.id, (_id, msg) => {
       busyLabel.value = msg
@@ -239,9 +240,9 @@ async function generate() {
     if (next?.data.outputAssetId) {
       updateNodeData(props.id, { ...next.data, nodeType: 'audioGen' })
     }
-    toast.success('音频已生成')
+    toast.success(localized('mediaNodes.audioGenerated'))
   } catch (e: unknown) {
-    if (shouldToastAiError(e)) toast.error(friendlyAiError(e) || '生成失败', 10000)
+    if (shouldToastAiError(e)) toast.error(friendlyAiError(e) || localized('mediaNodes.generationFailed'), 10000)
   } finally {
     busyLabel.value = ''
   }
@@ -251,7 +252,7 @@ async function downloadAsset() {
   if (!outputId.value) return
   const blob = await assets.getBlob(outputId.value)
   if (!blob) {
-    toast.error('素材读取失败')
+    toast.error(localized('mediaNodes.readAssetFailed'))
     return
   }
   const url = URL.createObjectURL(blob)
@@ -265,10 +266,10 @@ async function downloadAsset() {
 function duplicateSelf() {
   const nid = project.duplicateCanvasNode(props.id)
   if (!nid) {
-    toast.warn('复制失败')
+    toast.warn(localized('mediaNodes.duplicateFailed'))
     return
   }
-  toast.success('已复制节点')
+  toast.success(localized('mediaNodes.nodeDuplicated'))
 }
 
 function removeSelf() {
@@ -284,8 +285,8 @@ function removeSelf() {
     <transition name="float-up">
       <div v-if="selected && panelOpen" class="toolbar-wrap nodrag nowheel" @mousedown.stop @click.stop>
         <div class="toolbar">
-          <button type="button" :disabled="generating" @click="generate"><span>↺</span>{{ hasAsset ? '重做' : '出音频' }}</button>
-          <button type="button" :disabled="uploading || generating" @click="uploadOutput"><span>↑</span>{{ uploading ? '上传中' : $t('common.upload') }}</button>
+          <button type="button" :disabled="generating" @click="generate"><span>↺</span>{{ hasAsset ? $t('mediaNodes.redo') : $t('mediaNodes.generateAudio') }}</button>
+          <button type="button" :disabled="uploading || generating" @click="uploadOutput"><span>↑</span>{{ uploading ? $t('mediaNodes.uploading') : $t('common.upload') }}</button>
           <button type="button" @click="duplicateSelf"><span>❐</span>{{ $t('common.copy') }}</button>
           <button v-if="hasAsset" type="button" @click="downloadAsset"><span>⬇</span>{{ $t('common.download') }}</button>
           <button type="button" @click="removeSelf">{{ $t('common.delete') }}</button>
@@ -297,14 +298,14 @@ function removeSelf() {
       <audio v-if="mediaUrl" class="player nodrag nowheel" :src="mediaUrl" controls @mousedown.stop />
       <button v-else type="button" class="ph nodrag" :disabled="uploading || generating" @click.stop="uploadOutput">
         <span class="wave" aria-hidden="true"><i /><i /><i /><i /><i /></span>
-        <span>{{ uploading ? $t('common.uploading') : '上传音频' }}</span>
+        <span>{{ uploading ? $t('common.uploading') : $t('mediaNodes.uploadAudio') }}</span>
       </button>
-      <NodeBusyOverlay v-if="generating" :label="busyLabel || '合成音频…'" />
+      <NodeBusyOverlay v-if="generating" :label="busyLabel || $t('mediaNodes.generatingAudio')" />
       <div v-if="failMsg && !generating" class="fail" :title="failMsg">{{ failMsg }}</div>
     </div>
 
     <div class="name">
-      <span class="kind">音频</span>
+      <span class="kind">{{ $t('mediaNodes.audio') }}</span>
       <span class="title">{{ title }}</span>
     </div>
 
@@ -316,12 +317,12 @@ function removeSelf() {
         @mousedown.stop
         @click.stop
       >
-        <textarea v-model="prompt" rows="4" placeholder="写下要说的话，或直接上传一段音频。支持参考音频的模型还可以上传声音样本。" />
+        <textarea v-model="prompt" rows="4" :placeholder="$t('mediaNodes.speechPrompt')" />
         <button type="button" class="upload own" :disabled="uploading || generating" @click="uploadOutput">
-          {{ uploading ? $t('common.uploading') : hasAsset ? '更换音频' : '上传音频' }}
+          {{ uploading ? $t('common.uploading') : hasAsset ? $t('mediaNodes.replaceAudio') : $t('mediaNodes.uploadAudio') }}
         </button>
         <label class="model">
-          <span>配音模型</span>
+          <span>{{ $t('mediaNodes.ttsModel') }}</span>
           <select :value="selectedModel" @change="pickModel">
             <option v-for="id in modelOptions" :key="id" :value="id">{{ modelLabel(id) }}</option>
           </select>
@@ -335,7 +336,7 @@ function removeSelf() {
           <button v-else type="button" class="upload" :disabled="uploading" @click="pickRef">
             {{ uploading ? $t('common.uploading') : $t('pipelineNode.uploadAudio') }}
           </button>
-          <p>生成时会用这段样本复刻音色。</p>
+          <p>{{ $t('mediaNodes.cloneHint') }}</p>
         </div>
         <div class="foot">
           <button class="go" type="button" :disabled="generating" @click="generate">↑</button>

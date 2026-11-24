@@ -28,7 +28,7 @@ export interface LLMRequest {
   model?: string
   temperature?: number
   maxTokens?: number
-  /** 不发送 max_tokens，由服务商和模型决定输出上限。 */
+  /** Leave the output limit to the provider and model by omitting max_tokens. */
   useProviderOutputLimit?: boolean
   jsonMode?: boolean
   /** Doubao 응답에서 본문만 필요하면 추론을 끈다. */
@@ -74,7 +74,7 @@ function hasImageParts(messages: LLMMessage[]): boolean {
 
 function isRetryableNetwork(e: unknown): boolean {
   const msg = e instanceof Error ? e.message : String(e ?? '')
-  return /Failed to fetch|NetworkError|ERR_NETWORK|ERR_CONNECTION|ECONNRESET|ETIMEDOUT|ENOTFOUND|ECONNREFUSED|net::ERR|socket hang up|fetch failed|连不上语言模型/i.test(
+  return /Failed to fetch|NetworkError|ERR_NETWORK|ERR_CONNECTION|ECONNRESET|ETIMEDOUT|ENOTFOUND|ECONNREFUSED|net::ERR|socket hang up|fetch failed|连不上语言模型|언어 모델(?:에 연결|의 응답을 받는 중 연결)/i.test(
     msg
   )
 }
@@ -99,7 +99,7 @@ function stripRemoteMethod(msg: string): string {
 
 function friendlyNetworkError(e: unknown): Error {
   const msg = stripRemoteMethod(e instanceof Error ? e.message : String(e ?? ''))
-  if (/连不上语言模型/.test(msg)) return new Error(msg)
+  if (/连不上语言模型|언어 모델(?:에 연결|의 응답을 받는 중 연결)/.test(msg)) return new Error(msg)
   return new Error('언어 모델에 연결하지 못했어요. 네트워크와 브라우저 설정을 확인한 뒤 다시 시도해 주세요.')
 }
 

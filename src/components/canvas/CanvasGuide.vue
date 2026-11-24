@@ -43,8 +43,8 @@ const steps = [
     get title() { return translate('canvasGuide.tips') },
     get sub() { return translate('canvasGuide.combineIntro') },
     items: [
-      '左右两边可以随时混用：先让 AI 打底，再手动改细节，反过来也成立。',
-      '左侧最上面可以新建画布，接着是剧本和经典步骤，文件夹和设置在最下方。'
+      translate('canvasContext.mixedWorkflow'),
+      translate('canvasContext.railHint')
     ]
   }
 ]
