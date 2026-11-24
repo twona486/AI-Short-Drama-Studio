@@ -32,7 +32,7 @@
   },
   "build": {
     "appId": "com.aicuts.desktop",
-    "productName": "드라마 플로우 Studio",
+    "productName": "Drama Flow Studio",
     "icon": "logo.ico",
     "directories": {
       "output": "release"
@@ -55,6 +55,9 @@
         "to": "logo.png"
       }
     ],
+    "mac": {
+      "icon": "logo.png"
+    },
     "win": {
       "icon": "logo.ico",
       "target": [
