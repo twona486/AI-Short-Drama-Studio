@@ -390,7 +390,7 @@ export function buildStyleBriefForLLM(style: VisualStyle): string {
 - Each visualPrompt must include: ${g.mustInclude}
 - ${g.avoid}
 - Close each visualPrompt with a style reminder like this: "${g.sampleTail}"
-- Keep aesthetic, colorPalette, and lightingNote consistent with the selected style. Avoid generic cinematic phrasing unless cinematic is selected.`
+- Keep aesthetic, colorPalette, and lightingNote consistent with the selected style. Avoid generic cinematic phrasing unless cinematic is selected. Write user-facing descriptions in Korean and generation prompts in English.`
 }
 
 /** 이미지 생성 API에 전달할 짧은 화풍 지침이다. */

@@ -1,4 +1,5 @@
 /** 대본 이어 쓰기는 기존 장면을 보존하고 새 장면을 추가한다. */
+import { t } from '@/i18n'
 
 function sceneBreakdownBlock(md: string): string {
   const m = md.match(/^##[ \t]*(?:分场|장면 목록|장면 구성|Scenes|Scene breakdown)[ \t]*$/im)
@@ -33,7 +34,7 @@ export function mergeContinuedPlay(original: string, generated: string): string 
   const orig = (original || '').trim()
   const gen = (generated || '').trim()
   if (!orig) return gen
-  if (!gen) throw new Error('이어 쓴 대본이 비어 있어요.')
+  if (!gen) throw new Error(t('scriptContinuation.empty'))
 
   const origHeads = playSceneHeadings(orig)
   const genHeads = playSceneHeadings(gen)
@@ -50,12 +51,12 @@ export function mergeContinuedPlay(original: string, generated: string): string 
 
   if (!genHeads.length && gen.length > 40 && !gen.includes(orig.slice(0, 80))) {
     const n = origHeads.length + 1
-    return `${orig.replace(/\s*$/, '')}\n\n## 장면 ${n} | 이어지는 이야기\n\n${gen}\n`
+    return `${orig.replace(/\s*$/, '')}\n\n## ${t('scriptContinuation.heading', { number: n })}\n\n${gen}\n`
   }
 
   if (gen.length > orig.length && (added.length > 0 || genHeads.length >= origHeads.length)) {
     return gen
   }
 
-  throw new Error('새 장면이 없어요. 「아버지가 귀가한 뒤의 이야기로 두 장면을 이어 써 주세요」처럼 원하는 전개를 적어 주세요.')
+  throw new Error(t('scriptContinuation.noNewScenes'))
 }
