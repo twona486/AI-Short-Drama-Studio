@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { runEnterShortcut } from '@/utils/enterShortcut'
 import { locale, t as translate } from '@/i18n'
 import { computed, ref } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
@@ -60,7 +61,7 @@ function newProject() {
         <input
           v-model="nameInput"
           class="name-input"
-          @keydown.enter="commitEdit"
+          @keydown.enter="runEnterShortcut($event, commitEdit)"
           @keydown.escape="cancelEdit"
           @blur="commitEdit"
           autofocus

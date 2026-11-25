@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { runEnterShortcut } from '@/utils/enterShortcut'
 import { t as translate } from '@/i18n'
 import { computed, nextTick, onBeforeUnmount, ref } from 'vue'
 import { llmSetupReady, runSetupAgentTurn, type SetupEvent, type SetupMessage } from '@/services/settings/setupAgent'
@@ -233,8 +234,7 @@ const statusText = computed(() => {
           rows="3"
           :disabled="busy"
           :placeholder="$t('setupAgent.placeholder')"
-          @keydown.ctrl.enter.prevent="sendText(input)"
-          @keydown.meta.enter.prevent="sendText(input)"
+          @keydown.enter="($event.ctrlKey || $event.metaKey) && runEnterShortcut($event, () => sendText(input))"
         />
         <div class="actions">
           <span class="hint">{{ $t('setupAgent.keyboardHint') }}</span>

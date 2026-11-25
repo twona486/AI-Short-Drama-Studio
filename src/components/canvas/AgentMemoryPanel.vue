@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { runEnterShortcut } from '@/utils/enterShortcut'
 import { t as translate } from '@/i18n'
 
 import { onMounted, ref } from 'vue'
@@ -158,7 +159,7 @@ onMounted(reload)
           v-model="draft"
           type="text"
           :placeholder="$t('agentMemoryPanel.notePlaceholder')"
-          @keydown.enter.prevent="add"
+          @keydown.enter="runEnterShortcut($event, add)"
         />
         <button type="button" :disabled="!draft.trim() || adding" @click="add">{{ $t('agentMemoryPanel.addNote') }}</button>
       </div>

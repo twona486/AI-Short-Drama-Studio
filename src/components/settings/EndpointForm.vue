@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { runEnterShortcut } from '@/utils/enterShortcut'
 import { computed, ref, watch } from 'vue'
 import type { ProviderPreset } from '@/services/ai/providers'
 import { applyProviderPreset, findProvider, matchProviderId, suggestedPresetModels } from '@/services/ai/providers'
@@ -154,7 +155,7 @@ function onAdd() {
         :placeholder="currentPreset.id === 'custom' || !currentPreset.models.length
           ? $t('endpointForm.modelPlaceholder')
           : $t('endpointForm.modelExample', { p0: currentPreset.models[0] })"
-        @keydown.enter.prevent="onAdd"
+        @keydown.enter="runEnterShortcut($event, onAdd)"
       />
       <button class="mini" type="button" @click="onAdd">{{ $t('endpointForm.addToList') }}</button>
     </div>

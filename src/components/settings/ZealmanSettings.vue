@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { runEnterShortcut } from '@/utils/enterShortcut'
 import { t as translate } from '@/i18n'
 
 import { computed, ref } from 'vue'
@@ -77,7 +78,7 @@ function apply() {
       </div>
       <label for="zealman-base-url">Base URL</label>
       <div class="url-row">
-        <input id="zealman-base-url" v-model="baseUrl" placeholder="https://example.seetacloud.com:8443" @keyup.enter="apply" />
+        <input id="zealman-base-url" v-model="baseUrl" placeholder="https://example.seetacloud.com:8443" @keydown.enter="runEnterShortcut($event, apply)" />
         <button type="button" @click="apply">{{ $t('common.applyConfig') }}</button>
       </div>
       <p class="hint">{{ $t('zealmanSettings.endpoints') }}</p>
