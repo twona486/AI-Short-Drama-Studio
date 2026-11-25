@@ -4,6 +4,7 @@ import { effectiveShotAudioMode, needsExternalTts } from '@/utils/shot'
 import { boundSubjectIds } from '@/utils/consistency'
 import { needsShotFrames, shotUsesFrames, stillModeFromNode, stillTypeForMode } from '@/utils/videoStill'
 import { useSettingsStore } from '@/stores/settings'
+import { normalizeNodeScale } from '@/utils/nodeResize'
 
 export const NODE_W = 240
 const GAP = 18
@@ -51,6 +52,32 @@ function cell(row: number, col: number, nodeH: number) {
     x: PAD + col * (NODE_W + GAP),
     y: HEAD + PAD + row * (nodeH + GAP)
   }
+}
+
+/** 저장된 좌표는 유지하면서 실제 카드 높이에 맞게 렌더링할 행과 그룹 높이를 구한다. */
+export function measuredGroupRows(nodes: CanvasNode[], heights: ReadonlyMap<string, number>) {
+  const offsets = new Map<string, number>()
+  const groupHeights = new Map<string, number>()
+  const rowsByGroup = new Map<string, Map<number, CanvasNode[]>>()
+  for (const node of nodes) {
+    if (!node.parentGroupId) continue
+    let rows = rowsByGroup.get(node.parentGroupId)
+    if (!rows) rowsByGroup.set(node.parentGroupId, rows = new Map())
+    const row = rows.get(node.position.y)
+    if (row) row.push(node)
+    else rows.set(node.position.y, [node])
+  }
+  for (const [groupId, rows] of rowsByGroup) {
+    let bottom = -Infinity
+    for (const [y, row] of [...rows].sort(([a], [b]) => a - b)) {
+      const top = Math.max(y, bottom + GAP)
+      const height = Math.max(...row.map(node => (heights.get(node.id) ?? 0) * normalizeNodeScale(node.data.canvasScale)))
+      for (const node of row) offsets.set(node.id, top - y)
+      bottom = top + height
+    }
+    groupHeights.set(groupId, bottom + PAD)
+  }
+  return { offsets, groupHeights }
 }
 
 function persistStatus(

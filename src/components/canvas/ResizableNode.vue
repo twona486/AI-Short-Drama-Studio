@@ -7,6 +7,7 @@ import { normalizeNodeScale, resizeNodeCorner, type ResizeCorner } from '@/utils
 
 defineOptions({ inheritAttrs: false })
 const props = defineProps<{ renderer: Component; id: string; selected?: boolean; data: { nodeType?: string; width?: number; height?: number; canvasScale?: number } }>()
+const emit = defineEmits<{ measuredHeight: [height: number | undefined] }>()
 const project = useProjectStore()
 const toast = useToastStore()
 const { getViewport, updateNodeInternals } = useVueFlow()
@@ -30,9 +31,10 @@ onMounted(() => {
   observer = new ResizeObserver(() => {
     if (!inner.value) return
     measured.value = { width: inner.value.offsetWidth, height: inner.value.offsetHeight }
+    emit('measuredHeight', measured.value.height)
     refreshHandles()
   })
-  if (inner.value) observer.observe(inner.value)
+  if (inner.value) observer.observe(inner.value, { box: 'border-box' })
 })
 watch(scale, () => { void nextTick(refreshHandles) })
 function start(corner: ResizeCorner, event: PointerEvent) {
@@ -78,11 +80,21 @@ function cancel() {
   }
   cleanup()
 }
-onBeforeUnmount(() => { cancel(); observer?.disconnect(); cancelAnimationFrame(raf) })
+onBeforeUnmount(() => {
+  cancel()
+  observer?.disconnect()
+  cancelAnimationFrame(raf)
+  emit('measuredHeight', undefined)
+})
 </script>
 <template>
   <div ref="root" class="resizable-node" :class="{ resizing }" :style="outerStyle">
-    <div ref="inner" class="node-scale-content" :style="{ ...scriptBox, transform: `scale(${scale})` }">
+    <div
+      ref="inner"
+      class="node-scale-content"
+      :class="{ 'grouped-with-raised-title': node?.parentGroupId && data.nodeType !== 'subject' }"
+      :style="{ ...scriptBox, transform: `scale(${scale})` }"
+    >
       <component :is="renderer" v-bind="$attrs" :id="id" :selected="selected" :data="data" />
     </div>
     <template v-if="selected || resizing">
@@ -95,15 +107,20 @@ onBeforeUnmount(() => { cancel(); observer?.disconnect(); cancelAnimationFrame(r
 </template>
 <style scoped>
 .resizable-node { position: relative; overflow: visible; }
-.node-scale-content { position: relative; width: max-content; transform-origin: top left; }
+.node-scale-content {
+  --node-title-offset: 28px;
+  position: relative;
+  width: max-content;
+  transform-origin: top left;
+}
+.grouped-with-raised-title { padding-top: var(--node-title-offset); }
 .node-scale-content :deep(.rz) { display: none; }
 .node-scale-content :deep(.fnode), .node-scale-content :deep(.pnode) { background: transparent; box-shadow: none; }
 /* Keep the title attached to the card but outside its media surface. */
 .node-scale-content :deep(.fnode > .name),
 .node-scale-content :deep(.pnode > .pnode-name),
-.node-scale-content :deep(.subject-card > .sc-head),
 .node-scale-content :deep(.anode > .anode-top) {
-  position: absolute; top: -28px; left: 0; right: 0; height: 24px; min-height: 24px;
+  position: absolute; top: calc(-1 * var(--node-title-offset)); left: 0; right: 0; height: 24px; min-height: 24px;
   margin: 0; padding: 0 2px; border: none; border-radius: 0; background: transparent; box-shadow: none;
   display: flex; align-items: center; gap: 6px;
 }

@@ -715,7 +715,6 @@ async function removeSelf() {
             :profile-id="node?.data.videoProfileId"
             @select-profile="(id) => applyShotVideoProfile(props.id, id)"
           />
-          <!-- 비율과 모델을 한 줄에 표시한다. -->
           <AspectRatioSeg v-if="!isVideo" v-model="aspectRatio" compact />
           <ImageResolutionSeg
             v-if="!isVideo && imageResolutionChoices.length"
@@ -1106,8 +1105,8 @@ async function removeSelf() {
   gap: 8px;
   margin-top: 8px;
 }
-.prompt-foot > :deep(.psel:first-child) {
-  flex: 1 1 140px;
+.prompt-foot > :deep(.psel) {
+  flex: 1 1 min(100%, 180px);
 }
 .prompt-foot > .go {
   margin-left: auto;
@@ -1177,6 +1176,7 @@ async function removeSelf() {
   top: calc(100% + 4px);
 }
 .go {
+  flex-shrink: 0;
   width: 28px;
   height: 28px;
   margin-left: auto;

@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { confirmAction } from '@/utils/confirmAction'
 import { t as translate, uiPunctuation } from '@/i18n'
-import { computed, defineComponent, h, markRaw, nextTick, onMounted, onUnmounted, ref, watch, type Component } from 'vue'
+import { computed, defineComponent, h, markRaw, nextTick, onMounted, onUnmounted, reactive, ref, watch, type Component } from 'vue'
 import { useRouter } from 'vue-router'
 import { SelectionMode, VueFlow, useVueFlow, type Connection, type Edge, type Node, type NodeMouseEvent } from '@vue-flow/core'
 import { Controls } from '@vue-flow/controls'
@@ -9,7 +9,7 @@ import '@vue-flow/core/dist/style.css'
 import '@vue-flow/core/dist/theme-default.css'
 import '@vue-flow/controls/dist/style.css'
 import { useProjectStore, useAssetsStore, useToastStore } from '@/stores'
-import { rebuildCanvasGraph, NODE_W, pipelineNodeHeight, nextFreeformPosition, rescueStrandedFreeformNodes } from '@/services/canvas/layout'
+import { rebuildCanvasGraph, NODE_W, measuredGroupRows, nextFreeformPosition, rescueStrandedFreeformNodes } from '@/services/canvas/layout'
 import { setCanvasReveal, setCanvasInspect, setCanvasSelect, setCanvasLinkMenu } from '@/services/canvas/canvasBridge'
 import { rebindShotScenes, optimizeShotVideoPrompt, optimizeFreeformVideoPrompt } from '@/services/canvas/runner'
 import {
@@ -164,9 +164,24 @@ const rawNodeTypes = {
   audioGen: AudioGenNode,
   compose: ComposeNode
 }
+const measuredHeights = reactive(new Map<string, number>())
 const nodeTypes = Object.fromEntries(Object.entries(rawNodeTypes).map(([type, renderer]) => [type, type === 'groupFrame' ? markRaw(renderer) : markRaw(defineComponent({
   inheritAttrs: false,
-  setup(_, { attrs }) { return () => h(ResizableNode, { ...attrs, id: String(attrs.id), data: attrs.data as any, renderer: markRaw(renderer as Component) }) }
+  setup(_, { attrs }) {
+    return () => {
+      const id = String(attrs.id)
+      return h(ResizableNode, {
+        ...attrs,
+        id,
+        data: attrs.data as any,
+        renderer: markRaw(renderer as Component),
+        onMeasuredHeight: (height: number | undefined) => {
+          if (height === undefined) measuredHeights.delete(id)
+          else measuredHeights.set(id, height)
+        }
+      })
+    }
+  }
 }))]))
 
 const { onConnect, onNodeDragStop, onMoveEnd, fitView, screenToFlowCoordinate, getSelectedNodes, removeSelectedNodes } = useVueFlow()
@@ -182,35 +197,11 @@ const ctxMenu = ref<{
   links?: LinkCanvasKind[]
 } | null>(null)
 
-// Expand rendered rows for taller images without rewriting saved canvas coordinates.
-const imageRowLayout = computed(() => {
-  const offsets = new Map<string, number>()
-  const growth = new Map<string, number>()
-  const p = project.current
-  const nodes = p?.canvas?.nodes
-  if (!p || !nodes) return { offsets, growth }
-  const byGroup = new Map<string, CanvasNode[]>()
-  for (const n of nodes) {
-    if (!n.parentGroupId) continue
-    const children = byGroup.get(n.parentGroupId) ?? []
-    children.push(n)
-    byGroup.set(n.parentGroupId, children)
-  }
-  for (const [group, children] of byGroup) {
-    let extra = 0
-    for (const n of children.sort((a, b) => a.position.y - b.position.y)) {
-      offsets.set(n.id, extra)
-      if ((!canvasNodeProducesImage(n) && n.type !== 'shotVideo') || n.type === 'shotFrames') continue
-      const id = canvasNodeOutputAssetId(p, n)
-      const asset = id ? assets.getMeta(id) : undefined
-      const defaultAspect = n.type === 'shotImage' || n.type === 'shotBoard' || n.type === 'shotVideo' ? p.settings.aspectRatio : '16:9'
-      const imageAspect = asset?.kind === 'image' && asset.width > 0 && asset.height > 0 ? `${asset.width}:${asset.height}` : defaultAspect
-      extra += Math.max(0, pipelineNodeHeight(imageAspect) * normalizeNodeScale(n.data.canvasScale) - pipelineNodeHeight(defaultAspect))
-    }
-    growth.set(group, extra)
-  }
-  return { offsets, growth }
-})
+const groupRows = computed(() => measuredGroupRows(project.current?.canvas?.nodes ?? [], measuredHeights))
+
+function groupHeight(node: CanvasNode) {
+  return Math.max(node.data.height ?? 240, groupRows.value.groupHeights.get(node.id) ?? 0)
+}
 
 const flowNodes = computed<Node[]>(() => {
   const graph = project.current?.canvas
@@ -224,7 +215,7 @@ const flowNodes = computed<Node[]>(() => {
         data: { ...n.data, nodeType: n.type },
         style: {
           width: `${n.data.width ?? 280}px`,
-          height: `${(n.data.height ?? 240) + (imageRowLayout.value.growth.get(n.id) ?? 0)}px`
+          height: `${groupHeight(n)}px`
         },
         draggable: true,
         selectable: false,
@@ -248,7 +239,7 @@ const flowNodes = computed<Node[]>(() => {
     const mapped: Node = {
       id: n.id,
       type: n.type,
-      position: { x: n.position.x, y: n.position.y + (imageRowLayout.value.offsets.get(n.id) ?? 0) },
+      position: { x: n.position.x, y: n.position.y + (groupRows.value.offsets.get(n.id) ?? 0) },
       data: { ...n.data, nodeType: n.type },
       draggable: true,
       zIndex: n.type === 'imageGen' || n.type === 'videoGen' || n.type === 'audioGen' || n.type === 'compose' ? 12 : 1
@@ -581,7 +572,7 @@ onNodeDragStop(({ node }) => {
   if (parentId) {
     const parent = project.current.canvas.nodes.find((n) => n.id === parentId)
     const pw = Number(parent?.data.width) || 0
-    const ph = (Number(parent?.data.height) || 0) + (imageRowLayout.value.growth.get(parentId) ?? 0)
+    const ph = parent ? groupHeight(parent) : 0
     const cx = node.position.x + (node.dimensions?.width || NODE_W) / 2
     const cy = node.position.y + 48
     const inside = cx >= 0 && cy >= 0 && cx <= pw && cy <= ph
@@ -592,7 +583,7 @@ onNodeDragStop(({ node }) => {
       }
       parentGroupId = undefined
     } else {
-      position.y -= imageRowLayout.value.offsets.get(node.id) ?? 0
+      position.y -= groupRows.value.offsets.get(node.id) ?? 0
     }
   }
   const nodes = project.current.canvas.nodes.map((n) =>
