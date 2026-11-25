@@ -1,14 +1,6 @@
 import { t } from '@/i18n'
-/**
- * 스토리보드 자막으로 내레이션 음성을 생성한다.
- *
- * Alibaba Cloud Bailian SpeechSynthesizer API(문서 2938790)를 사용한다.
- *   POST {origin}/api/v1/services/audio/tts/SpeechSynthesizer
- * 기본 모델은 qwen-audio-3.0-tts-flash다. 영상 더빙에는 비실시간 HTTP를 사용한다.
- * 영상 생성과 함께 음성을 만들고 내보낼 때 해당 클립에 합성한다.
- */
-
-import { getAIMode } from './client'
+import { desktop, isDesktop } from '@/services/desktop'
+import { isOfficialOpenAiUrl, OPENAI_TTS_DEFAULT_VOICE, OPENAI_TTS_VOICES } from './openAiTts'
 import { spokenTextOnly } from './dialogue'
 import { getTtsConfig } from './runtime'
 
@@ -26,7 +18,7 @@ export interface TTSInput {
 export interface TTSOutput {
   blob: Blob
   mimeType: string
-  duration?: number
+  durationMs?: number
   model: string
 }
 
@@ -132,10 +124,6 @@ export function detectSpeechLanguage(text: string): 'Chinese' | 'English' | 'Aut
   if (cjk >= latin && cjk > 0) return 'Chinese'
   if (latin > 0 && cjk === 0) return 'English'
   return 'Auto'
-}
-
-function ttsConfig() {
-  return getTtsConfig()
 }
 
 /** SpeechSynthesizer 요청에 쓸 /api/v1 포함 주소를 구한다. */
@@ -312,55 +300,46 @@ export function compatibleVoice(model: string, requested?: string): string {
   return voice || 'longanhuan_v3.6'
 }
 
-function mockSpeechWav(text: string): Blob {
-  const chars = Math.max(1, text.replace(/\s/g, '').length)
-  const duration = Math.min(10, Math.max(1.2, chars / 4.5))
-  const sampleRate = 22050
-  const n = Math.ceil(duration * sampleRate)
-  const dataSize = n * 2
-  const buf = new ArrayBuffer(44 + dataSize)
-  const view = new DataView(buf)
-  const ascii = (off: number, s: string) => {
-    for (let i = 0; i < s.length; i++) view.setUint8(off + i, s.charCodeAt(i))
-  }
-  ascii(0, 'RIFF')
-  view.setUint32(4, 36 + dataSize, true)
-  ascii(8, 'WAVE')
-  ascii(12, 'fmt ')
-  view.setUint32(16, 16, true)
-  view.setUint16(20, 1, true)
-  view.setUint16(22, 1, true)
-  view.setUint32(24, sampleRate, true)
-  view.setUint32(28, sampleRate * 2, true)
-  view.setUint16(32, 2, true)
-  view.setUint16(34, 16, true)
-  ascii(36, 'data')
-  view.setUint32(40, dataSize, true)
-  for (let i = 0; i < n; i++) {
-    const t = i / sampleRate
-    const env = Math.min(1, t * 8) * Math.min(1, (duration - t) * 8)
-    const sample = Math.sin(2 * Math.PI * 196 * t) * 0.12 * env
-    view.setInt16(44 + i * 2, Math.round(sample * 32767), true)
-  }
-  return new Blob([buf], { type: 'audio/wav' })
-}
-
 export async function generateSpeech(input: TTSInput): Promise<TTSOutput> {
+  const cfg = getTtsConfig()
+  const model = input.model?.trim() || cfg.model
+  if (cfg.openAi) {
+    if (!isOfficialOpenAiUrl(cfg.baseUrl)) throw new Error('설정에서 공식 OpenAI TTS API 주소를 사용해야 합니다.')
+    if (!input.text.trim()) throw new Error('내레이션 원고가 없어 더빙할 수 없습니다.')
+    if (!cfg.apiKey.trim()) throw new Error('설정에서 OpenAI 더빙 API 키를 입력하거나 OpenAI 언어 모델의 키를 연결해야 합니다.')
+    if (!isDesktop() || typeof desktop().openAiTts !== 'function') {
+      throw new Error('OpenAI 더빙을 사용하려면 데스크톱 앱이 필요합니다.')
+    }
+    input.signal?.throwIfAborted()
+    const requestId = crypto.randomUUID()
+    const voice = [input.voice, cfg.voice, OPENAI_TTS_DEFAULT_VOICE]
+      .find((item): item is string => Boolean(item && OPENAI_TTS_VOICES.includes(item)))!
+    const cancel = () => desktop().cancelProviderFetch(requestId)
+    input.signal?.addEventListener('abort', cancel, { once: true })
+    try {
+      const { wav, durationMs } = await desktop().openAiTts({
+        requestId, apiKey: cfg.apiKey, model, voice, text: input.text, instruction: input.instruction
+      })
+      input.signal?.throwIfAborted()
+      const blob = new Blob([new Uint8Array(wav)], { type: 'audio/wav' })
+      return { blob, mimeType: blob.type, durationMs, model }
+    } catch (error) {
+      input.signal?.throwIfAborted()
+      throw error
+    } finally {
+      input.signal?.removeEventListener('abort', cancel)
+    }
+  }
+
   const spoken = clipText(spokenTextOnly(input.text || ''))
   const text = /[가-힣]/.test(spoken) ? spoken : normalizeForSpeech(spoken)
   if (!text) throw new Error('내레이션 원고가 없어 더빙할 수 없습니다.')
 
-  const cfg = ttsConfig()
-  const model = input.model?.trim() || cfg.model
   const voice = compatibleVoice(model, input.voice || cfg.voice)
   const language = input.language || detectSpeechLanguage(text)
   log(`내레이션 텍스트 ${text.slice(0, 80)}${text.length > 80 ? '…' : ''}  lang=${language}`)
 
-  if (getAIMode() !== 'real' || !cfg.apiKey) {
-    log('데모 모드에서 임시 오디오 트랙을 만들어요.')
-    const blob = mockSpeechWav(text)
-    return { blob, mimeType: blob.type, model: 'mock-tts' }
-  }
+  if (!cfg.apiKey) throw new Error('설정에서 더빙 API 키를 입력해야 합니다.')
 
   const apiRoot = speechApiRoot(cfg.baseUrl)
   const errors: string[] = []

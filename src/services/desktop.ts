@@ -1,3 +1,4 @@
+import type { OpenAiTtsRequest, OpenAiTtsReply } from './ai/openAiTts'
 import type { LtxDesktopRequest, LtxDesktopReply } from './ai/ltxDesktopOptions'
 import type { LtxRequest, LtxReply } from './ai/ltxOptions'
 import { t } from '@/i18n'
@@ -32,6 +33,7 @@ export type DesktopAPI = {
   }) => Promise<string | null>
   pickDirectory: () => Promise<string | null>
   openPath: (filePath: string) => Promise<string>
+  openAiTts: (request: OpenAiTtsRequest) => Promise<OpenAiTtsReply>
   ltxDesktopRequest: (request: LtxDesktopRequest) => Promise<LtxDesktopReply>
   ltxRequest: (request: LtxRequest) => Promise<LtxReply>
   autodlFetch: (opts: {

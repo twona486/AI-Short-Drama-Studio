@@ -41,12 +41,22 @@ export async function reviewVideoQuality(
 export async function reviewSpeechQuality(
   blob: Blob,
   text: string,
-  targetDuration: number
+  targetDuration: number,
+  durationMs?: number
 ): Promise<QualityReport> {
   if (blob.size < 1_000 || !(blob.type || '').startsWith('audio/')) {
     return { passed: false, score: 0, issues: ['TTS가 올바른 오디오를 반환하지 않았어요.'] }
   }
   const spokenChars = text.replace(/[\s，。！？、,.!?；;]/g, '').length
+  if (durationMs !== undefined) {
+    const seconds = durationMs / 1000
+    return seconds > targetDuration + 1.5
+      ? {
+          passed: false, score: 45,
+          issues: [`더빙 길이 ${seconds.toFixed(1)}초가 샷 길이 ${targetDuration}초를 초과합니다. 대사를 줄이거나 샷 길이를 늘려 주세요.`]
+        }
+      : { passed: true, score: 100, issues: [] }
+  }
   const estimated = spokenChars / 4
   if (estimated > targetDuration + 1.5) {
     return {

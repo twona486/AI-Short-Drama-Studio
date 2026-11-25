@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { isOpenAiTts } from '@/services/ai/openAiTts'
 import { ltxShotSpeechTooFast } from '@/services/ai/ltxShotPrompt'
 import { nearestVideoDuration, videoDurationCapability, shotDurationWarning } from '@/services/ai/videoDuration'
 import { isLtxDesktop } from '@/services/ai/ltxDesktopOptions'
@@ -1164,6 +1165,16 @@ async function optimizeVideoPrompt() {
           @input="project.updateShot(shot.id, { voiceover: ($event.target as HTMLTextAreaElement).value })"
         />
         <TtsModelSelect v-if="effectiveShotAudioMode(shot) === 'tts'" />
+        <template v-if="effectiveShotAudioMode(shot) === 'tts' && isOpenAiTts(settings.config.tts)">
+          <p class="hint">{{ $t('openAiTts.generatedVoiceHint') }}</p>
+          <label>{{ $t('openAiTts.shotInstruction') }}</label>
+          <textarea
+            rows="2"
+            :value="shot.ttsInstruction"
+            :placeholder="$t('openAiTts.shotInstructionPlaceholder')"
+            @input="project.updateShot(shot.id, { ttsInstruction: ($event.target as HTMLTextAreaElement).value })"
+          />
+        </template>
         <label>{{ $t('nodeInspector.speakingVoice') }}</label>
         <textarea
           rows="2"

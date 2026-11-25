@@ -6,7 +6,7 @@ import { useAssetsStore, useProjectStore, useSettingsStore, useToastStore } from
 import { runCanvasNode } from '@/services/canvas/runner'
 import { isNodeRunning } from '@/services/canvas/jobs'
 import { friendlyAiError, shouldToastAiError } from '@/services/ai/abort'
-import { TTS_PRESETS } from '@/stores/settings'
+import { isOpenAiTts, OPENAI_TTS_MODELS } from '@/services/ai/openAiTts'
 import { VOICE_CLONE_MODEL, modelAcceptsReferenceAudio } from '@/services/ai/voiceClone'
 import { pickLocalFiles } from '@/utils/pickLocalFiles'
 import NodeBusyOverlay from '@/components/canvas/NodeBusyOverlay.vue'
@@ -59,19 +59,19 @@ const modelOptions = computed(() => {
   const profile =
     settings.config.ttsProfiles.find((item) => item.id === settings.config.activeTtsId) ||
     settings.config.ttsProfiles[0]
+  const openAi = isOpenAiTts(settings.config.tts)
   const names = [
     node.value?.data.ttsModel,
     settings.config.tts.model,
     ...(profile?.models ?? []),
-    ...TTS_PRESETS,
-    VOICE_CLONE_MODEL
+    ...(openAi ? OPENAI_TTS_MODELS : [VOICE_CLONE_MODEL])
   ]
   return [...new Set(names.map((item) => (item || '').trim()).filter(Boolean))]
 })
 const selectedModel = computed(
   () => node.value?.data.ttsModel?.trim() || settings.config.tts.model || modelOptions.value[0] || ''
 )
-const acceptsRef = computed(() => modelAcceptsReferenceAudio(selectedModel.value))
+const acceptsRef = computed(() => !isOpenAiTts(settings.config.tts) && modelAcceptsReferenceAudio(selectedModel.value))
 const refId = computed(() => node.value?.data.referenceAudioAssetId || '')
 
 watch(

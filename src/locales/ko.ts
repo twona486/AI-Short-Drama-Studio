@@ -1,4 +1,15 @@
 export default {
+  "openAiTts": {
+    "hint": "OpenAI Realtime으로 AI 음성을 만들어요.",
+    "generatedVoiceHint": "OpenAI TTS는 AI 음성을 만들어요.",
+    "reuseKey": "현재 OpenAI 언어 모델의 API 키를 사용해요",
+    "reuseKeyMissing": "언어 모델 설정에서 공식 OpenAI 연결을 선택하고 API 키를 입력해 주세요.",
+    "connectionVoice": "연결의 기본 목소리",
+    "characterVoice": "OpenAI 더빙 목소리",
+    "automaticVoice": "자동 추천",
+    "shotInstruction": "더빙 말투",
+    "shotInstructionPlaceholder": "예: 차분하게, 문장 끝을 낮춰서 읽어 주세요."
+  },
   "ltxDesktop": {
     "name": "LTX Desktop (LAN 페어링)",
     "hint": "Mac Studio의 LTX Desktop에서 LAN Remote를 켜고, 표시된 페어링 링크나 코드를 입력하세요.",

@@ -1,3 +1,5 @@
+import { requestOpenAiTts } from './openai-tts'
+import type { OpenAiTtsRequest } from '../src/services/ai/openAiTts'
 import { requestLtxDesktop } from './ltx-desktop'
 import type { LtxDesktopRequest } from '../src/services/ai/ltxDesktopOptions'
 /// <reference types="vite-plugin-electron/electron-env" />
@@ -869,6 +871,19 @@ app.whenReady().then(async () => {
   const providerRequests = new Map<string, AbortController>()
   ipcMain.on('desktop:cancelProviderFetch', (event, requestId: string) => {
     providerRequests.get(`${event.sender.id}:${requestId}`)?.abort()
+  })
+  ipcMain.handle('desktop:openAiTts', async (event, request: OpenAiTtsRequest) => {
+    const id = `${event.sender.id}:${request?.requestId}`
+    const controller = new AbortController()
+    const abort = () => controller.abort()
+    providerRequests.set(id, controller)
+    event.sender.once('destroyed', abort)
+    try {
+      return await requestOpenAiTts(request, controller.signal)
+    } finally {
+      event.sender.removeListener('destroyed', abort)
+      providerRequests.delete(id)
+    }
   })
   ipcMain.handle('desktop:autodlFetch', async (event, opts?: {
     url?: string

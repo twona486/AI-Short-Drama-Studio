@@ -1,3 +1,4 @@
+import type { OpenAiTtsRequest, OpenAiTtsReply } from '../src/services/ai/openAiTts'
 import type { LtxDesktopRequest, LtxDesktopReply } from '../src/services/ai/ltxDesktopOptions'
 import type { LtxRequest, LtxReply } from '../src/services/ai/ltxOptions'
 import { contextBridge, ipcRenderer } from 'electron'
@@ -33,6 +34,7 @@ export type DesktopAPI = {
   }) => Promise<string | null>
   pickDirectory: () => Promise<string | null>
   openPath: (filePath: string) => Promise<string>
+  openAiTts: (request: OpenAiTtsRequest) => Promise<OpenAiTtsReply>
   ltxDesktopRequest: (request: LtxDesktopRequest) => Promise<LtxDesktopReply>
   ltxRequest: (request: LtxRequest) => Promise<LtxReply>
   autodlFetch: (opts: {
@@ -97,6 +99,7 @@ const api: DesktopAPI = {
   saveTextFile: (opts) => ipcRenderer.invoke('desktop:saveTextFile', opts),
   pickDirectory: () => ipcRenderer.invoke('desktop:pickDirectory'),
   openPath: (filePath) => ipcRenderer.invoke('desktop:openPath', filePath),
+  openAiTts: (request) => ipcRenderer.invoke('desktop:openAiTts', request),
   ltxDesktopRequest: (request) => ipcRenderer.invoke('desktop:ltxDesktopRequest', request),
   ltxRequest: (request) => ipcRenderer.invoke('desktop:ltxRequest', request),
   autodlFetch: (opts) => ipcRenderer.invoke('desktop:autodlFetch', opts),

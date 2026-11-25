@@ -13,6 +13,8 @@ const props = defineProps<{
   model: string
   models: string[]
   provider?: string
+  fixedBaseUrl?: boolean
+  hideKey?: boolean
 }>()
 
 const emit = defineEmits<{
@@ -96,11 +98,12 @@ function onAdd() {
     <label>{{ $t('endpointForm.baseUrl') }}</label>
     <input
       v-model="baseUrlModel"
+      :readonly="fixedBaseUrl"
       :placeholder="currentPreset.baseUrl || 'https://…/v1'"
     />
 
-    <label>API Key</label>
-    <div class="secret">
+    <label v-if="!hideKey">API Key</label>
+    <div v-if="!hideKey" class="secret">
       <input
         :type="showKey ? 'text' : 'password'"
         autocomplete="off"

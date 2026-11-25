@@ -3,8 +3,10 @@ import { t as translate } from '@/i18n'
 
 import { ref, computed, onMounted, watch, nextTick } from 'vue'
 import { useRouter } from 'vue-router'
-import { useProjectStore, useToastStore, useAssetsStore } from '@/stores'
+import { useProjectStore, useToastStore, useAssetsStore, useSettingsStore } from '@/stores'
 import { buildCuesFromClips, parseSRT, renderCaptionPng, toSRT } from '@/services/ffmpeg'
+import { openAiShotSpeech } from '@/services/ai/shotSpeech'
+import { isOpenAiTts, OPENAI_TTS_VOICES } from '@/services/ai/openAiTts'
 import { generateSpeech, TTS_VOICES } from '@/services/ai'
 import GlassCard from '@/components/common/GlassCard.vue'
 import GradientButton from '@/components/common/GradientButton.vue'
@@ -18,6 +20,11 @@ const router = useRouter()
 const project = useProjectStore()
 const toast = useToastStore()
 const assets = useAssetsStore()
+const settings = useSettingsStore()
+const openAi = computed(() => isOpenAiTts(settings.config.tts))
+const voices = computed(() => openAi.value
+  ? OPENAI_TTS_VOICES.map((id) => ({ id, label: id }))
+  : TTS_VOICES)
 
 const srtText = ref('')
 const audioUrls = ref<Record<string, string>>({})
@@ -67,10 +74,8 @@ const highlightScale = computed({
 })
 const ttsVoice = computed({
   get: () => {
-    const v = project.current?.settings.ttsVoice || 'longanhuan_v3.6'
-    // 이전 버전의 qwen3-tts 음색은 새 모델과 호환되지 않으므로 기본 음색으로 바꾼다.
-    if (TTS_VOICES.some((x) => x.id === v)) return v
-    return 'longanhuan_v3.6'
+    const v = project.current?.settings.ttsVoice
+    return voices.value.some((x) => x.id === v) ? v! : openAi.value ? '' : 'longanhuan_v3.6'
   },
   set: (v: string) => project.setSettings({ ttsVoice: v })
 })
@@ -214,7 +219,8 @@ async function generateLine(shotId: string) {
   }
   generating.value.add(shotId)
   try {
-    const result = await generateSpeech({ text, voice: ttsVoice.value })
+    const speech = openAi.value && project.current ? openAiShotSpeech(shot, project.current) : { text, voice: ttsVoice.value }
+    const result = await generateSpeech(speech)
     await saveVoiceover(shot, result.blob, result.mimeType, text)
     toast.success(translate('caption.clipVoiceReady', { p0: shot.index + 1 }))
   } catch (e: any) {
@@ -377,6 +383,7 @@ function next() {
         <h1>{{ $t('caption.textPanel') }}</h1>
         <p v-if="isDigitalHuman">{{ $t('caption.importedAudioHint') }}</p>
         <p v-else>{{ $t('caption.workflowHint') }}</p>
+        <p v-if="openAi && !isDigitalHuman">{{ $t('openAiTts.generatedVoiceHint') }}</p>
       </div>
       <div class="head-actions">
         <template v-if="!isDigitalHuman">
@@ -386,7 +393,8 @@ function next() {
           <label class="voice-pick">
             <span>{{ $t('common.voice') }}</span>
             <select v-model="ttsVoice" class="input" style="width: auto; min-width: 160px;">
-              <option v-for="v in TTS_VOICES" :key="v.id" :value="v.id">{{ v.label }}</option>
+              <option v-if="openAi" value="">{{ $t('openAiTts.connectionVoice') }}</option>
+              <option v-for="v in voices" :key="v.id" :value="v.id">{{ v.label }}</option>
             </select>
           </label>
         </template>
