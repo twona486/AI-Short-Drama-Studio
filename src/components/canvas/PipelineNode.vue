@@ -2059,6 +2059,9 @@ const cropStyle = computed(() => ({
   gap: 8px;
   margin-top: 4px;
 }
+.prompt-foot > :deep(.psel) {
+  flex: 1 1 min(100%, 180px);
+}
 .prompt-foot span {
   font-size: 10px;
   color: var(--color-text-4);
@@ -2093,6 +2096,7 @@ const cropStyle = computed(() => ({
   color: var(--color-text-1);
 }
 .go {
+  flex-shrink: 0;
   width: 28px;
   height: 28px;
   margin: 0;

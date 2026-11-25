@@ -533,7 +533,7 @@ async function generateThis(ev: Event, kind: 'play' | 'extract' | 'continue' = '
         </div>
       </template>
     </div>
-    <div v-else class="sdoc-md nowheel nodrag" :class="{ 'has-panel': selected && panelOpen }" v-html="html" />
+    <div v-else class="sdoc-md nowheel nodrag" v-html="html" />
 
     <Teleport to="body">
       <div v-if="libraryOpen" class="script-library-backdrop" @click.self="libraryOpen = false" @keydown.esc="libraryOpen = false">
@@ -565,47 +565,6 @@ async function generateThis(ev: Event, kind: 'play' | 'extract' | 'continue' = '
       </div>
     </Teleport>
 
-    <div v-if="!playReady && !emptyState && !editing" class="sdoc-gate nodrag">
-      <span>{{ $t('scriptDocNode.draftHint') }}</span>
-      <button type="button" :disabled="generating || !llmModel" @click="generateThis($event, 'play')" @mousedown.stop>
-        {{ $t('scriptDocNode.generateFull') }}
-      </button>
-    </div>
-    <div v-else-if="playReady && !project.current?.shots.length && !editing" class="sdoc-gate nodrag">
-      <span>{{ $t('scriptDocNode.extractionHint') }}</span>
-      <div class="sdoc-extracts">
-        <button type="button" :disabled="generating" @click="generateThis($event, 'extract', 'subjects')" @mousedown.stop>
-          {{ $t('common.extractCharacters') }}
-        </button>
-        <button type="button" :disabled="generating" @click="generateThis($event, 'extract', 'scenes')" @mousedown.stop>
-          {{ $t('common.extractScenes') }}
-        </button>
-        <button
-          type="button"
-          :disabled="generating || !canExtractShots"
-          :title="canExtractShots ? $t('scriptDocNode.makeStoryboard') : $t('scriptDocNode.extractFirst')"
-          @click="generateThis($event, 'extract', 'shots')"
-          @mousedown.stop
-        >
-          {{ $t('common.extractStoryboard') }}
-        </button>
-      </div>
-    </div>
-    <div v-else-if="waitingReview && !editing" class="sdoc-gate nodrag">
-      <span>{{ $t('scriptDocNode.needApproval') }}</span>
-      <button type="button" @click="approvePlay" @mousedown.stop>{{ $t('scriptDocNode.approve') }}</button>
-    </div>
-    <div v-else-if="approved && !editing" class="sdoc-ok nodrag">
-      {{ $t('scriptDocNode.approvedHint') }}
-    </div>
-    <p v-if="nodeMeta?.error" class="sdoc-err">{{ nodeMeta.error }}</p>
-    <NodeBusyOverlay v-if="generating" :label="$t('common.generating')" />
-    <Handle id="out" type="source" :position="Position.Right" class="hndl" />
-    <div class="rz rz-e nodrag nopan" :title="$t('scriptDocNode.resizeHorizontally')" @pointerdown="onResizeStart('e', $event)" />
-    <div class="rz rz-s nodrag nopan" :title="$t('scriptDocNode.resizeVertically')" @pointerdown="onResizeStart('s', $event)" />
-    <div class="rz rz-se nodrag nopan" :title="$t('scriptDocNode.resize')" @pointerdown="onResizeStart('se', $event)" />
-    </div>
-
     <transition name="float-down">
       <div
         v-if="selected && panelOpen && !editing && !emptyState"
@@ -613,32 +572,34 @@ async function generateThis(ev: Event, kind: 'play' | 'extract' | 'continue' = '
         @mousedown.stop
         @click.stop
       >
-        <label>{{ $t('scriptDocNode.topic') }}</label>
-        <textarea
-          rows="4"
-          :value="project.current?.script?.topic || ''"
-          :placeholder="$t('scriptDocNode.topicHint')"
-          @input="patchTopic(($event.target as HTMLTextAreaElement).value)"
-        />
-        <template v-if="!playReady">
-          <label>{{ $t('scriptDocNode.draft') }}</label>
+        <div class="prompt-fields">
+          <label>{{ $t('scriptDocNode.topic') }}</label>
           <textarea
-            rows="3"
-            :value="project.current?.script?.content || ''"
-            :placeholder="$t('scriptDocNode.outlineHint')"
-            @input="patchDraftBrief(($event.target as HTMLTextAreaElement).value)"
+            rows="4"
+            :value="project.current?.script?.topic || ''"
+            :placeholder="$t('scriptDocNode.topicHint')"
+            @input="patchTopic(($event.target as HTMLTextAreaElement).value)"
           />
-        </template>
-        <p v-else class="prompt-hint">{{ $t('scriptDocNode.scriptGuide') }}</p>
-        <template v-if="playReady">
-          <label>{{ $t('common.continueDirection') }}</label>
-          <textarea
-            rows="3"
-            :value="continueHint"
-            :placeholder="$t('scriptDocNode.continueExample')"
-            @input="continueHint = ($event.target as HTMLTextAreaElement).value"
-          />
-        </template>
+          <template v-if="!playReady">
+            <label>{{ $t('scriptDocNode.draft') }}</label>
+            <textarea
+              rows="3"
+              :value="project.current?.script?.content || ''"
+              :placeholder="$t('scriptDocNode.outlineHint')"
+              @input="patchDraftBrief(($event.target as HTMLTextAreaElement).value)"
+            />
+          </template>
+          <p v-else class="prompt-hint">{{ $t('scriptDocNode.scriptGuide') }}</p>
+          <template v-if="playReady">
+            <label>{{ $t('common.continueDirection') }}</label>
+            <textarea
+              rows="3"
+              :value="continueHint"
+              :placeholder="$t('scriptDocNode.continueExample')"
+              @input="continueHint = ($event.target as HTMLTextAreaElement).value"
+            />
+          </template>
+        </div>
         <div class="prompt-foot">
           <label class="model-pick">
             <span>LLM</span>
@@ -698,6 +659,48 @@ async function generateThis(ev: Event, kind: 'play' | 'extract' | 'continue' = '
         </div>
       </div>
     </transition>
+
+    <div v-if="!playReady && !emptyState && !editing" class="sdoc-gate nodrag">
+      <span>{{ $t('scriptDocNode.draftHint') }}</span>
+      <button type="button" :disabled="generating || !llmModel" @click="generateThis($event, 'play')" @mousedown.stop>
+        {{ $t('scriptDocNode.generateFull') }}
+      </button>
+    </div>
+    <div v-else-if="playReady && !project.current?.shots.length && !editing" class="sdoc-gate nodrag">
+      <span>{{ $t('scriptDocNode.extractionHint') }}</span>
+      <div class="sdoc-extracts">
+        <button type="button" :disabled="generating" @click="generateThis($event, 'extract', 'subjects')" @mousedown.stop>
+          {{ $t('common.extractCharacters') }}
+        </button>
+        <button type="button" :disabled="generating" @click="generateThis($event, 'extract', 'scenes')" @mousedown.stop>
+          {{ $t('common.extractScenes') }}
+        </button>
+        <button
+          type="button"
+          :disabled="generating || !canExtractShots"
+          :title="canExtractShots ? $t('scriptDocNode.makeStoryboard') : $t('scriptDocNode.extractFirst')"
+          @click="generateThis($event, 'extract', 'shots')"
+          @mousedown.stop
+        >
+          {{ $t('common.extractStoryboard') }}
+        </button>
+      </div>
+    </div>
+    <div v-else-if="waitingReview && !editing" class="sdoc-gate nodrag">
+      <span>{{ $t('scriptDocNode.needApproval') }}</span>
+      <button type="button" @click="approvePlay" @mousedown.stop>{{ $t('scriptDocNode.approve') }}</button>
+    </div>
+    <div v-else-if="approved && !editing" class="sdoc-ok nodrag">
+      {{ $t('scriptDocNode.approvedHint') }}
+    </div>
+    <p v-if="nodeMeta?.error" class="sdoc-err">{{ nodeMeta.error }}</p>
+    <NodeBusyOverlay v-if="generating" :label="$t('common.generating')" />
+    <Handle id="out" type="source" :position="Position.Right" class="hndl" />
+    <div class="rz rz-e nodrag nopan" :title="$t('scriptDocNode.resizeHorizontally')" @pointerdown="onResizeStart('e', $event)" />
+    <div class="rz rz-s nodrag nopan" :title="$t('scriptDocNode.resizeVertically')" @pointerdown="onResizeStart('s', $event)" />
+    <div class="rz rz-se nodrag nopan" :title="$t('scriptDocNode.resize')" @pointerdown="onResizeStart('se', $event)" />
+    </div>
+
   </div>
 </template>
 
@@ -789,6 +792,7 @@ async function generateThis(ev: Event, kind: 'play' | 'extract' | 'continue' = '
 }
 .sdoc-head {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
   gap: 10px;
@@ -801,6 +805,7 @@ async function generateThis(ev: Event, kind: 'play' | 'extract' | 'continue' = '
 .sdoc-titles {
   display: flex;
   flex-direction: column;
+  flex: 1 1 80px;
   gap: 2px;
   min-width: 0;
 }
@@ -808,6 +813,9 @@ async function generateThis(ev: Event, kind: 'play' | 'extract' | 'continue' = '
   font-size: 10px;
   color: var(--color-text-4);
   letter-spacing: 0.06em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 .sdoc-titles strong {
   font-size: 14px;
@@ -817,9 +825,10 @@ async function generateThis(ev: Event, kind: 'play' | 'extract' | 'continue' = '
 }
 .sdoc-actions {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 6px;
-  flex-shrink: 0;
+  max-width: 100%;
 }
 .sdoc-btn {
   flex-shrink: 0;
@@ -850,9 +859,6 @@ async function generateThis(ev: Event, kind: 'play' | 'extract' | 'continue' = '
   overflow: auto;
   padding: 14px 16px 20px;
   cursor: text;
-}
-.sdoc-md.has-panel {
-  padding-bottom: 240px;
 }
 .sdoc-edit {
   width: 100%;
@@ -1009,7 +1015,7 @@ async function generateThis(ev: Event, kind: 'play' | 'extract' | 'continue' = '
   display: flex;
   flex-direction: column;
 }
-.gen-form label {
+.gen-form > label {
   display: block;
   margin: 0 0 5px;
   font-size: 11px;
@@ -1036,11 +1042,8 @@ async function generateThis(ev: Event, kind: 'play' | 'extract' | 'continue' = '
 .gen-foot {
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
   gap: 8px;
-}
-.gen-foot .model-pick {
-  flex: 1;
-  min-width: 0;
 }
 .gen-foot .ghost,
 .gen-foot .primary {
@@ -1099,7 +1102,7 @@ async function generateThis(ev: Event, kind: 'play' | 'extract' | 'continue' = '
   display: flex;
   flex-wrap: wrap;
   gap: 6px;
-  flex-shrink: 0;
+  max-width: 100%;
 }
 .sdoc-extracts button:disabled {
   opacity: 0.45;
@@ -1154,22 +1157,22 @@ async function generateThis(ev: Event, kind: 'play' | 'extract' | 'continue' = '
   border-bottom: 2px solid var(--color-text-3);
 }
 .prompt {
-  position: absolute;
-  left: 12px;
-  right: 12px;
-  bottom: 12px;
-  top: auto;
-  z-index: 5;
-  width: auto;
-  transform: none;
-  transform-origin: 50% 100%;
+  display: flex;
+  flex-direction: column;
+  flex-shrink: 0;
+  max-height: 60%;
+  margin: 0 12px 10px;
   background: var(--color-bg-1);
   border: 1px solid var(--color-border);
   border-radius: 12px;
   padding: 10px 12px;
   box-shadow: 0 16px 36px rgba(0, 0, 0, 0.4);
 }
-.prompt label {
+.prompt-fields {
+  min-height: 0;
+  overflow: auto;
+}
+.prompt-fields > label {
   display: block;
   margin: 0 0 4px;
   font-size: 10px;
@@ -1198,11 +1201,12 @@ async function generateThis(ev: Event, kind: 'play' | 'extract' | 'continue' = '
   display: flex;
   align-items: center;
   flex-wrap: wrap;
+  flex-shrink: 0;
   gap: 8px;
   margin-top: 2px;
 }
 .model-pick {
-  flex: 1;
+  flex: 0 0 100%;
   min-width: 0;
   display: flex;
   align-items: center;
