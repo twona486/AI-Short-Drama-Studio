@@ -19,7 +19,9 @@ import {
 } from '@/services/storage'
 import { isDesktop, desktop } from '@/services/desktop'
 import { emptyCanvas, normalizeH3GenMode, normalizeVideoGenModel } from '@/types/canvas'
-import { pushHistory } from '@/utils/shot'
+import { useSettingsStore } from './settings'
+import { videoDurationCapability } from '@/services/ai/videoDuration'
+import { compatibleShotAudioMode, effectiveShotAudioMode, isDigitalHumanSpeechProject, pushHistory } from '@/utils/shot'
 import { rebuildCanvasGraph } from '@/services/canvas/layout'
 import { removeCanvasNodeReference } from '@/services/canvas/references'
 import { aspectToSize, isLandscapeAspect } from '@/utils/aspect'
@@ -491,13 +493,29 @@ export const useProjectStore = defineStore('project', () => {
     touch()
   }
 
-  /** 음성 방식을 바꾸면 이전 영상을 이력으로 옮기고 해당 영상만 다시 생성한다. */
+  function shotSupportsVideoVoice(shot: Shot): boolean {
+    if (isDigitalHumanSpeechProject(current.value)) return true
+    const settings = useSettingsStore()
+    if (!settings.diskReady) return true
+    const node = current.value?.canvas?.nodes.find((item) =>
+      item.type === 'shotVideo' && item.data.shotId === shot.id)
+    const profileId = node?.data.videoProfileId || shot.videoProfileId
+    const profile = profileId
+      ? settings.config.videos.find((item) => item.id === profileId)
+      : settings.config.video
+    // 삭제된 연결은 사용자가 다시 지정할 때까지 기존 음성 방식을 보관한다.
+    if (!profile) return true
+    const model = normalizeVideoGenModel(node?.data.videoModel ?? settings.config.defaultVideoModel)
+    return videoDurationCapability({ model, profile }).voice !== 'unsupported'
+  }
+
   /** 더빙 설정을 바꿔도 기존 영상은 유지한다. 사용자가 새로 생성할 때 변경 사항을 적용한다. */
   function setShotAudioMode(id: ID, audioMode: ShotAudioMode) {
     if (!current.value) return
     const idx = current.value.shots.findIndex((s) => s.id === id)
     if (idx < 0) return
     const shot = current.value.shots[idx]
+    audioMode = compatibleShotAudioMode(audioMode, shotSupportsVideoVoice(shot))
     if (shot.audioMode === audioMode) return
     const keepTts = audioMode === 'tts'
     current.value.shots[idx] = {
@@ -511,6 +529,15 @@ export const useProjectStore = defineStore('project', () => {
     }
     touch()
   }
+
+  watch(
+    () => (current.value?.shots || []).filter((shot) =>
+      compatibleShotAudioMode(effectiveShotAudioMode(shot), shotSupportsVideoVoice(shot)) !== effectiveShotAudioMode(shot)
+    ),
+    (shots) => {
+      for (const shot of shots) setShotAudioMode(shot.id, 'tts')
+    }
+  )
 
   /** 변경한 항목에 의존하는 결과만 무효화한다. 기존 에셋은 이력과 라이브러리에 보존한다. */
   function invalidateShotAssets(shotId: ID, from: 'image' | 'video' | 'audio') {
@@ -852,6 +879,7 @@ export const useProjectStore = defineStore('project', () => {
     updateShot,
     setShotVideoPrompt,
     setShotAudioMode,
+    shotSupportsVideoVoice,
     assignShotBoard,
     assignShotImage,
     assignShotVideo,

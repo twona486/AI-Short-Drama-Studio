@@ -532,8 +532,8 @@ async function next() {
               :value="effectiveShotAudioMode(shot)"
               @change="changeAudioMode(shot, ($event.target as HTMLSelectElement).value as NonNullable<Shot['audioMode']>)"
             >
-              <option value="h3-dialogue">{{ $t('common.h3Dialogue') }}</option>
-              <option value="h3-voiceover">{{ $t('videos.h3Offscreen') }}</option>
+              <option value="h3-dialogue" :disabled="!project.shotSupportsVideoVoice(shot)">{{ $t('common.h3Dialogue') }}</option>
+              <option value="h3-voiceover" :disabled="!project.shotSupportsVideoVoice(shot)">{{ $t('videos.h3Offscreen') }}</option>
               <option value="tts">{{ $t('videos.postTtsMode') }}</option>
               <option value="none">{{ $t('videos.environmentOnly') }}</option>
             </select>
@@ -542,6 +542,7 @@ async function next() {
             <span>{{ $t('videos.voice') }}</span>
             <strong>{{ $t('videos.withAudio') }}</strong>
           </div>
+          <p v-if="!isDigitalHuman && !project.shotSupportsVideoVoice(shot)">{{ $t('common.videoVoiceUnsupported') }}</p>
         </div>
 
         <div class="shot-prompt">

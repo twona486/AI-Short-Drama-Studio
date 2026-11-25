@@ -77,7 +77,7 @@ export function normalizeModelNodeOptions(raw: unknown): ModelNodeOptions | unde
   const out: ModelNodeOptions = {}
   if (imageResolutions.length) out.imageResolutions = imageResolutions
   if (videoResolutions.length) out.videoResolutions = videoResolutions
-  if (src.videoAudio === true) out.videoAudio = true
+  if (typeof src.videoAudio === 'boolean') out.videoAudio = src.videoAudio
   if (src.lastFrameRequired === true) out.lastFrameRequired = true
   const audioField = normalizeAudioField(src.audioField)
   if (out.videoAudio && audioField) out.audioField = audioField

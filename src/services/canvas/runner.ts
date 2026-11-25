@@ -1,3 +1,4 @@
+import { ltxShotPrompt, ltxShotSpeechTooFast } from '@/services/ai/ltxShotPrompt'
 import { videoDurationCapability, nearestVideoDuration } from '@/services/ai/videoDuration'
 import { isLtxDesktop, isLtxTask } from '@/services/ai/ltxDesktopOptions'
 import { isLtxProfile } from '@/services/ai/ltxOptions'
@@ -1376,15 +1377,18 @@ export async function generateShotVideo(shot: Shot, onProgress?: (msg: string) =
     const first = resuming ? undefined : await prepareLtxShotStart(shot, p, videoNode, aspectRatio, onProgress, signal)
     ensureNotCancelled(signal)
     if (project.current?.id !== p.id) throw new DOMException(translate('ltx.projectChanged'), 'AbortError')
+    const videoResolution = canvasVideoResolutionForShot(shot, 'h3')
+    const duration = nearestVideoDuration(shot.duration, videoDurationCapability({ profile, resolution: videoResolution }).durations)
+    if (!resuming && ltxShotSpeechTooFast(shot, duration)) onProgress?.(translate('ltx.speechTooFast', { seconds: duration }))
     const result = await generateVideo({
-      prompt: shot.compiledVideoPrompt || shot.visualPrompt || '',
+      prompt: ltxShotPrompt(shot, resolveShotSpeakerVoice(shot, p)),
       imageBlob: first,
       lastFrameBlob: resuming ? undefined : await tryLoadRefImageBlob(shot.lastFrameAssetId),
       duration: shot.duration,
       ...aspectToSize(aspectRatio),
       aspectRatio,
       videoProfileId: profileId || profile?.id,
-      videoResolution: canvasVideoResolutionForShot(shot, 'h3'),
+      videoResolution,
       generateAudio: shotVideoAudio(shot.id, profileId),
       signal,
       resumeTaskId,

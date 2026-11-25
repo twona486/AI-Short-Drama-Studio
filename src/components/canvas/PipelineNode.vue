@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { ltxShotSpeechTooFast } from '@/services/ai/ltxShotPrompt'
 import { nearestVideoDuration, videoDurationCapability, shotDurationWarning } from '@/services/ai/videoDuration'
 import { isLtxTask, isLtxDesktop } from '@/services/ai/ltxDesktopOptions'
 import { isLtxProfile, LTX_DEFAULT_MODEL } from '@/services/ai/ltxOptions'
@@ -1251,6 +1252,9 @@ const cropStyle = computed(() => ({
 
     <p v-if="type === 'shotVideo' && exceedsShotDuration" class="shot-duration-warning">
       {{ $t('storyboard.shotDurationWarning', { max: durationCapability.max, duration: shot?.duration }) }}
+    </p>
+    <p v-if="type === 'shotVideo' && ltxProfile && ltxShotSpeechTooFast(shot, shotDurationValue)" class="shot-duration-warning">
+      {{ $t('ltx.speechTooFast', { seconds: shotDurationValue }) }}
     </p>
     <transition name="float-down">
       <div v-if="selected && panelOpen && showPrompt && !cropOn && !trimOn" class="prompt nodrag nowheel" @pointerdown.stop @mousedown.stop @click.stop>

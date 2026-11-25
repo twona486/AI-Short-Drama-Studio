@@ -10,7 +10,7 @@ import { inspectCanvasNode } from '@/services/canvas/canvasBridge'
 import NodeBusyOverlay from '@/components/canvas/NodeBusyOverlay.vue'
 import NodeLinkPlus from '@/components/canvas/NodeLinkPlus.vue'
 import TtsModelSelect from '@/components/settings/TtsModelSelect.vue'
-import { effectiveShotAudioMode, needsExternalTts } from '@/utils/shot'
+import { isVideoVoiceMode, effectiveShotAudioMode, needsExternalTts } from '@/utils/shot'
 import type { ShotAudioMode } from '@/types'
 
 const props = defineProps<{
@@ -46,6 +46,7 @@ const nodeMeta = computed(() => project.current?.canvas?.nodes.find((n) => n.id 
 const status = computed(() => nodeMeta.value?.status ?? 'idle')
 const generating = computed(() => isNodeRunning(props.id))
 const mode = computed(() => (shot.value ? effectiveShotAudioMode(shot.value) : 'none'))
+const supportsVideoVoice = computed(() => !shot.value || project.shotSupportsVideoVoice(shot.value))
 const canTts = computed(() => Boolean(shot.value && needsExternalTts(shot.value, project.current)))
 const gateBlocked = computed(() => needsPlayReview(project.current))
 const title = computed(() =>
@@ -174,11 +175,13 @@ function openDetail() {
             :key="m.id"
             type="button"
             :class="{ on: mode === m.id }"
+            :disabled="!supportsVideoVoice && isVideoVoiceMode(m.id)"
             @click="setMode(m.id)"
           >
             {{ m.label }}
           </button>
         </div>
+        <p v-if="!supportsVideoVoice" class="hint">{{ $t('common.videoVoiceUnsupported') }}</p>
         <textarea
           rows="4"
           :value="shot?.voiceover || ''"

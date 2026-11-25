@@ -473,12 +473,13 @@ function next() {
                   :value="line.shot ? effectiveShotAudioMode(line.shot) : 'none'"
                   @change="line.shot && changeAudioMode(line.shot, ($event.target as HTMLSelectElement).value as ShotAudioMode)"
                 >
-                  <option value="h3-dialogue">{{ $t('common.h3Dialogue') }}</option>
-                  <option value="h3-voiceover">{{ $t('caption.h3Offscreen') }}</option>
+                  <option value="h3-dialogue" :disabled="line.shot && !project.shotSupportsVideoVoice(line.shot)">{{ $t('common.h3Dialogue') }}</option>
+                  <option value="h3-voiceover" :disabled="line.shot && !project.shotSupportsVideoVoice(line.shot)">{{ $t('caption.h3Offscreen') }}</option>
                   <option value="tts">{{ $t('common.postTts') }}</option>
                   <option value="none">{{ $t('common.noNarration') }}</option>
                 </select>
               </label>
+              <p v-if="line.shot && !project.shotSupportsVideoVoice(line.shot)">{{ $t('common.videoVoiceUnsupported') }}</p>
               <audio v-if="audioUrls[line.shotId]" class="vo-player" :src="audioUrls[line.shotId]" controls />
               <div class="line-actions">
                 <GradientButton

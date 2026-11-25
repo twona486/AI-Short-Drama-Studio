@@ -34,6 +34,14 @@ export function effectiveShotAudioMode(shot: Shot): ShotAudioMode {
   return shot.audioMode ?? (shot.audioAssetId ? 'tts' : 'h3-dialogue')
 }
 
+export function isVideoVoiceMode(mode: ShotAudioMode): boolean {
+  return mode === 'h3-dialogue' || mode === 'h3-voiceover'
+}
+
+export function compatibleShotAudioMode(mode: ShotAudioMode, supportsVoice: boolean): ShotAudioMode {
+  return !supportsVoice && isVideoVoiceMode(mode) ? 'tts' : mode
+}
+
 export function h3VoiceMode(shot: Shot): 'dialogue' | 'voiceover' | 'none' {
   const mode = effectiveShotAudioMode(shot)
   if (mode === 'h3-dialogue') return 'dialogue'
