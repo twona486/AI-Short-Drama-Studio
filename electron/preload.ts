@@ -1,4 +1,4 @@
-import type { DrawThingsRequest, DrawThingsReply, DrawThingsProgress } from '../src/services/ai/drawThingsOptions'
+import type { DrawThingsDesktopRequest, DrawThingsReply, DrawThingsProgress } from '../src/services/ai/drawThingsOptions'
 import type { LtxDesktopRequest, LtxDesktopReply } from '../src/services/ai/ltxDesktopOptions'
 import type { LtxRequest, LtxReply } from '../src/services/ai/ltxOptions'
 import { contextBridge, ipcRenderer } from 'electron'
@@ -35,7 +35,8 @@ export type DesktopAPI = {
   pickDirectory: () => Promise<string | null>
   openPath: (filePath: string) => Promise<string>
   ltxDesktopRequest: (request: LtxDesktopRequest) => Promise<LtxDesktopReply>
-  drawThingsRequest: (request: DrawThingsRequest) => Promise<DrawThingsReply>
+  drawThingsRequest: (request: DrawThingsDesktopRequest) => Promise<DrawThingsReply>
+  protectDrawThingsSecret: (secret: string) => Promise<string | null>
   cancelDrawThings: (id: string) => void
   onDrawThingsProgress: (id: string, callback: (progress: DrawThingsProgress) => void) => () => void
   ltxRequest: (request: LtxRequest) => Promise<LtxReply>
@@ -103,6 +104,7 @@ const api: DesktopAPI = {
   openPath: (filePath) => ipcRenderer.invoke('desktop:openPath', filePath),
   ltxDesktopRequest: (request) => ipcRenderer.invoke('desktop:ltxDesktopRequest', request),
   drawThingsRequest: (request) => ipcRenderer.invoke('desktop:drawThingsRequest', request),
+  protectDrawThingsSecret: (secret) => ipcRenderer.invoke('desktop:protectDrawThingsSecret', secret),
   cancelDrawThings: (id) => ipcRenderer.send('desktop:cancelDrawThings', id),
   onDrawThingsProgress: (id, callback) => {
     const channel = 'desktop:drawThingsProgress'

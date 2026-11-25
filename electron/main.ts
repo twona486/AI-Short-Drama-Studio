@@ -1,5 +1,5 @@
 import { createDrawThingsQueue } from './draw-things'
-import type { DrawThingsRequest } from '../src/services/ai/drawThingsOptions'
+import { DRAW_THINGS_MAX_SECRET_BYTES, isDrawThingsGrpc, type DrawThingsDesktopRequest } from '../src/services/ai/drawThingsOptions'
 import { requestLtxDesktop } from './ltx-desktop'
 import type { LtxDesktopRequest } from '../src/services/ai/ltxDesktopOptions'
 /// <reference types="vite-plugin-electron/electron-env" />
@@ -12,7 +12,8 @@ import {
   protocol,
   Menu,
   net,
-  session
+  session,
+  safeStorage
 } from 'electron'
 import path from 'node:path'
 import os from 'node:os'
@@ -1132,13 +1133,34 @@ app.whenReady().then(async () => {
 
   const drawThings = createDrawThingsQueue()
   const drawThingsSenders = new WeakSet<Electron.WebContents>()
-  ipcMain.handle('desktop:drawThingsRequest', ({ sender }, request: DrawThingsRequest) => {
+  ipcMain.handle('desktop:protectDrawThingsSecret', (_event, secret: unknown) => {
+    if (typeof secret !== 'string' || !secret || Buffer.byteLength(secret) > DRAW_THINGS_MAX_SECRET_BYTES) return null
+    try {
+      if (!safeStorage.isEncryptionAvailable() ||
+        (process.platform === 'linux' && safeStorage.getSelectedStorageBackend() === 'basic_text')) return null
+      return safeStorage.encryptString(secret).toString('base64')
+    } catch {
+      return null
+    }
+  })
+  ipcMain.handle('desktop:drawThingsRequest', ({ sender }, request: DrawThingsDesktopRequest) => {
+    if (!request || typeof request.baseUrl !== 'string') return { kind: 'invalidRequest' }
+    const { encryptedSharedSecret, ...operation } = request
+    let sharedSecret: string | undefined
+    if (isDrawThingsGrpc(request.baseUrl) && encryptedSharedSecret !== undefined) {
+      if (typeof encryptedSharedSecret !== 'string' || encryptedSharedSecret.length > 8192) return { kind: 'grpcSecret' }
+      try {
+        sharedSecret = safeStorage.decryptString(Buffer.from(encryptedSharedSecret, 'base64'))
+      } catch {
+        return { kind: 'grpcSecret' }
+      }
+    }
     const owner = sender.id
     if (!drawThingsSenders.has(sender)) {
       drawThingsSenders.add(sender)
       sender.once('destroyed', () => drawThings.cancel(owner))
     }
-    return drawThings.request(owner, request, (progress) => {
+    return drawThings.request(owner, { ...operation, sharedSecret }, (progress) => {
       if (!sender.isDestroyed() && request.kind === 'generate') sender.send('desktop:drawThingsProgress', request.id, progress)
     })
   })

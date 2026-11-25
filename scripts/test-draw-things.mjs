@@ -31,6 +31,7 @@ const {
 const { applyProviderPreset, IMAGE_PROVIDERS } = await vite.ssrLoadModule('/src/services/ai/providers.ts')
 const { endpointReady, useSettingsStore } = await vite.ssrLoadModule('/src/stores/settings.ts')
 const { generateImage } = await vite.ssrLoadModule('/src/services/ai/image.ts')
+const { checkDrawThings } = await vite.ssrLoadModule('/src/services/ai/drawThings.ts')
 const [qwen, edit, flux] = DRAW_THINGS_MODELS
 const png = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jgSEAAAAASUVORK5CYII=', 'base64')
 const job = (baseUrl, model, id = 'test', prompt = 'A rainy street.') => (
@@ -77,6 +78,35 @@ test('설치 기본값, 로컬 프리셋, 비율과 모델별 참조 제한', ()
   assert.equal(drawThingsInputError(flux, 2), 'drawThings.multipleReferences')
   assert.equal(drawThingsInputError(edit, 4, true), undefined)
   assert.equal(drawThingsInputError(flux, 5, true), 'drawThings.referenceLimit')
+})
+
+test('저장한 암호문은 해당 Draw Things 연결에서만 전달합니다', async (context) => {
+  setActivePinia(createPinia())
+  const settings = useSettingsStore()
+  const baseUrl = 'grpc://100.64.0.1:7859'
+  const profile = settings.addImage({
+    name: 'Draw Things', baseUrl, provider: DRAW_THINGS_PROVIDER, model: qwen, models: [qwen]
+  })
+  const encryptedSharedSecret = 'mock-ciphertext'
+  settings.patchImage({ drawThingsSharedSecret: encryptedSharedSecret })
+  settings.selectImageModel(profile, flux)
+  assert.equal(settings.config.image.drawThingsSharedSecret, encryptedSharedSecret)
+  const calls = []
+  globalThis.window.desktop = {
+    isDesktop: true,
+    async kvSet() {},
+    async drawThingsRequest(request) {
+      calls.push(request)
+      return { kind: 'ready' }
+    }
+  }
+  context.after(() => { delete globalThis.window.desktop })
+  await checkDrawThings(baseUrl, settings.config.image.drawThingsSharedSecret)
+  await checkDrawThings(DRAW_THINGS_URL, settings.config.image.drawThingsSharedSecret)
+  assert.equal(calls[0].encryptedSharedSecret, encryptedSharedSecret)
+  assert.equal(calls[1].encryptedSharedSecret, undefined)
+  settings.patchImage({ baseUrl: 'grpc://192.168.1.2:7859' })
+  assert.equal(settings.config.image.drawThingsSharedSecret, undefined)
 })
 
 test('HTTP 연결, 모델 전환, 한 장 편집 요청과 응답 오류', async (context) => {
@@ -132,7 +162,7 @@ test('HTTP 연결, 모델 전환, 한 장 편집 요청과 응답 오류', async
   assert.ok(progress.some(label => label.includes('순서')))
   assert.ok(progress.some(label => label.includes('Draw Things에서 이미지를 생성')))
   const reference = png.toString('base64')
-  await queue.request(1, { ...job(baseUrl, edit), reference })
+  await queue.request(1, { ...job(baseUrl, edit), reference, sharedSecret: 'mock-secret' })
   const [, t2i, repeat, i2i] = calls
   assert.deepEqual(calls.map((call) => call.path), [
     '/sdapi/v1/options', '/sdapi/v1/txt2img', '/sdapi/v1/txt2img', '/sdapi/v1/img2img'
@@ -153,6 +183,7 @@ test('HTTP 연결, 모델 전환, 한 장 편집 요청과 응답 오류', async
   assert.equal(i2i.body.cfg_scale, 4)
   assert.equal(i2i.body.sampler_name, 'UniPC Trailing')
   assert.deepEqual(i2i.body.init_images, [reference])
+  assert.equal('sharedSecret' in i2i.body, false)
   assert.equal(i2i.body.strength, 1)
   await assert.rejects(generateImage({ ...input, referenceImages: [new Blob(), new Blob()] }), /한 장만/)
   assert.deepEqual(await queue.request(1, job(baseUrl, qwen, 'err', 'missing')), { kind: 'missingModel' })
@@ -216,8 +247,8 @@ function scan(bytes) {
   return values
 }
 
-test('gRPC 로컬 모델 목록, 순서 있는 여러 장 참조, 진행 단계, 이미지 텐서와 취소', { timeout: 12000 }, async (context) => {
-  const server = new Server()
+test('gRPC 인증, 모델 목록, 참조 크기, 진행 단계, 대기열, 제한 시간과 취소', { timeout: 12000 }, async (context) => {
+  const server = new Server({ 'grpc.max_receive_message_length': 32 * 1024 * 1024 })
   context.after(() => server.forceShutdown())
   const protocols = Object.fromEntries(['Echo', 'GenerateImage'].map((method) => [method, {
     path: `/ImageGenerationService/${method}`,
@@ -226,6 +257,7 @@ test('gRPC 로컬 모델 목록, 순서 있는 여러 장 참조, 진행 단계,
   }]))
   const requests = []
   let needKey = false
+  const sharedSecret = 'mock-shared-secret'
   let compressed = false
   let cancelled
   const cancellation = new Promise(resolve => { cancelled = resolve })
@@ -236,7 +268,7 @@ test('gRPC 로컬 모델 목록, 순서 있는 여러 장 참조, 진행 단계,
       const req = scan(call.request)
       assert.equal(req.get(1)[0].toString(), 'Drama Flow Studio')
       const response = Writer.create().uint32(10).string('HELLO Drama Flow Studio')
-      if (needKey) response.uint32(32).bool(true)
+      if (needKey && req.get(2)?.[0].toString() !== sharedSecret) response.uint32(32).bool(true)
       const models = JSON.stringify([{ file: edit }, { file: flux }, { file: qwen }, { file: 'irrelevant.ckpt' }])
       response.uint32(26).fork().uint32(10).bytes(Buffer.from(models)).ldelim()
       reply(null, Buffer.from(response.finish()))
@@ -245,6 +277,10 @@ test('gRPC 로컬 모델 목록, 순서 있는 여러 장 참조, 진행 단계,
       const req = scan(call.request)
       requests.push(req)
       const prompt = req.get(5)[0].toString()
+      if (needKey && req.get(13)?.[0].toString() !== sharedSecret) {
+        call.destroy(new Error('Missing test credential'))
+        return
+      }
       const progress = Writer.create().uint32(18).fork().uint32(26).fork().uint32(8).int32(2).ldelim().ldelim()
       call.write(Buffer.from(progress.finish()))
       if (prompt === 'cancel') {
@@ -252,6 +288,7 @@ test('gRPC 로컬 모델 목록, 순서 있는 여러 장 참조, 진행 단계,
         begin()
         return
       }
+      if (prompt === 'timeout') return
       const alpha = prompt === 'transparent'
       const samples = alpha ? [0x3800, 0x3c00, 0xbc00, 0] : [0x3c00, 0xbc00, 0]
       const tensor = Buffer.alloc(68 + 2 * samples.length)
@@ -272,7 +309,8 @@ test('gRPC 로컬 모델 목록, 순서 있는 여러 장 참조, 진행 단계,
   assert.deepEqual(await queue.request(1, { kind: 'check', baseUrl }), { kind: 'ready', models: [edit, flux, qwen] })
   needKey = true
   assert.deepEqual(await queue.request(1, { kind: 'check', baseUrl }), { kind: 'grpcSecret' })
-  needKey = false
+  assert.deepEqual(await queue.request(1, { kind: 'check', baseUrl, sharedSecret: 'mock-wrong' }), { kind: 'grpcSecret' })
+  assert.equal((await queue.request(1, { kind: 'check', baseUrl, sharedSecret })).kind, 'ready')
 
   const pixels = (colour) => {
     const rgba = new Uint8Array(128 * 128 * 4)
@@ -280,7 +318,7 @@ test('gRPC 로컬 모델 목록, 순서 있는 여러 장 참조, 진행 단계,
     return rgba.buffer
   }
   const request = {
-    ...job(baseUrl, edit), width: 128, height: 128,
+    ...job(baseUrl, edit), width: 128, height: 128, sharedSecret,
     referencePixels: [pixels([255, 0, 0, 255]), pixels([0, 255, 0, 255]), pixels([0, 0, 255, 255])]
   }
   const progress = []
@@ -289,6 +327,7 @@ test('gRPC 로컬 모델 목록, 순서 있는 여러 장 참조, 진행 단계,
   assert.deepEqual([...new Uint8Array(result.data)], [255, 0, 128, 255])
   assert.deepEqual(progress, [undefined, { step: 3, total: 30 }])
   const sent = requests[0]
+  assert.equal(sent.get(13)[0].toString() === sharedSecret, true)
   const primary = sent.get(1)[0]
   assert.equal(primary.readUInt32LE(24), 128)
   assert.equal(primary.readUInt32LE(28), 128)
@@ -322,8 +361,24 @@ test('gRPC 로컬 모델 목록, 순서 있는 여러 장 참조, 진행 단계,
   compressed = false
   const active = queue.request(1, { ...request, prompt: 'cancel' })
   await streaming
+  const held = queue.request(1, { ...request, id: 'held' })
+  await setImmediate()
+  assert.equal(requests.at(-1).get(5)[0].toString(), 'cancel')
+  queue.cancel(1, 'held')
+  assert.deepEqual(await held, { kind: 'cancelled' })
   queue.cancel(1, request.id)
   assert.deepEqual(await active, { kind: 'cancelled' })
   await cancellation
   assert.equal((await queue.request(1, request)).kind, 'pixels')
+
+  const shortDeadline = createDrawThingsQueue({ probeMs: 1000, generationMs: 150 })
+  assert.deepEqual(await shortDeadline.request(1, { ...request, prompt: 'timeout' }), { kind: 'timeout' })
+  assert.equal((await shortDeadline.request(1, request)).kind, 'pixels')
+  assert.deepEqual(await queue.request(1, {
+    ...request, width: 2048, height: 2048, referencePixels: Array(4).fill(new ArrayBuffer(0))
+  }), { kind: 'referenceTooLarge' })
+  const large = new ArrayBuffer(1344 * 768 * 4)
+  assert.equal((await queue.request(1, {
+    ...request, width: 1344, height: 768, referencePixels: Array(4).fill(large)
+  })).kind, 'pixels')
 })

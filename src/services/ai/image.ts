@@ -580,7 +580,7 @@ export async function generateImage(
   if (getAIMode() === 'real') {
     const cfg = imageConfig(input.model)
     if (cfg.provider === DRAW_THINGS_PROVIDER) {
-      return await generateDrawThings(cfg.baseUrl, model, input, onProgress)
+      return await generateDrawThings(cfg, input, onProgress)
     }
     const adapterType = resolveImageAdapter(cfg)
     if (adapterType === 'openai-images' && isOfficialOpenAi(cfg.baseUrl) && isOpenAiImageModel(model)) {

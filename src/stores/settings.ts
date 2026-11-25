@@ -37,6 +37,8 @@ export type SetupKind = 'llm' | 'vision' | 'image' | 'tts' | 'video' | 'music'
 export interface ServiceEndpoint {
   baseUrl: string
   apiKey: string
+  /** Electron safeStorage로 암호화한 Draw Things 공유 키. */
+  drawThingsSharedSecret?: string
   model: string
   /** 연결을 구성하면 모델 목록에서 선택할 수 있다. */
   models: string[]
@@ -217,6 +219,8 @@ function asEndpoint(ep: ServiceEndpoint): ServiceEndpoint {
   return {
     baseUrl: ep.baseUrl,
     apiKey: ep.apiKey,
+    ...(ep.provider === DRAW_THINGS_PROVIDER && ep.drawThingsSharedSecret
+      ? { drawThingsSharedSecret: ep.drawThingsSharedSecret } : {}),
     model: ep.model,
     models: uniq(ep.models ?? []),
     provider: ep.provider,
@@ -300,6 +304,7 @@ function hydrateNamed(
           {
             ...fallback,
             ...p,
+            drawThingsSharedSecret: p.drawThingsSharedSecret,
             models: uniq([...(p.models ?? []), ...(p.model ? [p.model] : [])])
           },
           p.name,
@@ -1023,7 +1028,11 @@ export const useSettingsStore = defineStore('settings', () => {
     const cur =
       config.value.images.find((p) => p.id === id) ||
       profileFromEndpoint(config.value.image, t('settings.defaults.image'), id)
-    syncImage({ ...cur, ...patch, models: uniq(patch.models ?? cur.models) })
+    const next = { ...cur, ...patch, models: uniq(patch.models ?? cur.models) }
+    if (next.provider !== DRAW_THINGS_PROVIDER || (next.baseUrl !== cur.baseUrl && patch.drawThingsSharedSecret === undefined)) {
+      delete next.drawThingsSharedSecret
+    }
+    syncImage(next)
   }
 
   function addImage(seed: {

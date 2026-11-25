@@ -2,9 +2,9 @@ import http from 'node:http'
 import https from 'node:https'
 import { isIPv4 } from 'node:net'
 import { lanOrigin, pinAddress } from './lan-origin'
-import { requestDrawThingsGrpc } from './draw-things-grpc'
+import { drawThingsGrpcTimeouts, grpcReferencesFit, requestDrawThingsGrpc } from './draw-things-grpc'
 import {
-  DRAW_THINGS_GRPC_PORT, DRAW_THINGS_PORT, drawThingsInputError, drawThingsPreset, isDrawThingsGrpc,
+  DRAW_THINGS_GRPC_PORT, DRAW_THINGS_MAX_SECRET_BYTES, DRAW_THINGS_PORT, drawThingsInputError, drawThingsPreset, isDrawThingsGrpc,
   type DrawThingsRequest, type DrawThingsReply, type DrawThingsProgress
 } from '../src/services/ai/drawThingsOptions'
 
@@ -55,10 +55,15 @@ async function requestJson(origin: URL, address: string, path: string, signal: A
 async function send(
   request: DrawThingsRequest,
   cancel: AbortSignal,
-  progress: (progress: DrawThingsProgress) => void
+  progress: (progress: DrawThingsProgress) => void,
+  grpcTimeouts: typeof drawThingsGrpcTimeouts
 ): Promise<DrawThingsReply> {
   if (typeof request.baseUrl !== 'string') return { kind: 'unsafeAddress' }
   const grpc = isDrawThingsGrpc(request.baseUrl)
+  if (grpc && request.sharedSecret !== undefined &&
+    (typeof request.sharedSecret !== 'string' || Buffer.byteLength(request.sharedSecret) > DRAW_THINGS_MAX_SECRET_BYTES)) {
+    return { kind: 'invalidRequest' }
+  }
   let origin: URL
   let address: string
   try {
@@ -72,7 +77,7 @@ async function send(
   const signal = AbortSignal.timeout(request.kind === 'check' ? 8000 : 20 * 60_000)
   try {
     if (request.kind === 'check') {
-      if (grpc) return await requestDrawThingsGrpc(address, origin.port || '80', request, cancel, progress)
+      if (grpc) return await requestDrawThingsGrpc(address, origin.port || '80', request, cancel, progress, grpcTimeouts)
       const settings = await requestJson(origin, address, '/sdapi/v1/options', signal) as Record<string, unknown> | null
       return settings && typeof settings.width === 'number' && typeof settings.height === 'number'
         ? { kind: 'ready' } : { kind: 'invalidResponse' }
@@ -82,16 +87,17 @@ async function send(
     if (grpc && (!Array.isArray(referencePixels) || reference !== undefined)) return { kind: 'invalidRequest' }
     if (!grpc && referencePixels !== undefined) return { kind: 'invalidRequest' }
     const count = referencePixels?.length ?? (reference === undefined ? 0 : 1)
-    if (!preset || drawThingsInputError(model, count, grpc) ||
+    if (!preset || model.length > 256 || drawThingsInputError(model, count, grpc) ||
       typeof prompt !== 'string' || !prompt.trim() || prompt.length > 40_000 ||
       ![width, height].every((dimension) => Number.isInteger(dimension) && dimension >= 128 && dimension <= 2048 && dimension % 64 === 0) ||
       (reference !== undefined && (typeof reference !== 'string' || !reference || reference.length > MAX_REFERENCE ||
         !/^[a-z\d+/]+={0,2}$/i.test(reference) || reference.length % 4 !== 0))) return { kind: 'invalidRequest' }
     if (grpc) {
+      if (!grpcReferencesFit(width, height, count)) return { kind: 'referenceTooLarge' }
       if (!referencePixels?.every((pixels) => pixels instanceof ArrayBuffer && pixels.byteLength === width * height * 4)) {
         return { kind: 'invalidRequest' }
       }
-      return await requestDrawThingsGrpc(address, origin.port || '80', request, cancel, progress)
+      return await requestDrawThingsGrpc(address, origin.port || '80', request, cancel, progress, grpcTimeouts)
     }
 
     const { steps, cfg_scale, sampler_name, shift, resolution_dependent_shift } = preset
@@ -132,7 +138,7 @@ type Job = {
   controller: AbortController
 }
 
-export function createDrawThingsQueue() {
+export function createDrawThingsQueue(grpcTimeouts = drawThingsGrpcTimeouts) {
   const pending: Job[] = []
   let active: Job | undefined
 
@@ -142,7 +148,7 @@ export function createDrawThingsQueue() {
       while ((active = pending.shift())) {
         const job = active
         job.onProgress(undefined)
-        job.resolve(await send(job.request, job.controller.signal, job.onProgress))
+        job.resolve(await send(job.request, job.controller.signal, job.onProgress, grpcTimeouts))
       }
     } finally {
       active = undefined
@@ -152,7 +158,7 @@ export function createDrawThingsQueue() {
   return {
     request(owner: number, request: DrawThingsRequest, onProgress: (progress: DrawThingsProgress) => void = () => {}): Promise<DrawThingsReply> {
       const controller = new AbortController()
-      if (request?.kind === 'check') return send(request, controller.signal, onProgress)
+      if (request?.kind === 'check') return send(request, controller.signal, onProgress, grpcTimeouts)
       if (request?.kind !== 'generate' || !validId(request.id)) return Promise.resolve({ kind: 'invalidRequest' })
       return new Promise((resolve) => {
         pending.push({ owner, request, onProgress, resolve, controller })

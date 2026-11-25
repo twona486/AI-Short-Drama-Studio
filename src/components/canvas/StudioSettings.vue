@@ -8,7 +8,7 @@ import { useRouter } from 'vue-router'
 import { useProjectStore, useSettingsStore, uniqueProfileName } from '@/stores'
 import { desktop, isDesktop } from '@/services/desktop'
 import { isLtxDesktop, LTX_DESKTOP_DEFAULT_URL, LTX_DESKTOP_MODELS, ltxDesktopError } from '@/services/ai/ltxDesktopOptions'
-import { DRAW_THINGS_PROVIDER, drawThingsModelLabel } from '@/services/ai/drawThingsOptions'
+import { DRAW_THINGS_PROVIDER, drawThingsModelLabel, isDrawThingsGrpc } from '@/services/ai/drawThingsOptions'
 import { checkDrawThings } from '@/services/ai/drawThings'
 import { LTX_MODELS, isLtxProfile } from '@/services/ai/ltxOptions'
 import { TTS_VOICES } from '@/services/ai/tts'
@@ -203,18 +203,53 @@ function imageProfile(p: (typeof settings.config.images)[number]) {
 const drawThings = computed(() => settings.config.image.provider === DRAW_THINGS_PROVIDER)
 const drawThingsBusy = ref(false)
 const drawThingsStatus = ref('')
-const drawThingsConnection = computed(() => JSON.stringify([
+const savedDrawThingsSecret = computed(() => settings.config.image.drawThingsSharedSecret)
+const drawThingsSecretDraft = ref('')
+const drawThingsSecretBusy = ref(false)
+const drawThingsConnection = computed(() => [
   settings.config.activeImageId, settings.config.image.provider, settings.config.image.baseUrl
-]))
-watch(drawThingsConnection, () => { drawThingsStatus.value = '' })
+].join('|'))
+watch(drawThingsConnection, () => {
+  drawThingsStatus.value = ''
+  drawThingsSecretDraft.value = ''
+})
+
+async function saveDrawThingsSecret() {
+  const connection = drawThingsConnection.value
+  const value = drawThingsSecretDraft.value
+  if (!value || drawThingsSecretBusy.value || drawThingsBusy.value) return
+  drawThingsSecretBusy.value = true
+  try {
+    const encrypted = isDesktop() ? await desktop().protectDrawThingsSecret(value) : null
+    if (drawThingsConnection.value !== connection || drawThingsSecretDraft.value !== value) return
+    if (!encrypted) {
+      drawThingsStatus.value = t('drawThings.secretSaveFailed')
+      return
+    }
+    settings.patchImage({ drawThingsSharedSecret: encrypted })
+    drawThingsSecretDraft.value = ''
+    drawThingsStatus.value = ''
+  } catch {
+    if (drawThingsConnection.value === connection) drawThingsStatus.value = t('drawThings.secretSaveFailed')
+  } finally {
+    drawThingsSecretBusy.value = false
+  }
+}
+
+function removeDrawThingsSecret() {
+  settings.patchImage({ drawThingsSharedSecret: undefined })
+  drawThingsSecretDraft.value = ''
+  drawThingsStatus.value = ''
+}
 
 async function probeDrawThings() {
   const connection = drawThingsConnection.value
+  const secret = savedDrawThingsSecret.value
   drawThingsBusy.value = true
   drawThingsStatus.value = ''
   try {
-    const result = await checkDrawThings(settings.config.image.baseUrl)
-    if (drawThingsConnection.value !== connection) return
+    const result = await checkDrawThings(settings.config.image.baseUrl, secret)
+    if (drawThingsConnection.value !== connection || savedDrawThingsSecret.value !== secret) return
     drawThingsStatus.value = result.detail
     if (result.models?.length) {
       const current = settings.config.image.model
@@ -440,8 +475,21 @@ function patchAdapter(
         >
           <template v-if="drawThings">
             <p class="hint">{{ $t('drawThings.grpcSetup') }}</p>
+            <template v-if="isDrawThingsGrpc(settings.config.image.baseUrl)">
+              <label for="draw-things-secret">{{ $t('drawThings.sharedSecret') }}</label>
+              <input
+                id="draw-things-secret" v-model="drawThingsSecretDraft" type="password" autocomplete="off"
+                :placeholder="savedDrawThingsSecret ? $t('drawThings.secretSaved') : undefined"
+                :disabled="drawThingsSecretBusy || drawThingsBusy"
+                @keydown.enter.stop.prevent="saveDrawThingsSecret"
+              />
+              <div>
+                <button type="button" :disabled="!drawThingsSecretDraft || drawThingsSecretBusy || drawThingsBusy" @click="saveDrawThingsSecret">{{ $t('common.save') }}</button>
+                <button v-if="savedDrawThingsSecret" type="button" :disabled="drawThingsSecretBusy || drawThingsBusy" @click="removeDrawThingsSecret">{{ $t('drawThings.removeSecret') }}</button>
+              </div>
+            </template>
             <p class="hint">{{ $t('drawThings.memory') }}</p>
-            <button type="button" :disabled="drawThingsBusy" @click="probeDrawThings">{{ $t('drawThings.check') }}</button>
+            <button type="button" :disabled="drawThingsBusy || drawThingsSecretBusy || !!drawThingsSecretDraft" @click="probeDrawThings">{{ $t('drawThings.check') }}</button>
             <p v-if="drawThingsBusy || drawThingsStatus" class="hint" role="status">
               {{ drawThingsBusy ? $t('drawThings.checking') : drawThingsStatus }}
             </p>

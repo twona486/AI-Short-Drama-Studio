@@ -72,6 +72,7 @@ export interface AdapterConfig {
 }
 
 export type EndpointLike = {
+  drawThingsSharedSecret?: string
   baseUrl?: string
   ltxHostOverride?: string
   apiKey?: string
@@ -1108,7 +1109,7 @@ export async function testEndpointConnection(
   kind: 'llm' | 'vision' | 'image' | 'tts' | 'video' | 'music',
   ep: EndpointLike
 ): Promise<ConnectionTestResult> {
-  if (kind === 'image' && ep.provider === DRAW_THINGS_PROVIDER) return checkDrawThings(ep.baseUrl || '')
+  if (kind === 'image' && ep.provider === DRAW_THINGS_PROVIDER) return checkDrawThings(ep.baseUrl || '', ep.drawThingsSharedSecret)
   const base = trimSlash(ep.baseUrl || '')
   if (!base) return { ok: false, detail: 'API 주소가 없습니다.' }
 

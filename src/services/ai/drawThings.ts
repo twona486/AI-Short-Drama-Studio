@@ -13,15 +13,18 @@ function replyMessage(reply: DrawThingsReply) {
   return t(`drawThings.${reply.kind}`, reply.kind === 'http' ? { status: reply.status } : {})
 }
 
-export async function checkDrawThings(baseUrl: string) {
+export async function checkDrawThings(baseUrl: string, encryptedSharedSecret?: string) {
   try {
-    const reply = await drawThingsApi().drawThingsRequest({ kind: 'check', baseUrl })
+    const reply = await drawThingsApi().drawThingsRequest({
+      kind: 'check', baseUrl, encryptedSharedSecret: isDrawThingsGrpc(baseUrl) ? encryptedSharedSecret : undefined
+    })
     return {
       ok: reply.kind === 'ready', detail: replyMessage(reply),
       models: reply.kind === 'ready' ? reply.models : undefined
     }
   } catch (error) {
-    return { ok: false, detail: error instanceof Error ? error.message : t('drawThings.offline') }
+    const unavailable = !isDesktop() || !desktop().drawThingsRequest
+    return { ok: false, detail: t(unavailable ? 'drawThings.desktopOnly' : 'drawThings.offline') }
   }
 }
 
@@ -69,8 +72,10 @@ async function pixelsToPng(reply: Extract<DrawThingsReply, { kind: 'pixels' }>) 
 }
 
 export async function generateDrawThings(
-  baseUrl: string, model: string, input: ImageGenInput, onProgress?: (message: string) => void
+  config: { baseUrl: string; model: string; drawThingsSharedSecret?: string },
+  input: ImageGenInput, onProgress?: (message: string) => void
 ): Promise<ImageGenOutput> {
+  const { baseUrl, model, drawThingsSharedSecret } = config
   const { signal } = input
   throwIfAborted(signal)
   const grpc = isDrawThingsGrpc(baseUrl)
@@ -101,8 +106,9 @@ export async function generateDrawThings(
     onProgress?.(t('drawThings.queued'))
     throwIfAborted(signal)
     const pending = api.drawThingsRequest({
-      baseUrl, kind: 'generate', id, model, prompt: input.prompt, width, height, reference, referencePixels
-    })
+      baseUrl, kind: 'generate', id, model, prompt: input.prompt, width, height, reference, referencePixels,
+      encryptedSharedSecret: grpc ? drawThingsSharedSecret : undefined
+    }).catch(() => { throw new Error(t('drawThings.offline')) })
     const cancelled = new Promise<DrawThingsReply>((resolve) => {
       cancel = () => {
         api.cancelDrawThings(id)

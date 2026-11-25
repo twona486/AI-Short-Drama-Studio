@@ -9,7 +9,7 @@ import {
 // Fields used from draw-things-community's Libraries/GRPC/Models/Sources/imageService/imageService.proto.
 const protocol = protobuf.parse(`
   syntax = "proto3";
-  message EchoRequest { string name = 1; }
+  message EchoRequest { string name = 1; optional string sharedSecret = 2; }
   message EchoReply { string message = 1; Metadata override = 3; bool sharedSecretMissing = 4; }
   message Metadata { bytes models = 1; }
   message GenerateRequest {
@@ -21,6 +21,7 @@ const protocol = protobuf.parse(`
     bytes configuration = 7;
     string user = 10;
     int32 device = 11;
+    optional string sharedSecret = 13;
     bool chunked = 14;
   }
   message Hint { string hintType = 1; repeated WeightedTensor tensors = 2; }
@@ -36,6 +37,14 @@ const generateRequest = protocol.lookupType('GenerateRequest')
 const generateResponse = protocol.lookupType('GenerateResponse')
 const service = '/ImageGenerationService'
 const maxTensorBytes = 32 * 1024 * 1024
+const maxRequestTensorBytes = maxTensorBytes - 256 * 1024
+const headerSize = 68
+
+export function grpcReferencesFit(width: number, height: number, count: number) {
+  return count * (headerSize + width * height * 6) <= maxRequestTensorBytes
+}
+
+export const drawThingsGrpcTimeouts = { probeMs: 8_000, generationMs: 20 * 60_000 }
 
 type GenerateRequest = Extract<DrawThingsRequest, { kind: 'generate' }>
 type Preset = NonNullable<ReturnType<typeof drawThingsPreset>>
@@ -65,7 +74,6 @@ function configuration(request: GenerateRequest, preset: Preset) {
 }
 
 // NNC tensors use a 68-byte header and little-endian NHWC samples.
-const headerSize = 68
 const float16 = 0x20000
 const float32 = 0x4000
 const nhwc = 2
@@ -140,11 +148,11 @@ function grpcError(error: ServiceError): DrawThingsReply {
 
 type EchoReply = { message?: string; sharedSecretMissing?: boolean; override?: { models?: Uint8Array } }
 
-async function probe(client: Client, signal: AbortSignal): Promise<DrawThingsReply> {
+async function probe(client: Client, signal: AbortSignal, timeoutMs: number, sharedSecret?: string): Promise<DrawThingsReply> {
   return new Promise((resolve) => {
     const call = client.makeUnaryRequest(
       `${service}/Echo`, serialize(echoRequest), (bytes) => echoReply.decode(bytes) as EchoReply,
-      { name: 'Drama Flow Studio' }, { deadline: Date.now() + 8000 },
+      { name: 'Drama Flow Studio', sharedSecret }, { deadline: Date.now() + timeoutMs },
       (error, reply) => {
         signal.removeEventListener('abort', cancel)
         if (error) return resolve(grpcError(error))
@@ -176,7 +184,7 @@ type GenerateResponse = {
 
 async function generate(
   client: Client, request: GenerateRequest, preset: Preset,
-  signal: AbortSignal, progress: (progress: DrawThingsProgress) => void
+  signal: AbortSignal, progress: (progress: DrawThingsProgress) => void, timeoutMs: number
 ): Promise<DrawThingsReply> {
   const { width, height } = request
   const [image, ...refs] = (request.referencePixels || []).map((pixels) => imageTensor(pixels, width, height))
@@ -187,9 +195,10 @@ async function generate(
       image, scaleFactor: 1,
       hints: refs.length ? [{ hintType: 'shuffle', tensors: refs.map(tensor => ({ tensor, weight: 1 })) }] : [],
       prompt: request.prompt, negativePrompt: preset.mode === 'edit' ? ' ' : '',
-      configuration: configuration(request, preset), user: 'Drama Flow Studio', device: 2, chunked: true
+      configuration: configuration(request, preset), user: 'Drama Flow Studio', device: 2, chunked: true,
+      sharedSecret: request.sharedSecret || undefined
     },
-    { deadline: Date.now() + 20 * 60_000 }
+    { deadline: Date.now() + timeoutMs }
   )
   const cancel = () => call.cancel()
   try {
@@ -226,7 +235,7 @@ async function generate(
 
 export async function requestDrawThingsGrpc(
   address: string, port: string, request: DrawThingsRequest, signal: AbortSignal,
-  progress: (progress: DrawThingsProgress) => void
+  progress: (progress: DrawThingsProgress) => void, timeouts: typeof drawThingsGrpcTimeouts
 ): Promise<DrawThingsReply> {
   if (signal.aborted) return { kind: 'cancelled' }
   const client = new Client(`${address}:${port}`, credentials.createInsecure(), {
@@ -236,13 +245,13 @@ export async function requestDrawThingsGrpc(
     'grpc.max_receive_message_length': maxTensorBytes
   })
   try {
-    const ready = await probe(client, signal)
+    const ready = await probe(client, signal, timeouts.probeMs, request.sharedSecret || undefined)
     if (request.kind === 'check' || ready.kind !== 'ready') return ready
     if (ready.models && !ready.models.includes(request.model)) return { kind: 'missingModel' }
     const preset = drawThingsPreset(request.model)
     if (!preset) return { kind: 'invalidRequest' }
     if (signal.aborted) return { kind: 'cancelled' }
-    return await generate(client, request, preset, signal, progress)
+    return await generate(client, request, preset, signal, progress, timeouts.generationMs)
   } finally {
     client.close()
   }

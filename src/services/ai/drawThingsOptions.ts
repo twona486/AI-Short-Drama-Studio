@@ -5,6 +5,7 @@ export const DRAW_THINGS_PORT = '7860'
 export const DRAW_THINGS_URL = `http://127.0.0.1:${DRAW_THINGS_PORT}`
 export const DRAW_THINGS_GRPC_PORT = '7859'
 export const DRAW_THINGS_MAX_REFERENCES = 4
+export const DRAW_THINGS_MAX_SECRET_BYTES = 4096
 export const isDrawThingsGrpc = (url: string) => /^grpc:\/\//i.test(url.trim())
 
 // Draw Things의 configs.json에 있는 권장 설정과 기본 체크포인트.
@@ -63,19 +64,24 @@ export function drawThingsSize(aspectRatio: AspectRatio | undefined, width: numb
   ))
 }
 
-export type DrawThingsRequest =
-  | { baseUrl: string; kind: 'check' }
+export type DrawThingsRequest = { baseUrl: string; sharedSecret?: string } & (
+  | { kind: 'check' }
   | {
-      baseUrl: string; kind: 'generate'; id: string
+      kind: 'generate'; id: string
       model: string; prompt: string; width: number; height: number
       reference?: string; referencePixels?: ArrayBuffer[]
-    }
+    })
 
 export type DrawThingsReply =
   | { kind: 'ready'; models?: string[] }
   | { kind: 'image'; data: ArrayBuffer; mimeType: 'image/png' | 'image/jpeg' }
   | { kind: 'pixels'; data: ArrayBuffer; width: number; height: number }
   | { kind: 'http'; status: number }
-  | { kind: 'unsafeAddress' | 'offline' | 'timeout' | 'invalidResponse' | 'missingModel' | 'invalidRequest' | 'cancelled' | 'grpcSecret' | 'grpcCompression' }
+  | { kind: 'unsafeAddress' | 'offline' | 'timeout' | 'invalidResponse' | 'missingModel' | 'invalidRequest' | 'cancelled' | 'grpcSecret' | 'grpcCompression' | 'referenceTooLarge' }
+
+export type DrawThingsDesktopRequest = { encryptedSharedSecret?: string } & (
+  | Omit<Extract<DrawThingsRequest, { kind: 'check' }>, 'sharedSecret'>
+  | Omit<Extract<DrawThingsRequest, { kind: 'generate' }>, 'sharedSecret'>
+)
 
 export type DrawThingsProgress = { step: number; total: number } | undefined
