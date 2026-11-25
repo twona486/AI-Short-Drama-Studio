@@ -11,6 +11,8 @@ import { toRaw } from 'vue'
 import type { ScriptDoc } from '@/types'
 import { desktop, isDesktop } from '@/services/desktop'
 import * as idb from './idb'
+import { localizeScript } from './defaultNames'
+import { withFileQueue } from './fileQueue'
 
 const SCRIPTS_FOLDER = '_scripts'
 const INDEX_FILE = 'index.json'
@@ -35,27 +37,58 @@ async function ensureDir(dir: string) {
 export async function listScriptDocs(): Promise<ScriptDoc[]> {
   if (!isDesktop()) return idb.listScripts()
   const dir = await scriptsDir()
+  const list = await withFileQueue(dir, () => migrateScriptIndex(dir))
+  return list.sort((a, b) => (b.updatedAt ?? 0) - (a.updatedAt ?? 0))
+}
+
+async function readIndex(dir: string): Promise<ScriptDoc[]> {
   const p = await indexPath(dir)
   if (!(await desktop().exists(p))) return []
   try {
     const parsed = JSON.parse(await desktop().readText(p))
-    const list = Array.isArray(parsed) ? (parsed as ScriptDoc[]) : []
-    return list.sort((a, b) => (b.updatedAt ?? 0) - (a.updatedAt ?? 0))
+    return Array.isArray(parsed) ? parsed : []
   } catch {
     return []
   }
+}
+
+async function writeIndex(dir: string, list: ScriptDoc[]) {
+  await desktop().writeText(await indexPath(dir), JSON.stringify(toPlain(list), null, 2), true)
+}
+
+async function migrateScriptIndex(dir: string): Promise<ScriptDoc[]> {
+  const list = await readIndex(dir)
+  let changed = false
+  for (const [index, doc] of list.entries()) {
+    if (!doc || typeof doc.title !== 'string' || typeof doc.id !== 'string' || doc.defaultNamesLocalized) continue
+    const path = await desktop().join(dir, `${doc.id}.md`)
+    const raw = doc.source !== 'imported' && /^[a-zA-Z0-9_-]+$/.test(doc.id) && await desktop().exists(path)
+      ? await desktop().readText(path)
+      : ''
+    const { meta, markdown } = localizeScript(doc, raw)
+    if (markdown !== raw) await desktop().writeText(path, markdown, true)
+    list[index] = meta
+    changed = true
+  }
+  // 본문을 먼저 저장한다. 중단 후 재시도해도 이미 바꾼 제목은 그대로 둔다.
+  if (changed) await writeIndex(dir, list)
+  return list
 }
 
 /** 데스크톱의 메타데이터 목록을 쓴다. */
 export async function saveScriptMeta(doc: ScriptDoc): Promise<void> {
   if (!isDesktop()) return
   const dir = await scriptsDir()
-  await ensureDir(dir)
-  const list = await listScriptDocs()
+  await withFileQueue(dir, () => writeScriptMeta(dir, doc))
+}
+
+async function writeScriptMeta(dir: string, doc: ScriptDoc) {
+  const list = await readIndex(dir)
+  const stored: ScriptDoc = { ...doc, defaultNamesLocalized: true }
   const idx = list.findIndex((item) => item.id === doc.id)
-  if (idx >= 0) list[idx] = doc
-  else list.unshift(doc)
-  await desktop().writeText(await indexPath(dir), JSON.stringify(toPlain(list), null, 2))
+  if (idx >= 0) list[idx] = stored
+  else list.unshift(stored)
+  await writeIndex(dir, list)
 }
 
 /** Markdown 본문을 쓰고 _scripts 기준 상대 경로를 반환한다. */
@@ -68,10 +101,14 @@ export async function saveScriptMarkdown(
     return undefined
   }
   const dir = await scriptsDir()
+  return withFileQueue(dir, () => writeScriptMarkdown(dir, id, markdown))
+}
+
+async function writeScriptMarkdown(dir: string, id: string, markdown: string): Promise<string> {
   await ensureDir(dir)
   const rel = `${id}.md`
   const abs = await desktop().join(dir, rel)
-  await desktop().writeText(abs, markdown)
+  await desktop().writeText(abs, markdown, true)
   return rel
 }
 
@@ -81,18 +118,23 @@ export async function saveScript(doc: ScriptDoc, markdown: string): Promise<Scri
     await idb.putScriptRecord(doc, markdown)
     return { ...doc }
   }
-  const rel = await saveScriptMarkdown(doc.id, markdown)
-  const stored: ScriptDoc = { ...doc, fileRelPath: rel }
-  await saveScriptMeta(stored)
-  return stored
+  const dir = await scriptsDir()
+  return withFileQueue(dir, async () => {
+    const rel = await writeScriptMarkdown(dir, doc.id, markdown)
+    const stored: ScriptDoc = { ...doc, fileRelPath: rel, defaultNamesLocalized: true }
+    await writeScriptMeta(dir, stored)
+    return stored
+  })
 }
 
 export async function loadScriptMarkdown(id: string): Promise<string> {
   if (!isDesktop()) return idb.getScriptText(id)
   const dir = await scriptsDir()
-  const abs = await desktop().join(dir, `${id}.md`)
-  if (!(await desktop().exists(abs))) return ''
-  return desktop().readText(abs)
+  return withFileQueue(dir, async () => {
+    const abs = await desktop().join(dir, `${id}.md`)
+    if (!(await desktop().exists(abs))) return ''
+    return desktop().readText(abs)
+  })
 }
 
 export async function deleteScriptDoc(id: string): Promise<void> {
@@ -101,16 +143,11 @@ export async function deleteScriptDoc(id: string): Promise<void> {
     return
   }
   const dir = await scriptsDir()
-  await desktop().remove(await desktop().join(dir, `${id}.md`))
-  const list = await listScriptDocs()
-  await desktop().writeText(
-    await indexPath(dir),
-    JSON.stringify(
-      toPlain(list.filter((item) => item.id !== id)),
-      null,
-      2
-    )
-  )
+  await withFileQueue(dir, async () => {
+    await desktop().remove(await desktop().join(dir, `${id}.md`))
+    const list = await readIndex(dir)
+    await writeIndex(dir, list.filter((item) => item.id !== id))
+  })
 }
 
 /** 파일 탐색기에서 열 대본의 절대 경로 */

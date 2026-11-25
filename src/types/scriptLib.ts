@@ -28,6 +28,7 @@ export interface ScriptEpisode {
 export interface ScriptDoc {
   id: ID
   title: string
+  defaultNamesLocalized?: true
   /** Markdown 파일 이름. 예를 들어 여름밤.md. */
   filename: string
   /** 출처. AI 생성, 외부 가져오기 또는 직접 작성. */
