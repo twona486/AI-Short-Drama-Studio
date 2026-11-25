@@ -24,6 +24,7 @@ const vite = await createServer({
 after(() => vite.close())
 
 const { createDrawThingsQueue } = await vite.ssrLoadModule('/electron/draw-things.ts')
+const { lanOrigin, pinAddress } = await vite.ssrLoadModule('/electron/lan-origin.ts')
 const {
   DRAW_THINGS_MODELS, DRAW_THINGS_PROVIDER, DRAW_THINGS_URL, drawThingsInputError, drawThingsSize
 } = await vite.ssrLoadModule('/src/services/ai/drawThingsOptions.ts')
@@ -43,6 +44,21 @@ async function httpFixture(context, handler) {
   context.after(() => new Promise((resolve) => server.close(resolve)))
   return `http://127.0.0.1:${server.address().port}`
 }
+
+test('Draw Things 주소 검증에서 사설망과 Tailscale을 허용합니다', async () => {
+  for (const port of ['7860', '7859']) {
+    for (const address of ['100.64.0.1', '100.127.255.254', '192.168.1.90']) {
+      const origin = lanOrigin(address, port)
+      assert.equal(origin.port, port)
+      assert.equal(await pinAddress(origin), address)
+    }
+    assert.equal(lanOrigin('studio.tailnet.ts.net', port).origin, `http://studio.tailnet.ts.net:${port}`)
+  }
+  const queue = createDrawThingsQueue()
+  for (const baseUrl of ['http://100.63.255.255', 'grpc://100.128.0.0']) {
+    assert.deepEqual(await queue.request(1, { kind: 'check', baseUrl }), { kind: 'unsafeAddress' })
+  }
+})
 
 test('설치 기본값, 로컬 프리셋, 비율과 모델별 참조 제한', () => {
   setActivePinia(createPinia())

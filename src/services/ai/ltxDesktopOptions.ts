@@ -21,6 +21,7 @@ export type LtxDesktopOperation =
 
 export type LtxDesktopRequest = {
   baseUrl: string
+  hostOverride?: string
   token?: string
   operation: LtxDesktopOperation
 }
@@ -34,10 +35,10 @@ export type LtxDesktopReply =
   | { kind: 'video'; data: ArrayBuffer }
   | { kind: 'failed'; code: string }
   | { kind: 'http'; status: number }
-  | { kind: 'unsafeAddress' | 'offline' | 'invalid' | 'unsupported' | 'wrongHost' }
+  | { kind: 'unsafeAddress' | 'offline' | 'invalid' | 'unsupported' | 'invalidHostOverride' }
 
 export function ltxDesktopError(reply: LtxDesktopReply, pairing = false) {
-  if (reply.kind === 'wrongHost') return 'ltxDesktop.linkError'
+  if (reply.kind === 'invalidHostOverride') return 'ltxDesktop.hostOverrideError'
   if (reply.kind === 'invalid' && pairing) return 'ltxDesktop.codeError'
   if (reply.kind === 'offline') return 'ltxDesktop.offline'
   if (reply.kind === 'unsafeAddress') return 'ltxDesktop.addressError'

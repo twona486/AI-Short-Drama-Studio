@@ -1,4 +1,4 @@
-import { lanOrigin, pinAddress } from './lan-origin'
+import { lanOrigin, pinAddress, tailscaleIPv4 } from './lan-origin'
 import { isIPv4 } from 'node:net'
 import http from 'node:http'
 import https from 'node:https'
@@ -17,7 +17,22 @@ export function desktopOrigin(raw: string) {
   return lanOrigin(raw, '41955')
 }
 
-function requestBytes(origin: URL, address: string, path: string, config: {
+export function desktopHostHeader(origin: URL, address: string, override?: string) {
+  if (override !== undefined && typeof override !== 'string') throw new Error('Invalid Host header')
+  const value = override?.trim()
+  if (value) {
+    const match = /^([a-z0-9](?:[a-z0-9.-]*[a-z0-9])?)(?::(\d{1,5}))?$/i.exec(value)
+    if (!match || value.length > 253 || (match[2] && (Number(match[2]) < 1 || Number(match[2]) > 65535))) {
+      throw new Error('Invalid Host header')
+    }
+    return value
+  }
+  const port = origin.port || (origin.protocol === 'https:' ? '443' : '80')
+  const host = tailscaleIPv4(address) || origin.hostname.endsWith('.ts.net') ? 'localhost' : address
+  return `${host}:${port}`
+}
+
+function requestBytes(origin: URL, address: string, hostHeader: string, path: string, config: {
   method?: 'GET' | 'POST'
   token?: string
   body?: Uint8Array
@@ -29,8 +44,7 @@ function requestBytes(origin: URL, address: string, path: string, config: {
   const transport = secure ? https : http
   const port = origin.port || (secure ? '443' : '80')
   return new Promise<{ status: number; data: Buffer }>((resolve, reject) => {
-    // LAN Remote accepts its advertised IP in Host, including when reached via mDNS.
-    const headers: Record<string, string | number> = { Host: `${address}:${port}` }
+    const headers: Record<string, string | number> = { Host: hostHeader }
     if (config.token) headers.Authorization = `Bearer ${config.token}`
     if (config.contentType) headers['Content-Type'] = config.contentType
     if (config.body) headers['Content-Length'] = config.body.byteLength
@@ -77,10 +91,16 @@ export async function requestLtxDesktop(request: LtxDesktopRequest): Promise<Ltx
 
   try {
     const address = await pinAddress(origin)
+    let hostHeader: string
+    try {
+      hostHeader = desktopHostHeader(origin, address, request.hostOverride)
+    } catch {
+      return { kind: 'invalidHostOverride' }
+    }
     const op = request.operation
     const token = request.token
-    const raw = async (path: string, config?: Parameters<typeof requestBytes>[3]) => {
-      const response = await requestBytes(origin, address, path, config)
+    const raw = async (path: string, config?: Parameters<typeof requestBytes>[4]) => {
+      const response = await requestBytes(origin, address, hostHeader, path, config)
       if (response.status < 200 || response.status >= 300) throw new HttpFailure(response.status)
       return response.data
     }
@@ -97,14 +117,10 @@ export async function requestLtxDesktop(request: LtxDesktopRequest): Promise<Ltx
       if (code.includes('://')) {
         try {
           const link = new URL(code)
-          const authority = code.match(/^https?:\/\/[^/?#]+/i)?.[0] || ''
-          const issuer = desktopOrigin(authority)
-          if (link.username || link.password || link.pathname !== '/pairing' || link.hash ||
-            issuer.port !== origin.port || issuer.protocol !== origin.protocol ||
-            await pinAddress(issuer) !== address) return { kind: 'wrongHost' }
+          if (!['http:', 'https:'].includes(link.protocol) || link.pathname !== '/pairing') return { kind: 'invalid' }
           code = link.searchParams.get('t') || ''
         } catch {
-          return { kind: 'wrongHost' }
+          return { kind: 'invalid' }
         }
       }
       if (!code || code.length > 128) return { kind: 'invalid' }

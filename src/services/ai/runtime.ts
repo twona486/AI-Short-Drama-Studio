@@ -135,6 +135,7 @@ export function getVideoConfig(profileId?: string) {
     throw new Error('ComfyUI 워크플로의 서버 주소가 올바르지 않아요. ComfyUI 연결에서 API 주소를 다시 입력하세요.')
   }
   return {
+    ltxHostOverride: isLtxDesktop(s) ? s?.ltxHostOverride : undefined,
     baseUrl: isLtxDesktop(s) ? comfyBaseUrl : nativeComfy ? comfyBaseUrl : migrateVideoBaseUrl(s?.baseUrl || d.baseUrl),
     apiKey: nativeComfy ? videoKeyForProfile(s, '') : videoKeyForProfile(s, d.apiKey),
     workflowId: nativeComfy ? (s?.workflowId || 'comfyui-local') : migrateVideoWorkflowId(s?.workflowId || d.workflowId),

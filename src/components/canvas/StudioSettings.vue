@@ -27,6 +27,7 @@ import {
   VISION_PROVIDERS,
   applyProviderPreset,
   findProvider,
+  matchProviderId,
   type ProviderPreset
 } from '@/services/ai/providers'
 
@@ -43,6 +44,13 @@ const ltxDesktop = computed(() => isLtxDesktop(settings.config.video))
 const pairingLink = ref('')
 const pairingStatus = ref('')
 const pairingBusy = ref(false)
+const desktopHostOverride = computed({
+  get: () => settings.config.video.ltxHostOverride || '',
+  set: (value: string) => {
+    pairingStatus.value = ''
+    settings.patchVideo({ ltxHostOverride: value || undefined })
+  }
+})
 const desktopAddress = computed({
   get: () => settings.config.video.baseUrl,
   set: (value: string) => {
@@ -65,7 +73,7 @@ async function pairOrCheckLtxDesktop(pair: boolean) {
     return
   }
   const id = settings.config.activeVideoId
-  const { baseUrl, apiKey } = settings.config.video
+  const { baseUrl, apiKey, ltxHostOverride } = settings.config.video
   const code = pairingLink.value.trim()
   if (pair && !code) {
     pairingStatus.value = t('ltxDesktop.codeError')
@@ -75,9 +83,10 @@ async function pairOrCheckLtxDesktop(pair: boolean) {
   pairingStatus.value = ''
   try {
     const reply = await desktop().ltxDesktopRequest({
-      baseUrl, token: apiKey, operation: pair ? { kind: 'pair', code } : { kind: 'check' }
+      baseUrl, hostOverride: ltxHostOverride, token: apiKey, operation: pair ? { kind: 'pair', code } : { kind: 'check' }
     })
-    if (settings.config.activeVideoId !== id || settings.config.video.baseUrl !== baseUrl) return
+    if (settings.config.activeVideoId !== id || settings.config.video.baseUrl !== baseUrl ||
+      settings.config.video.ltxHostOverride !== ltxHostOverride) return
     if (reply.kind === 'paired') {
       settings.patchVideo({ apiKey: reply.token })
       pairingLink.value = ''
@@ -215,7 +224,11 @@ async function probeDrawThings() {
 function videoProfile(p: (typeof settings.config.videos)[number]) {
   const workflow = zealmanVideoWorkflowLabel(p.workflowId)
   const name = zealmanVideoProfileLabel(p.name, p.workflowId)
-  return { id: p.id, name, subtitle: workflow || t('studioSettings.noModel') }
+  const provider = p.provider || matchProviderId(p.baseUrl, VIDEO_PROVIDERS)
+  const kind = provider === 'zealman' ? 'Zealman'
+    : p.adapter?.type === 'comfyui-prompt' ? 'ComfyUI'
+    : isLtxDesktop(p) ? 'LTX Desktop' : findProvider(provider, VIDEO_PROVIDERS).name
+  return { id: p.id, name, subtitle: [kind, workflow || t('studioSettings.noModel')].join(' · ') }
 }
 
 function createNamed(
@@ -493,6 +506,7 @@ function patchAdapter(
       <ProfileLibrary
         :title="$t('studioSettings.savedVideo')"
         :hint="$t('studioSettings.savedVideoHint')"
+        :add-hint="$t('studioSettings.chooseVideoConnection')"
         :profiles="settings.config.videos.map(videoProfile)"
         :active-id="settings.config.activeVideoId"
         :providers="VIDEO_PROVIDERS"
@@ -513,6 +527,12 @@ function patchAdapter(
           <p class="hint">{{ $t('ltxDesktop.memory') }}</p>
           <label for="ltx-desktop-address">{{ $t('studioSettings.baseUrl') }}</label>
           <input id="ltx-desktop-address" v-model.trim="desktopAddress" :placeholder="LTX_DESKTOP_DEFAULT_URL" />
+          <details class="rule-details">
+            <summary>{{ $t('ltxDesktop.advanced') }}</summary>
+            <label for="ltx-desktop-host">{{ $t('ltxDesktop.hostOverride') }}</label>
+            <input id="ltx-desktop-host" v-model.trim="desktopHostOverride" placeholder="localhost:41955" />
+            <p class="hint">{{ $t('ltxDesktop.hostOverrideHint') }}</p>
+          </details>
           <label for="ltx-desktop-model">{{ $t('ltx.model') }}</label>
           <select id="ltx-desktop-model" v-model="videoWorkflow">
             <option v-for="model in LTX_DESKTOP_MODELS" :key="model" :value="model">{{ model }}</option>

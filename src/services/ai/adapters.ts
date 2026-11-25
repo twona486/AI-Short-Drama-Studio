@@ -73,6 +73,7 @@ export interface AdapterConfig {
 
 export type EndpointLike = {
   baseUrl?: string
+  ltxHostOverride?: string
   apiKey?: string
   model?: string
   workflowId?: string
@@ -1117,7 +1118,7 @@ export async function testEndpointConnection(
         return { ok: false, detail: translate('ltx.desktopOnly') }
       }
       const reply = await desktop().ltxDesktopRequest({
-        baseUrl: base, token: ep.apiKey, operation: { kind: 'check' }
+        baseUrl: base, hostOverride: ep.ltxHostOverride, token: ep.apiKey, operation: { kind: 'check' }
       })
       return {
         ok: reply.kind === 'ready',
