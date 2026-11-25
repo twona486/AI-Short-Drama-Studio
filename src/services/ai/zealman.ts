@@ -3,7 +3,8 @@ export const ZEALMAN_WORKFLOWS = [
   {
     id: 'U01-minimax_h3_light2v多图参考生视频加速版',
     name: 'U01-minimax_h3_light2v多图参考生视频加速版',
-    get displayName() { return translate('zealmanSettings.u01Name') },
+    displayNameKey: 'zealmanSettings.u01Name',
+    get displayName() { return translate(this.displayNameKey) },
     mode: 'reference' as const,
     stillMode: 'identity' as const,
     maxImages: 3,
@@ -18,7 +19,8 @@ export const ZEALMAN_WORKFLOWS = [
   {
     id: 'U02-minimax_h3_light2v首尾帧图生视频加速版',
     name: 'U02-minimax_h3_light2v首尾帧图生视频加速版',
-    get displayName() { return translate('zealmanSettings.u02Name') },
+    displayNameKey: 'zealmanSettings.u02Name',
+    get displayName() { return translate(this.displayNameKey) },
     mode: 'fl2va' as const,
     stillMode: 'keyframe' as const,
     maxImages: 2,
@@ -33,7 +35,8 @@ export const ZEALMAN_WORKFLOWS = [
   {
     id: 'U04-minimax_h3_light2v-5图参考生视频加速版',
     name: 'U04-minimax_h3_light2v-5图参考生视频加速版',
-    get displayName() { return translate('zealmanSettings.u04Name') },
+    displayNameKey: 'zealmanSettings.u04Name',
+    get displayName() { return translate(this.displayNameKey) },
     mode: 'reference' as const,
     stillMode: 'identity' as const,
     maxImages: 5,
@@ -48,7 +51,8 @@ export const ZEALMAN_WORKFLOWS = [
   {
     id: 'U06-minimax_h3_light2v多图参考生视频叠加加速插帧优化版',
     name: 'U06-minimax_h3_light2v多图参考生视频叠加加速插帧优化版',
-    get displayName() { return translate('zealmanSettings.u06Name') },
+    displayNameKey: 'zealmanSettings.u06Name',
+    get displayName() { return translate(this.displayNameKey) },
     mode: 'reference' as const,
     stillMode: 'identity' as const,
     maxImages: 9,
@@ -67,6 +71,7 @@ export type ZealmanWorkflow = (typeof ZEALMAN_WORKFLOWS)[number]
 export interface ZealmanImageWorkflow {
   id: string
   name: string
+  displayNameKey: string
   displayName: string
   seedKey: string
   promptKey: string
@@ -83,7 +88,8 @@ export const ZEALMAN_IMAGE_WORKFLOWS: ZealmanImageWorkflow[] = [
   {
     id: 'API-A01-文生图-Qwen2512高清放大',
     name: 'A01-文生图-Qwen2512高清放大',
-    get displayName() { return translate('zealmanSettings.a01Name') },
+    displayNameKey: 'zealmanSettings.a01Name',
+    get displayName() { return translate(this.displayNameKey) },
     seedKey: 'seed',
     promptKey: 'prompt',
     negativeKey: 'prompt_2',
@@ -105,6 +111,10 @@ export function zealmanImageWorkflowById(id: string): ZealmanImageWorkflow | und
   })
 }
 
+export function zealmanImageWorkflowLabel(id: string): string {
+  return zealmanImageWorkflowById(id)?.displayName ?? id
+}
+
 export function normalizeZealmanBaseUrl(value: string): string {
   const raw = value.trim().replace(/\/+$/, '')
   if (!raw) return ''
@@ -121,4 +131,31 @@ export function normalizeZealmanBaseUrl(value: string): string {
 
 export function zealmanWorkflowById(id: string): ZealmanWorkflow | undefined {
   return ZEALMAN_WORKFLOWS.find((item) => item.id === id)
+}
+
+export function zealmanVideoWorkflowLabel(id: string): string {
+  return zealmanWorkflowById(id)?.displayName ?? id
+}
+
+function isDefaultProfileName(name: string, displayNameKey: string, image = false): boolean {
+  return (['ko', 'zh'] as const).some((locale) => {
+    const label = translate(displayNameKey, {}, { locale })
+    return name === label || (image && name === translate('zealmanSettings.imageProfileName', { p0: label }, { locale }))
+  })
+}
+
+export function zealmanImageProfileLabel(name: string, id: string): string {
+  const workflow = zealmanImageWorkflowById(id)
+  if (!workflow) return name
+  if (zealmanImageWorkflowById(name) === workflow) return workflow.displayName
+  return isDefaultProfileName(name, workflow.displayNameKey, true)
+    ? translate('zealmanSettings.imageProfileName', { p0: workflow.displayName })
+    : name
+}
+
+export function zealmanVideoProfileLabel(name: string, id: string): string {
+  const workflow = zealmanWorkflowById(id)
+  return workflow && (name === id || isDefaultProfileName(name, workflow.displayNameKey))
+    ? workflow.displayName
+    : name
 }

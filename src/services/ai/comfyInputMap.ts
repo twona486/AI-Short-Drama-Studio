@@ -363,14 +363,17 @@ export function validateInputMap(payload: any, map: ComfyInputMap): ComfyInputMa
   return { ...map, bindings: kept }
 }
 
-export function describeInputMap(map: ComfyInputMap): string {
+export function describeInputMap(
+  map: ComfyInputMap,
+  punctuation = { parenthetical: (value: string) => `（${value}）`, semicolon: '；' }
+): string {
   if (!map?.bindings?.length) return '주입할 수 있는 입력이 없습니다.'
   return map.bindings
     .map((b) => {
       const base = `${comfyRoleLabel(b.role)} → #${b.nodeId}.${b.field}`
-      return b.note ? `${base}（${b.note}）` : base
+      return b.note ? `${base}${punctuation.parenthetical(b.note)}` : base
     })
-    .join('；')
+    .join(punctuation.semicolon)
 }
 
 const KIND_LABEL: Record<ComfyWorkflowKind, string> = {

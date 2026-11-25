@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { confirmAction } from '@/utils/confirmAction'
-import { t as translate } from '@/i18n'
+import { t as translate, uiPunctuation } from '@/i18n'
 import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useProjectStore, useToastStore, useAssetsStore } from '@/stores'
@@ -45,7 +45,7 @@ function shotCastLabel(s: Shot) {
     .map((id) => subjects.value.find((x) => x.id === id)?.name)
     .filter(Boolean)
   const scene = scenes.value.find((x) => x.id === s.sceneId)?.name
-  return [names.join('、') || null, scene].filter(Boolean).join(' · ')
+  return [names.join(uiPunctuation.listSeparator) || null, scene].filter(Boolean).join(' · ')
 }
 
 const editingAesthetic = ref(false)
@@ -292,7 +292,7 @@ function movementLabel(m: Shot['cameraMovement']): string {
 
     <GlassCard v-if="subjects.length || scenes.length" padding="md" class="cast-card">
       <div class="cast-col">
-        <h3>{{ $t('storyboard.subject') }}{{ subjects.length }}）</h3>
+        <h3>{{ $t('storyboard.subject') }}{{ subjects.length }}{{ uiPunctuation.closeParen }}</h3>
         <p class="cast-hint">{{ $t('storyboard.subjectConsistency') }}</p>
         <div v-for="sub in subjects" :key="sub.id" class="cast-item">
           <div class="cast-name">
@@ -330,7 +330,7 @@ function movementLabel(m: Shot['cameraMovement']): string {
         </div>
       </div>
       <div class="cast-col">
-        <h3>{{ $t('storyboard.scene') }}{{ scenes.length }}）</h3>
+        <h3>{{ $t('storyboard.scene') }}{{ scenes.length }}{{ uiPunctuation.closeParen }}</h3>
         <p class="cast-hint">{{ $t('storyboard.sceneAnchorHint') }}</p>
         <div v-for="scn in scenes" :key="scn.id" class="cast-item">
           <div class="cast-name">{{ scn.name }}</div>

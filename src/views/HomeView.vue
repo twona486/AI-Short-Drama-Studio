@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { confirmAction } from '@/utils/confirmAction'
-import { t as translate } from '@/i18n'
+import { t as translate, uiPunctuation } from '@/i18n'
 import { ref, onMounted, onBeforeUnmount, computed, watch, nextTick } from 'vue'
 import { useRouter } from 'vue-router'
 import { useProjectStore, useToastStore, useLibraryStore, LIBRARY_PUBLIC_ID } from '@/stores'
@@ -303,7 +303,7 @@ const selectedLibraryNames = computed(() => {
   const names = [...libSelected.value]
     .map((id) => library.getMeta(id)?.filename)
     .filter((name): name is string => Boolean(name))
-  if (names.length <= 3) return names.join('、')
+  if (names.length <= 3) return names.join(uiPunctuation.listSeparator)
   return `${names.slice(0, 3).join(', ')}…`
 })
 

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { t as translate } from '@/i18n'
+import { t as translate, uiPunctuation } from '@/i18n'
 import { computed, nextTick, onMounted, onBeforeUnmount, ref, watch } from 'vue'
 import { runAgentTurn, type AgentEvent, type AgentMessage } from '@/services/canvas/agent'
 import { runContinuousTurn } from '@/services/continuous/capture'
@@ -42,7 +42,7 @@ const props = withDefaults(
 type StepStatus = TraceStatus
 
 type FeedItem =
-  | { id: string; type: 'msg'; role: 'user' | 'assistant'; content: string }
+  | { id: string; type: 'msg'; role: 'user' | 'assistant'; content: string; attachedNames?: string[] }
   | { id: string; type: 'run'; rows: TraceRow[] }
 
 const feed = ref<FeedItem[]>([
@@ -51,8 +51,14 @@ const feed = ref<FeedItem[]>([
 const messages = computed<AgentMessage[]>(() =>
   feed.value
     .filter((item): item is Extract<FeedItem, { type: 'msg' }> => item.type === 'msg')
-    .map((item) => ({ role: item.role, content: item.content }))
+    .map((item) => ({ role: item.role, content: messageText(item, '、') }))
 )
+
+function messageText(item: Extract<FeedItem, { type: 'msg' }>, separator: string) {
+  const names = item.attachedNames ?? []
+  return names.length ? `${item.content}\n\n📎 ${names.join(separator)}` : item.content
+}
+
 const input = ref('')
 const busy = ref(false)
 const thinking = ref(false)
@@ -621,14 +627,13 @@ async function sendText(text: string) {
   if (!t || busy.value) return
   input.value = ''
   const attachedNames = attachments.value.map((a) => a.name)
-  const display = attachedNames.length ? `${t}\n\n📎 ${attachedNames.join('、')}` : t
   const attachOptions = attachments.value.slice()
-  feed.value.push({ id: `u-${Date.now()}`, type: 'msg', role: 'user', content: display })
+  feed.value.push({ id: `u-${Date.now()}`, type: 'msg', role: 'user', content: t, attachedNames })
   await appendAgentMessage('user', t)
   attachments.value = []
   busy.value = true
   thinking.value = true
-  log.value = attachedNames.length ? translate('agentChat.readingAttachments', { p0: attachedNames.join('、') }) : translate('agentChat.starting')
+  log.value = attachedNames.length ? translate('agentChat.readingAttachments', { p0: attachedNames.join(uiPunctuation.listSeparator) }) : translate('agentChat.starting')
   trace.value = [{ key: 'think', kind: 'think', get label() { return translate('agentChat.deliberating') }, status: 'running' }]
   chips.value = []
   const turnController = new AbortController()
@@ -762,7 +767,7 @@ function visibleRows(rows: TraceRow[]) {
       <template v-for="item in feed" :key="item.id">
         <div v-if="item.type === 'msg'" class="msg" :class="item.role">
           <div class="bubble">
-            <AgentRichText :content="item.id === 'welcome' ? $t('agentChat.welcome') : item.content" />
+            <AgentRichText :content="item.id === 'welcome' ? $t('agentChat.welcome') : messageText(item, uiPunctuation.listSeparator)" />
             <button
               v-if="item.role === 'assistant'"
               type="button"
