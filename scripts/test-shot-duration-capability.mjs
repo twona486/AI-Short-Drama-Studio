@@ -54,10 +54,10 @@ test('추출 후 너무 긴 샷을 나누고 화자와 원문 순서를 보존�
   assert.ok(shots.every((shot) => shot.voiceover.replace(/^수연:\s*/, '').length <= shot.duration * 4))
 })
 
-test('음성 능력표에서 확인 중인 LTX는 선택 가능하고 무음 연결은 미지원입니다', () => {
+test('음성 능력표에서 LTX는 지원하고 무음 연결은 미지원입니다', () => {
   assert.equal(caps({ profile: { provider: 'autodl' } }).voice, 'supported')
-  assert.equal(caps({ profile: { provider: 'ltx-desktop' } }).voice, 'verifying')
-  assert.equal(caps({ profile: { provider: 'ltx' } }).voice, 'verifying')
+  assert.equal(caps({ profile: { provider: 'ltx-desktop' } }).voice, 'supported')
+  assert.equal(caps({ profile: { provider: 'ltx' } }).voice, 'supported')
   assert.equal(caps({ profile: { provider: 'custom' } }).voice, 'unsupported')
   assert.equal(caps({ profile: { provider: 'custom', options: { videoAudio: true } } }).voice, 'supported')
   assert.equal(caps({ profile: { provider: 'autodl', options: { videoAudio: false } } }).voice, 'unsupported')
@@ -92,4 +92,26 @@ test('미지원 연결의 샷은 TTS로 전환하고 노드별 지원 연결과 
   assert.equal(project.shotSupportsVideoVoice(project.current.shots[1]), true)
   project.setShotAudioMode('a', 'h3-voiceover')
   assert.equal(project.current.shots[0].audioMode, 'tts')
+})
+
+const { ltxShotPrompt, ltxShotSpeechTooFast } = await vite.ssrLoadModule('/src/services/ai/ltxShotPrompt.ts')
+test('LTX 프롬프트는 원어 대사를 인용하고 TTS에는 대사를 넣지 않습니다', () => {
+  const shot = {
+    audioMode: 'h3-dialogue',
+    voiceover: '지우: 기차가 곧 도착해요.\n민지: 좋아요.',
+    compiledVideoPrompt: 'Steam drifts across the platform.\nJiwoo says "기차가 곧 도착해요."\n<d>이전 대사</d>'
+  }
+  const dialogue = ltxShotPrompt(shot, 'Soft and urgent.')
+  assert.match(dialogue, /지우 says in Korean: "기차가 곧 도착해요\."/)
+  assert.match(dialogue, /민지 says in Korean: "좋아요\."/)
+  assert.match(dialogue, /Soft and urgent/)
+  assert.doesNotMatch(dialogue, /이전 대사|\n/)
+  const dub = ltxShotPrompt({ ...shot, audioMode: 'tts' })
+  assert.match(dub, /no speech, ambient sound only/)
+  assert.doesNotMatch(dub, /도착해요|좋아요|이전 대사/)
+  assert.match(ltxShotPrompt({ ...shot, audioMode: 'h3-voiceover' }), /off-screen narrator/)
+  assert.match(ltxShotPrompt({ ...shot, voiceover: '' }), /no speech, ambient sound only/)
+  assert.equal(ltxShotSpeechTooFast(shot, 1), true)
+  assert.equal(ltxShotSpeechTooFast(shot, 5), false)
+  assert.equal(ltxShotSpeechTooFast({ ...shot, audioMode: 'tts' }, 1), false)
 })

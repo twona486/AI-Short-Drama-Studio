@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { ltxShotSpeechTooFast } from '@/services/ai/ltxShotPrompt'
 import { nearestVideoDuration, videoDurationCapability, shotDurationWarning } from '@/services/ai/videoDuration'
 import { isLtxDesktop } from '@/services/ai/ltxDesktopOptions'
 import { isLtxProfile, LTX_DEFAULT_MODEL } from '@/services/ai/ltxOptions'
@@ -1060,6 +1061,9 @@ async function optimizeVideoPrompt() {
         <label>{{ $t('common.secondsDuration') }}</label>
         <p v-if="shotDurationWarning(shot.duration, durationCapability.max)" class="hint">
           {{ $t('storyboard.shotDurationWarning', { max: durationCapability.max, duration: shot.duration }) }}
+        </p>
+        <p v-if="ltxProfile && ltxShotSpeechTooFast(shot, inspectorDuration)" class="hint">
+          {{ $t('ltx.speechTooFast', { seconds: inspectorDuration }) }}
         </p>
         <select v-model.number="inspectorDuration">
           <option v-for="seconds in inspectorDurations" :key="seconds" :value="seconds">{{ seconds }}</option>

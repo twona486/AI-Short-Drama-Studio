@@ -13,7 +13,8 @@ const { code } = await transform(
       canvasVideoModelForShot, isLtxTask, isLtxProfile, shotNodeAspect, tryLoadRefImageBlob,
       getImageConfig, resolveImageAdapter, collectFrameRefBlobs, renderShotFrame, ensureNotCancelled,
       translate, aspectToSize, canvasVideoResolutionForShot, shotVideoAudio, generateVideo,
-      setActiveProjectDir } = deps
+      setActiveProjectDir, nearestVideoDuration, videoDurationCapability, ltxShotSpeechTooFast,
+      ltxShotPrompt, resolveShotSpeakerVoice } = deps
     ${source.slice(start, end).replace('export async function generateShotVideo', 'async function generateShotVideo')}
     }
     return generateShotVideo
@@ -75,6 +76,11 @@ function fixture({ firstFrameAssetId, imageAssetId, videoTaskId, imageKey = 'fix
       assert.equal(input.prompt, 'Street scene')
       return { blob: new Blob(['movie']), prompt: input.prompt }
     },
+    nearestVideoDuration: (duration) => duration,
+    videoDurationCapability: () => ({ durations: [5, 10] }),
+    ltxShotSpeechTooFast: () => false,
+    ltxShotPrompt: (shot) => shot.visualPrompt,
+    resolveShotSpeakerVoice: () => undefined,
     setActiveProjectDir() {}
   })
   return { run: () => run(shot), events, shot }

@@ -32,6 +32,7 @@ export default {
   },
   "ltx": {
     "cloudName": "LTX API (클라우드)",
+    "speechTooFast": "대사가 실제 생성 길이인 {seconds}초에 비해 길어요. 대사를 나누거나 샷 길이를 늘려 주세요.",
     "hint": "LTX Developer Console에서 발급한 API 키로 시작 프레임을 영상으로 만들어요.",
     "model": "LTX 모델",
     "cost": "예상 비용 US$ {cost}",

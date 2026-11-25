@@ -8,8 +8,8 @@ import { isLtxDesktop, LTX_DESKTOP_MODELS, LTX_DESKTOP_WORKFLOW } from './ltxDes
 export type VideoVoiceSupport = 'supported' | 'unsupported' | 'verifying'
 
 const LTX_VIDEO_VOICE: Record<'ltx' | 'ltx-desktop', VideoVoiceSupport> = {
-  ltx: 'verifying',
-  'ltx-desktop': 'verifying'
+  ltx: 'supported',
+  'ltx-desktop': 'supported'
 }
 
 export type VideoDurationProfile = {
