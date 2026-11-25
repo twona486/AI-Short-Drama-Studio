@@ -11,6 +11,8 @@
 import { toRaw } from 'vue'
 import type { Asset, Project } from '@/types'
 import { desktop, isDesktop, blobFromPath, bufferFromBlob } from '@/services/desktop'
+import { localizeProject } from './defaultNames'
+import { withFileQueue } from './fileQueue'
 
 function toPlain<T>(value: T): T {
   return JSON.parse(JSON.stringify(toRaw(value)))
@@ -70,8 +72,8 @@ export async function saveProject(project: Project): Promise<void> {
   const dir = project.folderPath || activeDir
   if (!dir) throw new Error('프로젝트 폴더 경로가 없습니다.')
   const jsonPath = await desktop().join(dir, 'project.json')
-  const plain = toPlain(project)
-  await desktop().writeText(jsonPath, JSON.stringify(plain, null, 2))
+  const plain = { ...toPlain(project), defaultNamesLocalized: true }
+  await withFileQueue(jsonPath, () => desktop().writeText(jsonPath, JSON.stringify(plain, null, 2), true))
   activeDir = dir
 }
 
@@ -85,14 +87,31 @@ export async function loadProject(id: string): Promise<Project | undefined> {
 }
 
 export async function loadProjectFromDir(dir: string): Promise<Project | undefined> {
-  const jsonPath = await desktop().join(dir, 'project.json')
-  if (!(await desktop().exists(jsonPath))) return undefined
-  const text = await desktop().readText(jsonPath)
-  const p = JSON.parse(text) as Project
-  p.folderPath = dir
+  const p = await readProject(dir)
+  if (!p) return undefined
   activeDir = dir
   assetCache = await loadManifest(dir)
   return p
+}
+
+async function readProject(dir: string, skipUnreadable = false): Promise<Project | undefined> {
+  const jsonPath = await desktop().join(dir, 'project.json')
+  return withFileQueue(jsonPath, async () => {
+    let project: Project
+    try {
+      if (!(await desktop().exists(jsonPath))) return undefined
+      project = JSON.parse(await desktop().readText(jsonPath))
+    } catch (error) {
+      if (skipUnreadable) return undefined
+      throw error
+    }
+    if (typeof project?.name !== 'string') return undefined
+    if (!project.defaultNamesLocalized) {
+      localizeProject(project)
+      await desktop().writeText(jsonPath, JSON.stringify(project, null, 2), true)
+    }
+    return { ...project, folderPath: dir }
+  })
 }
 
 export async function listProjects(): Promise<Project[]> {
@@ -100,15 +119,8 @@ export async function listProjects(): Promise<Project[]> {
   const dirs = await desktop().listProjectDirs()
   const out: Project[] = []
   for (const dir of dirs) {
-    try {
-      const jsonPath = await desktop().join(dir, 'project.json')
-      const text = await desktop().readText(jsonPath)
-      const p = JSON.parse(text) as Project
-      p.folderPath = dir
-      out.push(p)
-    } catch {
-      /* skip broken */
-    }
+    const p = await readProject(dir, true)
+    if (p) out.push(p)
   }
   return out.sort((a, b) => (b.updatedAt ?? 0) - (a.updatedAt ?? 0))
 }

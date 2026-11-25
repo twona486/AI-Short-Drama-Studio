@@ -201,6 +201,7 @@ test('저장된 스타일 표시명으로 캐릭터·장면·스토리보드를 
     style: '🖌 수채화',
     shotDuration: 6,
     maxShotDuration: 10,
+    allowedShotDurations: [2, 3, 4, 5, 6, 8, 10],
     aspectRatio: '16:9',
     mode: 'extract'
   }
@@ -216,6 +217,7 @@ test('저장된 스타일 표시명으로 캐릭터·장면·스토리보드를 
     existingSubjects: subjects,
     existingScenes: scenes
   })).result.shots
+  assert.ok(prompts.some((prompt) => prompt.includes('allows at most 10 seconds per shot') && prompt.includes('2, 3, 4, 5, 6, 8, 10')))
   assert.equal(shots[0].title, '벽시계 아래')
   assert.match(shots[0].visualPrompt, /Watercolor/)
   assert.match(shots[0].voiceover, /아직 늦지 않았어/)

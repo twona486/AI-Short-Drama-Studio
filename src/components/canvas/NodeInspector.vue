@@ -1,6 +1,8 @@
 <script setup lang="ts">
+import { ltxShotSpeechTooFast } from '@/services/ai/ltxShotPrompt'
+import { nearestVideoDuration, videoDurationCapability, shotDurationWarning } from '@/services/ai/videoDuration'
 import { isLtxDesktop } from '@/services/ai/ltxDesktopOptions'
-import { isLtxProfile, ltxDurationOptions, LTX_DEFAULT_MODEL } from '@/services/ai/ltxOptions'
+import { isLtxProfile, LTX_DEFAULT_MODEL } from '@/services/ai/ltxOptions'
 import { confirmAction } from '@/utils/confirmAction'
 import { t as translate } from '@/i18n'
 import { computed, ref, watch } from 'vue'
@@ -41,7 +43,7 @@ import {
 import { VISUAL_STYLE_LABEL } from '@/utils/visualStyle'
 import { resolvedCanvasReferenceAssetIds } from '@/services/canvas/references'
 import ShotRefStrip from '@/components/canvas/ShotRefStrip.vue'
-import { normalizeH3GenMode, normalizeVideoGenModel, videoDurationOptions, videoMaxSeconds, videoMinSeconds, type AspectRatio, type CanvasNode, type H3VideoGenMode, type ID, type ShotAudioMode, type VideoGenModel, type VideoResolution, type VisualStyle } from '@/types'
+import { normalizeH3GenMode, normalizeVideoGenModel, type AspectRatio, type CanvasNode, type H3VideoGenMode, type ID, type ShotAudioMode, type VideoGenModel, type VideoResolution, type VisualStyle } from '@/types'
 
 const props = defineProps<{
   node: CanvasNode | null
@@ -283,7 +285,7 @@ const nodeAspectRatio = computed({
 })
 
 const videoModel = computed({
-  get: () => normalizeVideoGenModel(props.node?.data.videoModel),
+  get: () => normalizeVideoGenModel(props.node?.data.videoModel ?? (props.node?.type === 'shotVideo' ? settings.config.defaultVideoModel : undefined)),
   set: (v: VideoGenModel) => {
     if (!props.node) return
     applyShotVideoModel(props.node.id, v)
@@ -325,16 +327,19 @@ const imageResolution = computed({
 })
 const ltxProfile = computed(() => videoModel.value === 'h3' && isLtxProfile(docVideoProfile.value)
   ? docVideoProfile.value : undefined)
-const inspectorDurations = computed(() => ltxProfile.value
-  ? ltxDurationOptions(ltxProfile.value.workflowId) : videoDurationOptions(videoModel.value))
+const durationCapability = computed(() => videoDurationCapability({
+  model: videoModel.value, profile: docVideoProfile.value, resolution: videoResolution.value,
+  startEndFrames: h3GenMode.value === 'fl2va' ||
+    (props.node?.type === 'shotVideo' && isFl2vaChainActive(project.current))
+}))
+const inspectorDurations = computed(() => durationCapability.value.durations)
 const inspectorDuration = computed({
   get() {
     const opts = inspectorDurations.value
     const raw = Math.round(
       Number(props.node?.type === 'shotVideo' ? shot.value?.duration : props.node?.data.duration) || opts[0] || 5
     )
-    if (opts.includes(raw)) return raw
-    return opts.reduce((best, item) => (Math.abs(item - raw) < Math.abs(best - raw) ? item : best), opts[0] || raw)
+    return nearestVideoDuration(raw, opts)
   },
   set(v: number) {
     if (!props.node) return
@@ -1054,18 +1059,15 @@ async function optimizeVideoPrompt() {
           @input="project.setShotVideoPrompt(shot.id, ($event.target as HTMLTextAreaElement).value)"
         />
         <label>{{ $t('common.secondsDuration') }}</label>
-        <select v-if="ltxProfile" v-model.number="inspectorDuration">
+        <p v-if="shotDurationWarning(shot.duration, durationCapability.max)" class="hint">
+          {{ $t('storyboard.shotDurationWarning', { max: durationCapability.max, duration: shot.duration }) }}
+        </p>
+        <p v-if="ltxProfile && ltxShotSpeechTooFast(shot, inspectorDuration)" class="hint">
+          {{ $t('ltx.speechTooFast', { seconds: inspectorDuration }) }}
+        </p>
+        <select v-model.number="inspectorDuration">
           <option v-for="seconds in inspectorDurations" :key="seconds" :value="seconds">{{ seconds }}</option>
         </select>
-        <input
-          v-else
-          type="number"
-          :min="videoMinSeconds(videoModel)"
-          :max="videoMaxSeconds(videoModel)"
-          step="1"
-          :value="shot.duration"
-          @change="project.updateShot(shot.id, { duration: Math.min(videoMaxSeconds(videoModel), Math.max(videoMinSeconds(videoModel), Math.round(Number(($event.target as HTMLInputElement).value) || shot.duration))) })"
-        />
         <label>{{ $t('common.cameraMotion') }}</label>
         <select
           :value="shot.cameraMovement"
@@ -1148,11 +1150,12 @@ async function optimizeVideoPrompt() {
           :value="effectiveShotAudioMode(shot)"
           @change="project.setShotAudioMode(shot.id, ($event.target as HTMLSelectElement).value as ShotAudioMode)"
         >
-          <option value="h3-dialogue">{{ $t('common.h3Dialogue') }}</option>
-          <option value="h3-voiceover">{{ $t('nodeInspector.h3Offscreen') }}</option>
+          <option value="h3-dialogue" :disabled="!project.shotSupportsVideoVoice(shot)">{{ $t('common.h3Dialogue') }}</option>
+          <option value="h3-voiceover" :disabled="!project.shotSupportsVideoVoice(shot)">{{ $t('nodeInspector.h3Offscreen') }}</option>
           <option value="tts">{{ $t('common.postTts') }}</option>
           <option value="none">{{ $t('common.noNarration') }}</option>
         </select>
+        <p v-if="!project.shotSupportsVideoVoice(shot)" class="hint">{{ $t('common.videoVoiceUnsupported') }}</p>
         <label>{{ $t('common.narrationText') }}</label>
         <textarea
           rows="4"

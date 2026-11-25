@@ -1,3 +1,4 @@
+import { nearestVideoDuration, videoDurationCapability } from './videoDuration'
 /**
  * APIMart 내장 연동. 사용자는 API 주소와 키를 입력한다.
  * 기본 주소 https://api.aishuch.com
@@ -127,10 +128,9 @@ function videoSize(aspectRatio?: string, width?: number, height?: number): strin
 }
 
 function videoSeconds(model: string, raw?: number, limit?: number): number {
-  const seconds = Math.round(Number(raw) || 0)
-  if (limit === 30 && /seedance[\s._-]*2[._-]5|wan[\s._-]*3[._-]0/i.test(model)) return Math.min(30, Math.max(6, seconds || 6))
-  if (/grok-imagine-1\.5/i.test(model)) return Math.min(15, Math.max(6, seconds || 6))
-  return Math.min(15, Math.max(1, seconds || 6))
+  return nearestVideoDuration(Number(raw) || 6, videoDurationCapability({
+    profile: { workflowId: model }, durationLimit: limit
+  }).durations)
 }
 
 function errorMessage(json: any, status: number): string {

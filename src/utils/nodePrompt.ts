@@ -14,7 +14,7 @@ import {
 } from '@/services/ai/consistency'
 import { isPlaceholderSpokenLine, spokenTextOnly } from '@/services/ai/dialogue'
 import { buildH3ImageSlots, pictureIdentityBlock } from '@/services/ai/h3Prompt'
-import type { Project, Scene, Shot, StoryProp, Subject } from '@/types'
+import type { AspectRatio, ID, Project, Scene, Shot, StoryProp, Subject } from '@/types'
 import {
   collectShotRefIds,
   collectShotVideoEntries,
@@ -245,14 +245,16 @@ function splitShotContinuity(shot: Shot): { start: string; end: string } {
 }
 
 /** 시작 프레임은 움직이기 직전, 종료 프레임은 동작이 완료된 상태를 묘사한다. */
-export function defaultShotFramePrompts(shot: Shot, project: Project): { start: string; end: string } {
+type FramePromptContext = { referenceIds: ID[]; aspectRatio: AspectRatio }
+
+export function defaultShotFramePrompts(shot: Shot, project: Project, context?: FramePromptContext): { start: string; end: string } {
   const look = lookFromScript(project.script)
   const scene = sceneForShot(shot, project)
   const place = resolveShotPlace(shot, scene)
   const cast = subjectsForShot(shot, project)
   const { start, end } = splitShotContinuity(shot)
   // 참조 이미지 번호는 이전 샷의 종료 프레임이나 현재 샷의 시작 프레임을 포함한 순서대로 붙인다.
-  const refIds = collectShotRefIds(shot, project).ids
+  const refIds = context?.referenceIds ?? collectShotRefIds(shot, project).ids
   const orderedShots = [...(project.shots ?? [])].sort((a, b) => a.index - b.index)
   const pos = orderedShots.findIndex((item) => item.id === shot.id)
   const prevTail = pos > 0 ? orderedShots[pos - 1]?.lastFrameAssetId : undefined
@@ -260,7 +262,7 @@ export function defaultShotFramePrompts(shot: Shot, project: Project): { start: 
     shot,
     project,
     refIds,
-    prevTail
+    !context && prevTail
       ? `Image ${refIds.length + 1}: The previous shot's final frame. Continue its composition, camera position, and lighting for continuity without duplicating it.`
       : ''
   )
@@ -272,7 +274,7 @@ export function defaultShotFramePrompts(shot: Shot, project: Project): { start: 
       ? `Image ${refIds.length + 1}: This shot's opening frame. Keep the camera position, focal length, wardrobe, and lighting while advancing the action to its final state.`
       : ''
   )
-  const ar = project.settings?.aspectRatio || '16:9'
+  const ar = context?.aspectRatio ?? project.settings?.aspectRatio ?? '16:9'
   const visual = String(shot.visualPrompt || '').trim()
   const performance = String(shot.videoPrompt || '')
     .replace(/<d>[\s\S]*?<\/d>/gi, '')
@@ -319,12 +321,13 @@ export function defaultShotFramePrompts(shot: Shot, project: Project): { start: 
 export function shotFrameSendPrompt(
   shot: Shot,
   project: Project,
-  which: 'start' | 'end'
+  which: 'start' | 'end',
+  context?: FramePromptContext
 ): string {
   const raw =
     which === 'start'
-      ? shot.startFramePrompt?.trim() || defaultShotFramePrompts(shot, project).start
-      : shot.endFramePrompt?.trim() || defaultShotFramePrompts(shot, project).end
+      ? shot.startFramePrompt?.trim() || defaultShotFramePrompts(shot, project, context).start
+      : shot.endFramePrompt?.trim() || defaultShotFramePrompts(shot, project, context).end
   return ensureStyleLock(raw, project)
 }
 

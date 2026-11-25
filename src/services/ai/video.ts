@@ -1,4 +1,5 @@
-import { isLtxDesktop, isLtxTask, LTX_DESKTOP_MODELS, LTX_DESKTOP_WORKFLOW, ltxDesktopError, type LtxDesktopOperation, type LtxDesktopReply } from './ltxDesktopOptions'
+import { nearestVideoDuration, videoDurationCapability } from './videoDuration'
+import { isLtxDesktop, isLtxTask, ltxDesktopResolution, LTX_DESKTOP_MODELS, LTX_DESKTOP_WORKFLOW, ltxDesktopError, type LtxDesktopOperation, type LtxDesktopReply } from './ltxDesktopOptions'
 /**
  * AutoDL.art ComfyUI 워크플로를 이용한 AI 영상 생성
  *
@@ -29,7 +30,7 @@ import {
   migrateVideoWorkflowId
 } from './env'
 import type { AspectRatio, H3VideoGenMode, Shot, VideoGenModel, VideoResolution } from '@/types'
-import { normalizeVideoResolution, videoMaxSeconds } from '@/types'
+import { normalizeVideoResolution } from '@/types'
 import { pickDocVideoResolution, videoResolutionApiValue, videoResolutionChoices } from '@/services/ai/modelOptions'
 import { abortableDelay, controlledSignal, isTimeoutAbort, throwIfAborted } from './abort'
 import type { VideoPromptStyle } from '@/utils/shotPrompt'
@@ -651,9 +652,9 @@ async function realWorkflowVideo(
   const referencePayloadMb = dataUrls.reduce((sum, value) => sum + value.length, 0) / 1024 / 1024
   onProgress?.(`참조 이미지 ${dataUrls.length}장 준비 완료 / 약 ${referencePayloadMb.toFixed(1)} MB`)
 
-  const MIN_DUR = 1
-  const MAX_DUR = isAudioSync ? 15 : videoMaxSeconds(input.videoModel || 'h3')
-  const targetDuration = Math.max(MIN_DUR, Math.min(MAX_DUR, Math.round(input.duration) || 5))
+  const { durations, max: MAX_DUR } = videoDurationCapability({ profile: { workflowId } })
+  const MIN_DUR = durations[0]
+  const targetDuration = nearestVideoDuration(input.duration || 5, durations)
   if (targetDuration !== input.duration) {
     onProgress?.(`API 제한 ${MIN_DUR}–${MAX_DUR}초에 맞춰 영상 길이를 ${targetDuration}초로 조정했습니다.`)
   }
@@ -883,7 +884,7 @@ async function realWanVideo(
       ? [{ type: 'first_frame', url: urls[0] }]
       : urls.map((url) => ({ type: 'reference_image', url }))
 
-  const targetDuration = Math.max(2, Math.min(30, Math.round(input.duration) || 5))
+  const targetDuration = nearestVideoDuration(input.duration || 5, videoDurationCapability({ model: 'wan-prime' }).durations)
   let prompt = String(input.prompt || '').trim()
   if (!prompt) throw new Error('[video] 먼저 프롬프트를 작성하세요.')
   if (prompt.length > 20000) prompt = prompt.slice(0, 20000)
@@ -1331,7 +1332,7 @@ async function realLtxVideo(
   const apiKey = cfg.apiKey
   if (!apiKey) return error('missingKey')
   const model = LTX_MODELS.includes(cfg.workflowId) ? cfg.workflowId : LTX_DEFAULT_MODEL
-  const duration = ltxDuration(input.duration, model)
+  const duration = ltxDuration(input.duration, model, input.videoResolution)
   const prompt = input.prompt.trim()
   const progress = (status: string) => onProgress?.(translate(`ltx.${status}`))
   const failure = async (reply: LtxReply): Promise<never> => {
@@ -1402,7 +1403,8 @@ async function realLtxDesktopVideo(
   }
   const prompt = input.prompt.trim()
   const model = LTX_DESKTOP_MODELS.includes(cfg.workflowId) ? cfg.workflowId : LTX_DESKTOP_WORKFLOW
-  const duration = ltxDuration(input.duration, model)
+  const resolution = ltxDesktopResolution(input.videoResolution)
+  const duration = ltxDuration(input.duration, model, resolution)
   let id = input.resumeTaskId?.startsWith('ltx-desktop:') ? input.resumeTaskId.slice('ltx-desktop:'.length) : undefined
 
   try {
@@ -1418,7 +1420,7 @@ async function realLtxDesktopVideo(
       onProgress?.(translate('ltxDesktop.submitting'))
       const reply = await request({
         kind: 'submit', first, last, model, prompt, duration,
-        resolution: input.videoResolution === '1080p' ? '1080p' : '720p',
+        resolution,
         aspect: input.aspectRatio || (input.height > input.width ? '9:16' : '16:9')
       })
       if (reply.kind !== 'submitted') return fail(reply)

@@ -511,6 +511,7 @@ export interface Scene {
 export interface Project {
   id: ID
   name: string
+  defaultNamesLocalized?: true
   script: Script | null
   /** 숏드라마 챕터 라이브러리. 대본 작성과 영상 제작을 별도로 진행한다. */
   chapters?: ScriptChapter[]

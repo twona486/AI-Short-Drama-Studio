@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { videoDurationCapability } from '@/services/ai/videoDuration'
 import { t as translate } from '@/i18n'
 
 import { t } from '@/i18n'
@@ -40,6 +41,11 @@ const project = useProjectStore()
 const router = useRouter()
 const showVideoKey = ref(false)
 const ltxVideo = computed(() => isLtxProfile(settings.config.video))
+const videoVoiceHint = computed(() => {
+  const status = videoDurationCapability({ profile: settings.config.video }).voice
+  return status === 'verifying' ? 'common.videoVoiceVerifying'
+    : status === 'supported' ? 'common.videoVoiceSupported' : 'common.videoVoiceUnsupported'
+})
 const ltxDesktop = computed(() => isLtxDesktop(settings.config.video))
 const pairingLink = ref('')
 const pairingStatus = ref('')
@@ -522,6 +528,7 @@ function patchAdapter(
         :placeholder="$t('studioSettings.exampleAutoDl')"
       />
       <section class="video">
+        <p class="hint">{{ $t(videoVoiceHint) }}</p>
         <template v-if="ltxDesktop">
           <p class="hint">{{ $t('ltxDesktop.hint') }}</p>
           <p class="hint">{{ $t('ltxDesktop.memory') }}</p>

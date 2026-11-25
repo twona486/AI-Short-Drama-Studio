@@ -3,8 +3,9 @@ import { isIPv4 } from 'node:net'
 import http from 'node:http'
 import https from 'node:https'
 import { validLtxImage } from './ltx'
+import { ltxDurationOptions } from '../src/services/ai/ltxOptions'
 import {
-  LTX_DESKTOP_DURATIONS,
+  LTX_DESKTOP_RESOLUTIONS,
   LTX_DESKTOP_MODELS,
   type LtxDesktopReply,
   type LtxDesktopRequest
@@ -136,7 +137,7 @@ export async function requestLtxDesktop(request: LtxDesktopRequest): Promise<Ltx
     if (op.kind === 'submit') {
       if (!validLtxImage(op.first) || (op.last !== undefined && !validLtxImage(op.last)) ||
         !LTX_DESKTOP_MODELS.includes(op.model) || typeof op.prompt !== 'string' || op.prompt.length > 5000 ||
-        !LTX_DESKTOP_DURATIONS.includes(op.duration) || !['720p', '1080p'].includes(op.resolution) ||
+        !LTX_DESKTOP_RESOLUTIONS.includes(op.resolution) || !ltxDurationOptions(op.model, op.resolution).includes(op.duration) ||
         !['16:9', '9:16'].includes(op.aspect)) return { kind: 'invalid' }
       const specs = await json('/api/generate/models-specs')
       const local = Array.isArray(specs.downloaded_local_models) ? specs.downloaded_local_models : []

@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { activeStoryboardDuration } from '@/services/canvas/runner'
 import { confirmAction } from '@/utils/confirmAction'
 import { t as translate, uiPunctuation } from '@/i18n'
 import { ref, computed, onMounted } from 'vue'
@@ -119,6 +120,7 @@ async function generate() {
         content: project.current.script.content,
         style: look.style,
         shotDuration: project.current.script.shotDuration,
+        ...activeStoryboardDuration(),
         aspectRatio: project.current.settings.aspectRatio,
         keywords: project.current.script.keywords,
         targetDurationSec: project.current.script.targetDurationSec || undefined,

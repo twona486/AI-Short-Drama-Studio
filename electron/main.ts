@@ -17,6 +17,7 @@ import {
 import path from 'node:path'
 import os from 'node:os'
 import fs from 'node:fs/promises'
+import { randomUUID } from 'node:crypto'
 import { createReadStream, createWriteStream, existsSync, mkdirSync, statSync } from 'node:fs'
 import { Readable } from 'node:stream'
 import { pipeline } from 'node:stream/promises'
@@ -667,9 +668,22 @@ app.whenReady().then(async () => {
     return fs.readFile(filePath, 'utf8')
   })
 
-  ipcMain.handle('desktop:writeText', async (_e, filePath: string, text: string) => {
+  ipcMain.handle('desktop:writeText', async (_e, filePath: string, text: string, atomic?: boolean) => {
     await ensureDir(path.dirname(filePath))
-    await fs.writeFile(filePath, text, 'utf8')
+    if (!atomic) return fs.writeFile(filePath, text, 'utf8')
+    const stat = await fs.lstat(filePath).catch(error => {
+      if (error.code !== 'ENOENT') throw error
+    })
+    const target = stat?.isSymbolicLink() ? await fs.realpath(filePath) : filePath
+    const mode = stat?.isSymbolicLink() ? (await fs.stat(target)).mode : stat?.mode
+    const temp = path.join(path.dirname(target), `.write-${randomUUID()}.tmp`)
+    try {
+      await fs.writeFile(temp, text, { encoding: 'utf8', flag: 'wx', mode })
+      if (mode !== undefined) await fs.chmod(temp, mode)
+      await fs.rename(temp, target)
+    } finally {
+      await fs.rm(temp, { force: true })
+    }
   })
 
   ipcMain.handle('desktop:readBuffer', async (_e, filePath: string) => {

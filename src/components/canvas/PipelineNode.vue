@@ -1,6 +1,8 @@
 <script setup lang="ts">
+import { ltxShotSpeechTooFast } from '@/services/ai/ltxShotPrompt'
+import { nearestVideoDuration, videoDurationCapability, shotDurationWarning } from '@/services/ai/videoDuration'
 import { isLtxTask, isLtxDesktop } from '@/services/ai/ltxDesktopOptions'
-import { isLtxProfile, ltxDuration, ltxDurationOptions, LTX_DEFAULT_MODEL } from '@/services/ai/ltxOptions'
+import { isLtxProfile, LTX_DEFAULT_MODEL } from '@/services/ai/ltxOptions'
 import { t as translate } from '@/i18n'
 import { computed, onBeforeUnmount, ref, shallowRef, watch } from 'vue'
 import { useRouter } from 'vue-router'
@@ -37,9 +39,8 @@ import { clampRect, cropContainedImage, trimVideoBlob, type NormRect } from '@/u
 import {
   normalizeH3GenMode,
   normalizeVideoGenModel,
-  videoDurationOptions,
-  videoMaxSeconds,
-  videoMinSeconds,
+
+
   type AspectRatio,
   type CanvasNodeType,
   type H3VideoGenMode,
@@ -313,7 +314,7 @@ const isImageNode = computed(
     type.value === 'scene'
 )
 const videoModel = computed({
-  get: () => normalizeVideoGenModel(nodeMeta.value?.data.videoModel),
+  get: () => normalizeVideoGenModel(nodeMeta.value?.data.videoModel ?? settings.config.defaultVideoModel),
   set: (v: VideoGenModel) => applyShotVideoModel(props.id, v)
 })
 const resolutionChoices = computed(() =>
@@ -559,24 +560,19 @@ watch(
 
 const ltxProfile = computed(() => videoModel.value === 'h3' && isLtxProfile(docVideoProfile.value)
   ? docVideoProfile.value : undefined)
-const durationOptions = computed(() => ltxProfile.value
-  ? ltxDurationOptions(ltxProfile.value.workflowId) : videoDurationOptions(videoModel.value))
+const durationCapability = computed(() => videoDurationCapability({
+  model: videoModel.value, profile: docVideoProfile.value, resolution: videoResolution.value,
+  startEndFrames: h3GenMode.value === 'fl2va' || project.current?.settings.h3ShotChainMode === 'fl2va'
+}))
+const durationOptions = computed(() => durationCapability.value.durations)
 
 const ltxResume = computed(() => isLtxTask(shot.value?.videoTaskId))
-const shotDurationValue = computed(() => ltxProfile.value
-  ? ltxDuration(shot.value?.duration || 6, ltxProfile.value.workflowId)
-  : Math.min(
-    videoMaxSeconds(videoModel.value),
-    Math.max(videoMinSeconds(videoModel.value), Math.round(Number(shot.value?.duration) || 5))
-  )
-)
+const shotDurationValue = computed(() => nearestVideoDuration(shot.value?.duration || 5, durationOptions.value))
+const exceedsShotDuration = computed(() => shotDurationWarning(shot.value?.duration, durationCapability.value.max))
 
 function setShotDuration(raw: number) {
   if (!shot.value) return
-  const min = videoMinSeconds(videoModel.value)
-  const max = videoMaxSeconds(videoModel.value)
-  const d = Math.min(max, Math.max(min, Math.round(Number(raw) || shot.value.duration || min)))
-  project.updateShot(shot.value.id, { duration: d })
+  project.updateShot(shot.value.id, { duration: nearestVideoDuration(raw || shot.value.duration, durationOptions.value) })
 }
 
 const redrawFrameWait = shallowRef<AbortController>()
@@ -1264,6 +1260,12 @@ const cropStyle = computed(() => ({
       <span v-if="isVideoNode && durationLabel" class="len">{{ durationLabel }}</span>
     </div>
 
+    <p v-if="type === 'shotVideo' && exceedsShotDuration" class="shot-duration-warning">
+      {{ $t('storyboard.shotDurationWarning', { max: durationCapability.max, duration: shot?.duration }) }}
+    </p>
+    <p v-if="type === 'shotVideo' && ltxProfile && ltxShotSpeechTooFast(shot, shotDurationValue)" class="shot-duration-warning">
+      {{ $t('ltx.speechTooFast', { seconds: shotDurationValue }) }}
+    </p>
     <transition name="float-down">
       <div v-if="selected && panelOpen && showPrompt && !cropOn && !trimOn" class="prompt nodrag nowheel" @pointerdown.stop @mousedown.stop @click.stop>
       <div v-if="type === 'shotVideo'" class="prompt-tools">
@@ -1444,6 +1446,7 @@ const cropStyle = computed(() => ({
 </template>
 
 <style scoped>
+.shot-duration-warning { margin: 4px 8px; color: var(--color-warning, #ddac59); font-size: 11px; }
 .ltx-stop { position: absolute; right: 8px; bottom: 8px; z-index: 10; }
 .pnode {
   position: relative;

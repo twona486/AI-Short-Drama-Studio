@@ -1,3 +1,4 @@
+import { splitStoryboardDuration, storyboardDurationInstruction } from './storyboardDuration'
 /**
  * 스토리보드 생성 서비스
  *
@@ -55,6 +56,7 @@ export interface StoryboardInput {
   shotDuration: number
   /** 선택한 영상 모델의 샷당 최대 길이. 동작이 이 범위 안에서 이어져야 한다. */
   maxShotDuration?: number
+  allowedShotDurations?: number[]
   aspectRatio: string
   /** 원고 키워드(선택) */
   keywords?: string[]
@@ -648,13 +650,13 @@ async function repairStoryboardOnce(
     Number(input.targetDurationSec) || extractTargetDurationSec(input.topic, input.content)
   const repairShotCap = shotBudgetFromDuration(repairTargetSec, input.maxShotDuration)
   const durationBlock = repairTargetSec
-    ? `\n[Required final duration] The user requests ${repairTargetSec} seconds. Accept only ${repairTargetSec - DURATION_TOLERANCE_SEC}–${repairTargetSec + DURATION_TOLERANCE_SEC} seconds. Do not exceed ${repairShotCap} shots. If needed, combine adjacent shots in the same location with the same cast and use camera movement and blocking rather than cuts. Keep key events. Each duration must be ${MIN_SHOT_SEC}–${shotDurationLimit(input)} seconds, with a total in the requested range.`
+    ? `\n[Required final duration] The user requests ${repairTargetSec} seconds. Accept only ${repairTargetSec - DURATION_TOLERANCE_SEC}–${repairTargetSec + DURATION_TOLERANCE_SEC} seconds. Aim for ${repairShotCap} shots, allowing more when necessary to preserve speech and the per-shot cap. If needed, combine adjacent shots in the same location with the same cast and use camera movement and blocking rather than cuts. Keep key events. Each duration must be ${MIN_SHOT_SEC}–${shotDurationLimit(input)} seconds, with a total in the requested range.`
     : ''
   const repair = await callLLM({
     messages: [
       {
         role: 'system',
-          content: `${importedDirectorPrefix()}You are the supervising editor for the short film. The previous JSON failed review. Re-extract it and fix all listed issues before returning it.${durationBlock} Do not add products, characters, numbers, or facts the user did not mention. Restore only processes already shown or clearly implied within this request. Do not write consequences beyond its boundary.\n${extractHint}\n${NARRATIVE_CONTINUITY_RULES}\n${SPEAKER_STAGING_RULES}\nWhen a major event has been compressed away or adjacent shots do not connect, split, insert, or reorder shots near the gap to show the missing process and reactions within the episode. Keep unrelated shots and the user's suspenseful stopping point. Each added shot needs continuity in the form of a specific preceding ending → visible change → specific state for the next shot.\nUse a distinct 3–8-character title per shot, never a generic "Shot". Divide original text by meaning across voiceover. Default to h3-dialogue and use h3-voiceover only for explicit narration. Keep 2–4 consecutive short lines of one intent together in a 7–10-second shot where possible. Reserve a single line for short reactions or transitions. Do not exceed duration*4 characters. Use "Character name: line" for speaker identification; H3 removes the prefix.\nChoose framing based on action, spatial relations, setting, and emotion. Use close framing when the expression matters and the environment can be omitted. Use medium or group framing for handoffs, arguments, questions and answers, interpersonal distance, environmental pressure, or group reactions. Do not make every speaker a close-up; identify the one speaker and others' reactions.\nWrite user-facing titles, descriptions, and newly authored dialogue in Korean (한국어). Write visualPrompt, videoPrompt, and h3Aesthetic in English for generation. Preserve supplied lines and explicitly requested Korean on-screen text. Make visualPrompt a visible still frame with setting, clothing, and light, and keep it distinct from videoPrompt. h3Aesthetic covers material, lighting, color, and cinematography, without tag lists.\n${videoPerformanceSpec(getVideoPromptStyle())}\nReturn one complete, valid JSON object.`
+          content: `${importedDirectorPrefix()}You are the supervising editor for the short film. The previous JSON failed review. Re-extract it and fix all listed issues before returning it.${durationBlock} ${input.allowedShotDurations?.length ? storyboardDurationInstruction(input.allowedShotDurations) : ''} Do not add products, characters, numbers, or facts the user did not mention. Restore only processes already shown or clearly implied within this request. Do not write consequences beyond its boundary.\n${extractHint}\n${NARRATIVE_CONTINUITY_RULES}\n${SPEAKER_STAGING_RULES}\nWhen a major event has been compressed away or adjacent shots do not connect, split, insert, or reorder shots near the gap to show the missing process and reactions within the episode. Keep unrelated shots and the user's suspenseful stopping point. Each added shot needs continuity in the form of a specific preceding ending → visible change → specific state for the next shot.\nUse a distinct 3–8-character title per shot, never a generic "Shot". Divide original text by meaning across voiceover. Default to h3-dialogue and use h3-voiceover only for explicit narration. Keep 2–4 consecutive short lines of one intent together in a 7–10-second shot where possible. Reserve a single line for short reactions or transitions. Do not exceed duration*4 characters. Use "Character name: line" for speaker identification; H3 removes the prefix.\nChoose framing based on action, spatial relations, setting, and emotion. Use close framing when the expression matters and the environment can be omitted. Use medium or group framing for handoffs, arguments, questions and answers, interpersonal distance, environmental pressure, or group reactions. Do not make every speaker a close-up; identify the one speaker and others' reactions.\nWrite user-facing titles, descriptions, and newly authored dialogue in Korean (한국어). Write visualPrompt, videoPrompt, and h3Aesthetic in English for generation. Preserve supplied lines and explicitly requested Korean on-screen text. Make visualPrompt a visible still frame with setting, clothing, and light, and keep it distinct from videoPrompt. h3Aesthetic covers material, lighting, color, and cinematography, without tag lists.\n${videoPerformanceSpec(getVideoPromptStyle())}\nReturn one complete, valid JSON object.`
       },
       {
         role: 'user',
@@ -673,6 +675,7 @@ async function repairStoryboardOnce(
     topic: input.topic,
     content: input.content,
     keywords: input.keywords,
+    allowedShotDurations: input.allowedShotDurations,
     maxShotDuration: input.maxShotDuration
   })
 }
@@ -949,7 +952,7 @@ async function generateShotWorkBatch(
   )
   const budgetLine =
     totalShotBudget && totalShotBudget > 0
-      ? `\nTarget runtime: ${targetDurationSec || '?'}s with tolerance of ${DURATION_TOLERANCE_SEC}s. Aim for ${totalShotBudget} shots total and at most ${limit} in this excerpt. Combine continuous action and dialogue in the same setting where possible. Do not add silent shots to reach the count.${durationCap ? `Excerpt runtime: about ${durationCap}s.` : ''}`
+      ? `\nTarget runtime: ${targetDurationSec || '?'}s with tolerance of ${DURATION_TOLERANCE_SEC}s. Aim for ${totalShotBudget} shots total and about ${limit} in this excerpt. Add shots if required to fit all dialogue and narration. Combine continuous action and dialogue in the same setting where possible. Do not add silent shots to reach the count.${durationCap ? `Excerpt runtime: about ${durationCap}s.` : ''}`
       : ''
   const parseBatch = (content: string): Record<string, unknown>[] => {
     try {
@@ -981,7 +984,8 @@ When the source contains dialogue, let most shots carry it. Keep necessary silen
 Use visualPrompt for a representative still. Write videoPrompt as two to five timed, executable English beats from zero to the end. Include the active speaker, listeners' position and response, expression, camera motion and meaningful environment reactions such as cloth, rain or light. Avoid repeating the still or dividing time evenly by default.
 ${DIRECTOR_TIMELINE_SPEC}
 Write titles, purpose, labels and sound notes in polite conversational Korean, with English visual and video prompts. Keep every actor's eyeline inside the scene.
-Return JSON: {"shots":[{"title":"short Korean title","purpose":"dramatic function","shotSize":"framing","visualPrompt":"still-frame prompt","videoPrompt":"timed English motion prompt","duration":6,"audioDescription":"synchronized physical sound","voiceover":"speaker: exact source line, or empty","audioMode":"h3-dialogue|h3-voiceover|none","cameraMovement":"push|pull|pan|tilt|static|orbit","subjectNames":["source name"],"sceneName":"established location"}]}. Return 1–${limit} shots. If plain text is necessary, use Shot N, Image, Action, Duration, Sound and Dialogue. ${retry ? 'The previous reply could not be parsed. Return the shots directly.' : ''}`
+${input.allowedShotDurations?.length ? storyboardDurationInstruction(input.allowedShotDurations) : ''}
+Return JSON: {"shots":[{"title":"short Korean title","purpose":"dramatic function","shotSize":"framing","visualPrompt":"still-frame prompt","videoPrompt":"timed English motion prompt","duration":6,"audioDescription":"synchronized physical sound","voiceover":"speaker: exact source line, or empty","audioMode":"h3-dialogue|h3-voiceover|none","cameraMovement":"push|pull|pan|tilt|static|orbit","subjectNames":["source name"],"sceneName":"established location"}]}. Aim for 1–${limit} shots; exceed that estimate if needed to fit all original dialogue or narration. If plain text is necessary, use Shot N, Image, Action, Duration, Sound and Dialogue. ${retry ? 'The previous reply could not be parsed. Return the shots directly.' : ''}`
         },
         {
           role: 'user',
@@ -1298,6 +1302,7 @@ Dialogue: 아펑: 먼저 다 먹자. 심은 남겨 두고.`
         role: 'user',
         content: `Existing characters: ${subjectNames.join(', ') || '(none)'}
 Existing locations: ${sceneNames.join(', ') || '(none)'}
+${input.allowedShotDurations?.length ? storyboardDurationInstruction(input.allowedShotDurations) : ''}
 Shot duration. The current model allows up to ${shotDurationLimit(input)} seconds. ${film ? `Plan by scene action within 5–${shotDurationLimit(input)} seconds` : `Use ${input.shotDuration} seconds as a reference within 3–${shotDurationLimit(input)} seconds`}。Keep uninterrupted action in one shot when it fits.
 
 ${directives ? `Chapter requirements:\n${directives}\n` : ''}전체 대본
@@ -1603,7 +1608,7 @@ Return a top-level object with a nonempty scenes array. Do not nest inside data 
       if (!rows.length) throw new Error('캐릭터 추출에 실패했습니다. 대본에 캐릭터 섹션이나 대사의 화자 이름이 없고 모델도 명단을 반환하지 않았습니다.')
       const normalized = normalizeStoryboard(
         { subjects: rows, scenes: [], shots: [] },
-        { style: input.style, topic: input.topic, content: input.content, keywords: input.keywords, maxShotDuration: input.maxShotDuration }
+        { style: input.style, topic: input.topic, content: input.content, keywords: input.keywords, allowedShotDurations: input.allowedShotDurations, maxShotDuration: input.maxShotDuration }
       )
       const props = await pullRecurringProps(play, normalized.subjects ?? [])
       await input.onExtractStage?.('subjects', { subjects: normalized.subjects, props, scenes: [], shots: [] })
@@ -1660,7 +1665,7 @@ ${extractPlayForSceneStage(play)}`
       if (!rows.length) throw new Error('장면을 추출하지 못했어요. 대본에 ‘환경과 장면’이나 ‘실내｜장소’가 없고 모델 응답에도 장소가 없어요. 캐릭터 노드는 저장했어요.')
       const normalized = normalizeStoryboard(
         { ...scenePart.raw, subjects: subjectPart.raw.subjects || [], scenes: rows, shots: [] },
-        { style: input.style, topic: input.topic, content: input.content, keywords: input.keywords, maxShotDuration: input.maxShotDuration }
+        { style: input.style, topic: input.topic, content: input.content, keywords: input.keywords, allowedShotDurations: input.allowedShotDurations, maxShotDuration: input.maxShotDuration }
       )
       await input.onExtractStage?.('scenes', { ...normalized, shots: [] })
       onProgress?.(`✓ 장면 ${normalized.scenes?.length || 0}개를 저장했습니다.`)
@@ -1723,7 +1728,7 @@ ${extractPlayForSceneStage(play)}`
       const shots = rows.flatMap((batch) => batch || [])
       return normalizeStoryboard(
         { ...scenePart.raw, subjects: subjectRows, scenes: sceneRows, shots },
-        { style: input.style, topic: input.topic, content: input.content, keywords: input.keywords, maxShotDuration: input.maxShotDuration }
+        { style: input.style, topic: input.topic, content: input.content, keywords: input.keywords, allowedShotDurations: input.allowedShotDurations, maxShotDuration: input.maxShotDuration }
       )
     }
     const landFinishedBatch = async (
@@ -1893,6 +1898,7 @@ ${extractPlayForSceneStage(play)}`
         topic: input.topic,
         content: input.content,
         keywords: input.keywords,
+        allowedShotDurations: input.allowedShotDurations,
         maxShotDuration: input.maxShotDuration
       }),
       { ...input, targetDurationSec: targetDurationSec || input.targetDurationSec },
@@ -2058,6 +2064,7 @@ Visual style: express the user's wording through physical objects, without a sep
 Reject visualPrompt if it only lists positions, omits physical surroundings, or opens or ends with generic style language.
 Reject videoPrompt if it omits any duration from zero to the end, lacks actions and speakers at actual beats, or fills equal time slots with generic language.
 ${hasUserStyle && !look.matched ? 'Use the custom visual style in place of the preset selected on the page.' : `${styleGuide.avoid}`}
+${input.allowedShotDurations?.length ? storyboardDurationInstruction(input.allowedShotDurations) : ''}
 Use H3 on-screen dialogue by default. Divide the original words into meaningful paragraphs for voiceover and set audioMode=h3-dialogue. Avoid one line per shot. The current model accepts at most ${shotDurationLimit(input)} seconds per shot. For a shared place, person, intention, or continuous action, prefer one complete 7–${shotDurationLimit(input)}-second shot when it fits. Do not force two 5-second shots to fill a template. Cut only when focus, time, place, axis, or dramatic purpose changes. Reserve a single line for brief reactions or transitions and allow about four characters per second. Use "Character name: dialogue" in voiceover and specify the speaker and vocal quality in speakerHint.
 Follow action, spacing, and emotion when choosing framing. Use close framing when the expression matters and no surroundings are needed; use medium, two-person, or group framing for handoffs, arguments, exchanges, distance, environmental pressure, or group reactions. Do not force close-ups; name who speaks and others' reactions so mouths do not open together.
 Use h3-voiceover only for explicit off-screen narration, tts for requested dubbing in postproduction, and none for a silent empty shot. Create a separate subject for each ### under characters. If a form of address such as “older brother” refers to an existing character, record it in name, role, or description. Include every character in at least one shot, link them through subjectIds, and name them in visualPrompt and videoPrompt. Keep the father, older brother, and antagonist even if they never occupy the center of the frame. Create a character card for each and do not replace them in shots with a passerby or “a man.” Show a deceased character's keepsake, portrait, or flashback in at least one shot, and a living opponent's confrontation or visible pressure in at least one shot. Give every shot its own specific 3–8-character Korean title. Verify adjacent continuity and apply the narrative rules to major changes instead of jumping from a result to explanatory speech.
@@ -2095,6 +2102,7 @@ Return valid JSON only.`
     topic: input.topic,
     content: input.content,
     keywords: input.keywords,
+    allowedShotDurations: input.allowedShotDurations,
     maxShotDuration: input.maxShotDuration
   })
 
@@ -2299,9 +2307,11 @@ async function ensureShotDuration(
       `샷을 ${DURATION_REPAIR_ROUNDS}번 다시 나눴지만 전체 ${total}초가 목표 ${target}초의 허용 오차 ±${DURATION_TOLERANCE_SEC}초를 벗어나요.`
     )
   }
-  const fittedTotal = totalShotDuration(fitted)
+  const durations = input.allowedShotDurations
+  const aligned = durations?.length ? fitted.flatMap((shot) => splitStoryboardDuration(shot, durations)) : fitted
+  const fittedTotal = totalShotDuration(aligned)
   onProgress?.(`길이 검사를 통과하지 않아 목표 ${target}초에 맞춰 샷 길이를 조정했습니다. 현재 ${fittedTotal}초입니다.`)
-  return { ...current, shots: fitted }
+  return { ...current, shots: aligned }
 }
 
 export function storyboardQualityIssues(
@@ -2608,6 +2618,7 @@ export function normalizeStoryboard(
     content?: string
     keywords?: string[]
     maxShotDuration?: number
+    allowedShotDurations?: number[]
   } | VisualStyle = 'cinematic'
 ): StoryboardResult {
   const options =
@@ -2777,7 +2788,9 @@ export function normalizeStoryboard(
       audioDescription: String(s?.audioDescription || ''),
       voiceover,
       speakerHint: optStr(s?.speakerHint),
-      duration: clampShotDuration(s?.duration, voiceover, i, options.maxShotDuration),
+      duration: options.allowedShotDurations?.length && Number(s?.duration) > 0 && Number.isFinite(Number(s?.duration))
+        ? Math.min(300, Math.round(Number(s.duration)))
+        : clampShotDuration(s?.duration, voiceover, i, options.maxShotDuration),
       cameraMovement: normalizeCameraMovement(s?.cameraMovement),
       purpose,
       blocking,
@@ -2798,7 +2811,7 @@ export function normalizeStoryboard(
       audioMode,
       speakerHint: optStr(s?.speakerHint),
       speakerVoice: optStr(s?.speakerVoice),
-      duration: clampShotDuration(s?.duration, voiceover, i, options.maxShotDuration),
+      duration: draftShot.duration,
       cameraMovement: normalizeCameraMovement(s?.cameraMovement),
       subjectIds,
       sceneId: boundScene?.id,
@@ -2811,7 +2824,9 @@ export function normalizeStoryboard(
     }
   })
 
-  const boundShots = bindCastIntoShots(shots, subjects)
+  const durations = options.allowedShotDurations
+  const boundedShots = durations?.length ? shots.flatMap((shot) => splitStoryboardDuration(shot, durations)) : shots
+  const boundShots = bindCastIntoShots(boundedShots, subjects)
   // 대사의 화자에 해당하는 캐릭터 카드에서 voicePrompt를 가져온다.
   // 영상 생성과 후반 더빙에 동일한 값을 전달한다.
   bindShotVoiceHints(boundShots, subjects)
@@ -2961,6 +2976,7 @@ export async function generateStoryboard(
       topic: resolved.topic,
       content: resolved.content,
       keywords: resolved.keywords,
+      allowedShotDurations: resolved.allowedShotDurations,
       maxShotDuration: resolved.maxShotDuration
     }
   )

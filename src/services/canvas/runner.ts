@@ -1,3 +1,5 @@
+import { ltxShotPrompt, ltxShotSpeechTooFast } from '@/services/ai/ltxShotPrompt'
+import { videoDurationCapability, nearestVideoDuration } from '@/services/ai/videoDuration'
 import { isLtxDesktop, isLtxTask } from '@/services/ai/ltxDesktopOptions'
 import { isLtxProfile } from '@/services/ai/ltxOptions'
 import { uiPunctuation } from '@/i18n'
@@ -46,8 +48,9 @@ import {
 } from '@/services/ai'
 import { blobToChatImageUrl, callLLM } from '@/services/ai/client'
 import { stripReasoningLeak } from '@/utils/jsonRepair'
-import { imageModelForProject, getVideoPromptStyle } from '@/services/ai/runtime'
+import { resolveImageAdapter } from '@/services/ai/adapters'
 import { DRAW_THINGS_PROVIDER } from '@/services/ai/drawThingsOptions'
+import { getImageConfig, imageModelForProject, getVideoPromptStyle } from '@/services/ai/runtime'
 import { pickDocImageResolution } from '@/services/ai/modelOptions'
 import { importedDirectorPrefix } from '@/services/settings/directorSkill'
 import { collectShotRefIds, collectShotBoardRefIds, collectShotKeyframeRefIds, collectShotVideoEntries, packVideoRefEntries, boundSubjectIds, sceneAssetForShot, sceneForShot, subjectsForShot, sceneHasKeyProps } from '@/utils/consistency'
@@ -96,8 +99,6 @@ import {
   normalizeVideoGenModel,
   normalizeVideoResolution,
   videoMaxRefImages,
-  videoMaxSeconds,
-  videoMinSeconds
 } from '@/types'
 import { canvasNodeProducesImage, canvasReferenceSlotEntries, resolvedCanvasReferenceAssetIds } from '@/services/canvas/references'
 import { resolveH3PromptProfile } from './videoPromptProfile'
@@ -694,25 +695,37 @@ function refreshShot(shotId: string): Shot {
 async function collectFrameRefBlobs(
   shot: Shot,
   project: Project,
-  onProgress?: (msg: string) => void
-): Promise<{ blobs: Blob[]; labels: string[] }> {
+  onProgress?: (msg: string) => void,
+  videoNode?: CanvasNode
+): Promise<{ refs: ID[]; blobs: Blob[]; labels: string[] }> {
   const assets = useAssetsStore()
   const library = useLibraryStore()
   // 프레임을 만들 때는 캐릭터 4면 설정 이미지, 소품, 장면 기준 이미지를 모두 참고한다.
   // 4분할 키프레임은 격자가 프레임에 들어갈 수 있어 사용하지 않는다.
-  const bundle = collectShotRefIds(shot, project)
+  const bundle = videoNode ? collectShotKeyframeRefIds(shot, project) : collectShotRefIds(shot, project)
+  if (videoNode) {
+    const omitted = new Set([shot.imageAssetId, shot.boardAssetId, ...(shot.omittedRefAssetIds ?? [])])
+    for (const id of resolvedCanvasReferenceAssetIds(project, videoNode)) {
+      if (bundle.ids.length >= 8) break
+      if (omitted.has(id) || bundle.ids.includes(id)) continue
+      bundle.ids.push(id)
+      bundle.labels.push('additional visual reference connected to this shot')
+    }
+  }
+  const refs: ID[] = []
   const blobs: Blob[] = []
   const labels: string[] = []
   for (let i = 0; i < bundle.ids.length; i++) {
     const blob = (await assets.getBlob(bundle.ids[i])) || (await library.getBlob(bundle.ids[i]))
     if (!blob) continue
+    refs.push(bundle.ids[i])
     blobs.push(blob)
     labels.push(bundle.labels[i])
   }
   if (!blobs.length) {
     onProgress?.('캐릭터나 장면의 참조 이미지가 없어 스토리보드 설명을 바탕으로 프레임을 생성합니다.')
   }
-  return { blobs, labels }
+  return { refs, blobs, labels }
 }
 
 /** 프레임을 생성해 리소스 라이브러리에 저장한다. */
@@ -722,14 +735,16 @@ async function renderShotFrame(
   blobs: Blob[],
   labels: string[],
   onProgress?: (msg: string) => void,
-  signal?: AbortSignal
+  signal?: AbortSignal,
+  frameContext?: { referenceIds: ID[]; aspectRatio: AspectRatio }
 ) {
   const project = useProjectStore()
   const assets = useAssetsStore()
   if (!project.current) throw new Error('열려 있는 프로젝트가 없습니다.')
-  const prompt = shotFrameSendPrompt(shot, project.current, which)
+  const projectId = project.current.id
+  const prompt = shotFrameSendPrompt(shot, project.current, which, frameContext)
   const look = lookFromScript(project.current.script)
-  const aspectRatio = shotNodeAspect(project.current, shot.id, 'shotImage')
+  const aspectRatio = frameContext?.aspectRatio ?? shotNodeAspect(project.current, shot.id, 'shotImage')
   const size = imageGenSize('shot', aspectRatio)
   const word = which === 'start' ? translate('canvasRunner.firstFrame') : translate('canvasRunner.lastFrame')
   onProgress?.(`이 샷의 ${word}을 생성하는 중(캐릭터·장면 참조 이미지 ${blobs.length}장)…`)
@@ -759,14 +774,17 @@ async function renderShotFrame(
     ensureNotCancelled(signal)
     throw fail(e)
   }
+  ensureNotCancelled(signal)
   onProgress?.(`${word} 파일을 확인하는 중…`)
   const quality = await reviewImageQuality(result.blob, prompt, signal)
   if (!quality.passed) throw fail(new Error(translate('canvasRunner.invalidFrame', { frame: word, reason: quality.issues.join(uiPunctuation.semicolon) })))
+  ensureNotCancelled(signal)
+  if (project.current?.id !== projectId) throw new DOMException(translate('ltx.projectChanged'), 'AbortError')
   try {
     const asset = await assets.add(result.blob, 'image', 'ai-generated', {
       filename: `shot${shot.index + 1}_${which}frame_${Date.now().toString(36)}`,
       prompt,
-      projectId: project.current.id,
+      projectId,
       shotId: shot.id
     })
     return asset
@@ -1094,22 +1112,24 @@ function canvasVideoResolutionForShot(shot: Shot, videoModel: VideoGenModel): Vi
   return normalizeVideoResolution(canvasVideoNodeForShot(shot)?.data.videoResolution ?? useProjectStore().current?.settings.defaultVideoResolution, videoModel)
 }
 
-function clampVideoDuration(raw: number | undefined, videoModel: VideoGenModel, fallback = 5) {
-  const min = videoMinSeconds(videoModel)
-  const max = videoMaxSeconds(videoModel)
-  return Math.min(max, Math.max(min, Math.round(raw || fallback)))
+function clampVideoDuration(raw: number | undefined, model: VideoGenModel, fallback = 5, profileId?: string, resolution?: VideoResolution) {
+  return nearestVideoDuration(raw || fallback, videoDurationCapability({
+    model,
+    profile: videoProfileById(profileId),
+    resolution
+  }).durations)
 }
 
-function storyboardVideoModel(): VideoGenModel {
-  const p = useProjectStore().current
-  const existing = p?.canvas?.nodes.find((node) => node.type === 'shotVideo')
-  if (existing?.data.videoModel) return normalizeVideoGenModel(existing.data.videoModel)
-  const preferred = useSettingsStore().config.defaultVideoModel
-  if (preferred) return normalizeVideoGenModel(preferred)
-  const cfg = useSettingsStore().config.video
-  const marker = `${cfg.provider || ''} ${cfg.workflowId || ''} ${cfg.adapter?.type || ''}`.toLowerCase()
-  if (/h3.*v5/.test(marker) && !/15s/.test(marker)) return 'h3-v5'
-  return 'h3'
+export function activeStoryboardDuration() {
+  const settings = useSettingsStore().config
+  const project = useProjectStore().current
+  const capability = videoDurationCapability({
+    model: normalizeVideoGenModel(settings.defaultVideoModel),
+    profile: settings.video,
+    resolution: project?.settings.defaultVideoResolution,
+    startEndFrames: isFl2vaChainActive(project)
+  })
+  return { maxShotDuration: capability.max, allowedShotDurations: capability.durations }
 }
 
 function shotUsesFl2va(shot: Shot, videoModel: VideoGenModel): boolean {
@@ -1298,6 +1318,49 @@ export function rebindShotScenes() {
   }
 }
 
+async function prepareLtxShotStart(
+  shot: Shot,
+  p: Project,
+  videoNode: CanvasNode | undefined,
+  aspectRatio: AspectRatio,
+  onProgress?: (msg: string) => void,
+  signal?: AbortSignal
+): Promise<Blob> {
+  const existing = await tryLoadRefImageBlob(shot.firstFrameAssetId) ??
+    await tryLoadRefImageBlob(shot.imageAssetId)
+  if (existing) return existing
+
+  const cfg = getImageConfig()
+  const drawThings = cfg.provider === DRAW_THINGS_PROVIDER
+  const adapter = resolveImageAdapter(cfg)
+  const workflow = adapter === 'comfyui-prompt' || adapter === 'comfyui-workflow' || adapter === 'zealman-workflow'
+  if (!cfg.baseUrl?.trim() || ((drawThings || !workflow) && !cfg.model?.trim()) ||
+    (!drawThings && adapter === 'openai-images' && !cfg.apiKey?.trim()) ||
+    (!drawThings && adapter === 'comfyui-prompt' && !cfg.adapter?.workflowTemplate?.trim())) {
+    throw new Error(translate('ltx.startImageSettings'))
+  }
+
+  ensureNotCancelled(signal)
+  onProgress?.(translate('ltx.preparingStart', { shot: shot.index + 1 }))
+  const project = useProjectStore()
+  const { refs, blobs, labels } = await collectFrameRefBlobs(shot, p, onProgress, videoNode)
+  ensureNotCancelled(signal)
+  if (project.current?.id !== p.id) throw new DOMException(translate('ltx.projectChanged'), 'AbortError')
+  const frame = await renderShotFrame(shot, 'start', blobs, labels, onProgress, signal, { referenceIds: refs, aspectRatio })
+  ensureNotCancelled(signal)
+  if (project.current?.id !== p.id) throw new DOMException(translate('ltx.projectChanged'), 'AbortError')
+  const latest = refreshShot(shot.id)
+  if (latest.firstFrameAssetId !== shot.firstFrameAssetId) {
+    const selected = await tryLoadRefImageBlob(latest.firstFrameAssetId)
+    if (selected) return selected
+  }
+  const blob = await tryLoadRefImageBlob(frame.id)
+  if (!blob) throw new Error(translate('ltx.missingFrame'))
+  project.updateShot(shot.id, { firstFrameAssetId: frame.id })
+  await project.save()
+  return blob
+}
+
 export async function generateShotVideo(shot: Shot, onProgress?: (msg: string) => void, signal?: AbortSignal) {
   ensureNotCancelled(signal)
   shot = refreshShot(shot.id)
@@ -1313,15 +1376,21 @@ export async function generateShotVideo(shot: Shot, onProgress?: (msg: string) =
     const resumeTaskId = shot.videoTaskId
     const resuming = isLtxTask(resumeTaskId)
     const aspectRatio = shotNodeAspect(p, shot.id, 'shotVideo')
+    const first = resuming ? undefined : await prepareLtxShotStart(shot, p, videoNode, aspectRatio, onProgress, signal)
+    ensureNotCancelled(signal)
+    if (project.current?.id !== p.id) throw new DOMException(translate('ltx.projectChanged'), 'AbortError')
+    const videoResolution = canvasVideoResolutionForShot(shot, 'h3')
+    const duration = nearestVideoDuration(shot.duration, videoDurationCapability({ profile, resolution: videoResolution }).durations)
+    if (!resuming && ltxShotSpeechTooFast(shot, duration)) onProgress?.(translate('ltx.speechTooFast', { seconds: duration }))
     const result = await generateVideo({
-      prompt: shot.compiledVideoPrompt || '',
-      imageBlob: resuming ? undefined : await tryLoadRefImageBlob(shot.firstFrameAssetId || shot.imageAssetId),
+      prompt: ltxShotPrompt(shot, resolveShotSpeakerVoice(shot, p)),
+      imageBlob: first,
       lastFrameBlob: resuming ? undefined : await tryLoadRefImageBlob(shot.lastFrameAssetId),
       duration: shot.duration,
       ...aspectToSize(aspectRatio),
       aspectRatio,
       videoProfileId: profileId || profile?.id,
-      videoResolution: canvasVideoResolutionForShot(shot, 'h3'),
+      videoResolution,
       generateAudio: shotVideoAudio(shot.id, profileId),
       signal,
       resumeTaskId,
@@ -1461,14 +1530,14 @@ export async function generateShotVideo(shot: Shot, onProgress?: (msg: string) =
           sceneName: place.name,
           sceneLighting: place.lighting,
           shotTitle: shot.title,
-          duration: clampVideoDuration(shot.duration, videoModel),
+          duration: clampVideoDuration(shot.duration, videoModel, 5, profileId, canvasVideoResolutionForShot(shot, videoModel)),
           width: videoSize.width,
           height: videoSize.height,
           aspectRatio,
           cameraMovement: shot.cameraMovement,
           promptStyle,
           videoModel: 'h3',
-          videoProfileId: shot.videoProfileId,
+          videoProfileId: profileId,
           videoResolution: canvasVideoResolutionForShot(shot, videoModel),
           generateAudio: shotVideoAudio(shot.id, shot.videoProfileId),
           h3GenMode: 'fl2va',
@@ -1628,14 +1697,14 @@ export async function generateShotVideo(shot: Shot, onProgress?: (msg: string) =
       shotTitle: shot.title,
       imageAssignments,
       imageSlots,
-      duration: clampVideoDuration(shot.duration, videoModel),
+      duration: clampVideoDuration(shot.duration, videoModel, 5, profileId, canvasVideoResolutionForShot(shot, videoModel)),
       width: videoSize.width,
       height: videoSize.height,
       aspectRatio,
       cameraMovement: shot.cameraMovement,
       promptStyle,
       videoModel,
-      videoProfileId: shot.videoProfileId,
+      videoProfileId: profileId,
       videoResolution: canvasVideoResolutionForShot(shot, videoModel),
       generateAudio: shotVideoAudio(shot.id, shot.videoProfileId),
       h3GenMode: 'reference',
@@ -1822,7 +1891,7 @@ export async function optimizeShotVideoPrompt(shot: Shot, signal?: AbortSignal, 
       source,
       referenceIds: packed.map((entry) => entry.id),
       imageSlots,
-      duration: clampVideoDuration(shot.duration, videoModel),
+      duration: clampVideoDuration(shot.duration, videoModel, 5, profile?.id, canvasVideoResolutionForShot(shot, videoModel)),
       aspectRatio: shotNodeAspect(p, shot.id, 'shotVideo'),
       mode: shotUsesFl2va(shot, videoModel) ? 'FL2VA' : 'R2VA',
       aesthetic: p.script?.visualStyleOverride || p.script?.h3Aesthetic || p.script?.aesthetic,
@@ -1844,7 +1913,7 @@ export async function optimizeShotVideoPrompt(shot: Shot, signal?: AbortSignal, 
     const pictures = imageSlots
       .map((slot) => `Picture ${slot.index}: ${slot.sourceName || slot.name}`)
       .join('\n')
-    compiled = await rewritePromptText({ source, pictures, modelName: videoModel === 'wan-prime' ? 'Wan 3.0 Prime' : [profile?.name, profile?.workflowId].filter(Boolean).join(' / '), dialogue: shot.voiceover, duration: clampVideoDuration(shot.duration, videoModel), aspectRatio: shotNodeAspect(p, shot.id, 'shotVideo'), signal })
+    compiled = await rewritePromptText({ source, pictures, modelName: videoModel === 'wan-prime' ? 'Wan 3.0 Prime' : [profile?.name, profile?.workflowId].filter(Boolean).join(' / '), dialogue: shot.voiceover, duration: clampVideoDuration(shot.duration, videoModel, 5, profile?.id, canvasVideoResolutionForShot(shot, videoModel)), aspectRatio: shotNodeAspect(p, shot.id, 'shotVideo'), signal })
   }
   const currentShot = refreshShot(shot.id)
   const currentProfile = videoProfileById(canvasVideoNodeForShot(currentShot)?.data.videoProfileId || currentShot.videoProfileId)
@@ -2090,7 +2159,7 @@ export async function runGeneratePlay(
       content: requestContent,
       style: look.style,
       shotDuration: project.current.script.shotDuration,
-      maxShotDuration: videoMaxSeconds(storyboardVideoModel()),
+      ...activeStoryboardDuration(),
       aspectRatio: project.current.settings.aspectRatio,
       productImages,
       keywords: project.current.script.keywords,
@@ -2311,7 +2380,8 @@ export async function runExtractStoryboard(
   const look = lookFromScript(project.current.script)
   const keepApproved = Boolean(stage && isPlayApproved(project.current))
   // 같은 대본에서 다시 실행할 때 완료한 작업 그룹의 결과를 재사용한다.
-  const playKey = `shot-plan-v4:${scriptPlayKey(project.current.script.content || '')}:${resolveTargetDurationSec(project.current.script) || 0}:${videoMaxSeconds(storyboardVideoModel())}`
+  const durationPolicy = activeStoryboardDuration()
+  const playKey = `shot-plan-v5:${scriptPlayKey(project.current.script.content || '')}:${resolveTargetDurationSec(project.current.script) || 0}:${durationPolicy.allowedShotDurations.join(',')}`
   const savedBatches = project.current.script.shotBatches
   const resumeBatches: Array<Record<string, unknown>[] | undefined> | undefined =
     savedBatches?.playKey === playKey
@@ -2385,7 +2455,7 @@ export async function runExtractStoryboard(
       content: project.current.script.content,
       style: look.style,
       shotDuration: project.current.script.shotDuration,
-      maxShotDuration: videoMaxSeconds(storyboardVideoModel()),
+      ...durationPolicy,
       aspectRatio: project.current.settings.aspectRatio,
       productImages,
       keywords: project.current.script.keywords,
@@ -2880,7 +2950,7 @@ export async function generateFreeformVideo(
     }
   }
   if (p.folderPath) setActiveProjectDir(p.folderPath)
-  const duration = clampVideoDuration(node.data.duration, videoModel, 8)
+  const duration = clampVideoDuration(node.data.duration, videoModel, 8, node.data.videoProfileId, node.data.videoResolution ?? p.settings.defaultVideoResolution)
   const aspectRatio = canvasNodeAspect(node, p.settings.aspectRatio)
   const videoSize = aspectToSize(aspectRatio)
   const slotEntries = canvasReferenceSlotEntries(p, node)
@@ -2952,7 +3022,7 @@ export async function optimizeFreeformVideoPrompt(nodeId: string, signal?: Abort
       source,
       referenceIds: resolvedCanvasReferenceAssetIds(p, node),
       imageSlots,
-      duration: clampVideoDuration(node.data.duration, videoModel, 8),
+      duration: clampVideoDuration(node.data.duration, videoModel, 8, node.data.videoProfileId, node.data.videoResolution ?? p.settings.defaultVideoResolution),
       aspectRatio: canvasNodeAspect(node, p.settings.aspectRatio),
       mode: normalizeH3GenMode(node.data.h3GenMode) === 'fl2va' ? 'FL2VA' : 'R2VA',
       aesthetic: p.script?.visualStyleOverride || p.script?.h3Aesthetic || p.script?.aesthetic,
@@ -2963,7 +3033,7 @@ export async function optimizeFreeformVideoPrompt(nodeId: string, signal?: Abort
     const pictures = slotEntries
       .map((entry, index) => `Picture ${index + 1}: ${entry.name || 'Reference image'}`)
       .join('\n')
-    compiled = await rewritePromptText({ source, pictures, modelName: videoModel === 'wan-prime' ? 'Wan 3.0 Prime' : [profile?.name, profile?.workflowId].filter(Boolean).join(' / '), duration: clampVideoDuration(node.data.duration, videoModel, 8), aspectRatio: canvasNodeAspect(node, p.settings.aspectRatio), signal })
+    compiled = await rewritePromptText({ source, pictures, modelName: videoModel === 'wan-prime' ? 'Wan 3.0 Prime' : [profile?.name, profile?.workflowId].filter(Boolean).join(' / '), duration: clampVideoDuration(node.data.duration, videoModel, 8, node.data.videoProfileId, node.data.videoResolution ?? p.settings.defaultVideoResolution), aspectRatio: canvasNodeAspect(node, p.settings.aspectRatio), signal })
     compiled = withVideoReferenceBlock(compiled, slotEntries)
   }
   const currentNode = project.current?.canvas?.nodes.find((item) => item.id === nodeId)
@@ -3195,7 +3265,10 @@ export async function ensureShotFrames(
   if (!p || !needsShotFrames(p)) return 0
   // 혼합 모드에서는 시작·끝 프레임 입력이 필요한 샷만 보완한다.
   const missing = [...(p.shots ?? [])]
-    .filter((s) => shotUsesFrames(s, p) && (!s.firstFrameAssetId || !s.lastFrameAssetId))
+    .filter((s) => !isLtxTask(s.videoTaskId) &&
+      !(canvasVideoModelForShot(s) === 'h3' &&
+        isLtxProfile(videoProfileById(canvasVideoNodeForShot(s)?.data.videoProfileId || s.videoProfileId))) &&
+      shotUsesFrames(s, p) && (!s.firstFrameAssetId || !s.lastFrameAssetId))
     .sort((a, b) => a.index - b.index)
   if (!missing.length) return 0
   onProgress?.(`시작·끝 프레임 모드입니다. 샷 ${missing.length}개의 시작·끝 프레임을 샷 번호 순서대로 생성하는 중…`)

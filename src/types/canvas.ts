@@ -25,7 +25,7 @@ export type CanvasNodeType =
 /** 이미지에서 영상을 만드는 노드 모델. H3 기본은 15초, h3-v5는 10초와 1080p 옵션을 지원하며 완샹은 Model Studio 키를 쓴다. */
 export type VideoGenModel = 'h3' | 'h3-v5' | 'wan-prime'
 
-export type VideoResolution = '480p' | '720p' | '768p' | '1080p'
+export type VideoResolution = '270p' | '360p' | '540p' | '480p' | '720p' | '768p' | '1080p'
 
 /** H3 영상 생성 방식. reference는 다중 이미지 참조, fl2va는 시작·끝 프레임 방식이다. */
 export type H3VideoGenMode = 'reference' | 'fl2va'
@@ -105,6 +105,7 @@ export function normalizeVideoResolution(value: unknown, model: VideoGenModel): 
     .trim()
     .toLowerCase()
     .replace(/\s/g, '')
+  if (raw === '270p' || raw === '360p' || raw === '540p') return raw
   if (raw === '480p' || raw === '480') return '480p'
   if (raw === '720p' || raw === '720') return '720p'
   if (raw === '1080p' || raw === '1080') return '1080p'
