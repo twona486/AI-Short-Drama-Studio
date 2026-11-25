@@ -1,6 +1,8 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
 import { t } from '@/i18n'
+import ko from '@/locales/ko'
+import zh from '@/locales/zh'
 import { confirmAction } from '@/utils/confirmAction'
 import { useSettingsStore } from '@/stores'
 import ComfyWorkflowPanel from './ComfyWorkflowPanel.vue'
@@ -20,7 +22,19 @@ const confirmed = ref(false)
 const dirty = ref(false)
 const otherKey = 'ai-cut:comfy-other-workflows'
 const other = ref<Array<{ id: string; name: string; baseUrl: string; adapter: AdapterConfig }>>([])
-try { other.value = JSON.parse(localStorage.getItem(otherKey) || '[]') } catch { /* empty catalog */ }
+try {
+  const saved = JSON.parse(localStorage.getItem(otherKey) || '[]') as typeof other.value
+  if (Array.isArray(saved)) {
+    other.value = saved.map((profile) =>
+      profile?.name === zh.comfySettings.defaultName
+        ? { ...profile, name: ko.comfySettings.defaultName }
+        : profile
+    )
+    if (other.value.some((profile, index) => profile?.name !== saved[index]?.name)) {
+      localStorage.setItem(otherKey, JSON.stringify(other.value))
+    }
+  }
+} catch { /* 저장소를 사용할 수 없거나 저장 데이터가 손상됐어요. */ }
 const workflows = computed(() => [
   ...settings.config.images.filter(p => p.adapter?.type === 'comfyui-prompt').map(p => ({ ...p, kind: 'image' as const })),
   ...settings.config.videos.filter(p => p.adapter?.type === 'comfyui-prompt').map(p => ({ ...p, kind: 'video' as const })),

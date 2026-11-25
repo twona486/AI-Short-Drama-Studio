@@ -15,6 +15,9 @@ import type { VideoPromptStyle } from '@/utils/shotPrompt'
 import { isAutodlHost, normalizeStoredVideoEndpoint, type AdapterConfig } from '@/services/ai/adapters'
 import { normalizeModelNodeOptions, type ModelNodeOptions } from '@/services/ai/modelOptions'
 import { GENERAL_STORY_SKILL_ID, normalizeStorySkillId, storySkillById } from '@/skills/storyStyles'
+import ko from '@/locales/ko'
+import zh from '@/locales/zh'
+import { ZEALMAN_WORKFLOWS, zealmanImageWorkflowById } from '@/services/ai/zealman'
 
 export type { AdapterConfig }
 
@@ -509,11 +512,64 @@ function savedChatProfiles(list: NamedEndpoint[] | undefined) {
   return Array.isArray(list) ? list.map((profile) => profile && { ...profile, apiKey: profile.apiKey ?? '' }) : []
 }
 
-function parseSettings(raw: string | null): AppSettings {
+function migrateDefaultNames(settings: Partial<AppSettings>): boolean {
+  let changed = false
+  function rename(entry: { name: string }, koreanName: string) {
+    entry.name = koreanName
+    changed = true
+  }
+
+  const lists = [
+    ['llm', settings.llms], ['vision', settings.visions], ['image', settings.images],
+    ['tts', settings.ttsProfiles], ['video', settings.videos], ['music', settings.musics]
+  ] as const
+  for (const [kind, profiles] of lists) {
+    if (!Array.isArray(profiles)) continue
+    for (const profile of profiles) {
+      if (profile?.id && profile.name === zh.settings.defaults[kind]) {
+        rename(profile, ko.settings.defaults[kind])
+      } else if (profile?.adapter?.type === 'comfyui-prompt' && profile.name === zh.comfySettings.defaultName) {
+        rename(profile, ko.comfySettings.defaultName)
+      }
+    }
+  }
+
+  if (Array.isArray(settings.videos)) {
+    const zealmanLabels = { U01: 'u01Name', U02: 'u02Name', U04: 'u04Name', U06: 'u06Name' } as const
+    for (const profile of settings.videos) {
+      if (profile?.provider === 'zealman' && typeof profile.workflowId === 'string') {
+        const workflow = ZEALMAN_WORKFLOWS.find((item) => item.id === profile.workflowId)
+        if (workflow && profile.name === workflow.name) {
+          const prefix = workflow.id.slice(0, 3) as keyof typeof zealmanLabels
+          rename(profile, ko.zealmanSettings[zealmanLabels[prefix]])
+        }
+      } else if (profile && (profile.provider === 'autodl' || isAutodlHost(profile.baseUrl || ''))) {
+        const workflow = AUTODL_WORKFLOWS.find((item) => item.id === profile.workflowId)
+        if (workflow?.legacyName && profile.name === workflow.legacyName) rename(profile, workflow.name)
+      }
+    }
+  }
+  if (Array.isArray(settings.images)) {
+    for (const profile of settings.images) {
+      if (profile?.provider !== 'zealman' || typeof profile.model !== 'string') continue
+      const workflow = zealmanImageWorkflowById(profile.model)
+      if (workflow && profile.name === zh.zealmanSettings.imageProfileName.replace('{p0}', workflow.name)) {
+        rename(profile, ko.zealmanSettings.imageProfileName.replace('{p0}', ko.zealmanSettings.a01Name))
+      }
+    }
+  }
+  if (settings.directorSkill?.name === zh.directorSkill.defaultName) {
+    rename(settings.directorSkill, ko.directorSkill.defaultName)
+  }
+  return changed
+}
+
+function parseSettings(raw: string | null, saveMigrated?: (settings: Partial<AppSettings>) => void): AppSettings {
   const defaults = buildDefaults()
   if (!raw) return defaults
   try {
     const parsed = JSON.parse(raw) as Partial<AppSettings>
+    if (migrateDefaultNames(parsed)) saveMigrated?.(parsed)
     const llmSnap = savedChatEndpoint(parsed.llm, defaults.llm)
     const visionSnap = savedChatEndpoint(parsed.vision, defaults.vision)
     const llm = hydrateNamed(savedChatProfiles(parsed.llms), llmSnap, t('settings.defaults.llm'), parsed.activeLlmId, 'llm')
@@ -630,13 +686,13 @@ function parseSettings(raw: string | null): AppSettings {
 
 function loadFromLocal(): AppSettings {
   try {
-    return parseSettings(localStorage.getItem(STORAGE_KEY))
+    return parseSettings(localStorage.getItem(STORAGE_KEY), writeLocal)
   } catch {
     return buildDefaults()
   }
 }
 
-function writeLocal(v: AppSettings) {
+function writeLocal(v: Partial<AppSettings>) {
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(v))
   } catch {

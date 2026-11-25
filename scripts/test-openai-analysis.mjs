@@ -18,16 +18,16 @@ const { callLLM } = await server.ssrLoadModule('/src/services/ai/client.ts')
 const { LLM_PROVIDERS, VISION_PROVIDERS, IMAGE_PROVIDERS, suggestedPresetModels, applyProviderPreset } =
   await server.ssrLoadModule('/src/services/ai/providers.ts')
 
-function loadSettings(context, saved) {
+function loadSettings(context, saved, { onSave = () => {}, desktop } = {}) {
   context.mock.method(globalThis, 'fetch', () => {
     throw new Error('Unexpected network request')
   })
   const storage = Object.getOwnPropertyDescriptor(globalThis, 'localStorage')
   Object.defineProperty(globalThis, 'localStorage', {
     configurable: true,
-    value: { getItem: () => saved ? JSON.stringify(saved) : null, setItem() {} }
+    value: { getItem: () => saved ? JSON.stringify(saved) : null, setItem: onSave }
   })
-  globalThis.window = { addEventListener() {} }
+  globalThis.window = { desktop, addEventListener() {} }
   globalThis.document = { addEventListener() {} }
   context.after(() => {
     delete globalThis.localStorage
@@ -38,6 +38,77 @@ function loadSettings(context, saved) {
   setActivePinia(createPinia())
   return useSettingsStore()
 }
+
+test('저장된 중국어 기본 이름만 한국어로 바꾸고 다시 저장해요', (context) => {
+  const makeProfile = (id, name, options = {}) => ({
+    id, name, baseUrl: 'https://example.com/v1', apiKey: 'test-profile',
+    model: 'deepseek-v4-flash', models: ['deepseek-v4-flash'], ...options
+  })
+  const workflowId = 'minimax_h3_lightx2v_v5_15s'
+  const saved = {
+    llms: [makeProfile('llm', '默认 LLM'), makeProfile('custom', '默认 LLM (회사)')],
+    visions: [makeProfile('vision', '默认视觉')],
+    images: [
+      makeProfile('image', '默认生图'),
+      makeProfile('comfy', 'ComfyUI 工作流', { adapter: { type: 'comfyui-prompt' } }),
+      makeProfile('zealman-image', 'Zealman 生图 · A01-文生图-Qwen2512高清放大', {
+        provider: 'zealman', model: 'API-A01-文生图-Qwen2512高清放大'
+      })
+    ],
+    ttsProfiles: [makeProfile('tts', '默认配音')],
+    videos: [
+      { id: 'video', name: '默认视频', workflowId, baseUrl: 'https://autodl.art', apiKey: '' },
+      { id: 'autodl', name: 'H3 图生视频 · 15 秒', workflowId, baseUrl: 'https://autodl.art', apiKey: '' },
+      { id: 'unrelated', name: 'H3 图生视频 · 15 秒', workflowId, baseUrl: 'https://example.com', provider: 'custom', apiKey: '' },
+      { id: 'zealman-video', name: 'U01-minimax_h3_light2v多图参考生视频加速版',
+        workflowId: 'U01-minimax_h3_light2v多图参考生视频加速版', baseUrl: 'https://example.com', provider: 'zealman' }
+    ],
+    musics: [makeProfile('music', '默认配乐')],
+    activeLlmId: 'llm',
+    directorSkill: { name: '导演手册', filename: 'guide.md', body: 'Use dialogue to move the story forward.', importedAt: 1 }
+  }
+  const writes = []
+  const { config } = loadSettings(context, saved, { onSave: (_key, value) => writes.push(JSON.parse(value)) })
+  assert.equal(config.activeLlmId, 'llm')
+  assert.equal(config.llm.model, 'deepseek-v4-flash')
+  assert.equal(config.llm.apiKey, 'test-profile')
+  assert.deepEqual(config.llms.map(({ name }) => name), ['기본 언어 모델', '默认 LLM (회사)'])
+  assert.equal(config.visions[0].name, '기본 이미지 이해')
+  assert.deepEqual(config.images.slice(0, 2).map(({ name }) => name), ['기본 이미지 생성', 'ComfyUI 워크플로'])
+  assert.match(config.images[2].name, /^Zealman 이미지 생성/)
+  assert.equal(config.ttsProfiles[0].name, '기본 더빙')
+  assert.deepEqual(config.videos.slice(0, 3).map(({ name }) => name), ['기본 영상', 'H3 이미지→영상 · 15초', 'H3 图生视频 · 15 秒'])
+  assert.match(config.videos[3].name, /^U01/)
+  assert.notEqual(config.videos[3].name, saved.videos[3].name)
+  assert.equal(config.musics[0].name, '기본 배경 음악')
+  assert.equal(config.directorSkill.name, '감독 매뉴얼')
+  assert.equal(writes.length, 1)
+  const savedAgain = writes[0]
+  for (const key of ['llms', 'visions', 'images', 'ttsProfiles', 'videos', 'musics']) {
+    assert.deepEqual(savedAgain[key].map(({ name, ...rest }) => rest), saved[key].map(({ name, ...rest }) => rest))
+  }
+  assert.deepEqual({ ...savedAgain.directorSkill, name: saved.directorSkill.name }, saved.directorSkill)
+  loadSettings(context, savedAgain, { onSave: (_key, value) => writes.push(JSON.parse(value)) })
+  assert.equal(writes.length, 1)
+})
+
+test('데스크톱 설정 DB에도 바꾼 이름을 저장해요', async (context) => {
+  const profile = {
+    id: 'legacy', name: '默认 LLM', baseUrl: 'https://api.deepseek.com',
+    apiKey: 'test-deepseek', model: 'deepseek-v4-flash', models: ['deepseek-v4-flash']
+  }
+  const writes = []
+  const settings = loadSettings(context, null, { desktop: {
+    isDesktop: true,
+    async dbPath() { return 'test.sqlite' },
+    async kvGet() { return JSON.stringify({ llms: [profile], activeLlmId: profile.id }) },
+    async kvSet(_key, value) { writes.push(JSON.parse(value)) }
+  } })
+  await settings.ensureHydrated()
+  assert.equal(writes.at(-1).activeLlmId, profile.id)
+  const { options, ...savedProfile } = writes.at(-1).llms[0]
+  assert.deepEqual(savedProfile, { ...profile, name: '기본 언어 모델' })
+})
 
 test('새 설치의 대본·비전과 추천 모델은 OpenAI를 사용해요', (context) => {
   const settings = loadSettings(context)
