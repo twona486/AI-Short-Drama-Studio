@@ -66,6 +66,7 @@ export interface TtsProfile extends TtsEndpoint {
 
 export interface VideoEndpoint {
   baseUrl: string
+  ltxHostOverride?: string
   apiKey: string
   workflowId: string
   /**
@@ -232,6 +233,7 @@ function asTts(ep: TtsEndpoint): TtsEndpoint {
 
 function asVideo(ep: VideoEndpoint): VideoEndpoint {
   return {
+    ...(isLtxDesktop(ep) && ep.ltxHostOverride ? { ltxHostOverride: ep.ltxHostOverride } : {}),
     baseUrl: (ep.baseUrl || '').trim(),
     apiKey: ep.apiKey || '',
     workflowId: (ep.workflowId || '').trim(),
@@ -411,6 +413,7 @@ function hydrateVideo(
             promptStyle: p.promptStyle || fallback.promptStyle,
             provider: p.provider ?? (isActive ? fallback.provider : undefined),
             stillMode: p.stillMode,
+            ltxHostOverride: p.ltxHostOverride,
             options: p.options,
             adapter: p.adapter ?? (isActive ? fallback.adapter : undefined)
           }),

@@ -5,6 +5,7 @@ import type { ProviderPreset } from '@/services/ai/providers'
 const props = defineProps<{
   title: string
   hint?: string
+  addHint?: string
   profiles: { id: string; name: string; subtitle: string }[]
   activeId: string
   providers: ProviderPreset[]
@@ -28,9 +29,12 @@ function pick(id: string) {
   <section class="lib">
     <div class="lib-head">
       <h4>{{ title }}</h4>
-      <button type="button" class="add" @click="adding = !adding">
-        {{ adding ? $t('common.cancel') : $t('common.add') }}
-      </button>
+      <div class="add-actions">
+        <span v-if="addHint" class="hint">{{ addHint }}</span>
+        <button type="button" class="add" :aria-expanded="adding" @click="adding = !adding">
+          {{ adding ? $t('common.cancel') : $t('common.add') }}
+        </button>
+      </div>
     </div>
     <p v-if="hint" class="hint">{{ hint }}</p>
     <div v-if="adding" class="add-pick">
@@ -86,6 +90,7 @@ function pick(id: string) {
   font-size: 15px;
   font-weight: 650;
 }
+.add-actions { display: flex; align-items: center; gap: 8px; }
 .add {
   margin: 0;
   padding: 5px 12px;

@@ -15,7 +15,7 @@ const vite = await createServer({
 })
 after(() => vite.close())
 
-const { requestLtxDesktop, desktopOrigin } = await vite.ssrLoadModule('/electron/ltx-desktop.ts')
+const { requestLtxDesktop, desktopOrigin, desktopHostHeader } = await vite.ssrLoadModule('/electron/ltx-desktop.ts')
 const { generateVideo } = await vite.ssrLoadModule('/src/services/ai/video.ts')
 const { useSettingsStore } = await vite.ssrLoadModule('/src/stores/settings.ts')
 const { saveAsset, setActiveProjectDir } = await vite.ssrLoadModule('/src/services/storage/fs.ts')
@@ -27,13 +27,19 @@ const signedPath = '/api/assets/clip-1/bytes?exp=123&did=d1&sig=fixture'
 const mp4 = Buffer.alloc(2048)
 mp4.write('ftyp', 4)
 
-test('LAN 주소만 허용하고 포트와 .local을 지원합니다', async () => {
+test('사설망과 Tailscale의 주소 및 기본 Host를 검증합니다', async () => {
   assert.equal(desktopOrigin('studio.local:21955').origin, 'http://studio.local:21955')
-  for (const ip of ['10.2.3.4', '172.16.2.4', '172.31.9.9', '192.168.1.4', '127.0.0.1']) {
+  const magic = desktopOrigin('studio.tailnet.ts.net:21955')
+  assert.equal(magic.origin, 'http://studio.tailnet.ts.net:21955')
+  assert.equal(desktopHostHeader(magic, '100.127.1.2'), 'localhost:21955')
+  const tailnet = desktopOrigin('100.64.0.1')
+  assert.equal(desktopHostHeader(tailnet, '100.64.0.1'), 'localhost:41955')
+  assert.equal(desktopHostHeader(tailnet, '100.64.0.1', '192.168.20.4:41955'), '192.168.20.4:41955')
+  for (const ip of ['100.64.0.1', '100.127.255.254', '10.2.3.4', '172.16.2.4', '172.31.9.9', '192.168.1.4', '127.0.0.1']) {
     assert.equal(desktopOrigin(ip).origin, `http://${ip}:41955`)
   }
   for (const baseUrl of [
-    '8.8.8.8:41955', '172.32.0.1:41955', 'example.com:41955', 'http://studio.local@8.8.8.8:41955',
+    '8.8.8.8:41955', '100.63.255.255', '100.128.0.0', '172.32.0.1:41955', 'example.com:41955', 'http://studio.local@8.8.8.8:41955',
     'http://192.168.1.4:41955/api', 'http://192.168.1.4:41955/?t=secret'
   ]) {
     assert.deepEqual(await requestLtxDesktop({ baseUrl, operation: { kind: 'check' }, token }), { kind: 'unsafeAddress' })
@@ -47,6 +53,7 @@ test('페어링, 파일 업로드, 대기열, 진행률, 서명 MP4, 취소, 미
   const server = http.createServer(async (req, res) => {
     try {
       calls.push(req.url)
+      assert.equal(req.headers.host, 'localhost:41955')
       const chunks = []
       for await (const chunk of req) chunks.push(chunk)
       const bytes = Buffer.concat(chunks)
@@ -111,9 +118,12 @@ test('페어링, 파일 업로드, 대기열, 진행률, 서명 MP4, 취소, 미
   await once(server, 'listening')
   context.after(() => server.close())
   const baseUrl = `http://127.0.0.1:${server.address().port}`
-  const call = (operation, session = token) => requestLtxDesktop({ baseUrl, token: session, operation })
+  const call = (operation, session = token) => requestLtxDesktop({ baseUrl, hostOverride: 'localhost:41955', token: session, operation })
   assert.deepEqual(await call({ kind: 'pair', code: baseUrl + '/pairing?t=grant' }, ''), { kind: 'paired', token })
-  assert.deepEqual(await call({ kind: 'pair', code: 'http://192.168.1.11:14141/pairing?t=grant' }, ''), { kind: 'wrongHost' })
+  assert.deepEqual(await call({ kind: 'pair', code: 'http://192.168.1.11:14141/pairing?t=grant' }, ''), { kind: 'paired', token })
+  assert.deepEqual(await requestLtxDesktop({
+    baseUrl, hostOverride: 'localhost:41955\r\nBad: value', token, operation: { kind: 'check' }
+  }), { kind: 'invalidHostOverride' })
   assert.deepEqual(await call({ kind: 'check' }), { kind: 'ready' })
   const denied = await call({ kind: 'check' }, 'revoked')
   assert.equal(ltxDesktopError(denied), 'ltxDesktop.unpaired')
@@ -146,7 +156,8 @@ test('저장된 LAN 작업 ID로 결과만 받아 프로젝트 MP4 경로에 기
     addEventListener() {},
     desktop: {
       isDesktop: true,
-      async ltxDesktopRequest({ operation, baseUrl }) {
+      async ltxDesktopRequest({ operation, baseUrl, hostOverride }) {
+        assert.equal(hostOverride, 'localhost:41955')
         assert.equal(baseUrl, 'studio.local:41955')
         calls.push(operation)
         if (operation.kind === 'status') {
@@ -175,6 +186,7 @@ test('저장된 LAN 작업 ID로 결과만 받아 프로젝트 MP4 경로에 기
     name: 'LTX Desktop', provider: 'ltx-desktop', apiKey: token,
     workflowId: 'ltx-2.3-fast', baseUrl: 'studio.local:41955'
   })
+  useSettingsStore().patchVideo({ ltxHostOverride: 'localhost:41955' })
   const pending = generateVideo({
     prompt: '', duration: 5, width: 1280, height: 720,
     videoProfileId: profileId, resumeTaskId: 'ltx-desktop:job-1'

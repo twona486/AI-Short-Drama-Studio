@@ -13,17 +13,21 @@ import {
 const ID = /^[A-Za-z0-9_-]{1,128}$/
 const SIGNED_VIDEO = /^\/api\/assets\/[A-Za-z0-9_-]{1,128}\/bytes\?[^#\s]{1,1024}$/
 
+function tailscaleIPv4(address: string) {
+  return isIPv4(address) && /^100\.(?:6[4-9]|[7-9]\d|1[01]\d|12[0-7])\./.test(address)
+}
+
 function privateIPv4(address: string) {
   if (!isIPv4(address)) return false
   const [a, b] = address.split('.').map(Number)
-  return a === 10 || a === 127 || (a === 172 && b >= 16 && b <= 31) || (a === 192 && b === 168)
+  return tailscaleIPv4(address) || a === 10 || a === 127 || (a === 172 && b >= 16 && b <= 31) || (a === 192 && b === 168)
 }
 
 export function desktopOrigin(raw: string): URL {
   const value = raw.trim()
   const absolute = value.includes('://') ? value : `http://${value}`
   const url = new URL(absolute)
-  const named = url.hostname === 'localhost' || /^[a-z0-9-]+(?:\.[a-z0-9-]+)*\.local$/i.test(url.hostname)
+  const named = url.hostname === 'localhost' || /^[a-z0-9-]+(?:\.[a-z0-9-]+)*\.(?:local|ts\.net)$/i.test(url.hostname)
   if (!['http:', 'https:'].includes(url.protocol) || url.username || url.password || url.pathname !== '/' ||
     url.search || url.hash || (!named && !privateIPv4(url.hostname))) throw new Error('Invalid LAN address')
   if (!url.port && !/:\d+(?:[/?#]|$)/.test(absolute.slice(absolute.indexOf('://') + 3))) url.port = '41955'
@@ -34,13 +38,29 @@ async function pinAddress(url: URL): Promise<string> {
   if (privateIPv4(url.hostname)) return url.hostname
   if (url.hostname === 'localhost') return '127.0.0.1'
   const records = await lookup(url.hostname, { all: true, family: 4 })
-  if (!records.length || records.some(({ address }) => !privateIPv4(address))) {
+  const allowed = url.hostname.endsWith('.ts.net') ? tailscaleIPv4 : privateIPv4
+  if (!records.length || records.some(({ address }) => !allowed(address))) {
     throw new Error('LAN host did not resolve to private IPv4')
   }
   return records[0].address
 }
 
-function requestBytes(origin: URL, address: string, path: string, config: {
+export function desktopHostHeader(origin: URL, address: string, override?: string) {
+  if (override !== undefined && typeof override !== 'string') throw new Error('Invalid Host header')
+  const value = override?.trim()
+  if (value) {
+    const match = /^([a-z0-9](?:[a-z0-9.-]*[a-z0-9])?)(?::(\d{1,5}))?$/i.exec(value)
+    if (!match || value.length > 253 || (match[2] && (Number(match[2]) < 1 || Number(match[2]) > 65535))) {
+      throw new Error('Invalid Host header')
+    }
+    return value
+  }
+  const port = origin.port || (origin.protocol === 'https:' ? '443' : '80')
+  const host = tailscaleIPv4(address) || origin.hostname.endsWith('.ts.net') ? 'localhost' : address
+  return `${host}:${port}`
+}
+
+function requestBytes(origin: URL, address: string, hostHeader: string, path: string, config: {
   method?: 'GET' | 'POST'
   token?: string
   body?: Uint8Array
@@ -52,8 +72,7 @@ function requestBytes(origin: URL, address: string, path: string, config: {
   const transport = secure ? https : http
   const port = origin.port || (secure ? '443' : '80')
   return new Promise<{ status: number; data: Buffer }>((resolve, reject) => {
-    // LAN Remote accepts its advertised IP in Host, including when reached via mDNS.
-    const headers: Record<string, string | number> = { Host: `${address}:${port}` }
+    const headers: Record<string, string | number> = { Host: hostHeader }
     if (config.token) headers.Authorization = `Bearer ${config.token}`
     if (config.contentType) headers['Content-Type'] = config.contentType
     if (config.body) headers['Content-Length'] = config.body.byteLength
@@ -100,10 +119,16 @@ export async function requestLtxDesktop(request: LtxDesktopRequest): Promise<Ltx
 
   try {
     const address = await pinAddress(origin)
+    let hostHeader: string
+    try {
+      hostHeader = desktopHostHeader(origin, address, request.hostOverride)
+    } catch {
+      return { kind: 'invalidHostOverride' }
+    }
     const op = request.operation
     const token = request.token
-    const raw = async (path: string, config?: Parameters<typeof requestBytes>[3]) => {
-      const response = await requestBytes(origin, address, path, config)
+    const raw = async (path: string, config?: Parameters<typeof requestBytes>[4]) => {
+      const response = await requestBytes(origin, address, hostHeader, path, config)
       if (response.status < 200 || response.status >= 300) throw new HttpFailure(response.status)
       return response.data
     }
@@ -120,14 +145,10 @@ export async function requestLtxDesktop(request: LtxDesktopRequest): Promise<Ltx
       if (code.includes('://')) {
         try {
           const link = new URL(code)
-          const authority = code.match(/^https?:\/\/[^/?#]+/i)?.[0] || ''
-          const issuer = desktopOrigin(authority)
-          if (link.username || link.password || link.pathname !== '/pairing' || link.hash ||
-            issuer.port !== origin.port || issuer.protocol !== origin.protocol ||
-            await pinAddress(issuer) !== address) return { kind: 'wrongHost' }
+          if (!['http:', 'https:'].includes(link.protocol) || link.pathname !== '/pairing') return { kind: 'invalid' }
           code = link.searchParams.get('t') || ''
         } catch {
-          return { kind: 'wrongHost' }
+          return { kind: 'invalid' }
         }
       }
       if (!code || code.length > 128) return { kind: 'invalid' }
