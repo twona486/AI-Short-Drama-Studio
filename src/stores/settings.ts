@@ -9,6 +9,7 @@ import { defineStore } from 'pinia'
 import { ref, watch } from 'vue'
 import { AUTODL_BASE_URL, AUTODL_WORKFLOWS } from '@/services/ai/autodl'
 import { envDefaults, migrateVideoBaseUrl, migrateVideoWorkflowId } from '@/services/ai/env'
+import { isManualImageChoice } from '@/services/ai/providers'
 import { desktop, isDesktop } from '@/services/desktop'
 import { stillModeForVideoModel, type VideoGenModel, type VideoStillMode } from '@/types/canvas'
 import type { VideoPromptStyle } from '@/utils/shotPrompt'
@@ -142,13 +143,6 @@ export interface DirectorSkillDoc {
   body: string
   importedAt: number
 }
-
-export const IMAGE_PRESETS = [
-  'doubao-seedream-4-0-250828',
-  'gpt-image-1',
-  'dall-e-3',
-  'qwen-image-plus'
-]
 
 export const TTS_PRESETS = ['qwen-audio-3.0-tts-flash', 'qwen3-tts-flash']
 
@@ -443,7 +437,7 @@ function buildDefaults(): AppSettings {
   const first = profileFromEndpoint(llm, t('settings.defaults.llm'), newId('llm'))
   const vision = endpoint(env.vision.baseUrl, env.vision.apiKey, env.vision.model, [])
   const visionFirst = profileFromEndpoint(vision, t('settings.defaults.vision'), newId('vis'))
-  const image = endpoint(env.image.baseUrl, env.image.apiKey, env.image.model, IMAGE_PRESETS)
+  const image = endpoint(env.image.baseUrl, env.image.apiKey, env.image.model, [])
   const imageFirst = profileFromEndpoint(image, t('settings.defaults.image'), newId('img'))
   const tts: TtsEndpoint = {
     ...endpoint(env.tts.baseUrl, env.tts.apiKey, env.tts.model, TTS_PRESETS),
@@ -506,6 +500,13 @@ function savedChatEndpoint(saved: ServiceEndpoint | undefined, defaults: Service
   if (!saved) return defaults
   const model = saved.model ?? ''
   return { ...saved, apiKey: saved.apiKey ?? '', model, models: uniq([model, ...(saved.models ?? [])]) }
+}
+
+function fallbackImageProfile(profiles: NamedEndpoint[], defaults: NamedEndpoint) {
+  const existing = profiles.find((profile) => profile.model && !isManualImageChoice(profile))
+  if (existing) return existing
+  profiles.push(defaults)
+  return defaults
 }
 
 function savedChatProfiles(list: NamedEndpoint[] | undefined) {
@@ -573,17 +574,32 @@ function parseSettings(raw: string | null, saveMigrated?: (settings: Partial<App
     const visionSnap = savedChatEndpoint(parsed.vision, defaults.vision)
     const llm = hydrateNamed(savedChatProfiles(parsed.llms), llmSnap, t('settings.defaults.llm'), parsed.activeLlmId, 'llm')
     const vision = hydrateNamed(savedChatProfiles(parsed.visions), visionSnap, t('settings.defaults.vision'), parsed.activeVisionId, 'vis')
+    const imageProfiles = savedChatProfiles(parsed.images).map((profile) => profile && ({
+      ...profile,
+      baseUrl: profile.baseUrl ?? '',
+      model: profile.model ?? '',
+      provider: profile.provider,
+      adapter: profile.adapter,
+      options: profile.options
+    }))
     const image = hydrateNamed(
-      parsed.images,
-      {
-        ...defaults.image,
-        ...parsed.image,
-        models: uniq([...(parsed.image?.models ?? []), ...defaults.image.models])
-      },
+      imageProfiles,
+      savedChatEndpoint(parsed.image, defaults.image),
       t('settings.defaults.image'),
       parsed.activeImageId,
       'img'
     )
+    // 프로필을 쓰기 전의 단일 연결과 마지막으로 저장된 선택은 유지한다.
+    if (imageProfiles.some((profile) => profile?.id && profile.name) &&
+        !image.list.some((profile) => profile.id === parsed.activeImageId)) {
+      const saved = parsed.image
+      const previous = saved && image.list.find((profile) =>
+        profile.baseUrl === saved.baseUrl && profile.model === saved.model && profile.apiKey === saved.apiKey
+      )
+      const next = previous || fallbackImageProfile(image.list, defaults.images[0])
+      image.activeId = next.id
+      image.active = asEndpoint(next)
+    }
     const tts = hydrateTts(
       parsed.ttsProfiles,
       {
@@ -1044,8 +1060,8 @@ export const useSettingsStore = defineStore('settings', () => {
   function removeImage(id: string, allowLast = false) {
     if (config.value.images.length <= 1 && !allowLast) return
     const images = config.value.images.filter((p) => p.id !== id)
-    if (!images.length) images.push(buildDefaults().images[0])
-    const next = images.find((p) => p.id === config.value.activeImageId) || images[0]
+    const next = images.find((p) => p.id === config.value.activeImageId) ||
+      fallbackImageProfile(images, buildDefaults().images[0])
     syncImage(next, images)
   }
 
@@ -1307,8 +1323,14 @@ export const useSettingsStore = defineStore('settings', () => {
       return
     }
     if (kind === 'image') {
-      const next = drop(config.value.image.models, config.value.image.model)
-      if (next) patchImage(next)
+      const current = config.value.image
+      const next = drop(current.models, current.model)
+      if (next) patchImage({
+        models: next.models,
+        model: current.model === name
+          ? next.models.find((model) => !isManualImageChoice({ ...current, model })) || ''
+          : current.model
+      })
       return
     }
     if (kind === 'tts') {

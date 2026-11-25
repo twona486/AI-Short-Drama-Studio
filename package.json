@@ -29,6 +29,7 @@
     "preview": "vite preview --host",
     "type-check": "vue-tsc --noEmit",
     "test:openai-analysis": "node --test scripts/test-openai-analysis.mjs",
+    "test:openai-image": "node --test scripts/test-openai-image.mjs",
     "test:agent": "node scripts/test-agent-redo.mjs",
     "test:comfy": "node scripts/test-comfy-reference-slots.mjs",
     "test:continuous": "node scripts/test-continuous-capture.mjs",

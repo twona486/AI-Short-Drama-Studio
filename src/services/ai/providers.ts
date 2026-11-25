@@ -5,6 +5,8 @@
 
 import { t } from '@/i18n'
 import { OPENAI_BASE_URL, OPENAI_CHAT_MODELS, OPENAI_DEFAULT_CHAT_MODEL } from './openAiChat'
+import { OPENAI_DEFAULT_IMAGE_MODEL, OPENAI_IMAGE_MODELS } from './openAiImage'
+import { isApimartHost } from './adapters'
 
 export interface ProviderPreset {
   id: string
@@ -138,52 +140,57 @@ export const VISION_PROVIDERS: ProviderPreset[] = [
 
 export const IMAGE_PROVIDERS: ProviderPreset[] = [
   {
+    id: 'openai',
+    name: 'OpenAI',
+    get hint() { return t('provider.hint.openAiImage') },
+    baseUrl: OPENAI_BASE_URL,
+    models: OPENAI_IMAGE_MODELS,
+    defaultModel: OPENAI_DEFAULT_IMAGE_MODEL
+  },
+  {
     id: 'volcengine',
     get name() { return t('provider.name.volcengine') },
     get hint() { return t('provider.hint.seedream') },
     baseUrl: 'https://ark.cn-beijing.volces.com/api/v3',
+    showModelSuggestions: false,
     models: ['doubao-seedream-4-0-250828', 'doubao-seedream-3-0-t2i-250415'],
-    defaultModel: 'doubao-seedream-4-0-250828'
-  },
-  {
-    id: 'openai',
-    name: 'OpenAI',
-    get hint() { return t('provider.hint.openAiImage') },
-    baseUrl: 'https://api.openai.com/v1',
-    models: ['gpt-image-1', 'dall-e-3'],
-    defaultModel: 'gpt-image-1'
+    defaultModel: ''
   },
   {
     id: 'dashscope',
     get name() { return t('provider.name.dashscope') },
     get hint() { return t('provider.hint.qwenImage') },
     baseUrl: 'https://dashscope.aliyuncs.com/compatible-mode/v1',
+    showModelSuggestions: false,
     models: ['qwen-image-plus', 'wan2.5-t2i-preview'],
-    defaultModel: 'qwen-image-plus'
+    defaultModel: ''
   },
   {
     id: 'zhipu',
     get name() { return t('provider.name.zhipu') },
     get hint() { return t('provider.hint.cogview') },
     baseUrl: 'https://open.bigmodel.cn/api/paas/v4',
+    showModelSuggestions: false,
     models: ['cogview-4', 'cogview-3-flash'],
-    defaultModel: 'cogview-4'
+    defaultModel: ''
   },
   {
     id: 'minimax',
     name: 'MiniMax',
     get hint() { return t('provider.hint.miniMaxImage') },
     baseUrl: 'https://api.minimaxi.com/v1',
+    showModelSuggestions: false,
     models: ['image-01'],
-    defaultModel: 'image-01'
+    defaultModel: ''
   },
   {
     id: 'apimart',
     name: 'APIMart',
     get hint() { return t('provider.hint.apimartImage') },
     baseUrl: 'https://api.aishuch.com',
+    showModelSuggestions: false,
     models: ['gpt-image-2', 'gpt-image-2-ext', 'seedream-4.5'],
-    defaultModel: 'gpt-image-2',
+    defaultModel: '',
     keyPlaceholder: 'APIMart API Key'
   },
   CUSTOM_PROVIDER
@@ -260,6 +267,14 @@ export function matchProviderId(baseUrl: string, presets: ProviderPreset[]): str
 
 export function findProvider(id: string, presets: ProviderPreset[]): ProviderPreset {
   return presets.find((p) => p.id === id) || CUSTOM_PROVIDER
+}
+
+export function isManualImageChoice(endpoint: { provider?: string; baseUrl: string; model: string }) {
+  const matched = matchProviderId(endpoint.baseUrl, IMAGE_PROVIDERS)
+  return isApimartHost(endpoint.baseUrl) || IMAGE_PROVIDERS.some((preset) =>
+    preset.showModelSuggestions === false &&
+    (preset.id === endpoint.provider || preset.id === matched)
+  ) || /^(doubao-seedream|seedream|qwen-image|cogview|wan[\d.]*-.*(?:t2i|i2i)|image-01)/i.test(endpoint.model)
 }
 
 export function suggestedPresetModels(preset: ProviderPreset, configured: string[]): string[] {

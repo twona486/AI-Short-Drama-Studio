@@ -6,7 +6,7 @@ import { useSettingsStore } from '@/stores'
 import { isAutodlHost, normalizeStoredVideoEndpoint } from './adapters'
 import { envDefaults, migrateVideoBaseUrl, migrateVideoWorkflowId } from './env'
 import { zealmanWorkflowById } from './zealman'
-import type { AIMode } from '@/stores/settings'
+import type { AIMode, ServiceEndpoint } from '@/stores/settings'
 import type { VideoPromptStyle } from '@/utils/shotPrompt'
 
 function pick() {
@@ -42,15 +42,10 @@ export function getVisionConfig() {
 }
 
 export function getImageConfig() {
-  const d = envDefaults().image
-  const s = pick()?.image
+  const s: Omit<ServiceEndpoint, 'models'> = pick()?.image ?? envDefaults().image
   return {
-    baseUrl: (s?.baseUrl || d.baseUrl).replace(/\/+$/, ''),
-    apiKey: s?.apiKey || d.apiKey,
-    model: s?.model || d.model,
-    adapter: s?.adapter,
-    provider: s?.provider,
-    options: s?.options
+    ...s,
+    baseUrl: (s.baseUrl || '').replace(/\/+$/, '')
   }
 }
 
@@ -162,12 +157,12 @@ export function getMusicConfig() {
 }
 
 export function getRemakeImageModel() {
-  return envDefaults().remakeImageModel || 'gpt-image-1'
+  return envDefaults().remakeImageModel
 }
 
 /** 설정에서 선택한 이미지 모델을 쓰고 영상 재현에 설정이 없으면 GPT Image를 사용한다. */
 export function imageModelForProject(pipelineMode?: string) {
-  const selected = pick()?.image?.model?.trim()
-  if (selected) return selected
+  const image = pick()?.image
+  if (image) return image.model?.trim() || undefined
   return pipelineMode === 'remake' ? getRemakeImageModel() : undefined
 }

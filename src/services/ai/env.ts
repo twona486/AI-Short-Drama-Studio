@@ -1,6 +1,7 @@
 /** 개발 기본값은 Vite .env에서 읽으며 설치 빌드에는 포함하지 않는다. */
 
 import { OPENAI_BASE_URL, OPENAI_DEFAULT_CHAT_MODEL } from './openAiChat'
+import { OPENAI_DEFAULT_IMAGE_MODEL } from './openAiImage'
 
 function envStr(key: string, fallback = ''): string {
   const v = (import.meta.env as Record<string, string | undefined>)[key]
@@ -66,11 +67,11 @@ export function envDefaults() {
       apiKey: envStr('VITE_VISION_API_KEY'),
       model: envStr('VITE_VISION_MODEL', OPENAI_DEFAULT_CHAT_MODEL)
     },
-    remakeImageModel: envStr('VITE_REMAKE_IMAGE_MODEL', 'gpt-image-1'),
+    remakeImageModel: envStr('VITE_REMAKE_IMAGE_MODEL', OPENAI_DEFAULT_IMAGE_MODEL),
     image: {
-      baseUrl: envStr('VITE_IMAGE_BASE_URL', 'https://ark.cn-beijing.volces.com/api/v3'),
+      baseUrl: envStr('VITE_IMAGE_BASE_URL', OPENAI_BASE_URL),
       apiKey: envStr('VITE_IMAGE_API_KEY'),
-      model: envStr('VITE_IMAGE_MODEL', 'doubao-seedream-4-0-250828')
+      model: envStr('VITE_IMAGE_MODEL', OPENAI_DEFAULT_IMAGE_MODEL)
     },
     tts: {
       baseUrl: envStr('VITE_TTS_BASE_URL', 'https://dashscope.aliyuncs.com/api/v1'),

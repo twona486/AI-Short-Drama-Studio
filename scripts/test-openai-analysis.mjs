@@ -131,7 +131,7 @@ test('새 설치의 대본·비전과 추천 모델은 OpenAI를 사용해요', 
   }
   assert.deepEqual(LLM_PROVIDERS.map(({ id }) => id), ['openai', 'deepseek', 'dashscope', 'volcengine', 'moonshot', 'zhipu', 'minimax', 'custom'])
   assert.equal(settings.config.visionEnabled, false)
-  assert.equal(settings.config.image.model, 'doubao-seedream-4-0-250828')
+  assert.equal(settings.config.image.model, 'gpt-image-2.6-sunburst')
   assert.equal(settings.config.video.workflowId, 'minimax_h3_lightx2v_v5_15s')
   assert.equal(settings.config.tts.model, 'qwen-audio-3.0-tts-flash')
   assert.ok(suggestedPresetModels(IMAGE_PROVIDERS[0], []).length)

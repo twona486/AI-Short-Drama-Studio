@@ -21,6 +21,7 @@ import {
 import { zealmanWorkflowById } from './zealman'
 import { providerVideoResolution } from './modelOptions'
 import { adaptOpenAiChatBody, isOfficialOpenAi, OPENAI_DEFAULT_CHAT_MODEL } from './openAiChat'
+import { throwIfAborted } from './abort'
 
 function timeoutSignal(ms: number): AbortSignal {
   const c = new AbortController()
@@ -264,11 +265,13 @@ export async function providerHttp(
     headers?: Record<string, string>
     body?: string
     bodyBase64?: string
+    form?: FormData
     contentType?: string
     signal?: AbortSignal
     timeoutMs?: number
   } = {}
 ): Promise<ProxyHttpResult> {
+  throwIfAborted(init.signal)
   const method = (init.method || 'GET').toUpperCase()
   const timeoutMs = init.timeoutMs ?? 60_000
   // 데스크톱 메인 프로세스에서 CORS 제한을 피하고 /view 바이너리를 읽는다.
@@ -285,6 +288,14 @@ export async function providerHttp(
       headers.authorization ||
       Object.entries(headers).find(([k]) => k.toLowerCase() === 'authorization')?.[1] ||
       ''
+    const multipart = init.form ? new Response(init.form) : undefined
+    const bodyBytes = await multipart?.arrayBuffer()
+    throwIfAborted(init.signal)
+    const requestId = init.signal && typeof api.cancelProviderFetch === 'function' ? crypto.randomUUID() : undefined
+    const onAbort = () => {
+      if (requestId) api.cancelProviderFetch(requestId)
+    }
+    init.signal?.addEventListener('abort', onAbort, { once: true })
     const res = await api.autodlFetch({
       url,
       method,
@@ -292,11 +303,19 @@ export async function providerHttp(
       extraHeaders: Object.fromEntries(
         Object.entries(headers).filter(([name]) => name.toLowerCase() !== 'authorization')
       ),
-      body: init.bodyBase64 ? undefined : init.body,
+      body: init.bodyBase64 || bodyBytes ? undefined : init.body,
+      bodyBytes,
+      requestId,
       bodyBase64: init.bodyBase64,
-      contentType: init.contentType,
+      contentType: multipart?.headers.get('content-type') || init.contentType,
       timeoutMs
+    }).catch((error: unknown) => {
+      throwIfAborted(init.signal)
+      throw error
+    }).finally(() => {
+      init.signal?.removeEventListener('abort', onAbort)
     })
+    throwIfAborted(init.signal)
     return {
       ok: res.ok,
       status: res.status,
@@ -318,7 +337,7 @@ export async function providerHttp(
   init.signal?.addEventListener('abort', onAbort)
   try {
     const headers = { ...(init.headers || {}) }
-    let body: BodyInit | undefined = init.body
+    let body: BodyInit | undefined = init.form ?? init.body
     if (init.bodyBase64) {
       const binary = atob(init.bodyBase64)
       const bytes = new Uint8Array(binary.length)

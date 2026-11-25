@@ -38,9 +38,12 @@ export type DesktopAPI = {
     extraHeaders?: Record<string, string>
     body?: string
     bodyBase64?: string
+    bodyBytes?: ArrayBuffer
+    requestId?: string
     contentType?: string
     timeoutMs?: number
   }) => Promise<{ status: number; ok: boolean; text: string; dataBase64?: string; contentType?: string }>
+  cancelProviderFetch: (requestId: string) => void
   llmFetch: (opts: {
     url: string
     authorization?: string
@@ -91,6 +94,7 @@ const api: DesktopAPI = {
   pickDirectory: () => ipcRenderer.invoke('desktop:pickDirectory'),
   openPath: (filePath) => ipcRenderer.invoke('desktop:openPath', filePath),
   autodlFetch: (opts) => ipcRenderer.invoke('desktop:autodlFetch', opts),
+  cancelProviderFetch: (requestId) => ipcRenderer.send('desktop:cancelProviderFetch', requestId),
   llmFetch: (opts) => ipcRenderer.invoke('desktop:llmFetch', opts),
   dashscopeFetch: (opts) => ipcRenderer.invoke('desktop:dashscopeFetch', opts),
   downloadToTemp: (url) => ipcRenderer.invoke('desktop:downloadToTemp', url),
