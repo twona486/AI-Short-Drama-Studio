@@ -1102,6 +1102,11 @@ const cropStyle = computed(() => ({
       </div>
     </transition>
 
+    <div v-if="type === 'subject' && subject" class="sc-head">
+      <span class="sc-name" :title="title">{{ title }}</span>
+      <span class="sc-role">{{ subject.role || subjectKindText || $t('common.character') }}</span>
+    </div>
+
     <div ref="mediaBox" class="pnode-media" :style="{ aspectRatio: mediaAspect }">
       <template v-if="type === 'audio'">
         <audio
@@ -1220,10 +1225,6 @@ const cropStyle = computed(() => ({
     </div>
 
     <div v-if="type === 'subject' && subject" class="subject-card">
-      <div class="sc-head">
-        <span class="sc-name" :title="title">{{ title }}</span>
-        <span class="sc-role">{{ subject.role || subjectKindText || $t('common.character') }}</span>
-      </div>
       <p v-if="subject.description" class="sc-desc" :title="subject.description">
         {{ subject.description }}
       </p>
@@ -1777,12 +1778,14 @@ const cropStyle = computed(() => ({
 }
 .sc-head {
   display: flex;
+  padding: 4px 10px;
+  flex-wrap: wrap;
   align-items: center;
   gap: 6px;
 }
 .sc-name {
   min-width: 0;
-  flex: 1;
+  flex: 1 1 64px;
   font-size: 13px;
   font-weight: 680;
   letter-spacing: 0.01em;
@@ -1792,19 +1795,16 @@ const cropStyle = computed(() => ({
   text-overflow: ellipsis;
 }
 .sc-role {
-  flex-shrink: 0;
-  max-width: 96px;
+  max-width: 100%;
   padding: 2px 8px;
-  border-radius: 99px;
+  border-radius: 8px;
   border: 1px solid rgba(167, 139, 250, 0.4);
   background: rgba(167, 139, 250, 0.12);
   color: #c4b5fd;
   font-size: 10px;
   font-weight: 600;
   letter-spacing: 0.03em;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  overflow-wrap: anywhere;
 }
 .sc-desc {
   margin: 0;
