@@ -15,6 +15,7 @@ after(() => server.close())
 const { useSettingsStore } = await server.ssrLoadModule('/src/stores/settings.ts')
 const { getLlmConfig, getVisionConfig } = await server.ssrLoadModule('/src/services/ai/runtime.ts')
 const { callLLM } = await server.ssrLoadModule('/src/services/ai/client.ts')
+const { generateStoryboard } = await server.ssrLoadModule('/src/services/ai/storyboard.ts')
 const { LLM_PROVIDERS, VISION_PROVIDERS, IMAGE_PROVIDERS, suggestedPresetModels, applyProviderPreset } =
   await server.ssrLoadModule('/src/services/ai/providers.ts')
 
@@ -167,6 +168,58 @@ function completion(content) {
     usage: { prompt_tokens: 19, completion_tokens: 8, total_tokens: 27 }
   }
 }
+
+test('저장된 스타일 표시명으로 캐릭터·장면·스토리보드를 차례로 추출해요', async (context) => {
+  const settings = loadSettings(context)
+  settings.patchLlm({ apiKey: 'test-openai' })
+  const prompts = []
+  const shot = {
+    title: '벽시계 아래', subjectNames: ['지우'], sceneName: '역 대합실',
+    visualPrompt: 'Early light slants over pale floor tiles.', duration: 6,
+    videoPrompt: '0–3s: A wide shot tracks Jiwoo into the waiting room. 3–6s: The camera settles as Jiwoo stops under the clock.',
+    continuity: '빈 대합실 → 지우가 시계 아래에 멈춘다 → 시계 아래에 선 지우.',
+    audioMode: 'h3-dialogue', voiceover: '지우: 아직 늦지 않았어.'
+  }
+  globalThis.fetch = async (_url, init) => {
+    const { messages } = JSON.parse(init.body)
+    const system = messages.find(({ role }) => role === 'system').content
+    prompts.push(system)
+    const answer = system.includes('Extract only physical filming locations')
+      ? { h3Aesthetic: 'Layered transparent washes and a soft gray palette.', scenes: [{ name: '역 대합실', description: '천장이 높고 회색 타일 바닥이 펼쳐진 공간이에요.', mainAnchor: '벽시계', lighting: '새벽빛' }] }
+      : system.includes('소품만 추출')
+        ? { props: [] }
+        : system.includes('Check only jumps')
+          ? { issues: [] }
+          : system.includes('Return JSON: {"shots"')
+            ? { shots: [shot] }
+            : { subjects: [{ name: '지우', kind: 'person', description: '오래된 점퍼를 입어요.' }] }
+    return Response.json(completion(JSON.stringify(answer)))
+  }
+  const input = {
+    topic: '새벽 역',
+    content: '# 새벽 역\n\n## 장면 1 | 역 대합실\n\n지우가 벽시계 아래에 멈춰 선다.\n\n**지우:** 아직 늦지 않았어.',
+    style: '🖌 수채화',
+    shotDuration: 6,
+    maxShotDuration: 10,
+    aspectRatio: '16:9',
+    mode: 'extract'
+  }
+  const subjects = (await generateStoryboard({ ...input, extractStartAt: 'subjects', extractStopAfter: 'subjects' })).result.subjects
+  assert.deepEqual(subjects.map(({ name }) => name), ['지우'])
+  const { scenes } = (await generateStoryboard({ ...input, extractStartAt: 'scenes', extractStopAfter: 'scenes', existingSubjects: subjects })).result
+  assert.deepEqual(scenes.map(({ name }) => name), ['역 대합실'])
+  assert.ok(prompts.some((prompt) => prompt.includes('Style ID: watercolor')))
+  const shots = (await generateStoryboard({
+    ...input,
+    extractStartAt: 'shots',
+    extractStopAfter: 'shots',
+    existingSubjects: subjects,
+    existingScenes: scenes
+  })).result.shots
+  assert.equal(shots[0].title, '벽시계 아래')
+  assert.match(shots[0].visualPrompt, /Watercolor/)
+  assert.match(shots[0].voiceover, /아직 늦지 않았어/)
+})
 
 test('모델에 맞는 토큰·샘플링 필드로 대본을 요청하고 응답을 읽어요', async (context) => {
   const settings = loadSettings(context)
