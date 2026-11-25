@@ -1146,11 +1146,12 @@ async function optimizeVideoPrompt() {
           :value="effectiveShotAudioMode(shot)"
           @change="project.setShotAudioMode(shot.id, ($event.target as HTMLSelectElement).value as ShotAudioMode)"
         >
-          <option value="h3-dialogue">{{ $t('common.h3Dialogue') }}</option>
-          <option value="h3-voiceover">{{ $t('nodeInspector.h3Offscreen') }}</option>
+          <option value="h3-dialogue" :disabled="!project.shotSupportsVideoVoice(shot)">{{ $t('common.h3Dialogue') }}</option>
+          <option value="h3-voiceover" :disabled="!project.shotSupportsVideoVoice(shot)">{{ $t('nodeInspector.h3Offscreen') }}</option>
           <option value="tts">{{ $t('common.postTts') }}</option>
           <option value="none">{{ $t('common.noNarration') }}</option>
         </select>
+        <p v-if="!project.shotSupportsVideoVoice(shot)" class="hint">{{ $t('common.videoVoiceUnsupported') }}</p>
         <label>{{ $t('common.narrationText') }}</label>
         <textarea
           rows="4"

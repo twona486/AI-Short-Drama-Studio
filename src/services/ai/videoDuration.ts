@@ -5,7 +5,19 @@ import { zealmanWorkflowById } from './zealman'
 import { isLtxProfile, ltxDurationOptions, LTX_DEFAULT_MODEL, LTX_MODELS } from './ltxOptions'
 import { isLtxDesktop, LTX_DESKTOP_MODELS, LTX_DESKTOP_WORKFLOW } from './ltxDesktopOptions'
 
-export type VideoDurationProfile = { provider?: string; workflowId?: string; baseUrl?: string }
+export type VideoVoiceSupport = 'supported' | 'unsupported' | 'verifying'
+
+const LTX_VIDEO_VOICE: Record<'ltx' | 'ltx-desktop', VideoVoiceSupport> = {
+  ltx: 'verifying',
+  'ltx-desktop': 'verifying'
+}
+
+export type VideoDurationProfile = {
+  provider?: string
+  workflowId?: string
+  baseUrl?: string
+  options?: { videoAudio?: boolean }
+}
 
 export function videoDurationCapability(input: {
   model?: VideoGenModel
@@ -35,7 +47,13 @@ export function videoDurationCapability(input: {
       durations = durations.filter((seconds) => seconds <= workflow.maxDuration)
     }
   }
-  return { durations, max: durations[durations.length - 1] }
+  let voice: VideoVoiceSupport = 'unsupported'
+  if (model === 'h3-v5' || model === 'wan-prime') voice = 'supported'
+  else if (profile?.options?.videoAudio === false) voice = 'unsupported'
+  else if (profile?.provider === 'ltx' || profile?.provider === 'ltx-desktop') voice = LTX_VIDEO_VOICE[profile.provider]
+  else if (profile?.options?.videoAudio === true || autoDl || zealmanWorkflowById(workflowId) ||
+    /grok-imagine-1\.5/i.test(workflowId)) voice = 'supported'
+  return { durations, max: durations[durations.length - 1], voice }
 }
 
 export function nearestVideoDuration(raw: number, durations: number[]): number {

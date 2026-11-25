@@ -6,13 +6,13 @@ const source = readFileSync('src/stores/project.ts', 'utf8')
 const start = source.indexOf('  function setShotAudioMode(')
 const end = source.indexOf('\n  }', start) + '\n  }'.length
 assert.ok(start >= 0 && end > start)
-const compiled = await transform(`export function createAction(current, touch, pushHistory) { ${source.slice(start, end)}; return setShotAudioMode }`, { loader: 'ts', format: 'esm' })
+const compiled = await transform(`export function createAction(current, touch, pushHistory, compatibleShotAudioMode, shotSupportsVideoVoice) { ${source.slice(start, end)}; return setShotAudioMode }`, { loader: 'ts', format: 'esm' })
 const { createAction } = await import('data:text/javascript;base64,' + Buffer.from(compiled.code).toString('base64'))
 for (const mode of ['tts', 'none', 'h3-dialogue', 'h3-voiceover']) {
   const initial = { id:'s1',audioMode:'old', videoAssetId:'existing-video', videoTaskId:'pending-task', videoHistoryIds:['old-video'], imageAssetId:'image', status:'video-generated', audioAssetId:'tts-audio', audioHistoryIds:[] }
   const current = { value:{ shots:[structuredClone(initial)] } }
   let touches = 0
-  const set = createAction(current, () => touches++, (id, _next, ids) => [...ids, id])
+  const set = createAction(current, () => touches++, (id, _next, ids) => [...ids, id], (mode) => mode, () => true)
   set('s1', mode)
   const shot = current.value.shots[0]
   for (const key of ['videoAssetId', 'videoTaskId', 'videoHistoryIds', 'imageAssetId', 'status']) assert.deepEqual(shot[key], initial[key])
