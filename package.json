@@ -34,6 +34,7 @@
     "test:comfy": "node scripts/test-comfy-reference-slots.mjs",
     "test:continuous": "node scripts/test-continuous-capture.mjs",
     "test:enter": "node scripts/test-enter-shortcut.mjs",
+    "test:default-names": "node --test scripts/test-default-names.mjs",
     "diagnose:storyboard": "node scripts/diagnose-storyboard-llm.mjs"
   },
   "build": {

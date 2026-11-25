@@ -10,6 +10,7 @@
 
 import { toRaw } from 'vue'
 import type { Asset, Project, ScriptDoc } from '@/types'
+import { localizeProject, localizeScript } from './defaultNames'
 
 /** IndexedDB에 저장하기 전에 Vue 프록시를 일반 객체로 변환한다. */
 function toPlain<T>(value: T): T {
@@ -17,7 +18,7 @@ function toPlain<T>(value: T): T {
 }
 
 const DB_NAME = 'ai-cut-db'
-const DB_VERSION = 2
+const DB_VERSION = 3
 
 export type StoreName = 'projects' | 'assets' | 'thumbs' | 'scripts'
 
@@ -27,7 +28,7 @@ export function openDB(): Promise<IDBDatabase> {
   if (_db) return Promise.resolve(_db)
   return new Promise((resolve, reject) => {
     const req = indexedDB.open(DB_NAME, DB_VERSION)
-    req.onupgradeneeded = () => {
+    req.onupgradeneeded = (event) => {
       const db = req.result
       if (!db.objectStoreNames.contains('projects')) {
         db.createObjectStore('projects', { keyPath: 'id' })
@@ -41,13 +42,39 @@ export function openDB(): Promise<IDBDatabase> {
       if (!db.objectStoreNames.contains('scripts')) {
         db.createObjectStore('scripts', { keyPath: 'id' })
       }
+      if (event.oldVersion > 0 && req.transaction) {
+        migrateNames<Project>(req.transaction.objectStore('projects'), project => {
+          if (typeof project.name !== 'string' || project.defaultNamesLocalized) return
+          localizeProject(project)
+          return project
+        })
+        migrateNames<ScriptRecord>(req.transaction.objectStore('scripts'), row => {
+          if (typeof row.meta?.title !== 'string' || typeof row.markdown !== 'string' || row.meta.defaultNamesLocalized) return
+          return { ...row, ...localizeScript(row.meta, row.markdown) }
+        })
+      }
     }
     req.onsuccess = () => {
       _db = req.result
+      req.result.onversionchange = () => {
+        req.result.close()
+        if (_db === req.result) _db = null
+      }
       resolve(_db)
     }
     req.onerror = () => reject(req.error)
   })
+}
+
+function migrateNames<T>(store: IDBObjectStore, update: (row: T) => T | undefined) {
+  const req = store.openCursor()
+  req.onsuccess = () => {
+    const cursor = req.result
+    if (!cursor) return
+    const row = update(cursor.value)
+    if (row) cursor.update(row)
+    cursor.continue()
+  }
 }
 
 export async function put<T>(store: StoreName, value: T): Promise<void> {
