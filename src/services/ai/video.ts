@@ -1396,7 +1396,7 @@ async function realLtxDesktopVideo(
   if (!isDesktop() || !desktop().ltxDesktopRequest) throw new Error(translate('ltx.desktopOnly'))
   if (!cfg.apiKey) throw new Error(translate('ltxDesktop.unpaired'))
   const request = (operation: LtxDesktopOperation) =>
-    desktop().ltxDesktopRequest({ baseUrl: cfg.baseUrl, token: cfg.apiKey, operation })
+    desktop().ltxDesktopRequest({ baseUrl: cfg.baseUrl, hostOverride: cfg.ltxHostOverride, token: cfg.apiKey, operation })
   const fail = (reply: LtxDesktopReply): never => {
     throw new Error(translate(ltxDesktopError(reply)))
   }
