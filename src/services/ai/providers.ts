@@ -9,6 +9,7 @@ import { OPENAI_DEFAULT_IMAGE_MODEL, OPENAI_IMAGE_MODELS } from './openAiImage'
 import { LTX_DESKTOP_PROVIDER, LTX_DESKTOP_DEFAULT_URL, LTX_DESKTOP_MODELS, LTX_DESKTOP_WORKFLOW } from './ltxDesktopOptions'
 import { LTX_BASE_URL, LTX_DEFAULT_MODEL, LTX_MODELS } from './ltxOptions'
 import { isApimartHost } from './adapters'
+import { DRAW_THINGS_MODELS, DRAW_THINGS_PROVIDER, DRAW_THINGS_URL } from './drawThingsOptions'
 
 export interface ProviderPreset {
   id: string
@@ -19,6 +20,8 @@ export interface ProviderPreset {
   defaultModel: string
   keyPlaceholder?: string
   showModelSuggestions?: boolean
+  noApiKey?: boolean
+  includeModelsByDefault?: boolean
 }
 
 function uniq(list: string[]): string[] {
@@ -148,6 +151,16 @@ export const IMAGE_PROVIDERS: ProviderPreset[] = [
     baseUrl: OPENAI_BASE_URL,
     models: OPENAI_IMAGE_MODELS,
     defaultModel: OPENAI_DEFAULT_IMAGE_MODEL
+  },
+  {
+    id: DRAW_THINGS_PROVIDER,
+    get name() { return t('drawThings.name') },
+    get hint() { return t('drawThings.setup') },
+    baseUrl: DRAW_THINGS_URL,
+    models: DRAW_THINGS_MODELS,
+    defaultModel: DRAW_THINGS_MODELS[0],
+    noApiKey: true,
+    includeModelsByDefault: true
   },
   {
     id: 'volcengine',
@@ -305,13 +318,14 @@ export function suggestedPresetModels(preset: ProviderPreset, configured: string
 export function applyProviderPreset(
   current: { baseUrl: string; model: string; models: string[] },
   preset: ProviderPreset
-): { provider: string; baseUrl: string; model: string; models: string[] } {
+): { provider: string; baseUrl: string; model: string; models: string[]; apiKey?: string } {
   const keepUrl = preset.id === 'custom'
   const model = (keepUrl ? current.model : current.model || preset.defaultModel).trim()
   // 프리셋은 제안 목록이다. 설정 모델 이름은 현재 연결과 호출자가 지정한 값에서만 가져온다.
-  const models = uniq([...(model ? [model] : []), ...current.models])
+  const models = uniq([model, ...current.models, ...(preset.includeModelsByDefault ? preset.models : [])])
   return {
     provider: preset.id,
+    ...(preset.noApiKey ? { apiKey: '' } : {}),
     baseUrl: keepUrl ? current.baseUrl : preset.baseUrl || current.baseUrl,
     model,
     models

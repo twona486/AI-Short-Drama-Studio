@@ -1,3 +1,5 @@
+import { createDrawThingsQueue } from './draw-things'
+import type { DrawThingsRequest } from '../src/services/ai/drawThingsOptions'
 import { requestLtxDesktop } from './ltx-desktop'
 import type { LtxDesktopRequest } from '../src/services/ai/ltxDesktopOptions'
 /// <reference types="vite-plugin-electron/electron-env" />
@@ -1114,6 +1116,21 @@ app.whenReady().then(async () => {
     }
   })
 
+  const drawThings = createDrawThingsQueue()
+  const drawThingsSenders = new WeakSet<Electron.WebContents>()
+  ipcMain.handle('desktop:drawThingsRequest', ({ sender }, request: DrawThingsRequest) => {
+    const owner = sender.id
+    if (!drawThingsSenders.has(sender)) {
+      drawThingsSenders.add(sender)
+      sender.once('destroyed', () => drawThings.cancel(owner))
+    }
+    return drawThings.request(owner, request, (progress) => {
+      if (!sender.isDestroyed() && request.kind === 'generate') sender.send('desktop:drawThingsProgress', request.id, progress)
+    })
+  })
+  ipcMain.on('desktop:cancelDrawThings', ({ sender }, id: unknown) => {
+    if (typeof id === 'string') drawThings.cancel(sender.id, id)
+  })
   ipcMain.handle('desktop:ltxDesktopRequest', (_event, request: LtxDesktopRequest) => requestLtxDesktop(request))
 
   ipcMain.handle('desktop:ltxRequest', (_event, request: LtxRequest) =>

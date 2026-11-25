@@ -7,6 +7,8 @@ import { useRouter } from 'vue-router'
 import { useProjectStore, useSettingsStore, uniqueProfileName } from '@/stores'
 import { desktop, isDesktop } from '@/services/desktop'
 import { isLtxDesktop, LTX_DESKTOP_DEFAULT_URL, LTX_DESKTOP_MODELS, ltxDesktopError } from '@/services/ai/ltxDesktopOptions'
+import { DRAW_THINGS_PROVIDER, drawThingsModelLabel } from '@/services/ai/drawThingsOptions'
+import { checkDrawThings } from '@/services/ai/drawThings'
 import { LTX_MODELS, isLtxProfile } from '@/services/ai/ltxOptions'
 import { TTS_VOICES } from '@/services/ai/tts'
 import EndpointForm from '@/components/settings/EndpointForm.vue'
@@ -178,9 +180,36 @@ function subtitle(p: { models?: string[]; model?: string }) {
 }
 
 function imageProfile(p: (typeof settings.config.images)[number]) {
-  const model = zealmanImageWorkflowLabel(p.model)
+  const model = p.provider === DRAW_THINGS_PROVIDER ? drawThingsModelLabel(p.model) : zealmanImageWorkflowLabel(p.model)
   const name = zealmanImageProfileLabel(p.name, p.model)
   return { id: p.id, name, subtitle: subtitle({ model, models: p.models }) }
+}
+
+const drawThings = computed(() => settings.config.image.provider === DRAW_THINGS_PROVIDER)
+const drawThingsBusy = ref(false)
+const drawThingsStatus = ref('')
+const drawThingsConnection = computed(() => JSON.stringify([
+  settings.config.activeImageId, settings.config.image.provider, settings.config.image.baseUrl
+]))
+watch(drawThingsConnection, () => { drawThingsStatus.value = '' })
+
+async function probeDrawThings() {
+  const connection = drawThingsConnection.value
+  drawThingsBusy.value = true
+  drawThingsStatus.value = ''
+  try {
+    const result = await checkDrawThings(settings.config.image.baseUrl)
+    if (drawThingsConnection.value !== connection) return
+    drawThingsStatus.value = result.detail
+    if (result.models?.length) {
+      const current = settings.config.image.model
+      settings.patchImage({ models: result.models, model: result.models.includes(current) ? current : result.models[0] })
+    } else if (result.models) {
+      drawThingsStatus.value = t('drawThings.noInstalledModels')
+    }
+  } finally {
+    drawThingsBusy.value = false
+  }
 }
 
 function videoProfile(p: (typeof settings.config.videos)[number]) {
@@ -379,7 +408,7 @@ function patchAdapter(
         />
         <EndpointForm
           :title="$t('studioSettings.api')"
-          :hint="settings.config.image.provider === 'apimart' ? $t('studioSettings.apimartImageHint') : $t('studioSettings.imageHint')"
+          :hint="drawThings ? undefined : settings.config.image.provider === 'apimart' ? $t('studioSettings.apimartImageHint') : $t('studioSettings.imageHint')"
           :presets="IMAGE_PROVIDERS"
           :base-url="settings.config.image.baseUrl"
           :api-key="settings.config.image.apiKey"
@@ -389,9 +418,18 @@ function patchAdapter(
           @patch="settings.patchImage($event)"
           @add-model="settings.addModel('image', $event)"
           @remove-model="settings.removeModel('image', $event)"
-        />
+        >
+          <template v-if="drawThings">
+            <p class="hint">{{ $t('drawThings.grpcSetup') }}</p>
+            <p class="hint">{{ $t('drawThings.memory') }}</p>
+            <button type="button" :disabled="drawThingsBusy" @click="probeDrawThings">{{ $t('drawThings.check') }}</button>
+            <p v-if="drawThingsBusy || drawThingsStatus" class="hint" role="status">
+              {{ drawThingsBusy ? $t('drawThings.checking') : drawThingsStatus }}
+            </p>
+          </template>
+        </EndpointForm>
         <AdapterFields
-          v-if="settings.config.image.provider !== 'apimart'"
+          v-if="!drawThings && settings.config.image.provider !== 'apimart'"
           kind="image"
           :adapter="settings.config.image.adapter"
           :base-url="settings.config.image.baseUrl"

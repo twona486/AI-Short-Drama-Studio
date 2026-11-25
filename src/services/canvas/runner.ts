@@ -47,6 +47,7 @@ import {
 import { blobToChatImageUrl, callLLM } from '@/services/ai/client'
 import { stripReasoningLeak } from '@/utils/jsonRepair'
 import { imageModelForProject, getVideoPromptStyle } from '@/services/ai/runtime'
+import { DRAW_THINGS_PROVIDER } from '@/services/ai/drawThingsOptions'
 import { pickDocImageResolution } from '@/services/ai/modelOptions'
 import { importedDirectorPrefix } from '@/services/settings/directorSkill'
 import { collectShotRefIds, collectShotBoardRefIds, collectShotKeyframeRefIds, collectShotVideoEntries, packVideoRefEntries, boundSubjectIds, sceneAssetForShot, sceneForShot, subjectsForShot, sceneHasKeyProps } from '@/utils/consistency'
@@ -98,7 +99,7 @@ import {
   videoMaxSeconds,
   videoMinSeconds
 } from '@/types'
-import { canvasReferenceSlotEntries, resolvedCanvasReferenceAssetIds } from '@/services/canvas/references'
+import { canvasNodeProducesImage, canvasReferenceSlotEntries, resolvedCanvasReferenceAssetIds } from '@/services/canvas/references'
 import { resolveH3PromptProfile } from './videoPromptProfile'
 import { withVideoReferenceBlock } from '@/utils/videoReferenceBlock'
 import { optimizeH3FullReference } from '@/services/ai/h3FullReference'
@@ -755,6 +756,7 @@ async function renderShotFrame(
       onProgress
     )
   } catch (e: any) {
+    ensureNotCancelled(signal)
     throw fail(e)
   }
   onProgress?.(`${word} 파일을 확인하는 중…`)
@@ -2784,7 +2786,7 @@ export async function generateFreeformImage(
     referenceImages: blobs.length ? blobs : undefined,
     model: imageModelForProject(p.pipelineMode),
     signal
-  })
+  }, onProgress)
   const asset = await assets.add(result.blob, 'image', 'ai-generated', {
     filename: `${node.data.label || translate('canvasRunner.image')}.png`,
     prompt,
@@ -2978,6 +2980,15 @@ export async function optimizeFreeformVideoPrompt(nodeId: string, signal?: Abort
 }
 
 const ltxNodeWaits = new Map<string, AbortController>()
+const drawThingsNodeWaits = new Map<string, AbortController>()
+
+export function canStopDrawThingsNodeWait(nodeId: string) {
+  return isNodeRunning(nodeId) && drawThingsNodeWaits.has(nodeId)
+}
+
+export function stopDrawThingsNodeWait(nodeId: string) {
+  drawThingsNodeWaits.get(nodeId)?.abort(new DOMException(translate('drawThings.cancelled'), 'AbortError'))
+}
 
 export function stopLtxNodeWait(nodeId: string) {
   ltxNodeWaits.get(nodeId)?.abort(new DOMException(translate('ltx.stopped'), 'AbortError'))
@@ -2990,6 +3001,7 @@ export async function runCanvasNode(
   opts?: NodeRunOpts
 ) {
   const current = useProjectStore().current
+  const drawThings = useSettingsStore().config.image.provider === DRAW_THINGS_PROVIDER
   const captureNode = current?.canvas?.nodes.find((node) => node.id === nodeId && node.data.captureId)
   if (captureNode) {
     const { runCaptureNode } = await import('@/services/continuous/capture')
@@ -2997,16 +3009,18 @@ export async function runCanvasNode(
       (isLtxTask(captureNode.data.videoTaskId) ||
         (normalizeVideoGenModel(captureNode.data.videoModel) === 'h3' &&
           isLtxProfile(videoProfileById(captureNode.data.videoProfileId || current?.continuousCapture?.profileId))))
-    if (!ltx || isNodeRunning(nodeId)) {
+    const drawThingsImage = drawThings && captureNode.type === 'imageGen'
+    if ((!ltx && !drawThingsImage) || isNodeRunning(nodeId)) {
       return runCaptureNode(nodeId, msg => onProgress?.(nodeId, msg), signal, { manual: true })
     }
     const controller = new AbortController()
-    ltxNodeWaits.set(nodeId, controller)
+    const waits = drawThingsImage ? drawThingsNodeWaits : ltxNodeWaits
+    waits.set(nodeId, controller)
     try {
       return await runCaptureNode(nodeId, msg => onProgress?.(nodeId, msg),
         signal ? AbortSignal.any([signal, controller.signal]) : controller.signal, { manual: true })
     } finally {
-      ltxNodeWaits.delete(nodeId)
+      waits.delete(nodeId)
     }
   }
   return withNodeJob(nodeId, async () => {
@@ -3041,9 +3055,11 @@ export async function runCanvasNode(
     const ltx = (node.type === 'videoGen' || node.type === 'shotVideo') &&
       ([node.data.videoTaskId, shot?.videoTaskId].some(isLtxTask) ||
         (normalizeVideoGenModel(node.data.videoModel) === 'h3' && isLtxProfile(profile)))
-    const local = ltx ? new AbortController() : undefined
+    const drawThingsImage = drawThings && canvasNodeProducesImage(node)
+    const local = ltx || drawThingsImage ? new AbortController() : undefined
+    const waits = drawThingsImage ? drawThingsNodeWaits : ltxNodeWaits
     if (local) {
-      ltxNodeWaits.set(nodeId, local)
+      waits.set(nodeId, local)
       signal = signal ? AbortSignal.any([signal, local.signal]) : local.signal
     }
     patchNode(project, nodeId, 'running')
@@ -3105,8 +3121,8 @@ export async function runCanvasNode(
       if (node.type === 'final') patchNode(project, 'export', 'success')
       activity.done(translate('canvasRunner.completed', { label: label }))
     } catch (e: any) {
-      if (local?.signal.aborted && e?.name === 'AbortError') {
-        const message = translate(isLtxDesktop(profile) ? 'ltxDesktop.cancelRequested' : 'ltx.stopped')
+      if (local?.signal.aborted && (drawThingsImage || e?.name === 'AbortError')) {
+        const message = translate(drawThingsImage ? 'drawThings.cancelled' : isLtxDesktop(profile) ? 'ltxDesktop.cancelRequested' : 'ltx.stopped')
         patchNode(project, nodeId, 'idle', message)
         await project.save()
         onProgress?.(nodeId, message)
@@ -3118,7 +3134,7 @@ export async function runCanvasNode(
       activity.fail(e)
       throw e
     } finally {
-      if (local) ltxNodeWaits.delete(nodeId)
+      if (local) waits.delete(nodeId)
       pendingRun = {}
     }
   })

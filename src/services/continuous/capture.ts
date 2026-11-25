@@ -825,7 +825,7 @@ export async function runCaptureNode(nodeId: string, onLog?: (text: string) => v
         onLog?.(t('continuousCapture.generatingNamed', { name: n.data.label }))
         const images = await Promise.all(refs.map(r => imageBlob(r.id)))
         current(projectId)
-        const result = await generateImage({ prompt, style: lookFromTexts('cinematic', s.plan.aesthetic).style, ...size, aspectRatio: ratio, referenceImages: images, signal })
+        const result = await generateImage({ prompt, style: lookFromTexts('cinematic', s.plan.aesthetic).style, ...size, aspectRatio: ratio, referenceImages: images, signal }, onLog)
         current(projectId)
         const saved = await useAssetsStore().add(result.blob, 'image', 'ai-generated', { filename: `${n.data.label}.png`, projectId, prompt })
         current(projectId)
@@ -997,11 +997,12 @@ export async function runCaptureNode(nodeId: string, onLog?: (text: string) => v
       n.status = 'success'; n.error = undefined
       await save(projectId)
     } catch (error) {
+      const drawThingsStopped = signal?.aborted && signal.reason?.message === t('drawThings.cancelled')
       const stopped = signal?.aborted && error instanceof DOMException && error.name === 'AbortError' &&
-        (isLtxTask(n.data.videoTaskId) || signal.reason?.message === t('ltx.stopped'))
+        (drawThingsStopped || isLtxTask(n.data.videoTaskId) || signal.reason?.message === t('ltx.stopped'))
       const profile = useSettingsStore().config.videos.find((v) => v.id === (n.data.videoProfileId || s.profileId))
       n.status = stopped ? 'idle' : 'failed'
-      n.error = stopped ? t(isLtxDesktop(profile) ? 'ltxDesktop.cancelRequested' : 'ltx.stopped')
+      n.error = stopped ? t(drawThingsStopped ? 'drawThings.cancelled' : isLtxDesktop(profile) ? 'ltxDesktop.cancelRequested' : 'ltx.stopped')
         : error instanceof Error ? error.message : String(error)
       if (useProjectStore().current?.id === projectId) await save(projectId)
       throw error

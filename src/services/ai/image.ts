@@ -30,6 +30,8 @@ import type { VisualStyle, AspectRatio } from '@/types'
 import { abortableDelay, controlledSignal, isTimeoutAbort, throwIfAborted } from './abort'
 import { isOfficialOpenAi } from './openAiChat'
 import { isOpenAiImageModel, openAiImageRequest, OPENAI_IMAGE_TIMEOUT_MS, parseOpenAiImage } from './openAiImage'
+import { DRAW_THINGS_PROVIDER } from './drawThingsOptions'
+import { generateDrawThings } from './drawThings'
 
 export interface ImageGenInput {
   prompt: string
@@ -577,6 +579,9 @@ export async function generateImage(
 
   if (getAIMode() === 'real') {
     const cfg = imageConfig(input.model)
+    if (cfg.provider === DRAW_THINGS_PROVIDER) {
+      return await generateDrawThings(cfg.baseUrl, model, input, onProgress)
+    }
     const adapterType = resolveImageAdapter(cfg)
     if (adapterType === 'openai-images' && isOfficialOpenAi(cfg.baseUrl) && isOpenAiImageModel(model)) {
       onProgress?.(t(input.referenceImages?.length ? 'aiError.imageEditing' : 'aiError.imageGenerating'))

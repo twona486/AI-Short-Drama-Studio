@@ -1,3 +1,4 @@
+import type { DrawThingsRequest, DrawThingsReply, DrawThingsProgress } from '../src/services/ai/drawThingsOptions'
 import type { LtxDesktopRequest, LtxDesktopReply } from '../src/services/ai/ltxDesktopOptions'
 import type { LtxRequest, LtxReply } from '../src/services/ai/ltxOptions'
 import { contextBridge, ipcRenderer } from 'electron'
@@ -34,6 +35,9 @@ export type DesktopAPI = {
   pickDirectory: () => Promise<string | null>
   openPath: (filePath: string) => Promise<string>
   ltxDesktopRequest: (request: LtxDesktopRequest) => Promise<LtxDesktopReply>
+  drawThingsRequest: (request: DrawThingsRequest) => Promise<DrawThingsReply>
+  cancelDrawThings: (id: string) => void
+  onDrawThingsProgress: (id: string, callback: (progress: DrawThingsProgress) => void) => () => void
   ltxRequest: (request: LtxRequest) => Promise<LtxReply>
   autodlFetch: (opts: {
     url: string
@@ -98,6 +102,16 @@ const api: DesktopAPI = {
   pickDirectory: () => ipcRenderer.invoke('desktop:pickDirectory'),
   openPath: (filePath) => ipcRenderer.invoke('desktop:openPath', filePath),
   ltxDesktopRequest: (request) => ipcRenderer.invoke('desktop:ltxDesktopRequest', request),
+  drawThingsRequest: (request) => ipcRenderer.invoke('desktop:drawThingsRequest', request),
+  cancelDrawThings: (id) => ipcRenderer.send('desktop:cancelDrawThings', id),
+  onDrawThingsProgress: (id, callback) => {
+    const channel = 'desktop:drawThingsProgress'
+    const listener = (_event: Electron.IpcRendererEvent, activeId: string, progress: DrawThingsProgress) => {
+      if (id === activeId) callback(progress)
+    }
+    ipcRenderer.on(channel, listener)
+    return () => { ipcRenderer.removeListener(channel, listener) }
+  },
   ltxRequest: (request) => ipcRenderer.invoke('desktop:ltxRequest', request),
   autodlFetch: (opts) => ipcRenderer.invoke('desktop:autodlFetch', opts),
   cancelProviderFetch: (requestId) => ipcRenderer.send('desktop:cancelProviderFetch', requestId),

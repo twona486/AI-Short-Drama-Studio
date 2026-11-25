@@ -3,6 +3,7 @@ import { runEnterShortcut } from '@/utils/enterShortcut'
 import { computed, ref, watch } from 'vue'
 import type { ProviderPreset } from '@/services/ai/providers'
 import { applyProviderPreset, findProvider, matchProviderId, suggestedPresetModels } from '@/services/ai/providers'
+import { DRAW_THINGS_PROVIDER, drawThingsModelLabel } from '@/services/ai/drawThingsOptions'
 
 const props = defineProps<{
   title: string
@@ -56,6 +57,7 @@ const apiKeyModel = computed({
 })
 
 const currentPreset = computed(() => findProvider(providerId.value, props.presets))
+const drawThings = computed(() => currentPreset.value.id === DRAW_THINGS_PROVIDER)
 
 watch(
   () => props.baseUrl,
@@ -99,8 +101,8 @@ function onAdd() {
       :placeholder="currentPreset.baseUrl || 'https://…/v1'"
     />
 
-    <label>API Key</label>
-    <div class="secret">
+    <label v-if="!currentPreset.noApiKey">API Key</label>
+    <div v-if="!currentPreset.noApiKey" class="secret">
       <input
         :type="showKey ? 'text' : 'password'"
         autocomplete="off"
@@ -114,7 +116,7 @@ function onAdd() {
 
     <label>{{ $t('endpointForm.modelName') }}</label>
     <p class="hint">
-      {{ $t('endpointForm.modelHint') }}
+      {{ $t(drawThings ? 'drawThings.modelHint' : 'endpointForm.modelHint') }}
     </p>
     <div class="chips">
       <button
@@ -123,9 +125,10 @@ function onAdd() {
         type="button"
         class="chip"
         :class="{ on: m === model }"
+        :title="drawThings ? m : undefined"
         @click="emit('patch', { model: m })"
       >
-        {{ m }}
+        {{ drawThings ? drawThingsModelLabel(m) : m }}
         <span
           v-if="models.length > 1"
           class="x"
@@ -144,7 +147,7 @@ function onAdd() {
         class="chip ghost"
         @click="emit('addModel', m)"
       >
-        + {{ m }}
+        + {{ drawThings ? drawThingsModelLabel(m) : m }}
       </button>
     </div>
 

@@ -11,6 +11,7 @@ import { ref, watch } from 'vue'
 import { AUTODL_BASE_URL, AUTODL_WORKFLOWS } from '@/services/ai/autodl'
 import { envDefaults, migrateVideoBaseUrl, migrateVideoWorkflowId } from '@/services/ai/env'
 import { isManualImageChoice } from '@/services/ai/providers'
+import { DRAW_THINGS_PROVIDER } from '@/services/ai/drawThingsOptions'
 import { desktop, isDesktop } from '@/services/desktop'
 import { stillModeForVideoModel, type VideoGenModel, type VideoStillMode } from '@/types/canvas'
 import type { VideoPromptStyle } from '@/utils/shotPrompt'
@@ -175,7 +176,7 @@ export function endpointReady(ep?: {
     adapterType === 'comfyui-prompt' ||
     adapterType === 'zealman-workflow' ||
     (/localhost|127\.0\.0\.1/i.test(ep.baseUrl || '') && ep.provider === 'custom')
-  const hasEndpoint = Boolean(ep.baseUrl?.trim() && (ep.apiKey?.trim() || localComfy))
+  const hasEndpoint = Boolean(ep.baseUrl?.trim() && (ep.apiKey?.trim() || localComfy || ep.provider === DRAW_THINGS_PROVIDER))
   const hasModel = Boolean(ep.model?.trim() || ep.workflowId?.trim() || adapterType === 'comfyui-prompt')
   return hasEndpoint && hasModel
 }

@@ -7,7 +7,8 @@ import { t as translate } from '@/i18n'
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { Handle, Position, useVueFlow } from '@vue-flow/core'
 import { useAssetsStore, useLibraryStore, useProjectStore, useSettingsStore, useToastStore } from '@/stores'
-import { runCanvasNode, stopLtxNodeWait, optimizeFreeformVideoPrompt } from '@/services/canvas/runner'
+import { runCanvasNode, stopLtxNodeWait, optimizeFreeformVideoPrompt, canStopDrawThingsNodeWait, stopDrawThingsNodeWait } from '@/services/canvas/runner'
+import { DRAW_THINGS_PROVIDER, drawThingsInputError, isDrawThingsGrpc } from '@/services/ai/drawThingsOptions'
 import { applyShotVideoModel, applyShotVideoProfile } from '@/services/canvas/videoModel'
 import { isNodeRunning } from '@/services/canvas/jobs'
 import { friendlyAiError, shouldToastAiError } from '@/services/ai/abort'
@@ -165,6 +166,13 @@ const isH3Video = computed(() => isVideo.value && !ltxProfile.value && videoMode
 
 /* 노드에 선택한 영상 연결이 우선한다. 선택하지 않았으면 현재 전역 연결을 쓴다. */
 const settings = useSettingsStore()
+const drawThingsImage = computed(() => !isVideo.value && settings.config.image.provider === DRAW_THINGS_PROVIDER)
+const drawThingsProblem = computed(() => {
+  if (!drawThingsImage.value || isCapture.value) return ''
+  const { model, baseUrl } = settings.config.image
+  const problem = drawThingsInputError(model, refs.value.length, isDrawThingsGrpc(baseUrl))
+  return problem ? translate(problem) : ''
+})
 const VIDEO_PROFILES = computed(() => settings.config.videos ?? [])
 const effectiveVideoProfile = computed(() => {
   const list = VIDEO_PROFILES.value
@@ -429,6 +437,10 @@ function previewFull() {
 
 async function generate() {
   if (generating.value) return
+  if (drawThingsProblem.value) {
+    toast.warn(drawThingsProblem.value)
+    return
+  }
   if (!ltxResume.value && !prompt.value.trim()) {
     toast.warn(translate('common.enterPromptFirst'))
     return
@@ -471,7 +483,7 @@ async function generate() {
     }
   } catch (e: unknown) {
     if (shouldToastAiError(e)) toast.error(friendlyAiError(e) || translate('common.generateFailed'), 10000)
-    else if (node.value?.error === translate('ltx.stopped') || node.value?.error === translate('ltxDesktop.cancelRequested')) {
+    else if (node.value?.error && ['ltx.stopped', 'ltxDesktop.cancelRequested', 'drawThings.cancelled'].some(key => node.value?.error === translate(key))) {
       toast.info(node.value.error)
     }
   } finally {
@@ -566,7 +578,7 @@ async function removeSelf() {
     <transition name="float-up">
       <div v-if="selected && panelOpen" class="toolbar-wrap nodrag nowheel" @mousedown.stop @click.stop>
         <div class="toolbar">
-          <button type="button" :disabled="generating || optimizingPrompt" @click="generate">
+          <button type="button" :disabled="generating || optimizingPrompt || !!drawThingsProblem" :title="drawThingsProblem || undefined" @click="generate">
             <span>↺</span>{{ genLabel }}
           </button>
           <button
@@ -655,10 +667,11 @@ async function removeSelf() {
         {{ isVideo ? '▶' : '＋' }}
       </div>
       <span v-if="isVideo && duration" class="dur-tag">{{ duration }}s</span>
+      <button v-if="canStopDrawThingsNodeWait(props.id)" type="button" class="ltx-stop nodrag" @click.stop="stopDrawThingsNodeWait(props.id)">{{ $t('drawThings.stopWaiting') }}</button>
       <button v-if="isVideo && (ltxProfile || ltxResume) && generating" type="button" class="ltx-stop nodrag" @click.stop="stopLtxNodeWait(props.id)">{{ $t(isLtxDesktop(ltxProfile) ? 'ltxDesktop.cancel' : 'ltx.stop') }}</button>
       <button v-else-if="isVideo && ltxResume" type="button" class="ltx-stop nodrag" @click.stop="generate">{{ $t('ltx.resume') }}</button>
       <NodeBusyOverlay v-if="generating" :label="busyLabel || (isVideo ? $t('freeformGenNode.generatingVideo') : $t('freeformGenNode.generatingImage'))" />
-      <div v-if="failMsg && !generating" class="fail" :title="failMsg">{{ failMsg }}</div>
+      <div v-if="(drawThingsProblem || failMsg) && !generating" class="fail" :title="drawThingsProblem || failMsg">{{ drawThingsProblem || failMsg }}</div>
     </div>
 
     <div class="name">
@@ -729,7 +742,7 @@ async function removeSelf() {
           />
           <AspectRatioSeg v-if="!isVideo" v-model="aspectRatio" compact />
           <ImageResolutionSeg
-            v-if="!isVideo && imageResolutionChoices.length"
+            v-if="!isVideo && !drawThingsImage && imageResolutionChoices.length"
             v-model="imageResolution"
             :choices="imageResolutionChoices"
           />
@@ -749,7 +762,7 @@ async function removeSelf() {
             @update:duration="duration = $event"
             @update:audio="generateAudio = $event"
           />
-          <button class="go" type="button" :disabled="generating || optimizingPrompt" :title="genLabel" @click="generate">↑</button>
+          <button class="go" type="button" :disabled="generating || optimizingPrompt || !!drawThingsProblem" :title="drawThingsProblem || genLabel" @click="generate">↑</button>
         </div>
       </div>
     </transition>

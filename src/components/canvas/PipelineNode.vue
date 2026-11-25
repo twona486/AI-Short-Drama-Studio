@@ -2,11 +2,12 @@
 import { isLtxTask, isLtxDesktop } from '@/services/ai/ltxDesktopOptions'
 import { isLtxProfile, ltxDuration, ltxDurationOptions, LTX_DEFAULT_MODEL } from '@/services/ai/ltxOptions'
 import { t as translate } from '@/i18n'
-import { computed, onBeforeUnmount, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, ref, shallowRef, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { Handle, Position, useVueFlow } from '@vue-flow/core'
 import { useAssetsStore, useLibraryStore, useProjectStore, useSettingsStore, useToastStore } from '@/stores'
-import { runCanvasNode, stopLtxNodeWait, optimizeShotVideoPrompt, regenerateShotFrame, grabVideoLastFrameNode } from '@/services/canvas/runner'
+import { runCanvasNode, stopLtxNodeWait, optimizeShotVideoPrompt, regenerateShotFrame, grabVideoLastFrameNode, canStopDrawThingsNodeWait, stopDrawThingsNodeWait } from '@/services/canvas/runner'
+import { DRAW_THINGS_PROVIDER } from '@/services/ai/drawThingsOptions'
 import { isNodeRunning } from '@/services/canvas/jobs'
 import { needsPlayReview } from '@/services/canvas/playGate'
 import { cssAspectRatio } from '@/services/canvas/layout'
@@ -67,6 +68,7 @@ const router = useRouter()
 const assets = useAssetsStore()
 const library = useLibraryStore()
 const settings = useSettingsStore()
+const drawThings = computed(() => settings.config.image.provider === DRAW_THINGS_PROVIDER)
 const toast = useToastStore()
 const mediaUrl = ref('')
 const videoUrl = ref('')
@@ -577,10 +579,14 @@ function setShotDuration(raw: number) {
   project.updateShot(shot.value.id, { duration: d })
 }
 
+const redrawFrameWait = shallowRef<AbortController>()
+
 /** 시작 또는 종료 프레임 하나만 다시 생성한다. */
 async function redrawFrame(which: 'start' | 'end') {
   if (generating.value || toolBusy.value || !shot.value) return
   moreOpen.value = false
+  const controller = drawThings.value ? new AbortController() : undefined
+  redrawFrameWait.value = controller
   try {
     await regenerateShotFrame(
       shot.value,
@@ -588,13 +594,15 @@ async function redrawFrame(which: 'start' | 'end') {
       (msg) => {
         toolBusy.value = msg
       },
-      undefined
+      controller?.signal
     )
     await loadFrames()
     toast.success(which === 'start' ? translate('common.startFrameRedrawn') : translate('common.endFrameRedrawn'))
   } catch (e: any) {
-    toast.error(friendlyAiError(e) || translate('common.redrawFailed'))
+    if (controller?.signal.aborted) toast.info(translate('drawThings.cancelled'))
+    else toast.error(friendlyAiError(e) || translate('common.redrawFailed'))
   } finally {
+    redrawFrameWait.value = undefined
     toolBusy.value = ''
   }
 }
@@ -708,7 +716,7 @@ async function generateThis(ev?: Event, hd = false) {
   } catch (e: any) {
     // 실패 상태만 표시하면 원인을 알 수 없으므로 오류 내용도 알림으로 표시한다.
     if (shouldToastAiError(e)) toast.error(friendlyAiError(e) || translate('common.generateFailed'))
-    else if (nodeMeta.value?.error === translate('ltx.stopped') || nodeMeta.value?.error === translate('ltxDesktop.cancelRequested')) {
+    else if (nodeMeta.value?.error && ['ltx.stopped', 'ltxDesktop.cancelRequested', 'drawThings.cancelled'].some(key => nodeMeta.value?.error === translate(key))) {
       toast.info(nodeMeta.value.error)
     }
   } finally {
@@ -1056,7 +1064,7 @@ const cropStyle = computed(() => ({
           <button v-if="isImageNode && hasAsset" type="button" :disabled="!!toolBusy" @click="startCrop">
             <span>✂</span>{{ $t('common.crop') }}
           </button>
-          <button v-if="isImageNode" type="button" :disabled="generating || gateBlocked || !!toolBusy" @click="generateThis($event, true)">
+          <button v-if="isImageNode && !drawThings" type="button" :disabled="generating || gateBlocked || !!toolBusy" @click="generateThis($event, true)">
             <span>HD</span>{{ $t('pipelineNode.hd') }}
           </button>
           <button v-if="isVideoNode && hasAsset" type="button" :disabled="!!toolBusy" @click="startTrim">
@@ -1193,6 +1201,8 @@ const cropStyle = computed(() => ({
         {{ isVideoNode ? '▶' : '＋' }}
       </div>
       <span v-if="isVideoNode && durationLabel && !trimOn && !generating && !toolBusy" class="dur">{{ durationLabel }}</span>
+      <button v-if="canStopDrawThingsNodeWait(props.id)" type="button" class="ltx-stop nodrag" @click.stop="stopDrawThingsNodeWait(props.id)">{{ $t('drawThings.stopWaiting') }}</button>
+      <button v-if="redrawFrameWait" type="button" class="ltx-stop nodrag" @click.stop="redrawFrameWait.abort()">{{ $t('drawThings.stopWaiting') }}</button>
       <button v-if="type === 'shotVideo' && (ltxProfile || ltxResume) && generating" type="button" class="ltx-stop nodrag" @click.stop="stopLtxNodeWait(props.id)">{{ $t(isLtxDesktop(ltxProfile) ? 'ltxDesktop.cancel' : 'ltx.stop') }}</button>
       <button v-else-if="type === 'shotVideo' && ltxResume" type="button" class="ltx-stop nodrag" @click.stop="generateThis($event)">{{ $t('ltx.resume') }}</button>
       <NodeBusyOverlay v-if="generating || toolBusy" :label="toolBusy || $t('common.generating')" />
@@ -1369,7 +1379,7 @@ const cropStyle = computed(() => ({
         v-model:extra-ids="extraRefIds"
       />
       <div class="prompt-foot">
-        <ImageModelSelect v-if="isImageNode || isFrameNode" />
+        <ImageModelSelect v-if="isImageNode || isFrameNode || type === 'prop'" />
         <VideoModelSelect
           v-else-if="type === 'shotVideo'"
           v-model="videoModel"
@@ -1384,7 +1394,7 @@ const cropStyle = computed(() => ({
           compact
         />
         <ImageResolutionSeg
-          v-if="(isImageNode || isFrameNode) && imageResolutionChoices.length"
+          v-if="(isImageNode || isFrameNode) && !drawThings && imageResolutionChoices.length"
           v-model="imageResolution"
           :choices="imageResolutionChoices"
         />

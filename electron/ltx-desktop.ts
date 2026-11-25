@@ -1,4 +1,4 @@
-import { lookup } from 'node:dns/promises'
+import { lanOrigin, pinAddress } from './lan-origin'
 import { isIPv4 } from 'node:net'
 import http from 'node:http'
 import https from 'node:https'
@@ -13,31 +13,8 @@ import {
 const ID = /^[A-Za-z0-9_-]{1,128}$/
 const SIGNED_VIDEO = /^\/api\/assets\/[A-Za-z0-9_-]{1,128}\/bytes\?[^#\s]{1,1024}$/
 
-function privateIPv4(address: string) {
-  if (!isIPv4(address)) return false
-  const [a, b] = address.split('.').map(Number)
-  return a === 10 || a === 127 || (a === 172 && b >= 16 && b <= 31) || (a === 192 && b === 168)
-}
-
-export function desktopOrigin(raw: string): URL {
-  const value = raw.trim()
-  const absolute = value.includes('://') ? value : `http://${value}`
-  const url = new URL(absolute)
-  const named = url.hostname === 'localhost' || /^[a-z0-9-]+(?:\.[a-z0-9-]+)*\.local$/i.test(url.hostname)
-  if (!['http:', 'https:'].includes(url.protocol) || url.username || url.password || url.pathname !== '/' ||
-    url.search || url.hash || (!named && !privateIPv4(url.hostname))) throw new Error('Invalid LAN address')
-  if (!url.port && !/:\d+(?:[/?#]|$)/.test(absolute.slice(absolute.indexOf('://') + 3))) url.port = '41955'
-  return url
-}
-
-async function pinAddress(url: URL): Promise<string> {
-  if (privateIPv4(url.hostname)) return url.hostname
-  if (url.hostname === 'localhost') return '127.0.0.1'
-  const records = await lookup(url.hostname, { all: true, family: 4 })
-  if (!records.length || records.some(({ address }) => !privateIPv4(address))) {
-    throw new Error('LAN host did not resolve to private IPv4')
-  }
-  return records[0].address
+export function desktopOrigin(raw: string) {
+  return lanOrigin(raw, '41955')
 }
 
 function requestBytes(origin: URL, address: string, path: string, config: {
