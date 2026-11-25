@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { t } from '@/i18n'
+import { t, uiPunctuation } from '@/i18n'
 import { computed, ref } from 'vue'
 import { Handle, Position } from '@vue-flow/core'
 import { useProjectStore } from '@/stores'
@@ -83,7 +83,7 @@ async function copy() {
           <p v-if="assetsOf(scene.assetIds).length" class="cast">
             <span v-for="asset in assetsOf(scene.assetIds)" :key="asset.id">{{ kindLabel[asset.kind] || $t('timelineTracks.asset') }} {{ asset.name }}</span>
           </p>
-          <p v-for="(line, lineIndex) in linesOf(scene)" :key="lineIndex" class="line">{{ line.speaker }}：{{ line.text }}</p>
+          <p v-for="(line, lineIndex) in linesOf(scene)" :key="lineIndex" class="line">{{ line.speaker }}{{ uiPunctuation.colon }}{{ line.text }}</p>
         </li>
       </ol>
       <p v-if="plan.modelName" class="model">{{ plan.modelName }} · {{ $t('timelineTracks.clipRange', { min: Math.min(6, plan.maxSeconds || 6), max: plan.maxSeconds }) }}</p>

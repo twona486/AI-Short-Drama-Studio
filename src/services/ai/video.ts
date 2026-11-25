@@ -9,7 +9,7 @@
  * 워크플로 ID는 minimax_h3_lightx2v_v5_15s, minimax_h3_lightx2v_v5, minimax_h3_image_audio_to_video, minimax_h3_b99_002다.
  */
 
-import { t as translate } from '@/i18n'
+import { t as translate, uiPunctuation } from '@/i18n'
 import { getAIMode } from './client'
 import { comfyPromptGenerate, httpCustomMediaGenerate, isApimartHost, resolveVideoAdapter } from './adapters'
 import { apimartGenerateVideo, isApimartEndpoint } from './apimart'
@@ -740,12 +740,12 @@ async function realWorkflowVideo(
     }
     if (!submitResp.ok) {
       const hint = submitResp.status === 413 ? '(요청 본문이 너무 큽니다. 참조 이미지 크기를 줄이세요.)' : ''
-      throw new Error(`[video] 작업 제출에 실패했습니다. ${submitResp.status}${hint}：${submitText.slice(0, 1200)}`)
+      throw new Error(`[video] 작업 제출에 실패했습니다. ${submitResp.status}${hint}${uiPunctuation.colon}${submitText.slice(0, 1200)}`)
     }
     const submitCode = String(submitData?.code ?? '')
     taskId = taskIdOf(submitData)
     if (submitCode && !/^success$/i.test(submitCode) && !taskId) {
-      throw new Error(`[video] 작업 제출에 실패했습니다.：${submitData?.msg || submitCode}\n${submitText.slice(0, 400)}`)
+      throw new Error(`[video] 작업 제출에 실패했어요.${uiPunctuation.colon}${submitData?.msg || submitCode}\n${submitText.slice(0, 400)}`)
     }
     if (!taskId) {
       throw new Error(`[video] 제출 응답에 task_id가 없습니다.\n원본 응답 ${submitText.slice(0, 400)}`)
@@ -842,10 +842,10 @@ async function realWorkflowVideo(
           pollText.slice(0, 500)
       )
     }
-    onProgress?.(`생성 중… ${elapsed}s${status ? `（${status}）` : ''}`)
+    onProgress?.(`생성 중… ${elapsed}s${status ? uiPunctuation.parenthetical(status) : ''}`)
   }
 
-  throw new Error(`[video] 영상 생성 시간이 30분을 초과했습니다.，task_id=${taskId}`)
+  throw new Error(`[video] 영상 생성 시간이 30분을 초과했어요.${uiPunctuation.comma}task_id=${taskId}`)
 }
 
 /** Bailian wan3.0-video-prime는 이미지 한 장을 시작 프레임으로, 여러 장을 reference_image로 사용한다. 해상도는 노드의 480P, 720P, 1080P 선택을 따른다. */
@@ -1006,7 +1006,7 @@ async function realWanVideo(
     }
   }
 
-  throw new Error(`[video] Wan 생성 시간이 15분을 초과했습니다.，task_id=${taskId}`)
+  throw new Error(`[video] Wan 생성 시간이 15분을 초과했어요.${uiPunctuation.comma}task_id=${taskId}`)
 }
 
 /** 미리보기와 실제 생성이 같은 ComfyUI 및 MiniMax H3 프롬프트를 사용한다.

@@ -3,7 +3,7 @@
  * 설정의 adapter.type에 따라 연결 방식을 선택한다.
  */
 
-import { t as translate } from '@/i18n'
+import { t as translate, uiPunctuation } from '@/i18n'
 import { desktop, isDesktop } from '@/services/desktop'
 import {
   applyComfyInputs,
@@ -951,7 +951,7 @@ export async function comfyPromptGenerate(opts: {
         '연결의 ‘도우미로 워크플로 분석’을 눌러 입력 매핑을 다시 만드세요.'
     )
   }
-  opts.onProgress?.(`입력 전달 완료 ${writes.slice(0, 3).join('、')}`)
+  opts.onProgress?.(`입력 전달 완료 ${writes.slice(0, 3).join(uiPunctuation.listSeparator)}`)
 
   opts.onProgress?.('ComfyUI 대기열에 제출하는 중…')
   const submitUrl = joinUrl(base, submitPath)

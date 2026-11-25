@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { t as translate } from '@/i18n'
+import { t as translate, uiPunctuation } from '@/i18n'
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import GlassCard from '@/components/common/GlassCard.vue'
@@ -865,7 +865,7 @@ async function buildDigitalHumanVideo(
   const completed = videoIds.filter(Boolean).length
   if (signal.aborted) throw new DOMException(translate('smartSpeech.cancelled'), 'AbortError')
   if (failures.length) {
-    throw new Error(translate('smartSpeech.segmentFailed', { p0: failures.map((item) => item.index + 1).join('、'), p1: failures[0].message }))
+    throw new Error(translate('smartSpeech.segmentFailed', { p0: failures.map((item) => item.index + 1).join(uiPunctuation.listSeparator), p1: failures[0].message }))
   }
   if (completed < parts.length) {
     throw new Error(translate('smartSpeech.incomplete', { p0: completed, p1: parts.length }))
@@ -1052,7 +1052,7 @@ onBeforeUnmount(() => {
               <div class="upload-box wide" :class="{ filled: videoFiles.length }" role="button" @click="chooseVideos">
                 <template v-if="videoFiles.length">
                   <strong>{{ $t('smartSpeech.selected') }} {{ videoFiles.length }} {{ $t('smartSpeech.videoCount') }}</strong>
-                  <span>{{ videoFiles.map((file) => file.name).join('、') }}</span>
+                  <span>{{ videoFiles.map((file) => file.name).join(uiPunctuation.listSeparator) }}</span>
                 </template>
                 <template v-else>
                   <strong>{{ $t('smartSpeech.uploadLiveVideo') }}</strong>

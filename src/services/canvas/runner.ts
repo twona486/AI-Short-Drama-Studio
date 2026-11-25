@@ -1,3 +1,4 @@
+import { uiPunctuation } from '@/i18n'
 import { t as translate } from "@/i18n"
 import {
   useProjectStore,
@@ -363,7 +364,7 @@ export async function generateSubjectSheet(sub: Subject, onProgress?: (msg: stri
   })
   onProgress?.(translate('canvasRunner.checkCharacter'))
   const quality = await reviewImageQuality(result.blob, prompt, signal)
-  if (!quality.passed) throw new Error(`4면 설정 이미지 파일이 유효하지 않습니다. ${quality.issues.join('；')}`)
+  if (!quality.passed) throw new Error(`4면 설정 이미지 파일이 유효하지 않습니다. ${quality.issues.join(uiPunctuation.semicolon)}`)
   await saveGeneratedImageToSharedLibrary(result.blob, 'character', asset.filename, prompt, onProgress)
   project.updateSubject(latest.id, {
     designSheetAssetId: asset.id,
@@ -413,7 +414,7 @@ export async function generatePropSheet(prop: StoryProp, onProgress?: (msg: stri
   })
   onProgress?.(translate('canvasRunner.checkProp'))
   const quality = await reviewImageQuality(result.blob, prompt, signal)
-  if (!quality.passed) throw new Error(`소품의 다각도 이미지 파일이 유효하지 않습니다. ${quality.issues.join('；')}`)
+  if (!quality.passed) throw new Error(`소품의 다각도 이미지 파일이 유효하지 않습니다. ${quality.issues.join(uiPunctuation.semicolon)}`)
   await saveGeneratedImageToSharedLibrary(result.blob, 'prop', asset.filename, prompt, onProgress)
   project.updateProp(latest.id, {
     designSheetAssetId: asset.id,
@@ -480,7 +481,7 @@ export async function generateScenePropSheet(
   })
   onProgress?.(translate('canvasRunner.checkKeyProp'))
   const quality = await reviewImageQuality(result.blob, prompt, signal)
-  if (!quality.passed) throw new Error(`주요 소품 이미지 파일이 유효하지 않습니다. ${quality.issues.join('；')}`)
+  if (!quality.passed) throw new Error(`주요 소품 이미지 파일이 유효하지 않습니다. ${quality.issues.join(uiPunctuation.semicolon)}`)
   await saveGeneratedImageToSharedLibrary(result.blob, 'prop', asset.filename, prompt, onProgress)
   project.updateScene(latest.id, {
     propSheetAssetId: asset.id,
@@ -527,7 +528,7 @@ export async function generateScenePlate(scn: Scene, onProgress?: (msg: string) 
   })
   onProgress?.(translate('canvasRunner.checkScene'))
   const quality = await reviewImageQuality(result.blob, prompt, signal)
-  if (!quality.passed) throw new Error(`장면 기준 이미지 파일이 유효하지 않습니다. ${quality.issues.join('；')}`)
+  if (!quality.passed) throw new Error(`장면 기준 이미지 파일이 유효하지 않습니다. ${quality.issues.join(uiPunctuation.semicolon)}`)
   await saveGeneratedImageToSharedLibrary(result.blob, 'scene', asset.filename, prompt, onProgress)
   project.updateScene(latest.id, {
     plateAssetId: asset.id,
@@ -591,7 +592,7 @@ export async function generateShotBoard(shot: Shot, onProgress?: (msg: string) =
   })
   onProgress?.('스토리 개요판 파일을 확인하는 중…')
   const quality = await reviewImageQuality(result.blob, prompt, signal)
-  if (!quality.passed) throw new Error(`스토리 개요판 파일이 유효하지 않습니다. ${quality.issues.join('；')}`)
+  if (!quality.passed) throw new Error(`스토리 개요판 파일이 유효하지 않습니다. ${quality.issues.join(uiPunctuation.semicolon)}`)
   await saveGeneratedImageToSharedLibrary(result.blob, 'other', asset.filename, prompt, onProgress)
   project.assignShotBoard(shot.id, asset.id)
   await project.save()
@@ -672,7 +673,7 @@ export async function generateShotImage(shot: Shot, onProgress?: (msg: string) =
   })
   onProgress?.('키프레임 파일을 확인하는 중…')
   const quality = await reviewImageQuality(result.blob, prompt, signal)
-  if (!quality.passed) throw new Error(`키프레임 파일이 유효하지 않습니다. ${quality.issues.join('；')}`)
+  if (!quality.passed) throw new Error(`키프레임 파일이 유효하지 않습니다. ${quality.issues.join(uiPunctuation.semicolon)}`)
   await saveGeneratedImageToSharedLibrary(result.blob, 'other', asset.filename, prompt, onProgress)
   project.assignShotImage(shot.id, asset.id)
   await project.save()
@@ -755,7 +756,7 @@ async function renderShotFrame(
   }
   onProgress?.(`${word} 파일을 확인하는 중…`)
   const quality = await reviewImageQuality(result.blob, prompt, signal)
-  if (!quality.passed) throw fail(new Error(translate('canvasRunner.invalidFrame', { frame: word, reason: quality.issues.join('；') })))
+  if (!quality.passed) throw fail(new Error(translate('canvasRunner.invalidFrame', { frame: word, reason: quality.issues.join(uiPunctuation.semicolon) })))
   try {
     const asset = await assets.add(result.blob, 'image', 'ai-generated', {
       filename: `shot${shot.index + 1}_${which}frame_${Date.now().toString(36)}`,
@@ -1028,7 +1029,7 @@ async function regenerateDigitalHumanShot(
   )
   ensureNotCancelled(signal)
   const quality = await reviewVideoQuality(result.blob, result.prompt, signal)
-  if (!quality.passed) throw new Error(`영상 파일이 유효하지 않습니다. ${quality.issues.join('；')}`)
+  if (!quality.passed) throw new Error(`영상 파일이 유효하지 않습니다. ${quality.issues.join(uiPunctuation.semicolon)}`)
   const asset = await assets.add(result.blob, 'video', 'ai-generated', {
     filename: `digital_human_${shot.index + 1}_${Date.now().toString(36)}.mp4`,
     prompt: result.prompt,
@@ -1427,7 +1428,7 @@ export async function generateShotVideo(shot: Shot, onProgress?: (msg: string) =
       )
       onProgress?.('영상 파일을 확인하는 중…')
       const quality = await reviewVideoQuality(result.blob, result.prompt, signal)
-      if (!quality.passed) throw new Error(`영상 파일이 유효하지 않습니다. ${quality.issues.join('；')}`)
+      if (!quality.passed) throw new Error(`영상 파일이 유효하지 않습니다. ${quality.issues.join(uiPunctuation.semicolon)}`)
       const asset = await assets.add(result.blob, 'video', 'ai-generated', {
         filename: `video_${shot.index + 1}_${Date.now().toString(36)}`,
         prompt: result.prompt,
@@ -1551,7 +1552,7 @@ export async function generateShotVideo(shot: Shot, onProgress?: (msg: string) =
             ? `Picture ${index + 1}: four-panel storyboard keyframe`
             : `Picture ${index + 1}: storyboard panel`
   )
-  onProgress?.(`영상 생성 중(${slotNames.join('、')})…`)
+  onProgress?.(`영상 생성 중(${slotNames.join(uiPunctuation.listSeparator)})…`)
   const result = await generateVideo(
     {
       imageBlob: blobs[0],
@@ -1594,7 +1595,7 @@ export async function generateShotVideo(shot: Shot, onProgress?: (msg: string) =
   )
   onProgress?.('영상 파일을 확인하는 중…')
   const quality = await reviewVideoQuality(result.blob, result.prompt, signal)
-  if (!quality.passed) throw new Error(`영상 파일이 유효하지 않습니다. ${quality.issues.join('；')}`)
+  if (!quality.passed) throw new Error(`영상 파일이 유효하지 않습니다. ${quality.issues.join(uiPunctuation.semicolon)}`)
   const asset = await assets.add(result.blob, 'video', 'ai-generated', {
     filename: `video_${shot.index + 1}_${Date.now().toString(36)}`,
     prompt: result.prompt,
@@ -1875,7 +1876,7 @@ export async function generateShotAudio(shot: Shot, onProgress?: (msg: string) =
     blob = result.blob
   }
   const quality = await reviewSpeechQuality(blob, text, shot.duration)
-  if (!quality.passed) throw new Error(`더빙 파일 또는 길이 검사에 실패했습니다. ${quality.issues.join('；')}。${quality.retryHint || ''}`)
+  if (!quality.passed) throw new Error(`더빙 파일 또는 길이 검사에 실패했습니다. ${quality.issues.join(uiPunctuation.semicolon)}${uiPunctuation.sentenceSeparator}${quality.retryHint || ''}`)
   const asset = await assets.add(blob, 'audio', 'ai-generated', {
     filename: `voice_${shot.index + 1}_${Date.now().toString(36)}`,
     prompt: text,

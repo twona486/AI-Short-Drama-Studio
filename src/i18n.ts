@@ -24,6 +24,19 @@ export const i18n = createI18n({
 
 export const { locale, t } = i18n.global
 
+export const uiPunctuation = {
+  get colon() { return locale.value === 'zh' ? '：' : ': ' },
+  get comma() { return locale.value === 'zh' ? '，' : ', ' },
+  get listSeparator() { return locale.value === 'zh' ? '、' : ', ' },
+  get semicolon() { return locale.value === 'zh' ? '；' : '; ' },
+  get closeParen() { return locale.value === 'zh' ? '）' : ')' },
+  get sentenceSeparator() { return locale.value === 'zh' ? '。' : '. ' },
+  quote(value: string) { return locale.value === 'zh' ? `「${value}」` : `“${value}”` },
+  parenthetical(value: string | number) {
+    return locale.value === 'zh' ? `（${value}）` : ` (${value})`
+  }
+}
+
 export function setLocale(value: Locale) {
   locale.value = value
   try {

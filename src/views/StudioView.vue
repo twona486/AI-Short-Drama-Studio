@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { confirmAction } from '@/utils/confirmAction'
-import { t as translate } from '@/i18n'
+import { t as translate, uiPunctuation } from '@/i18n'
 import { computed, defineComponent, h, markRaw, nextTick, onMounted, onUnmounted, ref, watch, type Component } from 'vue'
 import { useRouter } from 'vue-router'
 import { SelectionMode, VueFlow, useVueFlow, type Connection, type Edge, type Node, type NodeMouseEvent } from '@vue-flow/core'
@@ -676,7 +676,7 @@ async function optimizeAllVideoPrompts() {
       optimizeAllProgress.value = `${processed}/${nodes.length}`
       for (const result of results) {
         if (result.ok) continue
-        failed.push(`${result.node.data.label || result.node.id}：${result.message}`)
+        failed.push(`${result.node.data.label || result.node.id}${uiPunctuation.colon}${result.message}`)
         if (/401|鉴权失败|인증.*실패|Authentication Fail|invalid.*api.?key/i.test(result.message)) {
           stoppedByAuth = true
         }
@@ -690,7 +690,7 @@ async function optimizeAllVideoPrompts() {
     if (failed.length) {
       const succeeded = processed - failed.length
       const stopped = processed < nodes.length ? translate('studio.remainingStopped', { p0: nodes.length - processed }) : ''
-      toast.warn(translate('studio.optimizeStatus', { p0: succeeded, p1: nodes.length, p2: failed.length, p3: stopped, p4: failed.slice(0, 2).join('；') }), 10000)
+      toast.warn(translate('studio.optimizeStatus', { p0: succeeded, p1: nodes.length, p2: failed.length, p3: stopped, p4: failed.slice(0, 2).join(uiPunctuation.semicolon) }), 10000)
     } else {
       toast.success(translate('studio.optimizedAll', { p0: concurrency, p1: nodes.length }))
     }
