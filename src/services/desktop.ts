@@ -37,9 +37,12 @@ export type DesktopAPI = {
     extraHeaders?: Record<string, string>
     body?: string
     bodyBase64?: string
+    bodyBytes?: ArrayBuffer
+    requestId?: string
     contentType?: string
     timeoutMs?: number
   }) => Promise<{ status: number; ok: boolean; text: string; dataBase64?: string; contentType?: string }>
+  cancelProviderFetch: (requestId: string) => void
   llmFetch: (opts: {
     url: string
     authorization?: string

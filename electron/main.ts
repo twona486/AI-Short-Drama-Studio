@@ -848,13 +848,19 @@ app.whenReady().then(async () => {
     )
   }
 
-  ipcMain.handle('desktop:autodlFetch', async (_e, opts?: {
+  const providerRequests = new Map<string, AbortController>()
+  ipcMain.on('desktop:cancelProviderFetch', (event, requestId: string) => {
+    providerRequests.get(`${event.sender.id}:${requestId}`)?.abort()
+  })
+  ipcMain.handle('desktop:autodlFetch', async (event, opts?: {
     url?: string
     method?: string
     authorization?: string
     extraHeaders?: Record<string, string>
     body?: string
     bodyBase64?: string
+    bodyBytes?: ArrayBuffer
+    requestId?: string
     contentType?: string
     timeoutMs?: number
   }) => {
@@ -870,7 +876,9 @@ app.whenReady().then(async () => {
     if (method !== 'GET' && method !== 'POST') throw new Error(nativeText('comfyMethod'))
     const timeoutMs = Math.min(600000, Math.max(5000, Number(opts?.timeoutMs) || 120000))
     const controller = new AbortController()
-    const timer = setTimeout(() => controller.abort(), timeoutMs)
+    const requestKey = opts?.requestId ? `${event.sender.id}:${opts.requestId}` : undefined
+    if (requestKey) providerRequests.set(requestKey, controller)
+    const timer = setTimeout(() => controller.abort(new DOMException('Request timed out', 'TimeoutError')), timeoutMs)
     try {
       const headers: Record<string, string> = { Accept: 'application/json' }
       for (const [name, value] of Object.entries(opts?.extraHeaders || {})) {
@@ -881,11 +889,12 @@ app.whenReady().then(async () => {
       if (token) headers.Authorization = token
       const requestType = String(opts?.contentType || '').trim()
       if (method === 'POST') headers['Content-Type'] = requestType || 'application/json'
-      const rawBody = method === 'POST'
-        ? opts?.bodyBase64
-          ? Buffer.from(String(opts.bodyBase64), 'base64')
-          : String(opts?.body || '')
-        : undefined
+      let rawBody: string | Buffer | undefined
+      if (method === 'POST') {
+        if (opts?.bodyBytes) rawBody = Buffer.from(opts.bodyBytes)
+        else if (opts?.bodyBase64) rawBody = Buffer.from(opts.bodyBase64, 'base64')
+        else rawBody = String(opts?.body || '')
+      }
       const res = await net.fetch(url, {
         method,
         headers,
@@ -903,11 +912,12 @@ app.whenReady().then(async () => {
         contentType
       }
     } catch (err: any) {
-      if (controller.signal.aborted) {
+      if (controller.signal.reason?.name === 'TimeoutError') {
         throw new Error(nativeText('autoDlTimeout', { seconds: Math.round(timeoutMs / 1000) }))
       }
       throw err
     } finally {
+      if (requestKey) providerRequests.delete(requestKey)
       clearTimeout(timer)
     }
   })

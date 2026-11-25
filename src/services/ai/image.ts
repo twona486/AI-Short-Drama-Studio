@@ -1,4 +1,4 @@
-import { uiPunctuation } from '@/i18n'
+import { t, uiPunctuation } from '@/i18n'
 /**
  * OpenAI 호환 Images API를 이용한 AI 이미지 생성
  *
@@ -16,6 +16,7 @@ import { generateMockImage } from './mock'
 import {
   httpCustomImageGenerate,
   comfyPromptGenerate,
+  providerHttp,
   resolveImageAdapter
 } from './adapters'
 import { apimartGenerateImage, isRelayImageEndpoint } from './apimart'
@@ -26,7 +27,9 @@ import {
   ZEALMAN_IMAGE_WORKFLOWS
 } from './zealman'
 import type { VisualStyle, AspectRatio } from '@/types'
-import { abortableDelay, throwIfAborted } from './abort'
+import { abortableDelay, controlledSignal, isTimeoutAbort, throwIfAborted } from './abort'
+import { isOfficialOpenAi } from './openAiChat'
+import { isOpenAiImageModel, openAiImageRequest, OPENAI_IMAGE_TIMEOUT_MS, parseOpenAiImage } from './openAiImage'
 
 export interface ImageGenInput {
   prompt: string
@@ -36,11 +39,11 @@ export interface ImageGenInput {
   /** 프롬프트 앞에 16:9나 9:16 같은 화면 비율 태그를 붙인다. */
   aspectRatio?: AspectRatio
   n?: number
-  /** 이미지 편집 및 합성에 참조를 최대 10장 제공한다. 일반적으로 캐릭터와 장면 이미지 1~3장을 쓴다. */
+  /** 이미지 편집 및 합성에 쓸 참조 이미지. 최대 개수는 공급업체별로 다르다. */
   referenceImages?: Blob[]
   /** 참조마다 프롬프트에 넣을 역할 설명 */
   referenceLabels?: string[]
-  /** 설정의 이미지 모델을 재정의한다. 예를 들어 영상 재현은 gpt-image-1을 사용한다. */
+  /** 설정의 이미지 모델을 재정의한다. */
   model?: string
   /** 서비스가 허용하는 1k, 2k, 4k 출력 옵션 */
   resolution?: string
@@ -363,7 +366,43 @@ async function realSeedream(input: ImageGenInput): Promise<ImageGenOutput> {
   return { blob, mimeType, prompt: input.prompt }
 }
 
-/** 이전 gpt-image 텍스트→이미지 경로 */
+async function realOpenAiImage(input: ImageGenInput): Promise<ImageGenOutput> {
+  const { baseUrl, apiKey, model } = imageConfig(input.model)
+  if (!apiKey) throw new Error(t('aiError.imageMissingKey'))
+  throwIfAborted(input.signal)
+  const request = await openAiImageRequest({
+    ...input,
+    model,
+    prompt: buildPrompt(input, Boolean(input.referenceImages?.length))
+  })
+  throwIfAborted(input.signal)
+  const control = controlledSignal(input.signal, OPENAI_IMAGE_TIMEOUT_MS)
+  const response = await providerHttp(`${baseUrl}${request.path}`, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${apiKey}`,
+      ...(request.form ? {} : { 'Content-Type': 'application/json' })
+    },
+    form: request.form,
+    body: request.body,
+    timeoutMs: OPENAI_IMAGE_TIMEOUT_MS,
+    signal: control.signal
+  }).catch((error: unknown) => {
+    if (isTimeoutAbort(error, control.signal)) {
+      throw new Error(t('aiError.imageTimeout', { seconds: OPENAI_IMAGE_TIMEOUT_MS / 1000 }))
+    }
+    throw error
+  }).finally(control.cleanup)
+  if (!response.ok) {
+    const data = await response.json().catch(() => null)
+    const detail = typeof data?.error?.message === 'string' ? data.error.message.slice(0, 500) : ''
+    throw new Error(t('aiError.imageRequestFailed', { status: response.status, detail }).trim())
+  }
+  const data = await response.json().catch(() => null)
+  return { ...parseOpenAiImage(data), prompt: input.prompt }
+}
+
+/** GPT Image 이외의 OpenAI 호환 텍스트→이미지 경로 */
 async function realLegacyGenerate(input: ImageGenInput): Promise<ImageGenOutput> {
   const { baseUrl, apiKey, model } = imageConfig(input.model)
   if (!baseUrl || !apiKey) {
@@ -396,7 +435,7 @@ async function realLegacyGenerate(input: ImageGenInput): Promise<ImageGenOutput>
   return { blob, mimeType, prompt: input.prompt }
 }
 
-/** 이전 gpt-image 편집의 멀티파트 경로 */
+/** GPT Image 이외의 OpenAI 호환 편집 멀티파트 경로 */
 async function realLegacyEdit(input: ImageGenInput): Promise<ImageGenOutput> {
   const { baseUrl, apiKey, model } = imageConfig(input.model)
   if (!baseUrl || !apiKey) {
@@ -539,9 +578,16 @@ export async function generateImage(
   if (getAIMode() === 'real') {
     const cfg = imageConfig(input.model)
     const adapterType = resolveImageAdapter(cfg)
+    if (adapterType === 'openai-images' && isOfficialOpenAi(cfg.baseUrl) && isOpenAiImageModel(model)) {
+      onProgress?.(t(input.referenceImages?.length ? 'aiError.imageEditing' : 'aiError.imageGenerating'))
+      return await realOpenAiImage(input)
+    }
     if (adapterType === 'zealman-workflow') {
       onProgress?.('Zealman에서 이미지를 생성하는 중…')
       return await realZealmanImage(input, onProgress)
+    }
+    if (!model && adapterType !== 'comfyui-prompt' && adapterType !== 'comfyui-workflow') {
+      throw new Error(t('aiError.imageMissingModel'))
     }
     if (
       adapterType !== 'comfyui-prompt' &&
