@@ -14,7 +14,7 @@ after(() => server.close())
 
 const { requestLtx } = await server.ssrLoadModule('/electron/ltx.ts')
 const { ltxRequestBody, pollLtxJob } = await server.ssrLoadModule('/src/services/ai/ltxJob.ts')
-const { ltxDurationOptions, ltxCost } = await server.ssrLoadModule('/src/services/ai/ltxOptions.ts')
+const { ltxDuration, ltxDurationOptions, ltxCost } = await server.ssrLoadModule('/src/services/ai/ltxOptions.ts')
 const { generateVideo } = await server.ssrLoadModule('/src/services/ai/video.ts')
 const { useSettingsStore } = await server.ssrLoadModule('/src/stores/settings.ts')
 const { saveAsset, setActiveProjectDir } = await server.ssrLoadModule('/src/services/storage/fs.ts')
@@ -184,4 +184,11 @@ test('저장한 작업 ID로 재조회하고 다운로드한 MP4를 프로젝트
   const saved = [...files].find(([path]) => path.endsWith('/video_fixture.mp4'))
   assert.ok(saved)
   assert.deepEqual(new Uint8Array(saved[1]), bytes)
+})
+
+test('기본 12초는 LAN 로컬 모델과 클라우드 Pro에서 10초로 매핑합니다', () => {
+  for (const model of ['ltx-2.3-fast', 'ltx-2.5-fast', 'ltx-2-3-pro', 'ltx-2-5-pro']) {
+    assert.equal(ltxDuration(12, model), 10)
+  }
+  assert.equal(ltxDuration(12, 'ltx-2-3-fast'), 12)
 })

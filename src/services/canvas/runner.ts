@@ -46,7 +46,8 @@ import {
 } from '@/services/ai'
 import { blobToChatImageUrl, callLLM } from '@/services/ai/client'
 import { stripReasoningLeak } from '@/utils/jsonRepair'
-import { imageModelForProject, getVideoPromptStyle } from '@/services/ai/runtime'
+import { resolveImageAdapter } from '@/services/ai/adapters'
+import { getImageConfig, imageModelForProject, getVideoPromptStyle } from '@/services/ai/runtime'
 import { pickDocImageResolution } from '@/services/ai/modelOptions'
 import { importedDirectorPrefix } from '@/services/settings/directorSkill'
 import { collectShotRefIds, collectShotBoardRefIds, collectShotKeyframeRefIds, collectShotVideoEntries, packVideoRefEntries, boundSubjectIds, sceneAssetForShot, sceneForShot, subjectsForShot, sceneHasKeyProps } from '@/utils/consistency'
@@ -693,25 +694,37 @@ function refreshShot(shotId: string): Shot {
 async function collectFrameRefBlobs(
   shot: Shot,
   project: Project,
-  onProgress?: (msg: string) => void
-): Promise<{ blobs: Blob[]; labels: string[] }> {
+  onProgress?: (msg: string) => void,
+  videoNode?: CanvasNode
+): Promise<{ refs: ID[]; blobs: Blob[]; labels: string[] }> {
   const assets = useAssetsStore()
   const library = useLibraryStore()
   // 프레임을 만들 때는 캐릭터 4면 설정 이미지, 소품, 장면 기준 이미지를 모두 참고한다.
   // 4분할 키프레임은 격자가 프레임에 들어갈 수 있어 사용하지 않는다.
-  const bundle = collectShotRefIds(shot, project)
+  const bundle = videoNode ? collectShotKeyframeRefIds(shot, project) : collectShotRefIds(shot, project)
+  if (videoNode) {
+    const omitted = new Set([shot.imageAssetId, shot.boardAssetId, ...(shot.omittedRefAssetIds ?? [])])
+    for (const id of resolvedCanvasReferenceAssetIds(project, videoNode)) {
+      if (bundle.ids.length >= 8) break
+      if (omitted.has(id) || bundle.ids.includes(id)) continue
+      bundle.ids.push(id)
+      bundle.labels.push('additional visual reference connected to this shot')
+    }
+  }
+  const refs: ID[] = []
   const blobs: Blob[] = []
   const labels: string[] = []
   for (let i = 0; i < bundle.ids.length; i++) {
     const blob = (await assets.getBlob(bundle.ids[i])) || (await library.getBlob(bundle.ids[i]))
     if (!blob) continue
+    refs.push(bundle.ids[i])
     blobs.push(blob)
     labels.push(bundle.labels[i])
   }
   if (!blobs.length) {
     onProgress?.('캐릭터나 장면의 참조 이미지가 없어 스토리보드 설명을 바탕으로 프레임을 생성합니다.')
   }
-  return { blobs, labels }
+  return { refs, blobs, labels }
 }
 
 /** 프레임을 생성해 리소스 라이브러리에 저장한다. */
@@ -721,14 +734,16 @@ async function renderShotFrame(
   blobs: Blob[],
   labels: string[],
   onProgress?: (msg: string) => void,
-  signal?: AbortSignal
+  signal?: AbortSignal,
+  frameContext?: { referenceIds: ID[]; aspectRatio: AspectRatio }
 ) {
   const project = useProjectStore()
   const assets = useAssetsStore()
   if (!project.current) throw new Error('열려 있는 프로젝트가 없습니다.')
-  const prompt = shotFrameSendPrompt(shot, project.current, which)
+  const projectId = project.current.id
+  const prompt = shotFrameSendPrompt(shot, project.current, which, frameContext)
   const look = lookFromScript(project.current.script)
-  const aspectRatio = shotNodeAspect(project.current, shot.id, 'shotImage')
+  const aspectRatio = frameContext?.aspectRatio ?? shotNodeAspect(project.current, shot.id, 'shotImage')
   const size = imageGenSize('shot', aspectRatio)
   const word = which === 'start' ? translate('canvasRunner.firstFrame') : translate('canvasRunner.lastFrame')
   onProgress?.(`이 샷의 ${word}을 생성하는 중(캐릭터·장면 참조 이미지 ${blobs.length}장)…`)
@@ -755,16 +770,20 @@ async function renderShotFrame(
       onProgress
     )
   } catch (e: any) {
+    ensureNotCancelled(signal)
     throw fail(e)
   }
+  ensureNotCancelled(signal)
   onProgress?.(`${word} 파일을 확인하는 중…`)
   const quality = await reviewImageQuality(result.blob, prompt, signal)
   if (!quality.passed) throw fail(new Error(translate('canvasRunner.invalidFrame', { frame: word, reason: quality.issues.join(uiPunctuation.semicolon) })))
+  ensureNotCancelled(signal)
+  if (project.current?.id !== projectId) throw new DOMException(translate('ltx.projectChanged'), 'AbortError')
   try {
     const asset = await assets.add(result.blob, 'image', 'ai-generated', {
       filename: `shot${shot.index + 1}_${which}frame_${Date.now().toString(36)}`,
       prompt,
-      projectId: project.current.id,
+      projectId,
       shotId: shot.id
     })
     return asset
@@ -1296,6 +1315,48 @@ export function rebindShotScenes() {
   }
 }
 
+async function prepareLtxShotStart(
+  shot: Shot,
+  p: Project,
+  videoNode: CanvasNode | undefined,
+  aspectRatio: AspectRatio,
+  onProgress?: (msg: string) => void,
+  signal?: AbortSignal
+): Promise<Blob> {
+  const existing = await tryLoadRefImageBlob(shot.firstFrameAssetId) ??
+    await tryLoadRefImageBlob(shot.imageAssetId)
+  if (existing) return existing
+
+  const cfg = getImageConfig()
+  const adapter = resolveImageAdapter(cfg)
+  const workflow = adapter === 'comfyui-prompt' || adapter === 'comfyui-workflow' || adapter === 'zealman-workflow'
+  if (!cfg.baseUrl?.trim() || (!workflow && !cfg.model?.trim()) ||
+    (adapter === 'openai-images' && !cfg.apiKey?.trim()) ||
+    (adapter === 'comfyui-prompt' && !cfg.adapter?.workflowTemplate?.trim())) {
+    throw new Error(translate('ltx.startImageSettings'))
+  }
+
+  ensureNotCancelled(signal)
+  onProgress?.(translate('ltx.preparingStart', { shot: shot.index + 1 }))
+  const project = useProjectStore()
+  const { refs, blobs, labels } = await collectFrameRefBlobs(shot, p, onProgress, videoNode)
+  ensureNotCancelled(signal)
+  if (project.current?.id !== p.id) throw new DOMException(translate('ltx.projectChanged'), 'AbortError')
+  const frame = await renderShotFrame(shot, 'start', blobs, labels, onProgress, signal, { referenceIds: refs, aspectRatio })
+  ensureNotCancelled(signal)
+  if (project.current?.id !== p.id) throw new DOMException(translate('ltx.projectChanged'), 'AbortError')
+  const latest = refreshShot(shot.id)
+  if (latest.firstFrameAssetId !== shot.firstFrameAssetId) {
+    const selected = await tryLoadRefImageBlob(latest.firstFrameAssetId)
+    if (selected) return selected
+  }
+  const blob = await tryLoadRefImageBlob(frame.id)
+  if (!blob) throw new Error(translate('ltx.missingFrame'))
+  project.updateShot(shot.id, { firstFrameAssetId: frame.id })
+  await project.save()
+  return blob
+}
+
 export async function generateShotVideo(shot: Shot, onProgress?: (msg: string) => void, signal?: AbortSignal) {
   ensureNotCancelled(signal)
   shot = refreshShot(shot.id)
@@ -1311,9 +1372,12 @@ export async function generateShotVideo(shot: Shot, onProgress?: (msg: string) =
     const resumeTaskId = shot.videoTaskId
     const resuming = isLtxTask(resumeTaskId)
     const aspectRatio = shotNodeAspect(p, shot.id, 'shotVideo')
+    const first = resuming ? undefined : await prepareLtxShotStart(shot, p, videoNode, aspectRatio, onProgress, signal)
+    ensureNotCancelled(signal)
+    if (project.current?.id !== p.id) throw new DOMException(translate('ltx.projectChanged'), 'AbortError')
     const result = await generateVideo({
-      prompt: shot.compiledVideoPrompt || '',
-      imageBlob: resuming ? undefined : await tryLoadRefImageBlob(shot.firstFrameAssetId || shot.imageAssetId),
+      prompt: shot.compiledVideoPrompt || shot.visualPrompt || '',
+      imageBlob: first,
       lastFrameBlob: resuming ? undefined : await tryLoadRefImageBlob(shot.lastFrameAssetId),
       duration: shot.duration,
       ...aspectToSize(aspectRatio),
@@ -3179,7 +3243,10 @@ export async function ensureShotFrames(
   if (!p || !needsShotFrames(p)) return 0
   // 혼합 모드에서는 시작·끝 프레임 입력이 필요한 샷만 보완한다.
   const missing = [...(p.shots ?? [])]
-    .filter((s) => shotUsesFrames(s, p) && (!s.firstFrameAssetId || !s.lastFrameAssetId))
+    .filter((s) => !isLtxTask(s.videoTaskId) &&
+      !(canvasVideoModelForShot(s) === 'h3' &&
+        isLtxProfile(videoProfileById(canvasVideoNodeForShot(s)?.data.videoProfileId || s.videoProfileId))) &&
+      shotUsesFrames(s, p) && (!s.firstFrameAssetId || !s.lastFrameAssetId))
     .sort((a, b) => a.index - b.index)
   if (!missing.length) return 0
   onProgress?.(`시작·끝 프레임 모드입니다. 샷 ${missing.length}개의 시작·끝 프레임을 샷 번호 순서대로 생성하는 중…`)
