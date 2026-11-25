@@ -5,6 +5,7 @@ import { z } from 'zod'
 import { desktop, isDesktop } from '@/services/desktop'
 import { getLlmConfig } from '@/services/ai/runtime'
 import { finalAnswerText } from '@/services/ai/finalAnswer'
+import { adaptOpenAiChatBody } from '@/services/ai/openAiChat'
 import { canvasVisionReady } from './agentMedia'
 import type { AgentToolName } from './toolRegistry'
 
@@ -108,7 +109,8 @@ function studioChatModel() {
     name: 'studio',
     baseURL: baseUrl.replace(/\/+$/, ''),
     apiKey,
-    fetch: studioLlmFetch
+    fetch: studioLlmFetch,
+    transformRequestBody: (body) => adaptOpenAiChatBody(baseUrl, body)
   })
   return provider.chatModel(model)
 }

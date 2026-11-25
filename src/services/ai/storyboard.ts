@@ -23,11 +23,11 @@ import { getLlmConfig, getVideoPromptStyle } from './runtime'
 import {
   buildStyleBriefForLLM,
   extractUserMediumPhrase,
+  getVisualStyleGuide,
   lookFromTexts,
   promptMentionsStyle,
   resolveVisualStyle,
-  styleLabel,
-  VISUAL_STYLE_GUIDE
+  styleLabel
 } from '@/utils/visualStyle'
 import { DIRECTOR_TIMELINE_SPEC, directorTimelineIssue, preservesScreenText, normalizeCameraMovement, synthesizeVideoPerformance, isVideoPerformanceTemplate, videoPerformanceIssue, videoPerformanceSpec, videoPromptJsonHint } from '@/utils/shotPrompt'
 import { extractJsonText, parseJsonRobust } from '@/utils/jsonRepair'
@@ -393,6 +393,7 @@ function buildStylePriorityBlock(input: StoryboardInput): string {
   const look = lookFromTexts(input.style, input.topic, input.content, input.keywords)
   const fallback = buildStyleBriefForLLM(look.style)
   const mediumPhrase = extractUserMediumPhrase(input.topic, input.content, ...(input.keywords ?? []))
+  const guide = getVisualStyleGuide(look.style)
 
   if (mediumPhrase) {
     return `[Use the user's specified style]
@@ -413,7 +414,7 @@ Write every visualPrompt as filmable shot description in English.
 5. Mention ${mediumPhrase} naturally once and attach techniques to visible objects. Do not start with just ${mediumPhrase} and a blocking list or end with generic style boilerplate.
 ${
   look.matched
-    ? `6. Follow these requirements when depicting physical objects in this medium: ${VISUAL_STYLE_GUIDE[look.matched].mustInclude}。${VISUAL_STYLE_GUIDE[look.matched].avoid}`
+    ? `6. Follow these requirements when depicting physical objects in this medium: ${guide.mustInclude}。${guide.avoid}`
     : `6. Describe objects with the materials and texture of ${mediumPhrase}. Do not impose the dropdown's style.`
 }`
   }
@@ -425,7 +426,7 @@ Original topic: preserve its mood; no medium was specified.
 ${userAuth}
 """
 
-Use the dropdown medium (current selection: ${VISUAL_STYLE_GUIDE[input.style].medium} / ${input.style}):
+Use the dropdown medium (current selection: ${guide.medium} / ${look.style}):
 ${fallback}`
   }
 
@@ -1458,7 +1459,7 @@ Report visible facts only. Do not infer brands, specifications, prices, efficacy
 
   const stylePriority = buildStylePriorityBlock(input)
   const look = lookFromTexts(input.style, input.topic, input.content, input.keywords)
-  const styleGuide = VISUAL_STYLE_GUIDE[look.style]
+  const styleGuide = getVisualStyleGuide(look.style)
   const presetMedium = styleGuide.medium
   const mediumPhrase = extractUserMediumPhrase(
     input.topic,

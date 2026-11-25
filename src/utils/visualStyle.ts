@@ -4,6 +4,8 @@
  */
 
 import type { VisualStyle } from '@/types'
+import ko from '@/locales/ko'
+import zh from '@/locales/zh'
 
 export const VISUAL_STYLE_LABEL: Record<VisualStyle, string> = {
   cinematic: 'Cinematic',
@@ -15,6 +17,17 @@ export const VISUAL_STYLE_LABEL: Record<VisualStyle, string> = {
   'pixel-art': 'Retro pixel art',
   'ink-wash': 'Chinese ink wash'
 }
+
+const STYLE_LABEL_KEYS = {
+  cinematic: 'cinematic',
+  anime: 'anime',
+  photorealistic: 'photorealistic',
+  '3d-render': 'render3d',
+  'oil-painting': 'oilPainting',
+  watercolor: 'watercolor',
+  'pixel-art': 'pixel',
+  'ink-wash': 'inkWash'
+} as const satisfies Record<VisualStyle, keyof typeof ko.script & keyof typeof zh.script>
 
 /** 파서 호환. 사용자 표현에서 가장 구체적인 화풍을 먼저 찾는다. */
 export const STYLE_ALIASES: Record<VisualStyle, string[]> = {
@@ -145,8 +158,29 @@ export const VISUAL_STYLE_GUIDE: Record<
   }
 }
 
+function styleKey(label: string): string {
+  return label.trim().replace(/^\p{Extended_Pictographic}\uFE0F?\s*/u, '').toLowerCase()
+}
+
+/** 저장된 표시 이름이나 구버전 별칭을 프롬프트에서 사용하는 스타일 ID로 변환한다. */
+const STYLE_IDS_BY_LABEL = new Map<string, VisualStyle>()
+for (const style of INFER_ORDER) {
+  const key = STYLE_LABEL_KEYS[style]
+  for (const label of [style, VISUAL_STYLE_LABEL[style], ko.script[key], zh.script[key], ...STYLE_ALIASES[style]]) {
+    STYLE_IDS_BY_LABEL.set(styleKey(label), style)
+  }
+}
+
+export function normalizeVisualStyle(value: unknown): VisualStyle {
+  return (typeof value === 'string' ? STYLE_IDS_BY_LABEL.get(styleKey(value)) : undefined) ?? 'cinematic'
+}
+
+export function getVisualStyleGuide(value: unknown) {
+  return VISUAL_STYLE_GUIDE[normalizeVisualStyle(value)]
+}
+
 export function styleLabel(style: VisualStyle): string {
-  return VISUAL_STYLE_LABEL[style] || style
+  return VISUAL_STYLE_LABEL[normalizeVisualStyle(style)]
 }
 
 function joinedText(...texts: Array<string | undefined>): string {
@@ -265,7 +299,7 @@ export function resolveVisualStyle(
   ...texts: Array<string | string[] | undefined>
 ): VisualStyle {
   const flat = flattenTexts(...texts)
-  return inferVisualStyleFromText(...flat) ?? fallback
+  return inferVisualStyleFromText(...flat) ?? normalizeVisualStyle(fallback)
 }
 
 export interface VisualLook {
@@ -286,9 +320,10 @@ export function lookFromTexts(
   const flat = flattenTexts(...texts)
   const named = extractUserMediumPhrase(...flat)
   const matched = inferVisualStyleFromText(...flat)
+  const style = matched ?? normalizeVisualStyle(fallback)
   return {
-    style: matched ?? fallback,
-    medium: named || styleLabel(matched ?? fallback),
+    style,
+    medium: named || styleLabel(style),
     matched,
     userNamed: Boolean(named)
   }
@@ -381,18 +416,16 @@ export function professionalQualityLock(style: VisualStyle): string {
     cinematic:
       'Professional finish: Apply cinematic grading, strong lighting ratios, and layered depth of field. Avoid flat illustration.'
   }
-  return locks[style]
+  return locks[normalizeVisualStyle(style)]
 }
 
 /** LLM에 전달할 화풍 지침을 작성한다. */
 export function buildStyleBriefForLLM(style: VisualStyle): string {
-  const label = styleLabel(style)
-  const g = VISUAL_STYLE_GUIDE[style]
-  if (!g) {
-    return `Selected visual style: ${style}. Name its medium and techniques in each visualPrompt.`
-  }
+  const id = normalizeVisualStyle(style)
+  const label = styleLabel(id)
+  const g = getVisualStyleGuide(id)
   return `Use the selected visual style consistently throughout:
-- Style ID: ${style}
+- Style ID: ${id}
 - Style name: ${label}
 - Medium: ${g.medium}
 - Each visualPrompt must include: ${g.mustInclude}
@@ -404,22 +437,22 @@ export function buildStyleBriefForLLM(style: VisualStyle): string {
 /** 이미지 생성 API에 전달할 짧은 화풍 지침이다. */
 export function styleLockSuffix(style: VisualStyle): string {
   const label = styleLabel(style)
-  const g = VISUAL_STYLE_GUIDE[style]
-  if (!g) return `${label} style, high detail.`
+  const g = getVisualStyleGuide(style)
   return `${label} style (${g.medium}). ${g.sampleTail}`
 }
 
 /** 구체적인 기법이나 별칭으로 프롬프트의 화풍을 확인한다. */
 export function promptMentionsStyle(prompt: string, style: VisualStyle): boolean {
   const p = prompt.toLowerCase()
-  const label = styleLabel(style)
-  const g = VISUAL_STYLE_GUIDE[style]
+  const id = normalizeVisualStyle(style)
+  const label = styleLabel(id)
+  const g = getVisualStyleGuide(id)
   const keys = [
-    style,
+    id,
     label,
-    g?.medium,
-    ...(g?.medium.split(/[\/·]/) ?? []),
-    ...STYLE_ALIASES[style]
+    g.medium,
+    ...g.medium.split(/[\/·]/),
+    ...STYLE_ALIASES[id]
   ]
     .filter(Boolean)
     .map((k) => String(k).toLowerCase().trim())

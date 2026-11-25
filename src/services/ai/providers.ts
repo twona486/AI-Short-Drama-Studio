@@ -4,6 +4,7 @@
  */
 
 import { t } from '@/i18n'
+import { OPENAI_BASE_URL, OPENAI_CHAT_MODELS, OPENAI_DEFAULT_CHAT_MODEL } from './openAiChat'
 
 export interface ProviderPreset {
   id: string
@@ -13,6 +14,7 @@ export interface ProviderPreset {
   models: string[]
   defaultModel: string
   keyPlaceholder?: string
+  showModelSuggestions?: boolean
 }
 
 function uniq(list: string[]): string[] {
@@ -31,25 +33,27 @@ export const CUSTOM_PROVIDER: ProviderPreset = {
 
 export const LLM_PROVIDERS: ProviderPreset[] = [
   {
+    id: 'openai',
+    name: 'OpenAI',
+    get hint() { return t('provider.hint.openAi') },
+    baseUrl: OPENAI_BASE_URL,
+    models: OPENAI_CHAT_MODELS,
+    defaultModel: OPENAI_DEFAULT_CHAT_MODEL
+  },
+  {
     id: 'deepseek',
     name: 'DeepSeek',
     get hint() { return t('provider.hint.deepSeek') },
+    showModelSuggestions: false,
     baseUrl: 'https://api.deepseek.com',
     models: ['deepseek-v4-flash', 'deepseek-chat', 'deepseek-reasoner'],
     defaultModel: 'deepseek-v4-flash'
   },
   {
-    id: 'openai',
-    name: 'OpenAI',
-    get hint() { return t('provider.hint.openAi') },
-    baseUrl: 'https://api.openai.com/v1',
-    models: ['gpt-4.1', 'gpt-4o', 'gpt-4o-mini'],
-    defaultModel: 'gpt-4o-mini'
-  },
-  {
     id: 'dashscope',
     get name() { return t('provider.name.dashscope') },
     get hint() { return t('provider.hint.qwen') },
+    showModelSuggestions: false,
     baseUrl: 'https://dashscope.aliyuncs.com/compatible-mode/v1',
     models: ['qwen-plus', 'qwen-max', 'qwen-turbo', 'qwen3-max'],
     defaultModel: 'qwen-plus'
@@ -58,6 +62,7 @@ export const LLM_PROVIDERS: ProviderPreset[] = [
     id: 'volcengine',
     get name() { return t('provider.name.volcengine') },
     get hint() { return t('provider.hint.doubao') },
+    showModelSuggestions: false,
     baseUrl: 'https://ark.cn-beijing.volces.com/api/v3',
     models: ['doubao-seed-1-6-250615', 'doubao-1-5-pro-32k', 'doubao-1-5-lite-32k'],
     defaultModel: 'doubao-1-5-pro-32k'
@@ -66,6 +71,7 @@ export const LLM_PROVIDERS: ProviderPreset[] = [
     id: 'moonshot',
     get name() { return t('provider.name.moonshot') },
     get hint() { return t('provider.hint.kimi') },
+    showModelSuggestions: false,
     baseUrl: 'https://api.moonshot.cn/v1',
     models: ['kimi-k2-turbo-preview', 'moonshot-v1-auto', 'moonshot-v1-128k'],
     defaultModel: 'kimi-k2-turbo-preview'
@@ -74,6 +80,7 @@ export const LLM_PROVIDERS: ProviderPreset[] = [
     id: 'zhipu',
     get name() { return t('provider.name.zhipu') },
     get hint() { return t('provider.hint.glm') },
+    showModelSuggestions: false,
     baseUrl: 'https://open.bigmodel.cn/api/paas/v4',
     models: ['glm-4.5', 'glm-4-plus', 'glm-4-flash'],
     defaultModel: 'glm-4-flash'
@@ -82,6 +89,7 @@ export const LLM_PROVIDERS: ProviderPreset[] = [
     id: 'minimax',
     name: 'MiniMax',
     get hint() { return t('provider.hint.miniMax') },
+    showModelSuggestions: false,
     baseUrl: 'https://api.minimaxi.com/v1',
     models: ['MiniMax-Text-01', 'MiniMax-M1'],
     defaultModel: 'MiniMax-Text-01'
@@ -91,25 +99,27 @@ export const LLM_PROVIDERS: ProviderPreset[] = [
 
 export const VISION_PROVIDERS: ProviderPreset[] = [
   {
+    id: 'openai',
+    name: 'OpenAI',
+    get hint() { return t('provider.hint.openAiVision') },
+    baseUrl: OPENAI_BASE_URL,
+    models: OPENAI_CHAT_MODELS,
+    defaultModel: OPENAI_DEFAULT_CHAT_MODEL
+  },
+  {
     id: 'dashscope',
     get name() { return t('provider.name.dashscope') },
     get hint() { return t('provider.hint.qwenVision') },
+    showModelSuggestions: false,
     baseUrl: 'https://dashscope.aliyuncs.com/compatible-mode/v1',
     models: ['qwen-vl-max', 'qwen-vl-plus', 'qwen3-vl-plus'],
     defaultModel: 'qwen-vl-max'
   },
   {
-    id: 'openai',
-    name: 'OpenAI',
-    get hint() { return t('provider.hint.openAiVision') },
-    baseUrl: 'https://api.openai.com/v1',
-    models: ['gpt-4o', 'gpt-4.1'],
-    defaultModel: 'gpt-4o'
-  },
-  {
     id: 'volcengine',
     get name() { return t('provider.name.volcengine') },
     get hint() { return t('provider.hint.doubaoVision') },
+    showModelSuggestions: false,
     baseUrl: 'https://ark.cn-beijing.volces.com/api/v3',
     models: ['doubao-1-5-vision-pro-32k', 'doubao-seed-1-6-vision-250815'],
     defaultModel: 'doubao-1-5-vision-pro-32k'
@@ -118,6 +128,7 @@ export const VISION_PROVIDERS: ProviderPreset[] = [
     id: 'zhipu',
     get name() { return t('provider.name.zhipu') },
     get hint() { return t('provider.hint.glmVision') },
+    showModelSuggestions: false,
     baseUrl: 'https://open.bigmodel.cn/api/paas/v4',
     models: ['glm-4.5v', 'glm-4v-plus'],
     defaultModel: 'glm-4v-plus'
@@ -249,6 +260,11 @@ export function matchProviderId(baseUrl: string, presets: ProviderPreset[]): str
 
 export function findProvider(id: string, presets: ProviderPreset[]): ProviderPreset {
   return presets.find((p) => p.id === id) || CUSTOM_PROVIDER
+}
+
+export function suggestedPresetModels(preset: ProviderPreset, configured: string[]): string[] {
+  if (preset.showModelSuggestions === false) return []
+  return preset.models.filter((model) => model && !configured.includes(model))
 }
 
 export function applyProviderPreset(

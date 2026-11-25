@@ -14,8 +14,10 @@ import { stillModeForVideoModel, type VideoGenModel, type VideoStillMode } from 
 import type { VideoPromptStyle } from '@/utils/shotPrompt'
 import { isAutodlHost, normalizeStoredVideoEndpoint, type AdapterConfig } from '@/services/ai/adapters'
 import { normalizeModelNodeOptions, type ModelNodeOptions } from '@/services/ai/modelOptions'
-import { LLM_PROVIDERS } from '@/services/ai/providers'
 import { GENERAL_STORY_SKILL_ID, normalizeStorySkillId, storySkillById } from '@/skills/storyStyles'
+import ko from '@/locales/ko'
+import zh from '@/locales/zh'
+import { ZEALMAN_WORKFLOWS, zealmanImageWorkflowById } from '@/services/ai/zealman'
 
 export type { AdapterConfig }
 
@@ -141,14 +143,6 @@ export interface DirectorSkillDoc {
   importedAt: number
 }
 
-export const LLM_PRESETS = [
-  'deepseek-v4-flash',
-  'deepseek-chat',
-  'deepseek-reasoner'
-]
-
-export const VISION_PRESETS = ['qwen-vl-max', 'qwen-vl-plus', 'gpt-4o']
-
 export const IMAGE_PRESETS = [
   'doubao-seedream-4-0-250828',
   'gpt-image-1',
@@ -162,21 +156,6 @@ export const MUSIC_PRESETS = ['music-3.0']
 
 function uniq(list: string[]): string[] {
   return [...new Set(list.map((s) => s.trim()).filter(Boolean))]
-}
-
-const LLM_CATALOG = new Set(LLM_PROVIDERS.flatMap((preset) => preset.models))
-
-/**
- * 목록에는 직접 구성한 모델만 표시한다.
- * 카탈로그 모델 중 현재 사용 중인 모델만 구성된 것으로 본다.
- * 사용자가 직접 추가한 카탈로그 외 모델도 유지한다.
- */
-function configuredLlmModels(models: string[] | undefined, active: string): string[] {
-  const saved = uniq(models ?? [])
-  const current = active.trim()
-  const manual = saved.filter((name) => !LLM_CATALOG.has(name))
-  const chosen = current && (saved.includes(current) || !saved.length) ? [current] : []
-  return uniq([...chosen, ...manual])
 }
 
 export function uniqueProfileName(existing: string[], base: string): string {
@@ -462,7 +441,7 @@ function buildDefaults(): AppSettings {
   const env = envDefaults()
   const llm = endpoint(env.llm.baseUrl, env.llm.apiKey, env.llm.model, [])
   const first = profileFromEndpoint(llm, t('settings.defaults.llm'), newId('llm'))
-  const vision = endpoint(env.vision.baseUrl, env.vision.apiKey, env.vision.model, VISION_PRESETS)
+  const vision = endpoint(env.vision.baseUrl, env.vision.apiKey, env.vision.model, [])
   const visionFirst = profileFromEndpoint(vision, t('settings.defaults.vision'), newId('vis'))
   const image = endpoint(env.image.baseUrl, env.image.apiKey, env.image.model, IMAGE_PRESETS)
   const imageFirst = profileFromEndpoint(image, t('settings.defaults.image'), newId('img'))
@@ -523,41 +502,77 @@ function resolveStoryPreference(value: unknown, legacy: unknown, group: 'style' 
   return storySkillById(id)?.group === group ? id : GENERAL_STORY_SKILL_ID
 }
 
-function parseSettings(raw: string | null): AppSettings {
+function savedChatEndpoint(saved: ServiceEndpoint | undefined, defaults: ServiceEndpoint): ServiceEndpoint {
+  if (!saved) return defaults
+  const model = saved.model ?? ''
+  return { ...saved, apiKey: saved.apiKey ?? '', model, models: uniq([model, ...(saved.models ?? [])]) }
+}
+
+function savedChatProfiles(list: NamedEndpoint[] | undefined) {
+  return Array.isArray(list) ? list.map((profile) => profile && { ...profile, apiKey: profile.apiKey ?? '' }) : []
+}
+
+function migrateDefaultNames(settings: Partial<AppSettings>): boolean {
+  let changed = false
+  function rename(entry: { name: string }, koreanName: string) {
+    entry.name = koreanName
+    changed = true
+  }
+
+  const lists = [
+    ['llm', settings.llms], ['vision', settings.visions], ['image', settings.images],
+    ['tts', settings.ttsProfiles], ['video', settings.videos], ['music', settings.musics]
+  ] as const
+  for (const [kind, profiles] of lists) {
+    if (!Array.isArray(profiles)) continue
+    for (const profile of profiles) {
+      if (profile?.id && profile.name === zh.settings.defaults[kind]) {
+        rename(profile, ko.settings.defaults[kind])
+      } else if (profile?.adapter?.type === 'comfyui-prompt' && profile.name === zh.comfySettings.defaultName) {
+        rename(profile, ko.comfySettings.defaultName)
+      }
+    }
+  }
+
+  if (Array.isArray(settings.videos)) {
+    for (const profile of settings.videos) {
+      if (profile?.provider === 'zealman' && typeof profile.workflowId === 'string') {
+        const workflow = ZEALMAN_WORKFLOWS.find((item) => item.id === profile.workflowId)
+        if (workflow && profile.name === workflow.name) {
+          rename(profile, t(workflow.displayNameKey, {}, { locale: 'ko' }))
+        }
+      } else if (profile && (profile.provider === 'autodl' || isAutodlHost(profile.baseUrl || ''))) {
+        const workflow = AUTODL_WORKFLOWS.find((item) => item.id === profile.workflowId)
+        if (workflow?.legacyName && profile.name === workflow.legacyName) rename(profile, workflow.name)
+      }
+    }
+  }
+  if (Array.isArray(settings.images)) {
+    for (const profile of settings.images) {
+      if (profile?.provider !== 'zealman' || typeof profile.model !== 'string') continue
+      const workflow = zealmanImageWorkflowById(profile.model)
+      if (workflow && profile.name === zh.zealmanSettings.imageProfileName.replace('{p0}', workflow.name)) {
+        const label = t(workflow.displayNameKey, {}, { locale: 'ko' })
+        rename(profile, t('zealmanSettings.imageProfileName', { p0: label }, { locale: 'ko' }))
+      }
+    }
+  }
+  if (settings.directorSkill?.name === zh.directorSkill.defaultName) {
+    rename(settings.directorSkill, ko.directorSkill.defaultName)
+  }
+  return changed
+}
+
+function parseSettings(raw: string | null, saveMigrated?: (settings: Partial<AppSettings>) => void): AppSettings {
   const defaults = buildDefaults()
   if (!raw) return defaults
   try {
     const parsed = JSON.parse(raw) as Partial<AppSettings>
-    const savedLlm = parsed.llm
-    const legacyQwenPrimary = /^qwen/i.test(savedLlm?.model ?? '')
-    const llmSnap = legacyQwenPrimary
-      ? { ...defaults.llm, models: configuredLlmModels(defaults.llm.models, defaults.llm.model) }
-      : {
-          ...defaults.llm,
-          ...savedLlm,
-          model: savedLlm?.model || defaults.llm.model,
-          models: configuredLlmModels(savedLlm?.models, savedLlm?.model || defaults.llm.model).filter(
-            (model) => !/^qwen/i.test(model)
-          )
-        }
-    const savedVision = parsed.vision
-    const legacyTextOnlyVision = /^(qwen3\.7|qwen-vl-)/i.test(savedVision?.model ?? '')
-    const visionSnap = {
-      ...defaults.vision,
-      ...savedVision,
-      model: legacyTextOnlyVision ? defaults.vision.model : (savedVision?.model || defaults.vision.model),
-      models: uniq([...(savedVision?.models ?? []), ...defaults.vision.models]).filter(
-        (model) => !/^(qwen3\.7|qwen-vl-)/i.test(model)
-      )
-    }
-    const llmRaw = hydrateNamed(parsed.llms, llmSnap, t('settings.defaults.llm'), parsed.activeLlmId, 'llm')
-    const llmList = llmRaw.list.map((profile) => {
-      const models = configuredLlmModels(profile.models, profile.model)
-      return { ...profile, models, model: models.includes(profile.model) ? profile.model : models[0] || '' }
-    })
-    const llmActive = llmList.find((profile) => profile.id === llmRaw.activeId) || llmList[0]
-    const llm = { list: llmList, activeId: llmActive.id, active: asEndpoint(llmActive) }
-    const vision = hydrateNamed(parsed.visions, visionSnap, t('settings.defaults.vision'), parsed.activeVisionId, 'vis')
+    if (migrateDefaultNames(parsed)) saveMigrated?.(parsed)
+    const llmSnap = savedChatEndpoint(parsed.llm, defaults.llm)
+    const visionSnap = savedChatEndpoint(parsed.vision, defaults.vision)
+    const llm = hydrateNamed(savedChatProfiles(parsed.llms), llmSnap, t('settings.defaults.llm'), parsed.activeLlmId, 'llm')
+    const vision = hydrateNamed(savedChatProfiles(parsed.visions), visionSnap, t('settings.defaults.vision'), parsed.activeVisionId, 'vis')
     const image = hydrateNamed(
       parsed.images,
       {
@@ -670,13 +685,13 @@ function parseSettings(raw: string | null): AppSettings {
 
 function loadFromLocal(): AppSettings {
   try {
-    return parseSettings(localStorage.getItem(STORAGE_KEY))
+    return parseSettings(localStorage.getItem(STORAGE_KEY), writeLocal)
   } catch {
     return buildDefaults()
   }
 }
 
-function writeLocal(v: AppSettings) {
+function writeLocal(v: Partial<AppSettings>) {
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(v))
   } catch {

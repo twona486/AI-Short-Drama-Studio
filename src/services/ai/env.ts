@@ -1,5 +1,7 @@
 /** 개발 기본값은 Vite .env에서 읽으며 설치 빌드에는 포함하지 않는다. */
 
+import { OPENAI_BASE_URL, OPENAI_DEFAULT_CHAT_MODEL } from './openAiChat'
+
 function envStr(key: string, fallback = ''): string {
   const v = (import.meta.env as Record<string, string | undefined>)[key]
   const s = typeof v === 'string' ? v.trim() : ''
@@ -55,19 +57,15 @@ export function envDefaults() {
   return {
     realMode: envRealMode(),
     llm: {
-      baseUrl: envStr('VITE_LLM_BASE_URL', 'https://api.deepseek.com'),
+      baseUrl: envStr('VITE_LLM_BASE_URL', OPENAI_BASE_URL),
       apiKey: envStr('VITE_LLM_API_KEY'),
-      model: envStr('VITE_LLM_MODEL', 'deepseek-v4-flash')
+      model: envStr('VITE_LLM_MODEL', OPENAI_DEFAULT_CHAT_MODEL)
     },
     vision: {
-      baseUrl: envStr(
-        'VITE_VISION_BASE_URL',
-        envStr('VITE_IMAGE_BASE_URL', 'https://dashscope.aliyuncs.com/compatible-mode/v1')
-      ),
-      apiKey: envStr('VITE_VISION_API_KEY') || envStr('VITE_IMAGE_API_KEY'),
-      model: envStr('VITE_VISION_MODEL', 'qwen-vl-max')
+      baseUrl: envStr('VITE_VISION_BASE_URL', OPENAI_BASE_URL),
+      apiKey: envStr('VITE_VISION_API_KEY'),
+      model: envStr('VITE_VISION_MODEL', OPENAI_DEFAULT_CHAT_MODEL)
     },
-    remakeVisionModel: envStr('VITE_REMAKE_VISION_MODEL', 'qwen-vl-max'),
     remakeImageModel: envStr('VITE_REMAKE_IMAGE_MODEL', 'gpt-image-1'),
     image: {
       baseUrl: envStr('VITE_IMAGE_BASE_URL', 'https://ark.cn-beijing.volces.com/api/v3'),

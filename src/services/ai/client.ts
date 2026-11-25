@@ -10,6 +10,7 @@ import { desktop, isDesktop } from '@/services/desktop'
 import { parseJsonRobust } from '@/utils/jsonRepair'
 import { finalAnswerText } from './finalAnswer'
 import { mockLLM } from './mock'
+import { adaptOpenAiChatBody, isOfficialOpenAi } from './openAiChat'
 import { getAIMode, getLlmConfig, getVisionConfig } from './runtime'
 
 export type LLMContentPart =
@@ -24,11 +25,11 @@ export interface LLMMessage {
 export interface LLMRequest {
   messages: LLMMessage[]
   provider?: 'llm' | 'vision'
-  /** 설정의 모델을 재정의한다. 예를 들어 영상 재현은 qwen3.8-max를 사용할 수 있다. */
+  /** 현재 연결에서 사용할 모델을 재정의한다. */
   model?: string
   temperature?: number
   maxTokens?: number
-  /** Leave the output limit to the provider and model by omitting max_tokens. */
+  /** Leave the output limit to the provider and model. */
   useProviderOutputLimit?: boolean
   jsonMode?: boolean
   /** Doubao 응답에서 본문만 필요하면 추론을 끈다. */
@@ -154,20 +155,24 @@ export async function callLLM(req: LLMRequest): Promise<LLMResponse> {
 
   const { abortableDelay, controlledSignal, isAbortError, llmAbortError, throwIfAborted } =
     await import('./abort')
-  const timeoutMs = req.timeoutMs ?? 120_000
-  const control = controlledSignal(req.signal, timeoutMs)
   const { baseUrl, apiKey, model: cfgModel } =
     req.provider === 'vision' ? getVisionConfig() : getLlmConfig()
   const model = req.model?.trim() || cfgModel
 
-  if (!baseUrl || !apiKey) {
+  if (!baseUrl || !apiKey || !model) {
     throw new Error(translate(req.provider === 'vision' ? 'providerErrors.visionConfig' : 'providerErrors.llmConfig'))
   }
+  const timeoutMs = req.timeoutMs ?? 120_000
+  const control = controlledSignal(req.signal, timeoutMs)
 
   const withImages = hasImageParts(req.messages)
+  let messages = req.messages
+  if (req.jsonMode && isOfficialOpenAi(baseUrl) && !messages.some((message) => /json/i.test(messageText(message.content)))) {
+    messages = [{ role: 'system', content: 'Return a valid JSON object.' }, ...messages]
+  }
   const body: Record<string, unknown> = {
     model,
-    messages: req.messages,
+    messages,
     temperature: req.temperature ?? 0.7
   }
   if (!req.useProviderOutputLimit) body.max_tokens = req.maxTokens ?? (withImages ? 8192 : 4000)
@@ -184,7 +189,7 @@ export async function callLLM(req: LLMRequest): Promise<LLMResponse> {
     payload: Record<string, unknown>,
     signal = control.signal
   ): Promise<LlmHttpResult> => {
-    const payloadBody = JSON.stringify(payload)
+    const payloadBody = JSON.stringify(adaptOpenAiChatBody(baseUrl, payload))
     const authorization = `Bearer ${apiKey}`
     if (isDesktop() && typeof desktop().llmFetch === 'function') {
       const res = await withAbort(
@@ -241,8 +246,9 @@ export async function callLLM(req: LLMRequest): Promise<LLMResponse> {
     if (
       !ok &&
       body.response_format &&
+      (status === 400 || status === 422) &&
       (/response_format|json_object/i.test(errText) ||
-        (req.provider === 'vision' && withImages && status === 400))
+        (!isOfficialOpenAi(baseUrl) && req.provider === 'vision' && withImages && status === 400))
     ) {
       delete body.response_format
       ;({ ok, status, errText, json } = await post(body))
@@ -282,7 +288,7 @@ export async function callLLM(req: LLMRequest): Promise<LLMResponse> {
             Math.max(Math.ceil((Number(body.max_tokens) || 4000) * 1.5), 6000)
           ) } : {}),
           messages: [
-            ...req.messages,
+            ...messages,
             ...(content.trim() ? ([{ role: 'assistant', content }] as LLMMessage[]) : []),
             {
               role: 'user',

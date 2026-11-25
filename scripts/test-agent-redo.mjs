@@ -44,7 +44,7 @@ const mocks = {
     export const runExtractStoryboard=async(_log,_signal,_opts,stage)=>{globalThis.__agentTest.calls.push('extract:'+stage)};
   `
 }
-const real = new Set(['actionPolicy', 'toolRegistry', 'agentLoop', 'planner', 'taskStore', 'visualStyle', 'abort', 'agentMedia'])
+const real = new Set(['actionPolicy', 'toolRegistry', 'agentLoop', 'planner', 'taskStore', 'visualStyle', 'abort', 'agentMedia', 'ko', 'zh'])
 const result = await build({
   stdin: { contents: `export * from './src/services/canvas/actionPolicy'; export * from './src/services/canvas/toolRegistry';
     export * from './src/services/canvas/agentLoop'; export * from './src/services/canvas/planner'; export * from './src/utils/visualStyle';`, resolveDir: process.cwd() },
