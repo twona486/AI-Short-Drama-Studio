@@ -12,6 +12,7 @@ import ProfileLibrary from '@/components/settings/ProfileLibrary.vue'
 import type { AdapterConfig } from '@/services/ai/adapters'
 import { type VideoStillMode } from '@/types/canvas'
 import { syncH3ShotStillModes } from '@/services/canvas/videoModel'
+import { zealmanImageProfileLabel, zealmanImageWorkflowLabel, zealmanVideoProfileLabel, zealmanVideoWorkflowLabel } from '@/services/ai/zealman'
 import { normalizeRouterBaseUrl } from '@/services/ai/openAiRouter'
 import {
   IMAGE_PROVIDERS,
@@ -113,11 +114,22 @@ function onVoice(v: string) {
   if (project.current) project.setSettings({ ttsVoice: v })
 }
 
-function subtitle(p: { models?: string[]; model?: string; workflowId?: string }) {
-  if (p.workflowId) return p.workflowId
+function subtitle(p: { models?: string[]; model?: string }) {
   const n = p.models?.length || 0
   if (n) return t('studioSettings.modelCount', { count: n, model: p.model || t('studioSettings.noModelSelected') })
   return p.model || t('studioSettings.noModel')
+}
+
+function imageProfile(p: (typeof settings.config.images)[number]) {
+  const model = zealmanImageWorkflowLabel(p.model)
+  const name = zealmanImageProfileLabel(p.name, p.model)
+  return { id: p.id, name, subtitle: subtitle({ model, models: p.models }) }
+}
+
+function videoProfile(p: (typeof settings.config.videos)[number]) {
+  const workflow = zealmanVideoWorkflowLabel(p.workflowId)
+  const name = zealmanVideoProfileLabel(p.name, p.workflowId)
+  return { id: p.id, name, subtitle: workflow || t('studioSettings.noModel') }
 }
 
 function createNamed(
@@ -284,14 +296,14 @@ function patchAdapter(
         <h3>{{ $t('studioSettings.zealmanImage') }}</h3>
         <p class="hint">{{ $t('studioSettings.zealmanImageHint') }}</p>
         <p class="hint">{{ $t('studioSettings.currentAddress') }}{{ settings.config.image.baseUrl || $t('studioSettings.missing') }}</p>
-        <p class="hint">{{ $t('studioSettings.workflow') }}{{ settings.config.image.model || $t('studioSettings.builtinImage') }}</p>
+        <p class="hint">{{ $t('studioSettings.workflow') }}{{ zealmanImageWorkflowLabel(settings.config.image.model) || $t('studioSettings.builtinImage') }}</p>
         <button type="button" @click="router.push('/settings/zealman')">{{ $t('studioSettings.openZealman') }}</button>
       </section>
       <button type="button" @click="router.push('/settings/comfyui')">{{ $t('studioUpdate.comfySetup') }}</button>
       <ProfileLibrary
         :title="$t('studioSettings.savedImage')"
         :hint="$t('studioSettings.savedImageHint')"
-        :profiles="settings.config.images.map((p) => ({ id: p.id, name: p.name, subtitle: subtitle(p) }))"
+        :profiles="settings.config.images.map(imageProfile)"
         :active-id="settings.config.activeImageId"
         :providers="IMAGE_PROVIDERS"
         @select="settings.selectImage"
@@ -376,14 +388,14 @@ function patchAdapter(
         <h3>{{ $t('studioSettings.zealmanVideo') }}</h3>
         <p class="hint">{{ $t('studioSettings.zealmanVideoHint') }}</p>
         <p class="hint">{{ $t('studioSettings.currentAddress') }}{{ settings.config.video.baseUrl || $t('studioSettings.missing') }}</p>
-        <p class="hint">{{ $t('studioSettings.workflow') }}{{ settings.config.video.workflowId || $t('studioSettings.builtinWorkflow') }}</p>
+        <p class="hint">{{ $t('studioSettings.workflow') }}{{ zealmanVideoWorkflowLabel(settings.config.video.workflowId) || $t('studioSettings.builtinWorkflow') }}</p>
         <button type="button" @click="router.push('/settings/zealman')">{{ $t('studioSettings.openZealman') }}</button>
       </section>
       <button type="button" @click="router.push('/settings/comfyui')">{{ $t('studioUpdate.comfySetup') }}</button>
       <ProfileLibrary
         :title="$t('studioSettings.savedVideo')"
         :hint="$t('studioSettings.savedVideoHint')"
-        :profiles="settings.config.videos.map((p) => ({ id: p.id, name: p.name, subtitle: subtitle(p) }))"
+        :profiles="settings.config.videos.map(videoProfile)"
         :active-id="settings.config.activeVideoId"
         :providers="VIDEO_PROVIDERS"
         @select="settings.selectVideo"

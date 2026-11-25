@@ -8,6 +8,7 @@
  * 실패하거나 설정이 없으면 데모 데이터를 사용한다.
  */
 
+import { uiPunctuation } from '@/i18n'
 import { callLLM, getAIMode, type LLMMessage, type LLMContentPart } from './client'
 import { assertScriptCompletion } from './scriptCompletion'
 import { dialogueVerbatimIssues } from '@/utils/dialogueVerbatim'
@@ -582,7 +583,7 @@ async function ensureNarrativeContinuity(
   for (let round = 0; round < 2; round++) {
     const issues = await auditStoryboardNarrative(current, input, model)
     if (!issues.length) return current
-    onProgress?.(`이야기가 끊기는 부분을 찾아 관련 샷을 재배치하는 중（${round + 1}/2）…`)
+    onProgress?.(`이야기가 끊기는 부분을 찾아 관련 샷을 재배치하는 중${uiPunctuation.parenthetical(`${round + 1}/2`)}…`)
     log(`⚠ 이야기 연결 검수를 통과하지 못했어요. ${round + 1}/2：${issues.join('；')}`)
     current = await repairStoryboardOnce(
       current,
@@ -594,7 +595,7 @@ async function ensureNarrativeContinuity(
   }
   const remaining = await auditStoryboardNarrative(current, input, model)
   if (remaining.length) {
-    throw new Error(`샷을 두 차례 자동으로 부분 수정했지만 이야기 연속성 검수를 통과하지 못했습니다. ${remaining.join('；')}`)
+    throw new Error(`샷을 두 차례 자동으로 부분 수정했지만 이야기 연속성 검수를 통과하지 못했어요. ${remaining.join(uiPunctuation.semicolon)}`)
   }
   return current
 }
@@ -693,12 +694,12 @@ async function ensureStoryboardQuality(
     }
     if (round === QUALITY_REPAIR_ROUNDS) {
       throw new Error(
-        `${QUALITY_REPAIR_ROUNDS}차례 재추출했지만 대본 품질 검수를 통과하지 못했습니다. ${issues.join('；')}`
+        `${QUALITY_REPAIR_ROUNDS}차례 재추출했지만 대본 품질 검수를 통과하지 못했어요. ${issues.join(uiPunctuation.semicolon)}`
       )
     }
     const n = round + 1
     log(`⚠ 품질 검수를 통과하지 못해 다시 추출해요. ${n}/${QUALITY_REPAIR_ROUNDS}：${issues.join('；')}`)
-    onProgress?.(`검수를 통과하지 못해 다시 추출하는 중（${n}/${QUALITY_REPAIR_ROUNDS}）…`)
+    onProgress?.(`검수를 통과하지 못해 다시 추출하는 중${uiPunctuation.parenthetical(`${n}/${QUALITY_REPAIR_ROUNDS}`)}…`)
     current = await repairStoryboardOnce(current, input, model, issues)
   }
   return current
@@ -1875,7 +1876,7 @@ ${extractPlayForSceneStage(play)}`
         total: workBatches.length
       })
       throw new Error(
-        `${failed.length}/${workBatches.length}개 스토리보드 작업 묶음이 실패했습니다. 나머지 ${rawShots.length}개 샷은 저장됐습니다. 실패한 구간 ${failed.map((item) => item.label).join('、')}`
+        `${failed.length}/${workBatches.length}개 스토리보드 작업 묶음이 실패했습니다. 나머지 ${rawShots.length}개 샷은 저장됐습니다. 실패한 구간 ${failed.map((item) => item.label).join(uiPunctuation.listSeparator)}`
       )
     }
     onProgress?.(`✓ 작업 묶음 ${workBatches.length}개를 완료해 샷 ${rawShots.length}개를 추출했습니다.`)
@@ -2931,7 +2932,7 @@ export async function generateStoryboard(
             : (input.extractStopAfter || input.extractStartAt) === 'shots'
               ? '3단계 — 저장된 캐릭터와 장면을 바탕으로 스토리보드를 추출하는 중…'
               : '1단계 — 캐릭터를 추출하는 중…'
-          : `「${look.medium}」 스타일로 촬영할 수 있는 샷을 나누고 있어요…`
+          : `${uiPunctuation.quote(look.medium)} 스타일로 촬영할 수 있는 샷을 나누고 있어요…`
       )
     try {
       const { result, model } = await realStoryboard(resolved, onProgress)

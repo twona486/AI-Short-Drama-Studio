@@ -535,13 +535,11 @@ function migrateDefaultNames(settings: Partial<AppSettings>): boolean {
   }
 
   if (Array.isArray(settings.videos)) {
-    const zealmanLabels = { U01: 'u01Name', U02: 'u02Name', U04: 'u04Name', U06: 'u06Name' } as const
     for (const profile of settings.videos) {
       if (profile?.provider === 'zealman' && typeof profile.workflowId === 'string') {
         const workflow = ZEALMAN_WORKFLOWS.find((item) => item.id === profile.workflowId)
         if (workflow && profile.name === workflow.name) {
-          const prefix = workflow.id.slice(0, 3) as keyof typeof zealmanLabels
-          rename(profile, ko.zealmanSettings[zealmanLabels[prefix]])
+          rename(profile, t(workflow.displayNameKey, {}, { locale: 'ko' }))
         }
       } else if (profile && (profile.provider === 'autodl' || isAutodlHost(profile.baseUrl || ''))) {
         const workflow = AUTODL_WORKFLOWS.find((item) => item.id === profile.workflowId)
@@ -554,7 +552,8 @@ function migrateDefaultNames(settings: Partial<AppSettings>): boolean {
       if (profile?.provider !== 'zealman' || typeof profile.model !== 'string') continue
       const workflow = zealmanImageWorkflowById(profile.model)
       if (workflow && profile.name === zh.zealmanSettings.imageProfileName.replace('{p0}', workflow.name)) {
-        rename(profile, ko.zealmanSettings.imageProfileName.replace('{p0}', ko.zealmanSettings.a01Name))
+        const label = t(workflow.displayNameKey, {}, { locale: 'ko' })
+        rename(profile, t('zealmanSettings.imageProfileName', { p0: label }, { locale: 'ko' }))
       }
     }
   }

@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { confirmAction } from '@/utils/confirmAction'
-import { t as translate } from '@/i18n'
+import { t as translate, uiPunctuation } from '@/i18n'
 /**
  * 리소스 라이브러리.
  *
@@ -386,7 +386,7 @@ function downloadProjectJson() {
     <!-- 리소스 라이브러리의 모든 에셋 -->
     <GlassCard padding="md" class="section-card">
       <div class="card-head">
-        <h3>{{ $t('drafts.libraryImages') }}{{ libraryImages.length }}）</h3>
+        <h3>{{ $t('drafts.libraryImages') }}{{ libraryImages.length }}{{ uiPunctuation.closeParen }}</h3>
       </div>
       <div v-if="libraryImages.length === 0" class="empty-mini">{{ $t('drafts.emptyImages') }}</div>
       <div v-else class="asset-grid">
@@ -413,7 +413,7 @@ function downloadProjectJson() {
 
     <GlassCard padding="md" class="section-card">
       <div class="card-head">
-        <h3>{{ $t('drafts.libraryVideos') }}{{ libraryVideos.length }}）</h3>
+        <h3>{{ $t('drafts.libraryVideos') }}{{ libraryVideos.length }}{{ uiPunctuation.closeParen }}</h3>
         <span v-if="thumbsLoading" class="meta-dim">{{ $t('drafts.generatingThumbnail') }}</span>
       </div>
       <div v-if="libraryVideos.length === 0" class="empty-mini">{{ $t('drafts.emptyVideos') }}</div>
@@ -458,7 +458,7 @@ function downloadProjectJson() {
     <!-- 대본 라이브러리 -->
     <GlassCard padding="md" class="section-card">
       <div class="card-head">
-        <h3>{{ $t('drafts.scripts') }}{{ scripts.docs.length }}）</h3>
+        <h3>{{ $t('drafts.scripts') }}{{ scripts.docs.length }}{{ uiPunctuation.closeParen }}</h3>
         <div class="head-tools">
           <button class="mini-btn" @click="router.push('/scripts')">{{ $t('drafts.manageScripts') }}</button>
         </div>
@@ -508,7 +508,7 @@ function downloadProjectJson() {
       <div class="kv-list">
         <div class="kv"><span>{{ $t('common.topic') }}</span><b>{{ script.topic }}</b></div>
         <div class="kv"><span>{{ $t('common.style') }}</span><b>{{ script.style }}</b></div>
-        <div class="kv"><span>{{ $t('common.keywords') }}</span><b>{{ script.keywords?.join('、') || '—' }}</b></div>
+        <div class="kv"><span>{{ $t('common.keywords') }}</span><b>{{ script.keywords?.join(uiPunctuation.listSeparator) || '—' }}</b></div>
         <div class="kv"><span>{{ $t('common.words') }}</span><b>{{ script.content.length }}</b></div>
       </div>
       <pre class="content-text">{{ script.content || $t('drafts.none') }}</pre>
@@ -627,7 +627,7 @@ function downloadProjectJson() {
     <!-- 타임라인 상태 -->
     <GlassCard padding="md" class="section-card">
       <div class="card-head">
-        <h3>{{ $t('drafts.timeline') }}{{ timeline.length }} {{ $t('drafts.countDuration') }} {{ totalDuration }}s）</h3>
+        <h3>{{ $t('drafts.timeline') }}{{ timeline.length }} {{ $t('drafts.countDuration') }} {{ totalDuration }}s{{ uiPunctuation.closeParen }}</h3>
         <button class="mini-btn" @click="goTo('edit')">{{ $t('drafts.editTimeline') }}</button>
       </div>
       <div v-if="timeline.length === 0" class="empty-mini">

@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
-import { t } from '@/i18n'
+import { t, uiPunctuation } from '@/i18n'
 import ko from '@/locales/ko'
 import zh from '@/locales/zh'
 import { confirmAction } from '@/utils/confirmAction'
@@ -133,7 +133,7 @@ defineExpose({ savePending: () => !dirty.value || save() })
     <p v-if="adapter.workflowTemplate && !editing">{{ $t('comfySettings.draftHint') }}</p>
     <p>{{ $t('comfySettings.uploadHint') }}</p>
     <div class="actions"><button type="button" @click="save">{{ $t('comfySettings.save') }}</button><button type="button" @click="reset">{{ $t('comfySettings.new') }}</button></div>
-    <p v-if="message" class="feedback" :class="feedback" :role="feedback === 'error' ? 'alert' : 'status'"><strong>{{ feedback === 'error' ? $t('common.unsaved') : feedback === 'success' ? $t('common.generationComplete') : $t('canvasGuide.next') }}：</strong>{{ message }}</p>
+    <p v-if="message" class="feedback" :class="feedback" :role="feedback === 'error' ? 'alert' : 'status'"><strong>{{ feedback === 'error' ? $t('common.unsaved') : feedback === 'success' ? $t('common.generationComplete') : $t('canvasGuide.next') }}{{ uiPunctuation.colon }}</strong>{{ message }}</p>
     <h3>{{ $t('comfySettings.configured') }}</h3>
     <p v-if="!workflows.length">{{ $t('comfySettings.empty') }}</p>
     <div v-for="p in workflows" :key="p.id" class="actions">

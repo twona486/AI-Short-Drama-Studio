@@ -1,3 +1,4 @@
+import { uiPunctuation } from '@/i18n'
 /**
  * OpenAI 호환 Images API를 이용한 AI 이미지 생성
  *
@@ -488,7 +489,7 @@ async function realZealmanImage(
   } catch {
     throw new Error('[image] Zealman 작업이 제출됐지만 응답이 JSON 형식이 아닙니다.')
   }
-  if (data?.success === false) throw new Error(`[image] Zealman 작업 제출에 실패했습니다.：${data?.error || text.slice(0, 800)}`)
+  if (data?.success === false) throw new Error(`[image] Zealman 작업 제출에 실패했어요.${uiPunctuation.colon}${data?.error || text.slice(0, 800)}`)
   const promptId = String(data?.prompt_id || '').trim()
   if (!promptId) throw new Error('[image] Zealman 응답에 prompt_id가 없습니다.')
 

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { t as translate } from '@/i18n'
+import { t as translate, uiPunctuation } from '@/i18n'
 
 import { computed, ref, watch } from 'vue'
 import type { AdapterConfig } from '@/services/ai/adapters'
@@ -104,7 +104,7 @@ const hasTemplate = computed(() => Boolean(props.adapter?.workflowTemplate?.trim
 const hasMap = computed(() => Boolean(mapInfo.value?.bindings?.length))
 const mapText = computed(() =>
   mapInfo.value
-    ? `${describeWorkflowKind(mapInfo.value.kind)}${mapInfo.value.summary ? ` · ${mapInfo.value.summary}` : ''}：${describeInputMap(mapInfo.value)}`
+    ? `${describeWorkflowKind(mapInfo.value.kind)}${mapInfo.value.summary ? ` · ${mapInfo.value.summary}` : ''}${uiPunctuation.colon}${describeInputMap(mapInfo.value, uiPunctuation)}`
     : ''
 )
 
@@ -137,7 +137,7 @@ async function analyzeWithAssistant(payload: any, template: string, silent = fal
       return
     }
     commitTemplate(template, translate('comfyWorkflowPanel.mappingSummary', {
-      mapping: describeInputMap(checked),
+      mapping: describeInputMap(checked, uiPunctuation),
       hint: error ? translate('comfyWorkflowPanel.analysisHint', { error }) : ''
     }), checked)
   } catch (e: any) {
@@ -181,7 +181,7 @@ function onSaveMapJson() {
     const obj = validateInputMap(JSON.parse(props.adapter?.workflowTemplate || '{}'), candidate)
     mapInfo.value = obj
     emit('patch', { ...(props.adapter || {}), inputMap: obj })
-    status.value = translate('mediaNodes.updatedMapping', { summary: describeInputMap(obj) })
+    status.value = translate('mediaNodes.updatedMapping', { summary: describeInputMap(obj, uiPunctuation) })
     toast.success(props.draftOnly ? translate('comfyMapping.confirmBeforeSave') : translate('comfyMapping.savedMap'))
   } catch (e: any) {
     toast.error(translate('comfyWorkflowPanel.invalidMapping', { p0: e?.message || e }))
@@ -320,7 +320,7 @@ function clearTemplate() {
       <button type="button" class="mini" @click="onImportUrl">{{ $t('comfyWorkflowPanel.fetch') }}</button>
     </div>
 
-    <label>workflowTemplate（API Format JSON）</label>
+    <label>workflowTemplate{{ uiPunctuation.parenthetical('API Format JSON') }}</label>
     <textarea
       v-model="draft"
       rows="12"
@@ -378,7 +378,7 @@ function clearTemplate() {
     </div>
     <div v-if="triedUrls.length" class="diag">
       <button type="button" class="mini ghost" @click="showTried = !showTried">
-        {{ showTried ? $t('common.collapse') : $t('comfyWorkflowPanel.addresses') }}（{{ triedUrls.length }}）
+        {{ showTried ? $t('common.collapse') : $t('comfyWorkflowPanel.addresses') }}{{ uiPunctuation.parenthetical(triedUrls.length) }}
       </button>
       <ul v-if="showTried">
         <li v-for="(u, i) in triedUrls" :key="i"><code>{{ u }}</code></li>

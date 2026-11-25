@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { confirmAction } from '@/utils/confirmAction'
-import { t as translate } from '@/i18n'
+import { t as translate, uiPunctuation } from '@/i18n'
 /**
  * 대본 관리.
  *
@@ -1063,7 +1063,7 @@ onMounted(async () => {
             <p>{{ message.content }}</p>
           </div>
           <div v-if="episodeWriting" class="writing-message assistant writing-pending" role="status">
-            <span>{{ $t('scriptDesk.writerShort') }}</span><p><i class="writing-pulse" /> {{ writingPhase === 'outline' ? $t('scriptDesk.outliningShort') : writingPhase === 'chat' ? $t('scriptDesk.replying') : $t('scriptDesk.writingShort') }}，{{ $t('scriptDesk.elapsed', { seconds: episodeElapsed }) }}</p>
+            <span>{{ $t('scriptDesk.writerShort') }}</span><p><i class="writing-pulse" /> {{ writingPhase === 'outline' ? $t('scriptDesk.outliningShort') : writingPhase === 'chat' ? $t('scriptDesk.replying') : $t('scriptDesk.writingShort') }}{{ uiPunctuation.comma }}{{ $t('scriptDesk.elapsed', { seconds: episodeElapsed }) }}</p>
           </div>
           <section v-if="storyPlan" class="story-plan">
             <div class="story-plan-heading"><strong>{{ $t('scriptDesk.outlineSize', { count: storyPlan.episodes.length }) }}</strong><button type="button" :disabled="episodeWriting" @click="planEditing = !planEditing">{{ planEditing ? $t('common.collapse') : $t('scriptDesk.viewOutline') }}</button></div>
