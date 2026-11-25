@@ -22,6 +22,8 @@ import { lookup } from 'node:dns/promises'
 import { isIP } from 'node:net'
 import http from 'node:http'
 import https from 'node:https'
+import { requestLtx } from './ltx'
+import type { LtxRequest } from '../src/services/ai/ltxOptions'
 import ko from '../src/locales/ko'
 import zh from '../src/locales/zh'
 import { migrateUserData, ROOT_PREF_FILE, USER_DATA_NAME, readStorageRootPreference } from './user-data'
@@ -1109,6 +1111,10 @@ app.whenReady().then(async () => {
       clearTimeout(timer)
     }
   })
+
+  ipcMain.handle('desktop:ltxRequest', (_event, request: LtxRequest) =>
+    requestLtx((url, options) => net.fetch(url, options), request)
+  )
 
   ipcMain.handle('desktop:downloadToTemp', async (_e, url: string) => {
     const target = String(url || '')

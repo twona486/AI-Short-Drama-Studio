@@ -105,8 +105,9 @@ function profileMentionsWan(profile?: { name?: string; workflowId?: string } | n
 /** 문서가 지정한 해상도를 표시한다. 옵션이 없는 Wan 모델은 Wan 3.0 문서의 480P, 720P, 1080P를 사용한다. */
 export function videoResolutionChoices(input: {
   model?: VideoGenModel
-  profile?: { name?: string; model?: string; workflowId?: string; options?: ModelNodeOptions } | null
+  profile?: { provider?: string; name?: string; model?: string; workflowId?: string; options?: ModelNodeOptions } | null
 }): DocVideoResolution[] {
+  if (input.profile?.provider === 'ltx') return ['720p', '1080p']
   if (/grok/i.test(`${input.profile?.name || ''} ${input.profile?.model || ''} ${input.profile?.workflowId || ''}`)) return ['480p', '720p', '1080p']
   const listed = input.profile?.options?.videoResolutions
   if (listed?.length) return [...listed]

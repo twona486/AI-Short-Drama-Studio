@@ -1,10 +1,11 @@
 <script setup lang="ts">
+import { isLtxProfile, ltxDuration, ltxDurationOptions, LTX_DEFAULT_MODEL } from '@/services/ai/ltxOptions'
 import { t as translate } from '@/i18n'
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { Handle, Position, useVueFlow } from '@vue-flow/core'
 import { useAssetsStore, useLibraryStore, useProjectStore, useSettingsStore, useToastStore } from '@/stores'
-import { runCanvasNode, optimizeShotVideoPrompt, regenerateShotFrame, grabVideoLastFrameNode } from '@/services/canvas/runner'
+import { runCanvasNode, stopLtxNodeWait, optimizeShotVideoPrompt, regenerateShotFrame, grabVideoLastFrameNode } from '@/services/canvas/runner'
 import { isNodeRunning } from '@/services/canvas/jobs'
 import { needsPlayReview } from '@/services/canvas/playGate'
 import { cssAspectRatio } from '@/services/canvas/layout'
@@ -315,7 +316,7 @@ const videoModel = computed({
 const resolutionChoices = computed(() =>
   videoResolutionChoices({
     model: videoModel.value,
-    profile: videoModel.value === 'wan-prime' ? null : docVideoProfile.value
+    profile: videoModel.value !== 'h3' && docVideoProfile.value?.provider === 'ltx' || videoModel.value === 'wan-prime' ? null : docVideoProfile.value
   })
 )
 const videoResolution = computed({
@@ -339,10 +340,10 @@ const imageResolution = computed({
   get: () => pickDocImageResolution(nodeMeta.value?.data.imageResolution, imageResolutionChoices.value) || '2k',
   set: (v: DocImageResolution) => project.patchCanvasNode(props.id, { imageResolution: v })
 })
-const showVideoAudio = computed(() => docVideoProfile.value?.options?.videoAudio === true)
+const showVideoAudio = computed(() => Boolean(ltxProfile.value) || docVideoProfile.value?.options?.videoAudio === true)
 const lastFrameRequired = computed(() => docVideoProfile.value?.options?.lastFrameRequired === true)
 const generateAudio = computed({
-  get: () => Boolean(nodeMeta.value?.data.generateAudio),
+  get: () => nodeMeta.value?.data.generateAudio ?? Boolean(ltxProfile.value),
   set: (v: boolean) => project.patchCanvasNode(props.id, { generateAudio: v })
 })
 const nodeAspectRatio = computed({
@@ -373,7 +374,7 @@ const lastFrameId = computed({
     if (shot.value) project.updateShot(shot.value.id, { lastFrameAssetId: v })
   }
 })
-const isH3VideoNode = computed(() => type.value === 'shotVideo' && videoModel.value !== 'wan-prime')
+const isH3VideoNode = computed(() => type.value === 'shotVideo' && !ltxProfile.value && videoModel.value !== 'wan-prime')
 const isH3Fl2va = computed(() => isH3VideoNode.value && h3GenMode.value === 'fl2va')
 const videoStillHint = computed(() => {
   if (type.value !== 'shotVideo') return ''
@@ -553,10 +554,15 @@ watch(
   { immediate: true }
 )
 
-const durationOptions = computed(() => videoDurationOptions(videoModel.value))
+const ltxProfile = computed(() => videoModel.value === 'h3' && isLtxProfile(docVideoProfile.value)
+  ? docVideoProfile.value : undefined)
+const durationOptions = computed(() => ltxProfile.value
+  ? ltxDurationOptions(ltxProfile.value.workflowId) : videoDurationOptions(videoModel.value))
 
-const shotDurationValue = computed(() =>
-  Math.min(
+const ltxResume = computed(() => shot.value?.videoTaskId?.startsWith('ltx:'))
+const shotDurationValue = computed(() => ltxProfile.value
+  ? ltxDuration(shot.value?.duration || 6, ltxProfile.value.workflowId)
+  : Math.min(
     videoMaxSeconds(videoModel.value),
     Math.max(videoMinSeconds(videoModel.value), Math.round(Number(shot.value?.duration) || 5))
   )
@@ -701,6 +707,7 @@ async function generateThis(ev?: Event, hd = false) {
   } catch (e: any) {
     // 실패 상태만 표시하면 원인을 알 수 없으므로 오류 내용도 알림으로 표시한다.
     if (shouldToastAiError(e)) toast.error(friendlyAiError(e) || translate('common.generateFailed'))
+    else if (nodeMeta.value?.error === translate('ltx.stopped')) toast.info(translate('ltx.stopped'))
   } finally {
     toolBusy.value = ''
   }
@@ -1183,6 +1190,8 @@ const cropStyle = computed(() => ({
         {{ isVideoNode ? '▶' : '＋' }}
       </div>
       <span v-if="isVideoNode && durationLabel && !trimOn && !generating && !toolBusy" class="dur">{{ durationLabel }}</span>
+      <button v-if="type === 'shotVideo' && (ltxProfile || ltxResume) && generating" type="button" class="ltx-stop nodrag" @click.stop="stopLtxNodeWait(props.id)">{{ $t('ltx.stop') }}</button>
+      <button v-else-if="type === 'shotVideo' && ltxResume" type="button" class="ltx-stop nodrag" @click.stop="generateThis($event)">{{ $t('ltx.resume') }}</button>
       <NodeBusyOverlay v-if="generating || toolBusy" :label="toolBusy || $t('common.generating')" />
       <div v-if="status === 'failed' && nodeMeta?.error && !selected" class="fail-dot" :title="nodeMeta.error" />
 
@@ -1341,7 +1350,7 @@ const cropStyle = computed(() => ({
       />
       <H3GenModeSelect v-if="isH3VideoNode" v-model="h3GenMode" />
       <FramePairSlots
-        v-if="isH3Fl2va"
+        v-if="isH3Fl2va || ltxProfile"
         v-model:first-id="firstFrameId"
         v-model:last-id="lastFrameId"
         :last-required="lastFrameRequired"
@@ -1383,6 +1392,7 @@ const cropStyle = computed(() => ({
           :aspect="nodeAspectRatio"
           :duration="shotDurationValue"
           :durations="durationOptions"
+          :ltx-model="ltxProfile ? ltxProfile.workflowId || LTX_DEFAULT_MODEL : undefined"
           :show-audio="showVideoAudio"
           :audio="generateAudio"
           @update:resolution="videoResolution = $event"
@@ -1420,6 +1430,7 @@ const cropStyle = computed(() => ({
 </template>
 
 <style scoped>
+.ltx-stop { position: absolute; right: 8px; bottom: 8px; z-index: 10; }
 .pnode {
   position: relative;
   width: 240px;

@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { ltxCost } from '@/services/ai/ltxOptions'
 import { t } from '@/i18n'
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import AspectRatioSeg from '@/components/common/AspectRatioSeg.vue'
@@ -8,6 +9,7 @@ import type { AspectRatio } from '@/types'
 
 const props = defineProps<{
   plain?: boolean
+  ltxModel?: string
   resolution: DocVideoResolution
   resolutions: DocVideoResolution[]
   aspect: AspectRatio
@@ -71,7 +73,7 @@ onBeforeUnmount(() => document.removeEventListener('pointerdown', onDocPointer, 
       </div>
       <div class="vset-block">
         <span>{{ $t('mediaNodes.aspect') }}</span>
-        <AspectRatioSeg compact :model-value="aspect" @update:model-value="emit('update:aspect', $event)" />
+        <AspectRatioSeg compact :choices="ltxModel ? ['16:9', '9:16'] : undefined" :model-value="aspect" @update:model-value="emit('update:aspect', $event)" />
       </div>
       <div class="vset-block">
         <span>{{ $t('common.length') }}</span>
@@ -79,6 +81,7 @@ onBeforeUnmount(() => document.removeEventListener('pointerdown', onDocPointer, 
           <option v-for="n in durations" :key="n" :value="n">{{ $t('continuousCapture.seconds', { count: n }) }}</option>
         </select>
       </div>
+      <p v-if="ltxModel" class="vset-block">{{ $t('ltx.cost', { cost: ltxCost(ltxModel, resolution, duration) }) }}</p>
       <div v-if="showAudio" class="vset-block">
         <span>{{ $t('smartSpeech.voice') }}</span>
         <DocAudioToggle :model-value="Boolean(audio)" @update:model-value="emit('update:audio', $event)" />

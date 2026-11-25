@@ -1,11 +1,12 @@
 <script setup lang="ts">
+import { isLtxProfile, ltxDuration, ltxDurationOptions, LTX_DEFAULT_MODEL } from '@/services/ai/ltxOptions'
 import { t as localized } from '@/i18n'
 import { confirmAction } from '@/utils/confirmAction'
 import { t as translate } from '@/i18n'
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { Handle, Position, useVueFlow } from '@vue-flow/core'
 import { useAssetsStore, useLibraryStore, useProjectStore, useSettingsStore, useToastStore } from '@/stores'
-import { runCanvasNode, optimizeFreeformVideoPrompt } from '@/services/canvas/runner'
+import { runCanvasNode, stopLtxNodeWait, optimizeFreeformVideoPrompt } from '@/services/canvas/runner'
 import { applyShotVideoModel, applyShotVideoProfile } from '@/services/canvas/videoModel'
 import { isNodeRunning } from '@/services/canvas/jobs'
 import { friendlyAiError, shouldToastAiError } from '@/services/ai/abort'
@@ -148,7 +149,7 @@ const videoModel = computed({
 const resolutionChoices = computed(() =>
   videoResolutionChoices({
     model: videoModel.value,
-    profile: videoModel.value === 'wan-prime' ? null : effectiveVideoProfile.value
+    profile: videoModel.value !== 'h3' && effectiveVideoProfile.value?.provider === 'ltx' || videoModel.value === 'wan-prime' ? null : effectiveVideoProfile.value
   })
 )
 const videoResolution = computed({
@@ -159,7 +160,7 @@ const videoResolution = computed({
   },
   set: (v: VideoResolution) => project.patchCanvasNode(props.id, { videoResolution: v })
 })
-const isH3Video = computed(() => isVideo.value && videoModel.value !== 'wan-prime')
+const isH3Video = computed(() => isVideo.value && !ltxProfile.value && videoModel.value !== 'wan-prime')
 
 /* 노드에 선택한 영상 연결이 우선한다. 선택하지 않았으면 현재 전역 연결을 쓴다. */
 const settings = useSettingsStore()
@@ -181,18 +182,23 @@ const imageResolution = computed({
   get: () => pickDocImageResolution(node.value?.data.imageResolution, imageResolutionChoices.value) || '2k',
   set: (v: DocImageResolution) => project.patchCanvasNode(props.id, { imageResolution: v })
 })
-const showVideoAudio = computed(() => effectiveVideoProfile.value?.options?.videoAudio === true)
+const showVideoAudio = computed(() => Boolean(ltxProfile.value) || effectiveVideoProfile.value?.options?.videoAudio === true)
 const lastFrameRequired = computed(() => effectiveVideoProfile.value?.options?.lastFrameRequired === true)
 const generateAudio = computed({
-  get: () => Boolean(node.value?.data.generateAudio),
+  get: () => node.value?.data.generateAudio ?? Boolean(ltxProfile.value),
   set: (v: boolean) => project.patchCanvasNode(props.id, { generateAudio: v })
 })
+const ltxResume = computed(() => node.value?.data.videoTaskId?.startsWith('ltx:'))
 const videoKindLabel = computed(() => (isVideo.value ? '' : localized('mediaNodes.imageGeneration')))
 const isH3Fl2va = computed(() => isH3Video.value && h3GenMode.value === 'fl2va')
-const durationOptions = computed(() => videoDurationOptions(videoModel.value))
+const ltxProfile = computed(() => videoModel.value === 'h3' && isLtxProfile(effectiveVideoProfile.value)
+  ? effectiveVideoProfile.value : undefined)
+const durationOptions = computed(() => ltxProfile.value
+  ? ltxDurationOptions(ltxProfile.value.workflowId) : videoDurationOptions(videoModel.value))
 const duration = computed({
   get() {
     const raw = Math.round(Number(node.value?.data.duration) || 8)
+    if (ltxProfile.value && !isCapture.value) return ltxDuration(raw, ltxProfile.value.workflowId)
     if (isCapture.value) return raw
     const opts = durationOptions.value
     if (opts.includes(raw)) return raw
@@ -422,11 +428,11 @@ function previewFull() {
 
 async function generate() {
   if (generating.value) return
-  if (!prompt.value.trim()) {
+  if (!ltxResume.value && !prompt.value.trim()) {
     toast.warn(translate('common.enterPromptFirst'))
     return
   }
-  if (isVideo.value && !isCapture.value) {
+  if (isVideo.value && !isCapture.value && !ltxResume.value) {
     if (isH3Fl2va.value) {
       if (!firstFrameId.value && !refs.value[0]) {
         toast.warn(translate('freeformGenNode.requireFirstFrame'))
@@ -436,7 +442,7 @@ async function generate() {
         toast.warn(translate('freeformGenNode.requireLastFrame'))
         return
       }
-    } else if (!refs.value.length) {
+    } else if (!refs.value.length && !(ltxProfile.value && node.value?.data.firstFrameAssetId)) {
       toast.warn(translate('freeformGenNode.requireReference'))
       return
     }
@@ -464,6 +470,7 @@ async function generate() {
     }
   } catch (e: unknown) {
     if (shouldToastAiError(e)) toast.error(friendlyAiError(e) || translate('common.generateFailed'), 10000)
+    else if (node.value?.error === translate('ltx.stopped')) toast.info(translate('ltx.stopped'))
   } finally {
     busyLabel.value = ''
   }
@@ -645,6 +652,8 @@ async function removeSelf() {
         {{ isVideo ? '▶' : '＋' }}
       </div>
       <span v-if="isVideo && duration" class="dur-tag">{{ duration }}s</span>
+      <button v-if="isVideo && (ltxProfile || ltxResume) && generating" type="button" class="ltx-stop nodrag" @click.stop="stopLtxNodeWait(props.id)">{{ $t('ltx.stop') }}</button>
+      <button v-else-if="isVideo && ltxResume" type="button" class="ltx-stop nodrag" @click.stop="generate">{{ $t('ltx.resume') }}</button>
       <NodeBusyOverlay v-if="generating" :label="busyLabel || (isVideo ? $t('freeformGenNode.generatingVideo') : $t('freeformGenNode.generatingImage'))" />
       <div v-if="failMsg && !generating" class="fail" :title="failMsg">{{ failMsg }}</div>
     </div>
@@ -664,7 +673,7 @@ async function removeSelf() {
       >
         <H3GenModeSelect v-if="isH3Video" v-model="h3GenMode" />
         <FramePairSlots
-          v-if="isH3Fl2va"
+          v-if="isH3Fl2va || (ltxProfile && !isCapture)"
           v-model:first-id="firstFrameId"
           v-model:last-id="lastFrameId"
           :last-required="lastFrameRequired"
@@ -728,6 +737,7 @@ async function removeSelf() {
             :aspect="aspectRatio"
             :duration="duration"
             :durations="durationOptions"
+            :ltx-model="ltxProfile ? ltxProfile.workflowId || LTX_DEFAULT_MODEL : undefined"
             :show-audio="showVideoAudio"
             :audio="generateAudio"
             @update:resolution="videoResolution = $event"
@@ -768,6 +778,7 @@ async function removeSelf() {
 </template>
 
 <style scoped>
+.ltx-stop { position: absolute; right: 8px; bottom: 8px; z-index: 10; }
 .fnode {
   position: relative;
   width: 240px;

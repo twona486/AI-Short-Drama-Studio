@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { isLtxProfile, ltxDurationOptions, LTX_DEFAULT_MODEL } from '@/services/ai/ltxOptions'
 import { confirmAction } from '@/utils/confirmAction'
 import { t as translate } from '@/i18n'
 import { computed, ref, watch } from 'vue'
@@ -293,7 +294,7 @@ function onSelectVideoProfile(profileId: string) {
 const resolutionChoices = computed(() =>
   videoResolutionChoices({
     model: videoModel.value,
-    profile: videoModel.value === 'wan-prime' ? null : docVideoProfile.value
+    profile: videoModel.value !== 'h3' && docVideoProfile.value?.provider === 'ltx' || videoModel.value === 'wan-prime' ? null : docVideoProfile.value
   })
 )
 const videoResolution = computed({
@@ -321,7 +322,10 @@ const imageResolution = computed({
     if (props.node) project.patchCanvasNode(props.node.id, { imageResolution: v })
   }
 })
-const inspectorDurations = computed(() => videoDurationOptions(videoModel.value))
+const ltxProfile = computed(() => videoModel.value === 'h3' && isLtxProfile(docVideoProfile.value)
+  ? docVideoProfile.value : undefined)
+const inspectorDurations = computed(() => ltxProfile.value
+  ? ltxDurationOptions(ltxProfile.value.workflowId) : videoDurationOptions(videoModel.value))
 const inspectorDuration = computed({
   get() {
     const opts = inspectorDurations.value
@@ -340,10 +344,10 @@ const inspectorDuration = computed({
     project.patchCanvasNode(props.node.id, { duration: v })
   }
 })
-const showVideoAudio = computed(() => docVideoProfile.value?.options?.videoAudio === true)
+const showVideoAudio = computed(() => Boolean(ltxProfile.value) || docVideoProfile.value?.options?.videoAudio === true)
 const lastFrameRequired = computed(() => docVideoProfile.value?.options?.lastFrameRequired === true)
 const generateAudio = computed({
-  get: () => Boolean(props.node?.data.generateAudio),
+  get: () => props.node?.data.generateAudio ?? Boolean(ltxProfile.value),
   set: (v: boolean) => {
     if (props.node) project.patchCanvasNode(props.node.id, { generateAudio: v })
   }
@@ -351,7 +355,7 @@ const generateAudio = computed({
 const isH3Video = computed(
   () =>
     (props.node?.type === 'shotVideo' || props.node?.type === 'videoGen') &&
-    videoModel.value !== 'wan-prime'
+    !ltxProfile.value && videoModel.value !== 'wan-prime'
 )
 const h3GenMode = computed({
   get: () =>
@@ -1049,7 +1053,11 @@ async function optimizeVideoPrompt() {
           @input="project.setShotVideoPrompt(shot.id, ($event.target as HTMLTextAreaElement).value)"
         />
         <label>{{ $t('common.secondsDuration') }}</label>
+        <select v-if="ltxProfile" v-model.number="inspectorDuration">
+          <option v-for="seconds in inspectorDurations" :key="seconds" :value="seconds">{{ seconds }}</option>
+        </select>
         <input
+          v-else
           type="number"
           :min="videoMinSeconds(videoModel)"
           :max="videoMaxSeconds(videoModel)"
@@ -1087,7 +1095,7 @@ async function optimizeVideoPrompt() {
 
       <H3GenModeSelect v-if="isH3Video" v-model="h3GenMode" />
       <FramePairSlots
-        v-if="isH3Fl2va"
+        v-if="isH3Fl2va || (ltxProfile && !node.data.captureId)"
         v-model:first-id="firstFrameId"
         v-model:last-id="lastFrameId"
         :last-required="lastFrameRequired"
@@ -1210,6 +1218,7 @@ async function optimizeVideoPrompt() {
           :aspect="nodeAspectRatio"
           :duration="inspectorDuration"
           :durations="inspectorDurations"
+          :ltx-model="ltxProfile ? ltxProfile.workflowId || LTX_DEFAULT_MODEL : undefined"
           :show-audio="showVideoAudio"
           :audio="generateAudio"
           @update:resolution="videoResolution = $event"

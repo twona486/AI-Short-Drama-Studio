@@ -10,6 +10,8 @@
  */
 
 import { t as translate, uiPunctuation } from '@/i18n'
+import { LTX_DEFAULT_MODEL, LTX_MODELS, ltxDuration, type LtxReply } from './ltxOptions'
+import { ltxRequestBody, pollLtxJob, waitForLtxRead } from './ltxJob'
 import { getAIMode } from './client'
 import { comfyPromptGenerate, httpCustomMediaGenerate, isApimartHost, resolveVideoAdapter } from './adapters'
 import { apimartGenerateVideo, isApimartEndpoint } from './apimart'
@@ -106,10 +108,11 @@ export interface VideoGenInput {
   audioSync?: boolean
   /** 인물, 장면, 개요판을 함께 보내면 R2VA를, 시작 프레임 하나면 I2VA를 사용한다. */
   mode?: 'I2VA' | 'T2VA' | 'R2VA' | 'FL2VA' | 'L2VA'
-  /** 기존 AutoDL task_id가 있으면 제출을 건너뛰고 조회를 재개한다. */
+  /** 기존 원격 작업 ID가 있으면 제출을 건너뛰고 조회를 재개한다. */
   resumeTaskId?: string
   /** 제출 즉시 task_id를 전달한다. 호출자는 재개를 위해 저장한다. */
   onTaskSubmitted?: (taskId: string) => void | Promise<void>
+  onTaskTerminalFailure?: () => void | Promise<void>
 }
 
 export interface VideoGenOutput {
@@ -1308,12 +1311,93 @@ async function realComfyNativeVideo(
   return { blob, mimeType, prompt, duration: input.duration }
 }
 
+async function realLtxVideo(
+  input: VideoGenInput,
+  cfg: ReturnType<typeof getVideoConfig>,
+  onProgress?: (msg: string) => void
+): Promise<VideoGenOutput> {
+  const error = (key: string): never => { throw new Error(translate(`ltx.${key}`)) }
+  if (!isDesktop() || !desktop().ltxRequest) return error('desktopOnly')
+  const apiKey = cfg.apiKey
+  if (!apiKey) return error('missingKey')
+  const model = LTX_MODELS.includes(cfg.workflowId) ? cfg.workflowId : LTX_DEFAULT_MODEL
+  const duration = ltxDuration(input.duration, model)
+  const prompt = input.prompt.trim()
+  const progress = (status: string) => onProgress?.(translate(`ltx.${status}`))
+  const failure = async (reply: LtxReply): Promise<never> => {
+    if (reply.kind === 'failed' || (reply.kind === 'http' && reply.status === 404)) {
+      await input.onTaskTerminalFailure?.()
+      return error(reply.kind === 'failed' ? reply.reason : 'expired')
+    }
+    if (reply.kind === 'http' && reply.status === 429) return error('queueFull')
+    if (reply.kind === 'http' && [401, 403].includes(reply.status)) return error('invalidKey')
+    return error('requestFailed')
+  }
+  const imageUri = async (blob: Blob) => {
+    const direct = /^(image\/(?:png|jpeg|webp))$/.test(blob.type) && blob.size <= 5_249_970
+    const uri = await (direct ? blobToDataUrl(blob) : blobToVideoImageDataUrl(blob))
+    if (!/^data:image\/(?:jpeg|png|webp);base64,/.test(uri) || uri.length > 7_000_000) {
+      return error('imageFormat')
+    }
+    return uri
+  }
+  let jobId = input.resumeTaskId?.startsWith('ltx:') ? input.resumeTaskId.slice(4) : undefined
+  if (!jobId) {
+    if (input.audioSync) return error('audioSync')
+    if (!input.imageBlob) return error('missingFrame')
+    if (!prompt || [...prompt].length > 5000) return error('prompt')
+    if (input.aspectRatio && input.aspectRatio !== '16:9' && input.aspectRatio !== '9:16') return error('aspect')
+    const body = ltxRequestBody({
+      first: await imageUri(input.imageBlob),
+      last: input.lastFrameBlob ? await imageUri(input.lastFrameBlob) : undefined,
+      prompt, model, duration,
+      resolution: input.videoResolution === '1080p' ? '1080p' : '720p',
+      portrait: input.aspectRatio ? input.aspectRatio === '9:16' : input.height > input.width,
+      audio: input.generateAudio
+    })
+    throwIfAborted(input.signal)
+    progress('submitting')
+    const submitted = await desktop().ltxRequest({ apiKey, body })
+    if (submitted.kind !== 'submitted') {
+      if (submitted.kind === 'http' && [400, 401, 403, 413, 429].includes(submitted.status)) {
+        await input.onTaskTerminalFailure?.()
+      }
+      return failure(submitted)
+    }
+    jobId = submitted.id
+    // Save accepted jobs even when the user stopped waiting during submission.
+    await input.onTaskSubmitted?.(`ltx:${jobId}`)
+  }
+  const acceptedId = jobId
+  progress('pending')
+  const blob = await pollLtxJob({
+    signal: input.signal,
+    status: () => waitForLtxRead(() => desktop().ltxRequest({ apiKey, jobId: acceptedId }), input.signal),
+    download: (url) => waitForLtxRead(async () => {
+      const result = await fetchVideoBytes(url, input.signal)
+      return assertVideoBlob(result.blob)
+    }, input.signal),
+    wait: (ms) => abortableDelay(ms, input.signal),
+    progress,
+    timeout: () => error('timeout'),
+    failure
+  })
+  throwIfAborted(input.signal)
+  return { blob, mimeType: blob.type, prompt, duration }
+}
+
 export async function generateVideo(
   input: VideoGenInput,
   onProgress?: (msg: string) => void
 ): Promise<VideoGenOutput> {
   const mode = getAIMode()
   if (mode === 'real') {
+    const resumeLtx = input.resumeTaskId?.startsWith('ltx:')
+    if (resumeLtx || (input.videoModel !== 'h3-v5' && input.videoModel !== 'wan-prime')) {
+      const cfg = getVideoConfig(input.videoProfileId)
+      if (cfg.provider === 'ltx') return realLtxVideo(input, cfg, onProgress)
+      if (resumeLtx) throw new Error(translate('ltx.profileChanged'))
+    }
     if (input.audioSync) {
       if (!input.imageBlob || !input.audioBlob) {
         throw new Error('[video] 디지털 휴먼 내레이션에는 캐릭터 참조 이미지와 해당 오디오가 필요합니다.')

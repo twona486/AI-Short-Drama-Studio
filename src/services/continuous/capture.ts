@@ -1,3 +1,4 @@
+import { isLtxProfile, ltxDurationOptions } from '@/services/ai/ltxOptions'
 import { t } from '@/i18n'
 /** Continuous-shooting controller. Intent and its own task card come first; generation stays behind the scene-by-scene confirmation gate. */
 import { useProjectStore, useSettingsStore, useAssetsStore, useLibraryStore } from '@/stores'
@@ -61,7 +62,8 @@ function selection() {
   const profile = c.videos.find(v => v.id === profileId)
   if (model !== 'wan-prime' && !profile) throw Error(t('continuousCapture.noVideoProfile'))
   const name = model === 'wan-prime' ? t('agentChat.wan') : `${profile?.name || ''} ${profile?.workflowId || ''}`
-  let max = videoMaxSeconds(model)
+  const durations = model === 'h3' && isLtxProfile(profile) ? ltxDurationOptions(profile?.workflowId) : undefined
+  let max = durations?.at(-1) ?? videoMaxSeconds(model)
   if (model !== 'wan-prime' && profile) {
     const relay = isApimartEndpoint(profile.baseUrl, profile.provider)
     const passthrough = profile.adapter?.type === 'comfyui-prompt' || profile.adapter?.type === 'http-custom'
@@ -72,7 +74,7 @@ function selection() {
       throw Error(t('continuousCapture.unsupportedWorkflow'))
     }
   }
-  return { model, profileId, modelName: name.trim(), maxSeconds: max }
+  return { model, profileId, modelName: name.trim(), maxSeconds: max, durations }
 }
 
 function current(projectId: string) {
@@ -459,13 +461,19 @@ async function plan(projectId: string, source: string, instruction: string, log:
     mark?.start('draft')
     const result = await callLLM({ signal, timeoutMs: CAPTURE_LLM_TIMEOUT_MS, temperature: 0.2, disableThinking: true, useProviderOutputLimit: true, jsonMode: true, messages: [
       { role: 'system', content: CAPTURE_DIRECTOR + `\nThe user confirmed this style: ${look.medium}. Keep it in aesthetic, every character, scene and prop prompt, and every video prompt. Do not substitute default cinematography, photorealism, or another medium. Cinematic lighting describes quality only and does not change the chosen medium.` },
-      { role: 'user', content: JSON.stringify({ script: source, instruction, maxSeconds: selected.maxSeconds, model: selected.modelName, style: look, existingAssets: known.map(a => ({ name: a.name, kind: a.kind })), previousValidationError: issue }) }
+      { role: 'user', content: JSON.stringify({ script: source, instruction, maxSeconds: selected.maxSeconds, allowedDurations: selected.durations, model: selected.modelName, style: look, existingAssets: known.map(a => ({ name: a.name, kind: a.kind })), previousValidationError: issue }) }
     ] })
     signal?.throwIfAborted()
     current(projectId)
     try {
       if (result.finishReason === 'length' || result.finishReason === 'max_tokens' || jsonCutOff(result.content)) throw Error(t('continuousCapture.truncatedPlan'))
       parsed = validateCapturePlan(parseJsonRobust(result.content), selected.maxSeconds)
+      const durations = selected.durations
+      if (durations && parsed.scenes.some((scene) =>
+        scene.segments.some((segment) => !durations.includes(segment.duration)))) {
+        parsed = undefined
+        throw Error(t('ltx.captureDuration', { durations: durations.join(', ') }))
+      }
       mark?.done('draft')
     } catch (error) {
       signal?.throwIfAborted()
@@ -822,6 +830,35 @@ export async function runCaptureNode(nodeId: string, onLog?: (text: string) => v
         current(projectId)
         n.data.outputAssetId = saved.id
       } else {
+        const profileId = n.data.videoProfileId || s.profileId
+        const profile = useSettingsStore().config.videos.find((v) => v.id === profileId)
+        const ltx = (n.data.videoModel || s.model) === 'h3' && isLtxProfile(profile)
+        const previousJob = n.data.videoTaskId?.startsWith('ltx:') ? n.data.videoTaskId : undefined
+        const finishVideo = async (blob: Blob) => {
+          signal?.throwIfAborted()
+          current(projectId)
+          const saved = await useAssetsStore().add(blob, 'video', 'ai-generated', { filename: `${n.data.label}.mp4`, projectId, prompt: n.data.prompt })
+          current(projectId)
+          n.data.outputAssetId = saved.id
+          n.data.videoTaskId = undefined
+          n.data.captureSubmissionPending = false
+        }
+        const clearFailedLtx = async () => {
+          current(projectId)
+          n.data.videoTaskId = undefined
+          n.data.captureSubmissionPending = false
+          await save(projectId)
+        }
+        if (previousJob) {
+          const result = await generateVideo({
+            prompt: n.data.prompt || '', duration: n.data.duration || 6, ...size, aspectRatio: ratio,
+            videoProfileId: profileId, signal, resumeTaskId: previousJob, onTaskTerminalFailure: clearFailedLtx
+          }, onLog)
+          await finishVideo(result.blob)
+          n.status = 'success'; n.error = undefined
+          await save(projectId)
+          return
+        }
         if (!s.videosApproved && !manual) throw Error(t('continuousCapture.approveVideoFirst'))
         if (!options?.preflighted) await ensureDialogueBeforeGeneration(projectId, 'videos', onLog || (() => {}), signal)
         if (n.data.captureSubmissionPending && !n.data.videoTaskId && !manual) throw Error(t('continuousCapture.unknownSubmission'))
@@ -835,6 +872,10 @@ export async function runCaptureNode(nodeId: string, onLog?: (text: string) => v
         const index = scene.segments.findIndex((_, i) => s.videoNodes[`${scene.id}:${i}`] === nodeId)
         const seg = scene.segments[index]
         const duration = manual && n.data.duration ? Math.round(n.data.duration) : seg.duration
+        if (ltx) {
+          const durations = ltxDurationOptions(profile?.workflowId)
+          if (!durations.includes(duration)) throw Error(t('ltx.captureDuration', { durations: durations.join(', ') }))
+        }
         const sceneIndex = s.plan.scenes.indexOf(scene)
         for (const prev of s.plan.scenes.slice(0, sceneIndex)) {
           if (prev.segments.some((_, i) => !node(projectId, s.videoNodes[`${prev.id}:${i}`])?.data.outputAssetId)) throw Error(t('continuousCapture.completePreviousScene'))
@@ -949,18 +990,15 @@ export async function runCaptureNode(nodeId: string, onLog?: (text: string) => v
         n.data.captureSubmissionPending = true
         if (!n.data.videoTaskId) n.data.prompt = localShotTime(n.data.prompt || '')
         await save(projectId)
-        const result = await generateVideo({ prompt: n.data.prompt!, promptAsIs: true, imageBlob: frame, referenceImages: references, duration, durationLimit: s.maxSeconds, ...size, aspectRatio: ratio, videoModel: n.data.videoModel || s.model, videoProfileId: n.data.videoProfileId || s.profileId, videoResolution: n.data.videoResolution ?? p.settings.defaultVideoResolution, mode: 'I2VA', generateAudio: n.data.generateAudio ?? true, signal, resumeTaskId: manual ? undefined : n.data.videoTaskId, onTaskSubmitted: async id => { current(projectId); n.data.videoTaskId = id; await save(projectId) } }, onLog)
-        current(projectId)
-        const saved = await useAssetsStore().add(result.blob, 'video', 'ai-generated', { filename: `${n.data.label}.mp4`, projectId, prompt: n.data.prompt })
-        current(projectId)
-        n.data.outputAssetId = saved.id
-        n.data.videoTaskId = undefined
-        n.data.captureSubmissionPending = false
+        const result = await generateVideo({ prompt: n.data.prompt!, promptAsIs: true, imageBlob: frame, referenceImages: references, duration, durationLimit: s.maxSeconds, ...size, aspectRatio: ratio, videoModel: n.data.videoModel || s.model, videoProfileId: n.data.videoProfileId || s.profileId, videoResolution: n.data.videoResolution ?? p.settings.defaultVideoResolution, mode: 'I2VA', generateAudio: n.data.generateAudio ?? true, signal, resumeTaskId: manual ? undefined : n.data.videoTaskId, onTaskTerminalFailure: ltx ? clearFailedLtx : undefined, onTaskSubmitted: async id => { current(projectId); n.data.videoTaskId = id; await save(projectId) } }, onLog)
+        await finishVideo(result.blob)
       }
       n.status = 'success'; n.error = undefined
       await save(projectId)
     } catch (error) {
-      n.status = 'failed'; n.error = error instanceof Error ? error.message : String(error)
+      n.status = signal?.aborted && (n.data.videoTaskId?.startsWith('ltx:') ||
+        (n.type === 'videoGen' && signal.reason instanceof DOMException && signal.reason.message === t('ltx.stopped'))) ? 'idle' : 'failed'
+      n.error = n.status === 'idle' ? t('ltx.stopped') : error instanceof Error ? error.message : String(error)
       if (useProjectStore().current?.id === projectId) await save(projectId)
       throw error
     }

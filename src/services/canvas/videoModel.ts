@@ -1,3 +1,4 @@
+import { isLtxProfile, ltxDuration } from '@/services/ai/ltxOptions'
 import { autodlVideoProfileId } from '@/services/ai/runtime'
 import { useProjectStore } from '@/stores/project'
 import { useSettingsStore } from '@/stores/settings'
@@ -28,19 +29,25 @@ export function applyShotVideoModel(nodeId: string, model: VideoGenModel, profil
     : undefined
   const prevStill = stillModeFromNode(node)
   const nextStill = stillModeForVideoModel(model, selectedProfile || settings.config.video)
-  const nextH3Mode = selectedProfile?.provider === 'zealman' && selectedProfile.workflowId.startsWith('U02-')
+  const ltx = model === 'h3' && isLtxProfile(selectedProfile)
+  const nextH3Mode = ltx ? 'reference' : selectedProfile?.provider === 'zealman' && selectedProfile.workflowId.startsWith('U02-')
     ? 'fl2va'
     : node.data.h3GenMode
   const min = videoMinSeconds(model)
   const max = videoMaxSeconds(model)
+  const duration = (value?: number) => ltx
+    ? ltxDuration(value || 6, selectedProfile?.workflowId)
+    : Math.min(max, Math.max(min, Math.round(value || min)))
+  const changedProfile = node.data.videoProfileId !== selectedProfileId || node.data.videoModel !== model
   project.patchCanvasNode(nodeId, {
+    ...(changedProfile && node.data.videoTaskId?.startsWith('ltx:') ? { videoTaskId: undefined } : {}),
     videoModel: model,
     videoProfileId: selectedProfileId,
     videoStillMode: nextStill,
     h3GenMode: nextH3Mode,
     videoResolution: normalizeVideoResolution(node.data.videoResolution, model),
     ...(node.type === 'videoGen'
-      ? { duration: Math.min(max, Math.max(min, Math.round(node.data.duration || min))) }
+      ? { duration: duration(node.data.duration) }
       : {})
   })
   const shotId = node.data.shotId
@@ -48,7 +55,8 @@ export function applyShotVideoModel(nodeId: string, model: VideoGenModel, profil
     const shot = project.current?.shots.find((s) => s.id === shotId)
     if (shot) {
       project.updateShot(shot.id, {
-        duration: Math.min(max, Math.max(min, Math.round(shot.duration || min))),
+        duration: duration(shot.duration),
+        ...(changedProfile && shot.videoTaskId?.startsWith('ltx:') ? { videoTaskId: undefined } : {}),
         videoProfileId: selectedProfileId,
         h3GenMode: nextH3Mode
       })
@@ -79,7 +87,8 @@ export function syncH3ShotStillModes(stillMode: VideoStillMode) {
   for (const node of p.canvas.nodes) {
     if (node.type !== 'shotVideo') continue
     const model = normalizeVideoGenModel(node.data.videoModel)
-    if (model === 'h3-v5' || model === 'wan-prime') continue
+    if (model === 'h3-v5' || model === 'wan-prime' ||
+      isLtxProfile(useSettingsStore().config.videos.find((profile) => profile.id === node.data.videoProfileId))) continue
     project.patchCanvasNode(node.id, { videoStillMode: stillMode })
   }
   if (project.current) project.setCanvas(rebuildCanvasGraph(project.current, true))

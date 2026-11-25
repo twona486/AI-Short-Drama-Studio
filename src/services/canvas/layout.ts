@@ -531,6 +531,8 @@ export function rebuildCanvasGraph(project: Project, preservePositions = true): 
         shotId: shot.id,
         label: `${i + 1}. ${shot.title}`,
         videoModel: prevVid?.data.videoModel ?? defaultVideoModelPref(),
+        videoProfileId: prevVid?.data.videoProfileId ?? shot.videoProfileId,
+        videoTaskId: shot.videoTaskId?.startsWith('ltx:') ? shot.videoTaskId : undefined,
         videoResolution: prevVid?.data.videoResolution ?? project.settings.defaultVideoResolution,
         videoStillMode: resolvedStill,
         aspectRatio: prevVid?.data.aspectRatio ?? project.settings.aspectRatio
