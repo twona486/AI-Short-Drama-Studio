@@ -1,6 +1,7 @@
 <script setup lang="ts">
+import { nearestVideoDuration, videoDurationCapability } from '@/services/ai/videoDuration'
 import { isLtxTask, isLtxDesktop } from '@/services/ai/ltxDesktopOptions'
-import { isLtxProfile, ltxDuration, ltxDurationOptions, LTX_DEFAULT_MODEL } from '@/services/ai/ltxOptions'
+import { isLtxProfile, LTX_DEFAULT_MODEL } from '@/services/ai/ltxOptions'
 import { t as localized } from '@/i18n'
 import { confirmAction } from '@/utils/confirmAction'
 import { t as translate } from '@/i18n'
@@ -35,7 +36,7 @@ import type { AspectRatio, CanvasNodeType, H3VideoGenMode, ID, VideoGenModel, Vi
 import {
   normalizeH3GenMode,
   normalizeVideoGenModel,
-  videoDurationOptions
+
 } from '@/types'
 
 const props = defineProps<{
@@ -194,26 +195,18 @@ const videoKindLabel = computed(() => (isVideo.value ? '' : localized('mediaNode
 const isH3Fl2va = computed(() => isH3Video.value && h3GenMode.value === 'fl2va')
 const ltxProfile = computed(() => videoModel.value === 'h3' && isLtxProfile(effectiveVideoProfile.value)
   ? effectiveVideoProfile.value : undefined)
-const durationOptions = computed(() => ltxProfile.value
-  ? ltxDurationOptions(ltxProfile.value.workflowId) : videoDurationOptions(videoModel.value))
+const durationCapability = computed(() => videoDurationCapability({
+  model: videoModel.value, profile: effectiveVideoProfile.value, resolution: videoResolution.value
+}))
+const durationOptions = computed(() => durationCapability.value.durations)
 const duration = computed({
   get() {
     const raw = Math.round(Number(node.value?.data.duration) || 8)
-    if (ltxProfile.value && !isCapture.value) return ltxDuration(raw, ltxProfile.value.workflowId)
     if (isCapture.value) return raw
-    const opts = durationOptions.value
-    if (opts.includes(raw)) return raw
-    const min = opts[0] ?? 1
-    const max = opts[opts.length - 1] ?? 15
-    return Math.min(max, Math.max(min, raw))
+    return nearestVideoDuration(raw, durationOptions.value)
   },
   set(v: number) {
-    const opts = durationOptions.value
-    const min = opts[0] ?? 1
-    const max = opts[opts.length - 1] ?? 15
-    project.patchCanvasNode(props.id, {
-      duration: Math.min(max, Math.max(min, Math.round(Number(v) || min)))
-    })
+    project.patchCanvasNode(props.id, { duration: nearestVideoDuration(v, durationOptions.value) })
   }
 })
 const durOpen = ref<'' | 'bar' | 'foot'>('')

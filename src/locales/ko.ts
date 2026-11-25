@@ -2133,6 +2133,7 @@ export default {
     "production": "제작 과정"
   },
   "storyboard": {
+    "shotDurationWarning": "이 샷은 {duration}초이고 현재 영상 연결은 최대 {max}초까지 지원해요. 대사와 동작을 유지하려면 현재 연결로 스토리보드를 다시 추출해 샷을 나눠 주세요.",
     "anchor": "기준 지점",
     "anchorExample": "안내 데스크 / 엘리베이터 문…",
     "animal": "동물",

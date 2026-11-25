@@ -1,9 +1,10 @@
 /** 도우미가 모델 문서에서 추출한 옵션만 노드에 표시한다. */
 
-import type { VideoGenModel } from '@/types/canvas'
+import { LTX_DESKTOP_RESOLUTIONS } from './ltxDesktopOptions'
+import type { VideoResolution, VideoGenModel } from '@/types/canvas'
 
 export type DocImageResolution = '1k' | '2k' | '4k'
-export type DocVideoResolution = '480p' | '720p' | '768p' | '1080p'
+export type DocVideoResolution = VideoResolution
 
 export interface ModelNodeOptions {
   /** 문서에서 지원하는 출력 해상도 옵션. 예를 들어 1K 또는 2K다. */
@@ -19,7 +20,7 @@ export interface ModelNodeOptions {
 }
 
 const RESOLUTION_ORDER: DocImageResolution[] = ['1k', '2k', '4k']
-const VIDEO_RESOLUTION_ORDER: DocVideoResolution[] = ['480p', '720p', '768p', '1080p']
+const VIDEO_RESOLUTION_ORDER: DocVideoResolution[] = ['270p', '360p', '480p', '540p', '720p', '768p', '1080p']
 
 export function normalizeDocImageResolution(value: unknown): DocImageResolution | undefined {
   const raw = String(value || '')
@@ -37,6 +38,7 @@ export function normalizeDocVideoResolution(value: unknown): DocVideoResolution 
     .trim()
     .toLowerCase()
     .replace(/\s/g, '')
+  if (raw === '270p' || raw === '360p' || raw === '540p') return raw
   if (raw === '480p' || raw === '480') return '480p'
   if (raw === '720p' || raw === '720') return '720p'
   if (raw === '768p' || raw === '768') return '768p'
@@ -107,7 +109,8 @@ export function videoResolutionChoices(input: {
   model?: VideoGenModel
   profile?: { provider?: string; name?: string; model?: string; workflowId?: string; options?: ModelNodeOptions } | null
 }): DocVideoResolution[] {
-  if (['ltx', 'ltx-desktop'].includes(input.profile?.provider || '')) return ['720p', '1080p']
+  if (input.profile?.provider === 'ltx-desktop') return [...LTX_DESKTOP_RESOLUTIONS]
+  if (input.profile?.provider === 'ltx') return ['720p', '1080p']
   if (/grok/i.test(`${input.profile?.name || ''} ${input.profile?.model || ''} ${input.profile?.workflowId || ''}`)) return ['480p', '720p', '1080p']
   const listed = input.profile?.options?.videoResolutions
   if (listed?.length) return [...listed]

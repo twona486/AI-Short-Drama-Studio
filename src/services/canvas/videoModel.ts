@@ -1,5 +1,6 @@
+import { nearestVideoDuration, videoDurationCapability } from '@/services/ai/videoDuration'
 import { isLtxTask } from '@/services/ai/ltxDesktopOptions'
-import { isLtxProfile, ltxDuration } from '@/services/ai/ltxOptions'
+import { isLtxProfile } from '@/services/ai/ltxOptions'
 import { autodlVideoProfileId } from '@/services/ai/runtime'
 import { useProjectStore } from '@/stores/project'
 import { useSettingsStore } from '@/stores/settings'
@@ -7,8 +8,6 @@ import {
   normalizeVideoGenModel,
   normalizeVideoResolution,
   stillModeForVideoModel,
-  videoMaxSeconds,
-  videoMinSeconds,
   videoStillNeedsCanvas,
   type VideoGenModel,
   type VideoStillMode
@@ -34,11 +33,7 @@ export function applyShotVideoModel(nodeId: string, model: VideoGenModel, profil
   const nextH3Mode = ltx ? 'reference' : selectedProfile?.provider === 'zealman' && selectedProfile.workflowId.startsWith('U02-')
     ? 'fl2va'
     : node.data.h3GenMode
-  const min = videoMinSeconds(model)
-  const max = videoMaxSeconds(model)
-  const duration = (value?: number) => ltx
-    ? ltxDuration(value || 6, selectedProfile?.workflowId)
-    : Math.min(max, Math.max(min, Math.round(value || min)))
+  const { durations } = videoDurationCapability({ model, profile: selectedProfile || settings.config.video, resolution: node.data.videoResolution })
   const changedProfile = node.data.videoProfileId !== selectedProfileId || node.data.videoModel !== model
   project.patchCanvasNode(nodeId, {
     ...(changedProfile && isLtxTask(node.data.videoTaskId) ? { videoTaskId: undefined } : {}),
@@ -48,7 +43,7 @@ export function applyShotVideoModel(nodeId: string, model: VideoGenModel, profil
     h3GenMode: nextH3Mode,
     videoResolution: normalizeVideoResolution(node.data.videoResolution, model),
     ...(node.type === 'videoGen'
-      ? { duration: duration(node.data.duration) }
+      ? { duration: nearestVideoDuration(node.data.duration || durations[0], durations) }
       : {})
   })
   const shotId = node.data.shotId
@@ -56,7 +51,6 @@ export function applyShotVideoModel(nodeId: string, model: VideoGenModel, profil
     const shot = project.current?.shots.find((s) => s.id === shotId)
     if (shot) {
       project.updateShot(shot.id, {
-        duration: duration(shot.duration),
         ...(changedProfile && isLtxTask(shot.videoTaskId) ? { videoTaskId: undefined } : {}),
         videoProfileId: selectedProfileId,
         h3GenMode: nextH3Mode
@@ -76,7 +70,6 @@ export function applyShotVideoModel(nodeId: string, model: VideoGenModel, profil
 export function applyShotVideoProfile(nodeId: string, profileId: string) {
   const settings = useSettingsStore()
   if (!settings.config.videos.some((profile) => profile.id === profileId)) return
-  settings.selectVideo(profileId)
   applyShotVideoModel(nodeId, 'h3', profileId)
 }
 
