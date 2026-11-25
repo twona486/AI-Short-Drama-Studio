@@ -1,3 +1,4 @@
+import { isLtxTask } from '@/services/ai/ltxDesktopOptions'
 import { isLtxProfile, ltxDuration } from '@/services/ai/ltxOptions'
 import { autodlVideoProfileId } from '@/services/ai/runtime'
 import { useProjectStore } from '@/stores/project'
@@ -40,7 +41,7 @@ export function applyShotVideoModel(nodeId: string, model: VideoGenModel, profil
     : Math.min(max, Math.max(min, Math.round(value || min)))
   const changedProfile = node.data.videoProfileId !== selectedProfileId || node.data.videoModel !== model
   project.patchCanvasNode(nodeId, {
-    ...(changedProfile && node.data.videoTaskId?.startsWith('ltx:') ? { videoTaskId: undefined } : {}),
+    ...(changedProfile && isLtxTask(node.data.videoTaskId) ? { videoTaskId: undefined } : {}),
     videoModel: model,
     videoProfileId: selectedProfileId,
     videoStillMode: nextStill,
@@ -56,7 +57,7 @@ export function applyShotVideoModel(nodeId: string, model: VideoGenModel, profil
     if (shot) {
       project.updateShot(shot.id, {
         duration: duration(shot.duration),
-        ...(changedProfile && shot.videoTaskId?.startsWith('ltx:') ? { videoTaskId: undefined } : {}),
+        ...(changedProfile && isLtxTask(shot.videoTaskId) ? { videoTaskId: undefined } : {}),
         videoProfileId: selectedProfileId,
         h3GenMode: nextH3Mode
       })

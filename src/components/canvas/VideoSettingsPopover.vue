@@ -10,6 +10,7 @@ import type { AspectRatio } from '@/types'
 const props = defineProps<{
   plain?: boolean
   ltxModel?: string
+  ltxDesktop?: boolean
   resolution: DocVideoResolution
   resolutions: DocVideoResolution[]
   aspect: AspectRatio
@@ -81,8 +82,8 @@ onBeforeUnmount(() => document.removeEventListener('pointerdown', onDocPointer, 
           <option v-for="n in durations" :key="n" :value="n">{{ $t('continuousCapture.seconds', { count: n }) }}</option>
         </select>
       </div>
-      <p v-if="ltxModel" class="vset-block">{{ $t('ltx.cost', { cost: ltxCost(ltxModel, resolution, duration) }) }}</p>
-      <div v-if="showAudio" class="vset-block">
+      <p v-if="ltxModel && !ltxDesktop" class="vset-block">{{ $t('ltx.cost', { cost: ltxCost(ltxModel, resolution, duration) }) }}</p>
+      <div v-if="showAudio && !ltxDesktop" class="vset-block">
         <span>{{ $t('smartSpeech.voice') }}</span>
         <DocAudioToggle :model-value="Boolean(audio)" @update:model-value="emit('update:audio', $event)" />
       </div>

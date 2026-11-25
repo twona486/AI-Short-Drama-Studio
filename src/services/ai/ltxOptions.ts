@@ -1,12 +1,15 @@
+import { isLtxDesktop, LTX_DESKTOP_DURATIONS, LTX_DESKTOP_MODELS } from './ltxDesktopOptions'
+
 export const LTX_BASE_URL = 'https://api.ltx.io'
 export const LTX_DEFAULT_MODEL = 'ltx-2-3-fast'
 export const LTX_MODELS = [LTX_DEFAULT_MODEL, 'ltx-2-3-pro', 'ltx-2-5-fast', 'ltx-2-5-pro']
 
 export function isLtxProfile(profile?: { provider?: string; baseUrl?: string }) {
-  return profile?.provider === 'ltx'
+  return profile?.provider === 'ltx' || isLtxDesktop(profile)
 }
 
 export function ltxDurationOptions(model?: string) {
+  if (LTX_DESKTOP_MODELS.includes(model || '')) return [...LTX_DESKTOP_DURATIONS]
   return model?.endsWith('-pro') ? [6, 8, 10] : [6, 8, 10, 12, 14, 16, 18, 20]
 }
 

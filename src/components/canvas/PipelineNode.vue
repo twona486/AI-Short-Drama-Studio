@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { isLtxTask, isLtxDesktop } from '@/services/ai/ltxDesktopOptions'
 import { isLtxProfile, ltxDuration, ltxDurationOptions, LTX_DEFAULT_MODEL } from '@/services/ai/ltxOptions'
 import { t as translate } from '@/i18n'
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
@@ -559,7 +560,7 @@ const ltxProfile = computed(() => videoModel.value === 'h3' && isLtxProfile(docV
 const durationOptions = computed(() => ltxProfile.value
   ? ltxDurationOptions(ltxProfile.value.workflowId) : videoDurationOptions(videoModel.value))
 
-const ltxResume = computed(() => shot.value?.videoTaskId?.startsWith('ltx:'))
+const ltxResume = computed(() => isLtxTask(shot.value?.videoTaskId))
 const shotDurationValue = computed(() => ltxProfile.value
   ? ltxDuration(shot.value?.duration || 6, ltxProfile.value.workflowId)
   : Math.min(
@@ -707,7 +708,9 @@ async function generateThis(ev?: Event, hd = false) {
   } catch (e: any) {
     // 실패 상태만 표시하면 원인을 알 수 없으므로 오류 내용도 알림으로 표시한다.
     if (shouldToastAiError(e)) toast.error(friendlyAiError(e) || translate('common.generateFailed'))
-    else if (nodeMeta.value?.error === translate('ltx.stopped')) toast.info(translate('ltx.stopped'))
+    else if (nodeMeta.value?.error === translate('ltx.stopped') || nodeMeta.value?.error === translate('ltxDesktop.cancelRequested')) {
+      toast.info(nodeMeta.value.error)
+    }
   } finally {
     toolBusy.value = ''
   }
@@ -1190,7 +1193,7 @@ const cropStyle = computed(() => ({
         {{ isVideoNode ? '▶' : '＋' }}
       </div>
       <span v-if="isVideoNode && durationLabel && !trimOn && !generating && !toolBusy" class="dur">{{ durationLabel }}</span>
-      <button v-if="type === 'shotVideo' && (ltxProfile || ltxResume) && generating" type="button" class="ltx-stop nodrag" @click.stop="stopLtxNodeWait(props.id)">{{ $t('ltx.stop') }}</button>
+      <button v-if="type === 'shotVideo' && (ltxProfile || ltxResume) && generating" type="button" class="ltx-stop nodrag" @click.stop="stopLtxNodeWait(props.id)">{{ $t(isLtxDesktop(ltxProfile) ? 'ltxDesktop.cancel' : 'ltx.stop') }}</button>
       <button v-else-if="type === 'shotVideo' && ltxResume" type="button" class="ltx-stop nodrag" @click.stop="generateThis($event)">{{ $t('ltx.resume') }}</button>
       <NodeBusyOverlay v-if="generating || toolBusy" :label="toolBusy || $t('common.generating')" />
       <div v-if="status === 'failed' && nodeMeta?.error && !selected" class="fail-dot" :title="nodeMeta.error" />
@@ -1393,6 +1396,7 @@ const cropStyle = computed(() => ({
           :duration="shotDurationValue"
           :durations="durationOptions"
           :ltx-model="ltxProfile ? ltxProfile.workflowId || LTX_DEFAULT_MODEL : undefined"
+          :ltx-desktop="isLtxDesktop(ltxProfile)"
           :show-audio="showVideoAudio"
           :audio="generateAudio"
           @update:resolution="videoResolution = $event"

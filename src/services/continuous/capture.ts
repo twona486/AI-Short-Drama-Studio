@@ -1,3 +1,4 @@
+import { isLtxDesktop, isLtxTask } from '@/services/ai/ltxDesktopOptions'
 import { isLtxProfile, ltxDurationOptions } from '@/services/ai/ltxOptions'
 import { t } from '@/i18n'
 /** Continuous-shooting controller. Intent and its own task card come first; generation stays behind the scene-by-scene confirmation gate. */
@@ -833,7 +834,7 @@ export async function runCaptureNode(nodeId: string, onLog?: (text: string) => v
         const profileId = n.data.videoProfileId || s.profileId
         const profile = useSettingsStore().config.videos.find((v) => v.id === profileId)
         const ltx = (n.data.videoModel || s.model) === 'h3' && isLtxProfile(profile)
-        const previousJob = n.data.videoTaskId?.startsWith('ltx:') ? n.data.videoTaskId : undefined
+        const previousJob = isLtxTask(n.data.videoTaskId) ? n.data.videoTaskId : undefined
         const finishVideo = async (blob: Blob) => {
           signal?.throwIfAborted()
           current(projectId)
@@ -996,9 +997,12 @@ export async function runCaptureNode(nodeId: string, onLog?: (text: string) => v
       n.status = 'success'; n.error = undefined
       await save(projectId)
     } catch (error) {
-      n.status = signal?.aborted && (n.data.videoTaskId?.startsWith('ltx:') ||
-        (n.type === 'videoGen' && signal.reason instanceof DOMException && signal.reason.message === t('ltx.stopped'))) ? 'idle' : 'failed'
-      n.error = n.status === 'idle' ? t('ltx.stopped') : error instanceof Error ? error.message : String(error)
+      const stopped = signal?.aborted && error instanceof DOMException && error.name === 'AbortError' &&
+        (isLtxTask(n.data.videoTaskId) || signal.reason?.message === t('ltx.stopped'))
+      const profile = useSettingsStore().config.videos.find((v) => v.id === (n.data.videoProfileId || s.profileId))
+      n.status = stopped ? 'idle' : 'failed'
+      n.error = stopped ? t(isLtxDesktop(profile) ? 'ltxDesktop.cancelRequested' : 'ltx.stopped')
+        : error instanceof Error ? error.message : String(error)
       if (useProjectStore().current?.id === projectId) await save(projectId)
       throw error
     }

@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { isLtxTask, isLtxDesktop } from '@/services/ai/ltxDesktopOptions'
 import { isLtxProfile, ltxDuration, ltxDurationOptions, LTX_DEFAULT_MODEL } from '@/services/ai/ltxOptions'
 import { t as localized } from '@/i18n'
 import { confirmAction } from '@/utils/confirmAction'
@@ -188,7 +189,7 @@ const generateAudio = computed({
   get: () => node.value?.data.generateAudio ?? Boolean(ltxProfile.value),
   set: (v: boolean) => project.patchCanvasNode(props.id, { generateAudio: v })
 })
-const ltxResume = computed(() => node.value?.data.videoTaskId?.startsWith('ltx:'))
+const ltxResume = computed(() => isLtxTask(node.value?.data.videoTaskId))
 const videoKindLabel = computed(() => (isVideo.value ? '' : localized('mediaNodes.imageGeneration')))
 const isH3Fl2va = computed(() => isH3Video.value && h3GenMode.value === 'fl2va')
 const ltxProfile = computed(() => videoModel.value === 'h3' && isLtxProfile(effectiveVideoProfile.value)
@@ -470,7 +471,9 @@ async function generate() {
     }
   } catch (e: unknown) {
     if (shouldToastAiError(e)) toast.error(friendlyAiError(e) || translate('common.generateFailed'), 10000)
-    else if (node.value?.error === translate('ltx.stopped')) toast.info(translate('ltx.stopped'))
+    else if (node.value?.error === translate('ltx.stopped') || node.value?.error === translate('ltxDesktop.cancelRequested')) {
+      toast.info(node.value.error)
+    }
   } finally {
     busyLabel.value = ''
   }
@@ -652,7 +655,7 @@ async function removeSelf() {
         {{ isVideo ? '▶' : '＋' }}
       </div>
       <span v-if="isVideo && duration" class="dur-tag">{{ duration }}s</span>
-      <button v-if="isVideo && (ltxProfile || ltxResume) && generating" type="button" class="ltx-stop nodrag" @click.stop="stopLtxNodeWait(props.id)">{{ $t('ltx.stop') }}</button>
+      <button v-if="isVideo && (ltxProfile || ltxResume) && generating" type="button" class="ltx-stop nodrag" @click.stop="stopLtxNodeWait(props.id)">{{ $t(isLtxDesktop(ltxProfile) ? 'ltxDesktop.cancel' : 'ltx.stop') }}</button>
       <button v-else-if="isVideo && ltxResume" type="button" class="ltx-stop nodrag" @click.stop="generate">{{ $t('ltx.resume') }}</button>
       <NodeBusyOverlay v-if="generating" :label="busyLabel || (isVideo ? $t('freeformGenNode.generatingVideo') : $t('freeformGenNode.generatingImage'))" />
       <div v-if="failMsg && !generating" class="fail" :title="failMsg">{{ failMsg }}</div>
@@ -738,6 +741,7 @@ async function removeSelf() {
             :duration="duration"
             :durations="durationOptions"
             :ltx-model="ltxProfile ? ltxProfile.workflowId || LTX_DEFAULT_MODEL : undefined"
+            :ltx-desktop="isLtxDesktop(ltxProfile)"
             :show-audio="showVideoAudio"
             :audio="generateAudio"
             @update:resolution="videoResolution = $event"

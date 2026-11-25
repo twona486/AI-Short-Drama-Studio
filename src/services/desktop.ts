@@ -1,3 +1,4 @@
+import type { LtxDesktopRequest, LtxDesktopReply } from './ai/ltxDesktopOptions'
 import type { LtxRequest, LtxReply } from './ai/ltxOptions'
 import { t } from '@/i18n'
 export type DesktopAPI = {
@@ -31,6 +32,7 @@ export type DesktopAPI = {
   }) => Promise<string | null>
   pickDirectory: () => Promise<string | null>
   openPath: (filePath: string) => Promise<string>
+  ltxDesktopRequest: (request: LtxDesktopRequest) => Promise<LtxDesktopReply>
   ltxRequest: (request: LtxRequest) => Promise<LtxReply>
   autodlFetch: (opts: {
     url: string

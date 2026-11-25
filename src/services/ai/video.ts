@@ -1,3 +1,4 @@
+import { isLtxDesktop, isLtxTask, LTX_DESKTOP_MODELS, LTX_DESKTOP_WORKFLOW, ltxDesktopError, type LtxDesktopOperation, type LtxDesktopReply } from './ltxDesktopOptions'
 /**
  * AutoDL.art ComfyUI 워크플로를 이용한 AI 영상 생성
  *
@@ -1311,6 +1312,15 @@ async function realComfyNativeVideo(
   return { blob, mimeType, prompt, duration: input.duration }
 }
 
+async function ltxImageUri(blob: Blob) {
+  const direct = /^(image\/(?:png|jpeg|webp))$/.test(blob.type) && blob.size <= 5_249_970
+  const uri = await (direct ? blobToDataUrl(blob) : blobToVideoImageDataUrl(blob))
+  if (!/^data:image\/(?:jpeg|png|webp);base64,/.test(uri) || uri.length > 7_000_000) {
+    throw new Error(translate('ltx.imageFormat'))
+  }
+  return uri
+}
+
 async function realLtxVideo(
   input: VideoGenInput,
   cfg: ReturnType<typeof getVideoConfig>,
@@ -1333,14 +1343,6 @@ async function realLtxVideo(
     if (reply.kind === 'http' && [401, 403].includes(reply.status)) return error('invalidKey')
     return error('requestFailed')
   }
-  const imageUri = async (blob: Blob) => {
-    const direct = /^(image\/(?:png|jpeg|webp))$/.test(blob.type) && blob.size <= 5_249_970
-    const uri = await (direct ? blobToDataUrl(blob) : blobToVideoImageDataUrl(blob))
-    if (!/^data:image\/(?:jpeg|png|webp);base64,/.test(uri) || uri.length > 7_000_000) {
-      return error('imageFormat')
-    }
-    return uri
-  }
   let jobId = input.resumeTaskId?.startsWith('ltx:') ? input.resumeTaskId.slice(4) : undefined
   if (!jobId) {
     if (input.audioSync) return error('audioSync')
@@ -1348,8 +1350,8 @@ async function realLtxVideo(
     if (!prompt || [...prompt].length > 5000) return error('prompt')
     if (input.aspectRatio && input.aspectRatio !== '16:9' && input.aspectRatio !== '9:16') return error('aspect')
     const body = ltxRequestBody({
-      first: await imageUri(input.imageBlob),
-      last: input.lastFrameBlob ? await imageUri(input.lastFrameBlob) : undefined,
+      first: await ltxImageUri(input.imageBlob),
+      last: input.lastFrameBlob ? await ltxImageUri(input.lastFrameBlob) : undefined,
       prompt, model, duration,
       resolution: input.videoResolution === '1080p' ? '1080p' : '720p',
       portrait: input.aspectRatio ? input.aspectRatio === '9:16' : input.height > input.width,
@@ -1386,16 +1388,98 @@ async function realLtxVideo(
   return { blob, mimeType: blob.type, prompt, duration }
 }
 
+async function realLtxDesktopVideo(
+  input: VideoGenInput,
+  cfg: ReturnType<typeof getVideoConfig>,
+  onProgress?: (msg: string) => void
+): Promise<VideoGenOutput> {
+  if (!isDesktop() || !desktop().ltxDesktopRequest) throw new Error(translate('ltx.desktopOnly'))
+  if (!cfg.apiKey) throw new Error(translate('ltxDesktop.unpaired'))
+  const request = (operation: LtxDesktopOperation) =>
+    desktop().ltxDesktopRequest({ baseUrl: cfg.baseUrl, token: cfg.apiKey, operation })
+  const fail = (reply: LtxDesktopReply): never => {
+    throw new Error(translate(ltxDesktopError(reply)))
+  }
+  const prompt = input.prompt.trim()
+  const model = LTX_DESKTOP_MODELS.includes(cfg.workflowId) ? cfg.workflowId : LTX_DESKTOP_WORKFLOW
+  const duration = ltxDuration(input.duration, model)
+  let id = input.resumeTaskId?.startsWith('ltx-desktop:') ? input.resumeTaskId.slice('ltx-desktop:'.length) : undefined
+
+  try {
+    if (!id) {
+      if (input.audioSync) throw new Error(translate('ltx.audioSync'))
+      if (!input.imageBlob) throw new Error(translate('ltx.missingFrame'))
+      if (input.aspectRatio && input.aspectRatio !== '16:9' && input.aspectRatio !== '9:16') {
+        throw new Error(translate('ltx.aspect'))
+      }
+      const first = await ltxImageUri(input.imageBlob)
+      const last = input.lastFrameBlob ? await ltxImageUri(input.lastFrameBlob) : undefined
+      throwIfAborted(input.signal)
+      onProgress?.(translate('ltxDesktop.submitting'))
+      const reply = await request({
+        kind: 'submit', first, last, model, prompt, duration,
+        resolution: input.videoResolution === '1080p' ? '1080p' : '720p',
+        aspect: input.aspectRatio || (input.height > input.width ? '9:16' : '16:9')
+      })
+      if (reply.kind !== 'submitted') return fail(reply)
+      id = reply.id
+      await input.onTaskSubmitted?.(`ltx-desktop:${id}`)
+    }
+
+    const jobId = id
+    const deadline = Date.now() + 60 * 60_000
+    let expiredDownloads = 0
+    while (Date.now() < deadline) {
+      await abortableDelay(3000, input.signal)
+      const reply = await waitForLtxRead(() => request({ kind: 'status', id: jobId }), input.signal)
+      if (reply.kind === 'pending') onProgress?.(translate('ltxDesktop.queued'))
+      else if (reply.kind === 'processing') {
+        const status = reply.percent === undefined ? translate('ltxDesktop.processing')
+          : translate('ltxDesktop.percent', { percent: reply.percent })
+        const eta = reply.remainingSeconds === undefined ? ''
+          : translate('ltxDesktop.eta', { seconds: reply.remainingSeconds })
+        onProgress?.([status, eta].filter(Boolean).join(' · '))
+      } else if (reply.kind === 'completed') {
+        onProgress?.(translate('ltx.downloading'))
+        const download = await waitForLtxRead(() => request({ kind: 'download', path: reply.path }), input.signal)
+        if (download.kind === 'http' && download.status === 403 && expiredDownloads++ < 2) continue
+        if (download.kind !== 'video') return fail(download)
+        const blob = await assertVideoBlob(new Blob([download.data]), undefined)
+        return { blob, mimeType: blob.type, prompt, duration }
+      } else {
+        if (reply.kind === 'failed' || (reply.kind === 'http' && reply.status === 404)) {
+          await input.onTaskTerminalFailure?.()
+        }
+        return fail(reply)
+      }
+    }
+    throw new Error(translate('ltx.timeout'))
+  } catch (error) {
+    const reason = input.signal?.reason
+    if (id && reason instanceof DOMException && reason.message === translate('ltx.stopped')) {
+      const reply = await request({ kind: 'cancel', id })
+      if (reply.kind === 'failed' && reply.code === 'cancelled') await input.onTaskTerminalFailure?.()
+      else if (!['processing', 'completed'].includes(reply.kind)) throw new Error(translate('ltxDesktop.cancelFailed'))
+    }
+    throw error
+  }
+}
+
 export async function generateVideo(
   input: VideoGenInput,
   onProgress?: (msg: string) => void
 ): Promise<VideoGenOutput> {
   const mode = getAIMode()
   if (mode === 'real') {
-    const resumeLtx = input.resumeTaskId?.startsWith('ltx:')
+    const resumeLtx = isLtxTask(input.resumeTaskId)
     if (resumeLtx || (input.videoModel !== 'h3-v5' && input.videoModel !== 'wan-prime')) {
       const cfg = getVideoConfig(input.videoProfileId)
-      if (cfg.provider === 'ltx') return realLtxVideo(input, cfg, onProgress)
+      if (isLtxDesktop(cfg) && (!resumeLtx || input.resumeTaskId?.startsWith('ltx-desktop:'))) {
+        return realLtxDesktopVideo(input, cfg, onProgress)
+      }
+      if (cfg.provider === 'ltx' && (!resumeLtx || input.resumeTaskId?.startsWith('ltx:'))) {
+        return realLtxVideo(input, cfg, onProgress)
+      }
       if (resumeLtx) throw new Error(translate('ltx.profileChanged'))
     }
     if (input.audioSync) {

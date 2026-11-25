@@ -6,6 +6,7 @@
 import { t } from '@/i18n'
 import { OPENAI_BASE_URL, OPENAI_CHAT_MODELS, OPENAI_DEFAULT_CHAT_MODEL } from './openAiChat'
 import { OPENAI_DEFAULT_IMAGE_MODEL, OPENAI_IMAGE_MODELS } from './openAiImage'
+import { LTX_DESKTOP_PROVIDER, LTX_DESKTOP_DEFAULT_URL, LTX_DESKTOP_MODELS, LTX_DESKTOP_WORKFLOW } from './ltxDesktopOptions'
 import { LTX_BASE_URL, LTX_DEFAULT_MODEL, LTX_MODELS } from './ltxOptions'
 import { isApimartHost } from './adapters'
 
@@ -223,8 +224,16 @@ export const MUSIC_PROVIDERS: ProviderPreset[] = [
 
 export const VIDEO_PROVIDERS: ProviderPreset[] = [
   {
+    id: LTX_DESKTOP_PROVIDER,
+    get name() { return t('ltxDesktop.name') },
+    get hint() { return t('ltxDesktop.hint') },
+    baseUrl: LTX_DESKTOP_DEFAULT_URL,
+    models: LTX_DESKTOP_MODELS,
+    defaultModel: LTX_DESKTOP_WORKFLOW
+  },
+  {
     id: 'ltx',
-    name: 'Lightricks LTX',
+    get name() { return t('ltx.cloudName') },
     get hint() { return t('ltx.hint') },
     baseUrl: LTX_BASE_URL,
     models: LTX_MODELS,

@@ -1,3 +1,5 @@
+import { requestLtxDesktop } from './ltx-desktop'
+import type { LtxDesktopRequest } from '../src/services/ai/ltxDesktopOptions'
 /// <reference types="vite-plugin-electron/electron-env" />
 import {
   app,
@@ -1111,6 +1113,8 @@ app.whenReady().then(async () => {
       clearTimeout(timer)
     }
   })
+
+  ipcMain.handle('desktop:ltxDesktopRequest', (_event, request: LtxDesktopRequest) => requestLtxDesktop(request))
 
   ipcMain.handle('desktop:ltxRequest', (_event, request: LtxRequest) =>
     requestLtx((url, options) => net.fetch(url, options), request)

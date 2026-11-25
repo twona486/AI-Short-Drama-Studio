@@ -107,7 +107,7 @@ export function videoResolutionChoices(input: {
   model?: VideoGenModel
   profile?: { provider?: string; name?: string; model?: string; workflowId?: string; options?: ModelNodeOptions } | null
 }): DocVideoResolution[] {
-  if (input.profile?.provider === 'ltx') return ['720p', '1080p']
+  if (['ltx', 'ltx-desktop'].includes(input.profile?.provider || '')) return ['720p', '1080p']
   if (/grok/i.test(`${input.profile?.name || ''} ${input.profile?.model || ''} ${input.profile?.workflowId || ''}`)) return ['480p', '720p', '1080p']
   const listed = input.profile?.options?.videoResolutions
   if (listed?.length) return [...listed]

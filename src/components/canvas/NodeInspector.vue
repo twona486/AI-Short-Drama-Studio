@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { isLtxDesktop } from '@/services/ai/ltxDesktopOptions'
 import { isLtxProfile, ltxDurationOptions, LTX_DEFAULT_MODEL } from '@/services/ai/ltxOptions'
 import { confirmAction } from '@/utils/confirmAction'
 import { t as translate } from '@/i18n'
@@ -1219,6 +1220,7 @@ async function optimizeVideoPrompt() {
           :duration="inspectorDuration"
           :durations="inspectorDurations"
           :ltx-model="ltxProfile ? ltxProfile.workflowId || LTX_DEFAULT_MODEL : undefined"
+          :ltx-desktop="isLtxDesktop(ltxProfile)"
           :show-audio="showVideoAudio"
           :audio="generateAudio"
           @update:resolution="videoResolution = $event"

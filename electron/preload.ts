@@ -1,3 +1,4 @@
+import type { LtxDesktopRequest, LtxDesktopReply } from '../src/services/ai/ltxDesktopOptions'
 import type { LtxRequest, LtxReply } from '../src/services/ai/ltxOptions'
 import { contextBridge, ipcRenderer } from 'electron'
 
@@ -32,6 +33,7 @@ export type DesktopAPI = {
   }) => Promise<string | null>
   pickDirectory: () => Promise<string | null>
   openPath: (filePath: string) => Promise<string>
+  ltxDesktopRequest: (request: LtxDesktopRequest) => Promise<LtxDesktopReply>
   ltxRequest: (request: LtxRequest) => Promise<LtxReply>
   autodlFetch: (opts: {
     url: string
@@ -95,6 +97,7 @@ const api: DesktopAPI = {
   saveTextFile: (opts) => ipcRenderer.invoke('desktop:saveTextFile', opts),
   pickDirectory: () => ipcRenderer.invoke('desktop:pickDirectory'),
   openPath: (filePath) => ipcRenderer.invoke('desktop:openPath', filePath),
+  ltxDesktopRequest: (request) => ipcRenderer.invoke('desktop:ltxDesktopRequest', request),
   ltxRequest: (request) => ipcRenderer.invoke('desktop:ltxRequest', request),
   autodlFetch: (opts) => ipcRenderer.invoke('desktop:autodlFetch', opts),
   cancelProviderFetch: (requestId) => ipcRenderer.send('desktop:cancelProviderFetch', requestId),

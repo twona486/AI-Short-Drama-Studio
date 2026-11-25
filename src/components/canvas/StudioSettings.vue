@@ -2,9 +2,11 @@
 import { t as translate } from '@/i18n'
 
 import { t } from '@/i18n'
-import { computed, ref } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { useProjectStore, useSettingsStore, uniqueProfileName } from '@/stores'
+import { desktop, isDesktop } from '@/services/desktop'
+import { isLtxDesktop, LTX_DESKTOP_DEFAULT_URL, LTX_DESKTOP_MODELS, ltxDesktopError } from '@/services/ai/ltxDesktopOptions'
 import { LTX_MODELS, isLtxProfile } from '@/services/ai/ltxOptions'
 import { TTS_VOICES } from '@/services/ai/tts'
 import EndpointForm from '@/components/settings/EndpointForm.vue'
@@ -35,6 +37,59 @@ const project = useProjectStore()
 const router = useRouter()
 const showVideoKey = ref(false)
 const ltxVideo = computed(() => isLtxProfile(settings.config.video))
+const ltxDesktop = computed(() => isLtxDesktop(settings.config.video))
+const pairingLink = ref('')
+const pairingStatus = ref('')
+const pairingBusy = ref(false)
+const desktopAddress = computed({
+  get: () => settings.config.video.baseUrl,
+  set: (value: string) => {
+    if (value === settings.config.video.baseUrl) return
+    pairingStatus.value = ''
+    pairingLink.value = ''
+    settings.patchVideo({ baseUrl: value, apiKey: '' })
+  }
+})
+
+watch(() => settings.config.activeVideoId, () => {
+  pairingLink.value = ''
+  pairingStatus.value = ''
+})
+
+async function pairOrCheckLtxDesktop(pair: boolean) {
+  if (pairingBusy.value) return
+  if (!isDesktop() || !desktop().ltxDesktopRequest) {
+    pairingStatus.value = t('ltx.desktopOnly')
+    return
+  }
+  const id = settings.config.activeVideoId
+  const { baseUrl, apiKey } = settings.config.video
+  const code = pairingLink.value.trim()
+  if (pair && !code) {
+    pairingStatus.value = t('ltxDesktop.codeError')
+    return
+  }
+  pairingBusy.value = true
+  pairingStatus.value = ''
+  try {
+    const reply = await desktop().ltxDesktopRequest({
+      baseUrl, token: apiKey, operation: pair ? { kind: 'pair', code } : { kind: 'check' }
+    })
+    if (settings.config.activeVideoId !== id || settings.config.video.baseUrl !== baseUrl) return
+    if (reply.kind === 'paired') {
+      settings.patchVideo({ apiKey: reply.token })
+      pairingLink.value = ''
+      pairingStatus.value = t('ltxDesktop.paired')
+    } else {
+      if (reply.kind === 'http' && reply.status === 401 && !pair) settings.patchVideo({ apiKey: '' })
+      pairingStatus.value = t(reply.kind === 'ready' ? 'ltxDesktop.ready' : ltxDesktopError(reply, pair))
+    }
+  } catch {
+    pairingStatus.value = t('ltxDesktop.offline')
+  } finally {
+    pairingBusy.value = false
+  }
+}
 const llmRouterUrl = ref('')
 const llmRouterKey = ref('')
 const llmRouterModel = ref('')
@@ -167,6 +222,8 @@ function createVideo(providerId: string) {
     settings.config.videos.map((p) => p.name),
     preset.id === 'custom' ? translate('studioSettings.customVideo') : preset.name
   )
+  pairingLink.value = ''
+  pairingStatus.value = ''
   settings.addVideo({
     name,
     baseUrl: preset.baseUrl || '',
@@ -413,7 +470,24 @@ function patchAdapter(
         :placeholder="$t('studioSettings.exampleAutoDl')"
       />
       <section class="video">
-        <template v-if="!ltxVideo">
+        <template v-if="ltxDesktop">
+          <p class="hint">{{ $t('ltxDesktop.hint') }}</p>
+          <p class="hint">{{ $t('ltxDesktop.memory') }}</p>
+          <label for="ltx-desktop-address">{{ $t('studioSettings.baseUrl') }}</label>
+          <input id="ltx-desktop-address" v-model.trim="desktopAddress" :placeholder="LTX_DESKTOP_DEFAULT_URL" />
+          <label for="ltx-desktop-model">{{ $t('ltx.model') }}</label>
+          <select id="ltx-desktop-model" v-model="videoWorkflow">
+            <option v-for="model in LTX_DESKTOP_MODELS" :key="model" :value="model">{{ model }}</option>
+          </select>
+          <label for="ltx-desktop-pairing">{{ $t('ltxDesktop.pairingLink') }}</label>
+          <input id="ltx-desktop-pairing" v-model.trim="pairingLink" type="password" autocomplete="off" />
+          <div class="ltx-desktop-actions">
+            <button type="button" :disabled="pairingBusy" @click="pairOrCheckLtxDesktop(true)">{{ $t('ltxDesktop.pair') }}</button>
+            <button type="button" :disabled="pairingBusy" @click="pairOrCheckLtxDesktop(false)">{{ $t('ltxDesktop.check') }}</button>
+          </div>
+          <p v-if="pairingStatus" role="status">{{ pairingStatus }}</p>
+        </template>
+        <template v-else-if="!ltxVideo">
         <h3>{{ $t('studioSettings.oneClick') }}</h3>
         <p class="hint">
           {{ $t('studioSettings.autoRules') }}
@@ -491,8 +565,8 @@ function patchAdapter(
             <option v-for="model in LTX_MODELS" :key="model" :value="model">{{ model }}</option>
           </select>
         </template>
-        <label>API Key / Token</label>
-        <div class="secret">
+        <label v-if="!ltxDesktop">API Key / Token</label>
+        <div v-if="!ltxDesktop" class="secret">
           <input
             :key="settings.config.activeVideoId"
             :type="showVideoKey ? 'text' : 'password'"
@@ -565,6 +639,7 @@ function patchAdapter(
   gap: 6px;
   max-width: 640px;
 }
+.ltx-desktop-actions { display: flex; gap: 8px; }
 .video select {
   padding: 8px 10px;
   color: inherit;

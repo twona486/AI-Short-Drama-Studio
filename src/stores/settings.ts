@@ -1,3 +1,4 @@
+import { isLtxDesktop } from '@/services/ai/ltxDesktopOptions'
 import { t } from '@/i18n'
 /**
  * AI 모드, 모델 연결, UI 환경설정을 관리한다.
@@ -1144,6 +1145,8 @@ export const useSettingsStore = defineStore('settings', () => {
     const cur =
       config.value.videos.find((p) => p.id === id) || videoFromEndpoint(config.value.video, t('settings.defaults.video'), id)
     const next = { ...cur, ...patch }
+    if ((isLtxDesktop(cur) || isLtxDesktop(next)) &&
+      (next.baseUrl !== cur.baseUrl || next.provider !== cur.provider)) next.apiKey = ''
     if (patch.apiKey !== undefined && !isAutodlVideoProfile(next)) {
       const incoming = String(patch.apiKey || '').trim()
       const belongsToAutodl = config.value.videos.some(

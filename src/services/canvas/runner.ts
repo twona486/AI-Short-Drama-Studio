@@ -1,3 +1,4 @@
+import { isLtxDesktop, isLtxTask } from '@/services/ai/ltxDesktopOptions'
 import { isLtxProfile } from '@/services/ai/ltxOptions'
 import { uiPunctuation } from '@/i18n'
 import { t as translate } from "@/i18n"
@@ -1304,11 +1305,11 @@ export async function generateShotVideo(shot: Shot, onProgress?: (msg: string) =
   const videoNode = canvasVideoNodeForShot(shot)
   const profileId = videoNode?.data.videoProfileId || shot.videoProfileId
   const profile = videoProfileById(profileId)
-  if (shot.videoTaskId?.startsWith('ltx:') ||
+  if (isLtxTask(shot.videoTaskId) ||
     (canvasVideoModelForShot(shot) === 'h3' && isLtxProfile(profile))) {
     const p = project.current
     const resumeTaskId = shot.videoTaskId
-    const resuming = resumeTaskId?.startsWith('ltx:')
+    const resuming = isLtxTask(resumeTaskId)
     const aspectRatio = shotNodeAspect(p, shot.id, 'shotVideo')
     const result = await generateVideo({
       prompt: shot.compiledVideoPrompt || '',
@@ -2809,7 +2810,7 @@ export async function generateFreeformVideo(
   if (!node) throw new Error('노드를 찾을 수 없습니다.')
   const prompt = node.data.prompt ?? ''
   const profile = videoProfileById(node.data.videoProfileId)
-  const resumingLtx = node.data.videoTaskId?.startsWith('ltx:')
+  const resumingLtx = isLtxTask(node.data.videoTaskId)
   if (resumingLtx || (normalizeVideoGenModel(node.data.videoModel) === 'h3' && isLtxProfile(profile))) {
     const ids = resolvedCanvasReferenceAssetIds(p, node)
     const aspectRatio = canvasNodeAspect(node, p.settings.aspectRatio)
@@ -2993,7 +2994,7 @@ export async function runCanvasNode(
   if (captureNode) {
     const { runCaptureNode } = await import('@/services/continuous/capture')
     const ltx = captureNode.type === 'videoGen' &&
-      (captureNode.data.videoTaskId?.startsWith('ltx:') ||
+      (isLtxTask(captureNode.data.videoTaskId) ||
         (normalizeVideoGenModel(captureNode.data.videoModel) === 'h3' &&
           isLtxProfile(videoProfileById(captureNode.data.videoProfileId || current?.continuousCapture?.profileId))))
     if (!ltx || isNodeRunning(nodeId)) {
@@ -3036,10 +3037,10 @@ export async function runCanvasNode(
       throw new Error(playGateMessage())
     }
     const shot = node.type === 'shotVideo' ? p.shots.find((item) => item.id === node.data.shotId) : undefined
+    const profile = videoProfileById(node.data.videoProfileId || shot?.videoProfileId)
     const ltx = (node.type === 'videoGen' || node.type === 'shotVideo') &&
-      ([node.data.videoTaskId, shot?.videoTaskId].some((id) => id?.startsWith('ltx:')) ||
-        (normalizeVideoGenModel(node.data.videoModel) === 'h3' &&
-          isLtxProfile(videoProfileById(node.data.videoProfileId || shot?.videoProfileId))))
+      ([node.data.videoTaskId, shot?.videoTaskId].some(isLtxTask) ||
+        (normalizeVideoGenModel(node.data.videoModel) === 'h3' && isLtxProfile(profile)))
     const local = ltx ? new AbortController() : undefined
     if (local) {
       ltxNodeWaits.set(nodeId, local)
@@ -3104,10 +3105,11 @@ export async function runCanvasNode(
       if (node.type === 'final') patchNode(project, 'export', 'success')
       activity.done(translate('canvasRunner.completed', { label: label }))
     } catch (e: any) {
-      if (local?.signal.aborted) {
-        patchNode(project, nodeId, 'idle', translate('ltx.stopped'))
+      if (local?.signal.aborted && e?.name === 'AbortError') {
+        const message = translate(isLtxDesktop(profile) ? 'ltxDesktop.cancelRequested' : 'ltx.stopped')
+        patchNode(project, nodeId, 'idle', message)
         await project.save()
-        onProgress?.(nodeId, translate('ltx.stopped'))
+        onProgress?.(nodeId, message)
       } else {
         patchNode(project, nodeId, 'failed', e?.message ?? String(e))
       }
