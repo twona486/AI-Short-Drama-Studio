@@ -1,3 +1,4 @@
+import { videoDurationCapability, nearestVideoDuration } from '@/services/ai/videoDuration'
 import { isLtxDesktop, isLtxTask } from '@/services/ai/ltxDesktopOptions'
 import { isLtxProfile } from '@/services/ai/ltxOptions'
 import { uiPunctuation } from '@/i18n'
@@ -96,8 +97,6 @@ import {
   normalizeVideoGenModel,
   normalizeVideoResolution,
   videoMaxRefImages,
-  videoMaxSeconds,
-  videoMinSeconds
 } from '@/types'
 import { canvasReferenceSlotEntries, resolvedCanvasReferenceAssetIds } from '@/services/canvas/references'
 import { resolveH3PromptProfile } from './videoPromptProfile'
@@ -1111,22 +1110,24 @@ function canvasVideoResolutionForShot(shot: Shot, videoModel: VideoGenModel): Vi
   return normalizeVideoResolution(canvasVideoNodeForShot(shot)?.data.videoResolution ?? useProjectStore().current?.settings.defaultVideoResolution, videoModel)
 }
 
-function clampVideoDuration(raw: number | undefined, videoModel: VideoGenModel, fallback = 5) {
-  const min = videoMinSeconds(videoModel)
-  const max = videoMaxSeconds(videoModel)
-  return Math.min(max, Math.max(min, Math.round(raw || fallback)))
+function clampVideoDuration(raw: number | undefined, model: VideoGenModel, fallback = 5, profileId?: string, resolution?: VideoResolution) {
+  return nearestVideoDuration(raw || fallback, videoDurationCapability({
+    model,
+    profile: videoProfileById(profileId),
+    resolution
+  }).durations)
 }
 
-function storyboardVideoModel(): VideoGenModel {
-  const p = useProjectStore().current
-  const existing = p?.canvas?.nodes.find((node) => node.type === 'shotVideo')
-  if (existing?.data.videoModel) return normalizeVideoGenModel(existing.data.videoModel)
-  const preferred = useSettingsStore().config.defaultVideoModel
-  if (preferred) return normalizeVideoGenModel(preferred)
-  const cfg = useSettingsStore().config.video
-  const marker = `${cfg.provider || ''} ${cfg.workflowId || ''} ${cfg.adapter?.type || ''}`.toLowerCase()
-  if (/h3.*v5/.test(marker) && !/15s/.test(marker)) return 'h3-v5'
-  return 'h3'
+export function activeStoryboardDuration() {
+  const settings = useSettingsStore().config
+  const project = useProjectStore().current
+  const capability = videoDurationCapability({
+    model: normalizeVideoGenModel(settings.defaultVideoModel),
+    profile: settings.video,
+    resolution: project?.settings.defaultVideoResolution,
+    startEndFrames: isFl2vaChainActive(project)
+  })
+  return { maxShotDuration: capability.max, allowedShotDurations: capability.durations }
 }
 
 function shotUsesFl2va(shot: Shot, videoModel: VideoGenModel): boolean {
@@ -1523,14 +1524,14 @@ export async function generateShotVideo(shot: Shot, onProgress?: (msg: string) =
           sceneName: place.name,
           sceneLighting: place.lighting,
           shotTitle: shot.title,
-          duration: clampVideoDuration(shot.duration, videoModel),
+          duration: clampVideoDuration(shot.duration, videoModel, 5, profileId, canvasVideoResolutionForShot(shot, videoModel)),
           width: videoSize.width,
           height: videoSize.height,
           aspectRatio,
           cameraMovement: shot.cameraMovement,
           promptStyle,
           videoModel: 'h3',
-          videoProfileId: shot.videoProfileId,
+          videoProfileId: profileId,
           videoResolution: canvasVideoResolutionForShot(shot, videoModel),
           generateAudio: shotVideoAudio(shot.id, shot.videoProfileId),
           h3GenMode: 'fl2va',
@@ -1690,14 +1691,14 @@ export async function generateShotVideo(shot: Shot, onProgress?: (msg: string) =
       shotTitle: shot.title,
       imageAssignments,
       imageSlots,
-      duration: clampVideoDuration(shot.duration, videoModel),
+      duration: clampVideoDuration(shot.duration, videoModel, 5, profileId, canvasVideoResolutionForShot(shot, videoModel)),
       width: videoSize.width,
       height: videoSize.height,
       aspectRatio,
       cameraMovement: shot.cameraMovement,
       promptStyle,
       videoModel,
-      videoProfileId: shot.videoProfileId,
+      videoProfileId: profileId,
       videoResolution: canvasVideoResolutionForShot(shot, videoModel),
       generateAudio: shotVideoAudio(shot.id, shot.videoProfileId),
       h3GenMode: 'reference',
@@ -1884,7 +1885,7 @@ export async function optimizeShotVideoPrompt(shot: Shot, signal?: AbortSignal, 
       source,
       referenceIds: packed.map((entry) => entry.id),
       imageSlots,
-      duration: clampVideoDuration(shot.duration, videoModel),
+      duration: clampVideoDuration(shot.duration, videoModel, 5, profile?.id, canvasVideoResolutionForShot(shot, videoModel)),
       aspectRatio: shotNodeAspect(p, shot.id, 'shotVideo'),
       mode: shotUsesFl2va(shot, videoModel) ? 'FL2VA' : 'R2VA',
       aesthetic: p.script?.visualStyleOverride || p.script?.h3Aesthetic || p.script?.aesthetic,
@@ -1906,7 +1907,7 @@ export async function optimizeShotVideoPrompt(shot: Shot, signal?: AbortSignal, 
     const pictures = imageSlots
       .map((slot) => `Picture ${slot.index}: ${slot.sourceName || slot.name}`)
       .join('\n')
-    compiled = await rewritePromptText({ source, pictures, modelName: videoModel === 'wan-prime' ? 'Wan 3.0 Prime' : [profile?.name, profile?.workflowId].filter(Boolean).join(' / '), dialogue: shot.voiceover, duration: clampVideoDuration(shot.duration, videoModel), aspectRatio: shotNodeAspect(p, shot.id, 'shotVideo'), signal })
+    compiled = await rewritePromptText({ source, pictures, modelName: videoModel === 'wan-prime' ? 'Wan 3.0 Prime' : [profile?.name, profile?.workflowId].filter(Boolean).join(' / '), dialogue: shot.voiceover, duration: clampVideoDuration(shot.duration, videoModel, 5, profile?.id, canvasVideoResolutionForShot(shot, videoModel)), aspectRatio: shotNodeAspect(p, shot.id, 'shotVideo'), signal })
   }
   const currentShot = refreshShot(shot.id)
   const currentProfile = videoProfileById(canvasVideoNodeForShot(currentShot)?.data.videoProfileId || currentShot.videoProfileId)
@@ -2152,7 +2153,7 @@ export async function runGeneratePlay(
       content: requestContent,
       style: look.style,
       shotDuration: project.current.script.shotDuration,
-      maxShotDuration: videoMaxSeconds(storyboardVideoModel()),
+      ...activeStoryboardDuration(),
       aspectRatio: project.current.settings.aspectRatio,
       productImages,
       keywords: project.current.script.keywords,
@@ -2373,7 +2374,8 @@ export async function runExtractStoryboard(
   const look = lookFromScript(project.current.script)
   const keepApproved = Boolean(stage && isPlayApproved(project.current))
   // 같은 대본에서 다시 실행할 때 완료한 작업 그룹의 결과를 재사용한다.
-  const playKey = `shot-plan-v4:${scriptPlayKey(project.current.script.content || '')}:${resolveTargetDurationSec(project.current.script) || 0}:${videoMaxSeconds(storyboardVideoModel())}`
+  const durationPolicy = activeStoryboardDuration()
+  const playKey = `shot-plan-v5:${scriptPlayKey(project.current.script.content || '')}:${resolveTargetDurationSec(project.current.script) || 0}:${durationPolicy.allowedShotDurations.join(',')}`
   const savedBatches = project.current.script.shotBatches
   const resumeBatches: Array<Record<string, unknown>[] | undefined> | undefined =
     savedBatches?.playKey === playKey
@@ -2447,7 +2449,7 @@ export async function runExtractStoryboard(
       content: project.current.script.content,
       style: look.style,
       shotDuration: project.current.script.shotDuration,
-      maxShotDuration: videoMaxSeconds(storyboardVideoModel()),
+      ...durationPolicy,
       aspectRatio: project.current.settings.aspectRatio,
       productImages,
       keywords: project.current.script.keywords,
@@ -2942,7 +2944,7 @@ export async function generateFreeformVideo(
     }
   }
   if (p.folderPath) setActiveProjectDir(p.folderPath)
-  const duration = clampVideoDuration(node.data.duration, videoModel, 8)
+  const duration = clampVideoDuration(node.data.duration, videoModel, 8, node.data.videoProfileId, node.data.videoResolution ?? p.settings.defaultVideoResolution)
   const aspectRatio = canvasNodeAspect(node, p.settings.aspectRatio)
   const videoSize = aspectToSize(aspectRatio)
   const slotEntries = canvasReferenceSlotEntries(p, node)
@@ -3014,7 +3016,7 @@ export async function optimizeFreeformVideoPrompt(nodeId: string, signal?: Abort
       source,
       referenceIds: resolvedCanvasReferenceAssetIds(p, node),
       imageSlots,
-      duration: clampVideoDuration(node.data.duration, videoModel, 8),
+      duration: clampVideoDuration(node.data.duration, videoModel, 8, node.data.videoProfileId, node.data.videoResolution ?? p.settings.defaultVideoResolution),
       aspectRatio: canvasNodeAspect(node, p.settings.aspectRatio),
       mode: normalizeH3GenMode(node.data.h3GenMode) === 'fl2va' ? 'FL2VA' : 'R2VA',
       aesthetic: p.script?.visualStyleOverride || p.script?.h3Aesthetic || p.script?.aesthetic,
@@ -3025,7 +3027,7 @@ export async function optimizeFreeformVideoPrompt(nodeId: string, signal?: Abort
     const pictures = slotEntries
       .map((entry, index) => `Picture ${index + 1}: ${entry.name || 'Reference image'}`)
       .join('\n')
-    compiled = await rewritePromptText({ source, pictures, modelName: videoModel === 'wan-prime' ? 'Wan 3.0 Prime' : [profile?.name, profile?.workflowId].filter(Boolean).join(' / '), duration: clampVideoDuration(node.data.duration, videoModel, 8), aspectRatio: canvasNodeAspect(node, p.settings.aspectRatio), signal })
+    compiled = await rewritePromptText({ source, pictures, modelName: videoModel === 'wan-prime' ? 'Wan 3.0 Prime' : [profile?.name, profile?.workflowId].filter(Boolean).join(' / '), duration: clampVideoDuration(node.data.duration, videoModel, 8, node.data.videoProfileId, node.data.videoResolution ?? p.settings.defaultVideoResolution), aspectRatio: canvasNodeAspect(node, p.settings.aspectRatio), signal })
     compiled = withVideoReferenceBlock(compiled, slotEntries)
   }
   const currentNode = project.current?.canvas?.nodes.find((item) => item.id === nodeId)

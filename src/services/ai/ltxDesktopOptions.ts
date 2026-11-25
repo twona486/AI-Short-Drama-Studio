@@ -2,6 +2,14 @@ export const LTX_DESKTOP_PROVIDER = 'ltx-desktop'
 export const LTX_DESKTOP_DEFAULT_URL = 'http://Mac-Studio-M5-Ultra.local:41955'
 export const LTX_DESKTOP_WORKFLOW = 'ltx-2.3-fast'
 export const LTX_DESKTOP_MODELS = [LTX_DESKTOP_WORKFLOW, 'ltx-2.5-fast']
+export const LTX_DESKTOP_LOW_RESOLUTIONS = ['270p', '360p', '540p'] as const
+export const LTX_DESKTOP_RESOLUTIONS = [...LTX_DESKTOP_LOW_RESOLUTIONS, '720p', '1080p'] as const
+export type LtxDesktopResolution = typeof LTX_DESKTOP_RESOLUTIONS[number]
+
+export function ltxDesktopResolution(value?: string): LtxDesktopResolution {
+  return LTX_DESKTOP_RESOLUTIONS.find((resolution) => resolution === value) ?? '720p'
+}
+
 export const LTX_DESKTOP_DURATIONS = [2, 3, 4, 5, 6, 8, 10, 20]
 
 export function isLtxDesktop(profile?: { provider?: string }) {
@@ -15,7 +23,7 @@ export function isLtxTask(taskId?: string) {
 export type LtxDesktopOperation =
   | { kind: 'pair'; code: string }
   | { kind: 'check' }
-  | { kind: 'submit'; first: string; last?: string; model: string; prompt: string; duration: number; resolution: '720p' | '1080p'; aspect: '16:9' | '9:16' }
+  | { kind: 'submit'; first: string; last?: string; model: string; prompt: string; duration: number; resolution: LtxDesktopResolution; aspect: '16:9' | '9:16' }
   | { kind: 'status' | 'cancel'; id: string }
   | { kind: 'download'; path: string }
 
