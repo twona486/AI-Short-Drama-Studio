@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { runEnterShortcut } from '@/utils/enterShortcut'
 import { confirmAction } from '@/utils/confirmAction'
 import { t as translate, uiPunctuation } from '@/i18n'
 /**
@@ -959,7 +960,7 @@ onMounted(async () => {
           </button>
         </div>
         <div class="sc-lib-search">
-          <input v-model="titleEditing" :aria-label="$t('scriptDesk.scriptName')" @change="commitTitle" @keydown.enter.prevent="commitTitle" />
+          <input v-model="titleEditing" :aria-label="$t('scriptDesk.scriptName')" @change="commitTitle" @keydown.enter="runEnterShortcut($event, commitTitle)" />
         </div>
         <div class="sc-lib-body">
           <div class="sc-sec-t">{{ $t('scriptDesk.currentSeries', { title: activeDoc?.title }) }}</div>
@@ -1096,7 +1097,7 @@ onMounted(async () => {
             </select></label>
           </div>
           <label class="writing-mode"><span>{{ $t('scriptDesk.writingMode') }}</span><select v-model="writingMode" :disabled="episodeWriting"><option value="auto">{{ $t('scriptDesk.auto') }}</option><option value="series">{{ $t('scriptDesk.series') }}</option><option value="episode">{{ $t('scriptDesk.singleEpisode') }}</option></select></label>
-          <textarea v-model="episodeHint" class="writing-input" :placeholder="$t('scriptDesk.askPlaceholder')" :disabled="episodeWriting" @keydown.ctrl.enter.prevent="writeCurrentEpisode" />
+          <textarea v-model="episodeHint" class="writing-input" :placeholder="$t('scriptDesk.askPlaceholder')" :disabled="episodeWriting" @keydown.ctrl.enter="runEnterShortcut($event, writeCurrentEpisode)" />
           <div class="writing-actions"><span>{{ $t('scriptDesk.sendHint') }}</span><button v-if="episodeWriting" class="writing-send cancel" type="button" @click="cancelEpisodeWrite">{{ $t('scripts.cancelGeneration') }}</button><button v-else class="writing-send" type="button" :disabled="writingHistoryLoading" @click="writeCurrentEpisode">{{ $t("common.send") }}</button></div>
         </div>
       </aside>

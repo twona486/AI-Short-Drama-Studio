@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { runEnterShortcut } from '@/utils/enterShortcut'
 import { t as translate } from '@/i18n'
 
 import { computed, ref } from 'vue'
@@ -74,7 +75,7 @@ function apply() {
           type="password"
           autocomplete="off"
           :placeholder="$t('autodlSettings.copyToken')"
-          @keyup.enter="apply"
+          @keydown.enter="runEnterShortcut($event, apply)"
         />
         <button type="button" @click="apply">{{ $t('common.applyConfig') }}</button>
       </div>

@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { runEnterShortcut } from '@/utils/enterShortcut'
 import { t as translate } from '@/i18n'
 
 import { ref } from 'vue'
@@ -66,7 +67,7 @@ async function onAdd() {
     <input
       v-model="baseUrl"
       placeholder="http://127.0.0.1:8188"
-      @keydown.enter.prevent="onAdd"
+      @keydown.enter="runEnterShortcut($event, onAdd)"
     />
 
     <label>{{ $t('comfyQuickAdd.keyOptional') }}</label>

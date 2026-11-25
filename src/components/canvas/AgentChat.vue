@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { runEnterShortcut } from '@/utils/enterShortcut'
 import { t as translate, uiPunctuation } from '@/i18n'
 import { computed, nextTick, onMounted, onBeforeUnmount, ref, watch } from 'vue'
 import { runAgentTurn, type AgentEvent, type AgentMessage } from '@/services/canvas/agent'
@@ -625,13 +626,12 @@ async function finishCanvasRun(ev: CanvasActivity) {
 async function sendText(text: string) {
   const t = text.trim()
   if (!t || busy.value) return
+  busy.value = true
   input.value = ''
   const attachedNames = attachments.value.map((a) => a.name)
   const attachOptions = attachments.value.slice()
   feed.value.push({ id: `u-${Date.now()}`, type: 'msg', role: 'user', content: t, attachedNames })
-  await appendAgentMessage('user', t)
   attachments.value = []
-  busy.value = true
   thinking.value = true
   log.value = attachedNames.length ? translate('agentChat.readingAttachments', { p0: attachedNames.join(uiPunctuation.listSeparator) }) : translate('agentChat.starting')
   trace.value = [{ key: 'think', kind: 'think', get label() { return translate('agentChat.deliberating') }, status: 'running' }]
@@ -640,8 +640,9 @@ async function sendText(text: string) {
   stopQueued.value = false
   continuousTurn.value = continuousEnabled.value && !props.selectedNode
   controller = turnController
-  await scrollToEnd()
   try {
+    await appendAgentMessage('user', t)
+    await scrollToEnd()
     const options = {
       signal: turnController.signal,
       stopAfterCurrent: () => stopQueued.value,
@@ -830,7 +831,7 @@ function visibleRows(rows: TraceRow[]) {
           rows="5"
           :disabled="busy"
           :placeholder="continuousEnabled ? $t('agentWorkspace.capturePlaceholder') : $t('agentChat.placeholder')"
-          @keydown.enter.exact.prevent="send"
+          @keydown.enter.exact="runEnterShortcut($event, send)"
         />
         <div class="bar">
           <div class="bar-pop">

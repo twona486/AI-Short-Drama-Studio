@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { runEnterShortcut } from '@/utils/enterShortcut'
 import { confirmAction } from '@/utils/confirmAction'
 import { t as translate, uiPunctuation } from '@/i18n'
 import { computed, defineComponent, h, markRaw, nextTick, onMounted, onUnmounted, ref, watch, type Component } from 'vue'
@@ -1220,7 +1221,7 @@ function goClassic() {
         v-if="renaming"
         v-model="nameInput"
         class="name-input nodrag"
-        @keydown.enter="commitRename"
+        @keydown.enter="runEnterShortcut($event, commitRename)"
         @keydown.escape="renaming = false"
         @blur="commitRename"
         autofocus
