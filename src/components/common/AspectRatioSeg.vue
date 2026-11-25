@@ -7,11 +7,13 @@ import type { AspectRatio } from '@/types'
 
 const props = defineProps<{
   compact?: boolean
+  choices?: AspectRatio[]
   modelValue?: AspectRatio
 }>()
 const emit = defineEmits<{ 'update:modelValue': [value: AspectRatio] }>()
 
 const project = useProjectStore()
+const presets = computed(() => ASPECT_PRESETS.filter((preset) => !props.choices || props.choices.includes(preset.value)))
 const current = computed(() => props.modelValue ?? project.current?.settings.aspectRatio ?? '16:9')
 
 function pick(ar: AspectRatio) {
@@ -30,7 +32,7 @@ function pick(ar: AspectRatio) {
     :model-value="current"
     @update:model-value="pick($event as AspectRatio)"
   >
-    <option v-for="a in ASPECT_PRESETS" :key="a.value" :value="a.value">
+    <option v-for="a in presets" :key="a.value" :value="a.value">
       {{ a.hint }} {{ a.value }}
     </option>
   </ParamSelect>
@@ -38,7 +40,7 @@ function pick(ar: AspectRatio) {
     <div class="ar-head">{{ $t('common.frameRatio') }}</div>
     <div class="ar-seg">
       <button
-        v-for="a in ASPECT_PRESETS"
+        v-for="a in presets"
         :key="a.value"
         type="button"
         class="ar-btn"

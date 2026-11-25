@@ -1,3 +1,4 @@
+import { isLtxDesktop } from './ltxDesktopOptions'
 /**
  * 런타임 AI 설정은 저장된 설정을 우선하고 없으면 .env를 사용한다.
  */
@@ -134,7 +135,7 @@ export function getVideoConfig(profileId?: string) {
     throw new Error('ComfyUI 워크플로의 서버 주소가 올바르지 않아요. ComfyUI 연결에서 API 주소를 다시 입력하세요.')
   }
   return {
-    baseUrl: nativeComfy ? comfyBaseUrl : migrateVideoBaseUrl(s?.baseUrl || d.baseUrl),
+    baseUrl: isLtxDesktop(s) ? comfyBaseUrl : nativeComfy ? comfyBaseUrl : migrateVideoBaseUrl(s?.baseUrl || d.baseUrl),
     apiKey: nativeComfy ? videoKeyForProfile(s, '') : videoKeyForProfile(s, d.apiKey),
     workflowId: nativeComfy ? (s?.workflowId || 'comfyui-local') : migrateVideoWorkflowId(s?.workflowId || d.workflowId),
     promptStyle: getVideoPromptStyle(),

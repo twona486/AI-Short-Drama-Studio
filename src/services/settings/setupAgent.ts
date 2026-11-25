@@ -1,3 +1,4 @@
+import { isLtxDesktop } from '@/services/ai/ltxDesktopOptions'
 /**
  * 설정 도우미는 언어 모델을 사용해 비전, 이미지, 더빙 및 영상 연결을 구성한다.
  */
@@ -91,7 +92,7 @@ function snapshot() {
   const videos = cfg.videos
     .map(
       (p) =>
-        `- [video] ${p.name} (${p.id}) url=${p.baseUrl || '없음'} key=${maskKey(p.apiKey)} workflow=${p.workflowId || '없음'} adapter=${p.adapter?.type || '기본값'} style=${p.promptStyle} still=${p.stillMode || 'identity'}`
+        `- [video] ${p.name} (${p.id}) url=${p.baseUrl || '없음'} key=${isLtxDesktop(p) ? (p.apiKey ? 'paired' : 'unpaired') : maskKey(p.apiKey)} workflow=${p.workflowId || '없음'} adapter=${p.adapter?.type || '기본값'} style=${p.promptStyle} still=${p.stillMode || 'identity'}`
     )
     .join('\n')
   return `현재 기기의 설정(API 키 마스킹 적용)
@@ -129,12 +130,13 @@ ${catalog(IMAGE_PROVIDERS)}
 Dubbing
 ${catalog(TTS_PROVIDERS)}
 Video
-${catalog(VIDEO_PROVIDERS)}
+${catalog(VIDEO_PROVIDERS.filter((preset) => preset.showModelSuggestions !== false))}
 
 Requirements:
 - If the user supplied API documentation or a gateway URL, use provider custom and add the profile using the documented base URL and models. If the document covers chat, image understanding and image generation, add a profile for each covered kind, reusing the given key and address where applicable.
 - Use the base URL through /v1 without /chat/completions or /images/generations. Use presets when the user gives no documentation or when they specify a matching official provider with no third-party address. Never rewrite a custom address to a preset domain.
 - For image generation without a specified provider, use OpenAI. Image presets with an empty default model require an explicit provider request and a model from the user or their API documentation. Do not choose them as recommendations or fallbacks.
+- Recommend LTX Desktop LAN for image-to-video when no provider is specified. It requires pairing in the settings screen. Use DashScope only when the user explicitly selects it.
 - For video, use the model as workflowId when no separate workflowId is given. For TTS, default to longanhuan_v3.6 unless the user requests a voice.
 - For a self-hosted ComfyUI address, use add_comfyui for image and video unless the user restricts the kind. A bare address is sufficient. Store workflowTemplate when API Format JSON is provided. Without it, add the profile and ask the user to paste the workflow before generating. Do not fabricate workflow or AutoDL lifecycle details.
 - For OpenAI-compatible gateways, use default chat or vision handling. For an image route other than /images/generations, use http-custom with path and resultJsonPath. Run test_connection after creating a connection only when the user requests a test.

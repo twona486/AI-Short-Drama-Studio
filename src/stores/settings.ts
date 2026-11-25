@@ -1,3 +1,4 @@
+import { isLtxDesktop } from '@/services/ai/ltxDesktopOptions'
 import { t } from '@/i18n'
 /**
  * AI 모드, 모델 연결, UI 환경설정을 관리한다.
@@ -385,6 +386,10 @@ function isolateVideoKeys(list: VideoProfile[]): VideoProfile[] {
   })
 }
 
+function isManualVideoProfile(profile: VideoProfile): boolean {
+  return profile.provider === 'dashscope' || /dashscope\.aliyuncs\.com/i.test(profile.baseUrl)
+}
+
 function hydrateVideo(
   saved: unknown,
   fallback: VideoEndpoint,
@@ -406,6 +411,7 @@ function hydrateVideo(
             promptStyle: p.promptStyle || fallback.promptStyle,
             provider: p.provider ?? (isActive ? fallback.provider : undefined),
             stillMode: p.stillMode,
+            options: p.options,
             adapter: p.adapter ?? (isActive ? fallback.adapter : undefined)
           }),
           p.name,
@@ -414,8 +420,9 @@ function hydrateVideo(
       })
     : [videoFromEndpoint(normalizeStoredVideoEndpoint(fallback), t('settings.defaults.video'))]
   const isolated = ensureBuiltinAutodlWorkflows(isolateVideoKeys(list))
-  const activeId = isolated.some((p) => p.id === savedActiveId) ? (savedActiveId as string) : isolated[0].id
-  const active = isolated.find((p) => p.id === activeId) || isolated[0]
+  const active = isolated.find((p) => p.id === savedActiveId) ||
+    isolated.find((p) => !isManualVideoProfile(p)) || isolated[0]
+  const activeId = active.id
   return { list: isolated, activeId: active.id, active: asVideo(active) }
 }
 
@@ -1138,6 +1145,8 @@ export const useSettingsStore = defineStore('settings', () => {
     const cur =
       config.value.videos.find((p) => p.id === id) || videoFromEndpoint(config.value.video, t('settings.defaults.video'), id)
     const next = { ...cur, ...patch }
+    if ((isLtxDesktop(cur) || isLtxDesktop(next)) &&
+      (next.baseUrl !== cur.baseUrl || next.provider !== cur.provider)) next.apiKey = ''
     if (patch.apiKey !== undefined && !isAutodlVideoProfile(next)) {
       const incoming = String(patch.apiKey || '').trim()
       const belongsToAutodl = config.value.videos.some(
@@ -1213,7 +1222,10 @@ export const useSettingsStore = defineStore('settings', () => {
     if (config.value.videos.length <= 1 && !allowLast) return
     const videos = config.value.videos.filter((p) => p.id !== id)
     if (!videos.length) videos.push(buildDefaults().videos[0])
-    const next = videos.find((p) => p.id === config.value.activeVideoId) || videos[0]
+    const next = videos.find((p) => p.id === config.value.activeVideoId) ||
+      videos.find((p) => !isManualVideoProfile(p)) ||
+      buildDefaults().videos[0]
+    if (!videos.some((p) => p.id === next.id)) videos.unshift(next)
     syncVideo(next, videos)
   }
 

@@ -6,6 +6,8 @@
 import { t } from '@/i18n'
 import { OPENAI_BASE_URL, OPENAI_CHAT_MODELS, OPENAI_DEFAULT_CHAT_MODEL } from './openAiChat'
 import { OPENAI_DEFAULT_IMAGE_MODEL, OPENAI_IMAGE_MODELS } from './openAiImage'
+import { LTX_DESKTOP_PROVIDER, LTX_DESKTOP_DEFAULT_URL, LTX_DESKTOP_MODELS, LTX_DESKTOP_WORKFLOW } from './ltxDesktopOptions'
+import { LTX_BASE_URL, LTX_DEFAULT_MODEL, LTX_MODELS } from './ltxOptions'
 import { isApimartHost } from './adapters'
 
 export interface ProviderPreset {
@@ -222,6 +224,23 @@ export const MUSIC_PROVIDERS: ProviderPreset[] = [
 
 export const VIDEO_PROVIDERS: ProviderPreset[] = [
   {
+    id: LTX_DESKTOP_PROVIDER,
+    get name() { return t('ltxDesktop.name') },
+    get hint() { return t('ltxDesktop.hint') },
+    baseUrl: LTX_DESKTOP_DEFAULT_URL,
+    models: LTX_DESKTOP_MODELS,
+    defaultModel: LTX_DESKTOP_WORKFLOW
+  },
+  {
+    id: 'ltx',
+    get name() { return t('ltx.cloudName') },
+    get hint() { return t('ltx.hint') },
+    baseUrl: LTX_BASE_URL,
+    models: LTX_MODELS,
+    defaultModel: LTX_DEFAULT_MODEL,
+    keyPlaceholder: 'LTX API Key'
+  },
+  {
     id: 'autodl',
     get name() { return t('provider.name.autodl') },
     get hint() { return t('provider.hint.autoDlVideo') },
@@ -232,6 +251,7 @@ export const VIDEO_PROVIDERS: ProviderPreset[] = [
   },
   {
     id: 'dashscope',
+    showModelSuggestions: false,
     get name() { return t('provider.name.dashscope') },
     get hint() { return t('provider.hint.dashScopeVideo') },
     baseUrl: 'https://dashscope.aliyuncs.com/api/v1',

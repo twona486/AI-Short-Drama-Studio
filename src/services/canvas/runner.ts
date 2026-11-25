@@ -1,3 +1,5 @@
+import { isLtxDesktop, isLtxTask } from '@/services/ai/ltxDesktopOptions'
+import { isLtxProfile } from '@/services/ai/ltxOptions'
 import { uiPunctuation } from '@/i18n'
 import { t as translate } from "@/i18n"
 import {
@@ -198,6 +200,7 @@ function videoProfileById(profileId?: string) {
 
 function docGenerateAudio(profileId: string | undefined, enabled?: boolean) {
   const profile = videoProfileById(profileId)
+  if (isLtxProfile(profile)) return enabled ?? true
   if (profile?.options?.videoAudio !== true) return undefined
   return Boolean(enabled)
 }
@@ -1059,7 +1062,8 @@ async function loadRefImageBlob(id: ID, label: string): Promise<Blob> {
 }
 
 /** 선택 참조 이미지를 읽지 못하면 오류 없이 이미지를 생략한다. */
-async function tryLoadRefImageBlob(id: ID): Promise<Blob | undefined> {
+async function tryLoadRefImageBlob(id?: ID): Promise<Blob | undefined> {
+  if (!id) return undefined
   const assets = useAssetsStore()
   const library = useLibraryStore()
   try {
@@ -1102,7 +1106,6 @@ function storyboardVideoModel(): VideoGenModel {
   if (preferred) return normalizeVideoGenModel(preferred)
   const cfg = useSettingsStore().config.video
   const marker = `${cfg.provider || ''} ${cfg.workflowId || ''} ${cfg.adapter?.type || ''}`.toLowerCase()
-  if (/dashscope|wan/.test(marker)) return 'wan-prime'
   if (/h3.*v5/.test(marker) && !/15s/.test(marker)) return 'h3-v5'
   return 'h3'
 }
@@ -1299,6 +1302,57 @@ export async function generateShotVideo(shot: Shot, onProgress?: (msg: string) =
   const project = useProjectStore()
   const assets = useAssetsStore()
   if (!project.current) throw new Error('열려 있는 프로젝트가 없습니다.')
+  const videoNode = canvasVideoNodeForShot(shot)
+  const profileId = videoNode?.data.videoProfileId || shot.videoProfileId
+  const profile = videoProfileById(profileId)
+  if (isLtxTask(shot.videoTaskId) ||
+    (canvasVideoModelForShot(shot) === 'h3' && isLtxProfile(profile))) {
+    const p = project.current
+    const resumeTaskId = shot.videoTaskId
+    const resuming = isLtxTask(resumeTaskId)
+    const aspectRatio = shotNodeAspect(p, shot.id, 'shotVideo')
+    const result = await generateVideo({
+      prompt: shot.compiledVideoPrompt || '',
+      imageBlob: resuming ? undefined : await tryLoadRefImageBlob(shot.firstFrameAssetId || shot.imageAssetId),
+      lastFrameBlob: resuming ? undefined : await tryLoadRefImageBlob(shot.lastFrameAssetId),
+      duration: shot.duration,
+      ...aspectToSize(aspectRatio),
+      aspectRatio,
+      videoProfileId: profileId || profile?.id,
+      videoResolution: canvasVideoResolutionForShot(shot, 'h3'),
+      generateAudio: shotVideoAudio(shot.id, profileId),
+      signal,
+      resumeTaskId,
+      onTaskSubmitted: async (videoTaskId) => {
+        if (project.current?.id !== p.id) return
+        project.updateShot(shot.id, { videoTaskId, videoProfileId: profile?.id })
+        if (videoNode) project.patchCanvasNode(videoNode.id, { videoTaskId, videoProfileId: profile?.id })
+        await project.save()
+      },
+      onTaskTerminalFailure: async () => {
+        if (project.current?.id !== p.id) return
+        project.updateShot(shot.id, { videoTaskId: undefined })
+        if (videoNode) project.patchCanvasNode(videoNode.id, { videoTaskId: undefined })
+        await project.save()
+      }
+    }, onProgress)
+    ensureNotCancelled(signal)
+    if (project.current?.id !== p.id) throw new DOMException(translate('ltx.projectChanged'), 'AbortError')
+    if (p.folderPath) setActiveProjectDir(p.folderPath)
+    const asset = await assets.add(result.blob, 'video', 'ai-generated', {
+      filename: `video_${shot.index + 1}_${Date.now().toString(36)}.mp4`,
+      prompt: result.prompt,
+      projectId: p.id,
+      shotId: shot.id
+    })
+    if (project.current?.id === p.id) {
+      project.assignShotVideo(shot.id, asset.id)
+      project.updateShot(shot.id, { videoTaskId: undefined })
+      if (videoNode) project.patchCanvasNode(videoNode.id, { videoTaskId: undefined })
+      await project.save()
+    }
+    return asset
+  }
   if (!(shot.compiledVideoPrompt || '').trim()) {
     throw new Error('이미지→영상 프롬프트가 비어 있습니다. 직접 작성하거나 ‘프롬프트 최적화’ 또는 ‘스토리보드 기준으로 다시 작성’을 누르세요.')
   }
@@ -2755,6 +2809,48 @@ export async function generateFreeformVideo(
   const node = p.canvas?.nodes.find((n) => n.id === nodeId)
   if (!node) throw new Error('노드를 찾을 수 없습니다.')
   const prompt = node.data.prompt ?? ''
+  const profile = videoProfileById(node.data.videoProfileId)
+  const resumingLtx = isLtxTask(node.data.videoTaskId)
+  if (resumingLtx || (normalizeVideoGenModel(node.data.videoModel) === 'h3' && isLtxProfile(profile))) {
+    const ids = resolvedCanvasReferenceAssetIds(p, node)
+    const aspectRatio = canvasNodeAspect(node, p.settings.aspectRatio)
+    const result = await generateVideo({
+      prompt,
+      imageBlob: resumingLtx ? undefined : await tryLoadRefImageBlob(node.data.firstFrameAssetId || ids[0]),
+      lastFrameBlob: resumingLtx ? undefined : await tryLoadRefImageBlob(node.data.lastFrameAssetId),
+      duration: node.data.duration ?? 8,
+      ...aspectToSize(aspectRatio),
+      aspectRatio,
+      videoProfileId: node.data.videoProfileId || profile?.id,
+      videoResolution: node.data.videoResolution ?? p.settings.defaultVideoResolution,
+      generateAudio: node.data.generateAudio,
+      signal,
+      resumeTaskId: node.data.videoTaskId,
+      onTaskSubmitted: async (videoTaskId) => {
+        if (project.current?.id !== p.id) return
+        project.patchCanvasNode(nodeId, { videoTaskId, videoProfileId: profile?.id })
+        await project.save()
+      },
+      onTaskTerminalFailure: async () => {
+        if (project.current?.id !== p.id) return
+        project.patchCanvasNode(nodeId, { videoTaskId: undefined })
+        await project.save()
+      }
+    }, onProgress)
+    ensureNotCancelled(signal)
+    if (project.current?.id !== p.id) throw new DOMException(translate('ltx.projectChanged'), 'AbortError')
+    if (p.folderPath) setActiveProjectDir(p.folderPath)
+    const asset = await assets.add(result.blob, 'video', 'ai-generated', {
+      filename: `${node.data.label || translate('canvasRunner.video')}.mp4`,
+      prompt: result.prompt,
+      projectId: p.id
+    })
+    if (project.current?.id === p.id) {
+      project.patchCanvasNode(nodeId, { outputAssetId: asset.id, videoTaskId: undefined })
+      await project.save()
+    }
+    return asset
+  }
   if (!prompt.trim()) throw new Error('먼저 프롬프트를 작성하세요.')
   const ids = resolvedCanvasReferenceAssetIds(p, node)
   const videoModel = normalizeVideoGenModel(node.data.videoModel)
@@ -2881,15 +2977,37 @@ export async function optimizeFreeformVideoPrompt(nodeId: string, signal?: Abort
   return compiled
 }
 
+const ltxNodeWaits = new Map<string, AbortController>()
+
+export function stopLtxNodeWait(nodeId: string) {
+  ltxNodeWaits.get(nodeId)?.abort(new DOMException(translate('ltx.stopped'), 'AbortError'))
+}
+
 export async function runCanvasNode(
   nodeId: string,
   onProgress?: RunProgress,
   signal?: AbortSignal,
   opts?: NodeRunOpts
 ) {
-  if (useProjectStore().current?.canvas?.nodes.find(n => n.id === nodeId)?.data.captureId) {
+  const current = useProjectStore().current
+  const captureNode = current?.canvas?.nodes.find((node) => node.id === nodeId && node.data.captureId)
+  if (captureNode) {
     const { runCaptureNode } = await import('@/services/continuous/capture')
-    return runCaptureNode(nodeId, msg => onProgress?.(nodeId, msg), signal, { manual: true })
+    const ltx = captureNode.type === 'videoGen' &&
+      (isLtxTask(captureNode.data.videoTaskId) ||
+        (normalizeVideoGenModel(captureNode.data.videoModel) === 'h3' &&
+          isLtxProfile(videoProfileById(captureNode.data.videoProfileId || current?.continuousCapture?.profileId))))
+    if (!ltx || isNodeRunning(nodeId)) {
+      return runCaptureNode(nodeId, msg => onProgress?.(nodeId, msg), signal, { manual: true })
+    }
+    const controller = new AbortController()
+    ltxNodeWaits.set(nodeId, controller)
+    try {
+      return await runCaptureNode(nodeId, msg => onProgress?.(nodeId, msg),
+        signal ? AbortSignal.any([signal, controller.signal]) : controller.signal, { manual: true })
+    } finally {
+      ltxNodeWaits.delete(nodeId)
+    }
   }
   return withNodeJob(nodeId, async () => {
     pendingRun = { hd: Boolean(opts?.hd) }
@@ -2917,6 +3035,16 @@ export async function runCanvasNode(
       !isPlayApproved(p)
     ) {
       throw new Error(playGateMessage())
+    }
+    const shot = node.type === 'shotVideo' ? p.shots.find((item) => item.id === node.data.shotId) : undefined
+    const profile = videoProfileById(node.data.videoProfileId || shot?.videoProfileId)
+    const ltx = (node.type === 'videoGen' || node.type === 'shotVideo') &&
+      ([node.data.videoTaskId, shot?.videoTaskId].some(isLtxTask) ||
+        (normalizeVideoGenModel(node.data.videoModel) === 'h3' && isLtxProfile(profile)))
+    const local = ltx ? new AbortController() : undefined
+    if (local) {
+      ltxNodeWaits.set(nodeId, local)
+      signal = signal ? AbortSignal.any([signal, local.signal]) : local.signal
     }
     patchNode(project, nodeId, 'running')
     if (node.type === 'export' || node.type === 'final') {
@@ -2977,12 +3105,20 @@ export async function runCanvasNode(
       if (node.type === 'final') patchNode(project, 'export', 'success')
       activity.done(translate('canvasRunner.completed', { label: label }))
     } catch (e: any) {
-      patchNode(project, nodeId, 'failed', e?.message ?? String(e))
+      if (local?.signal.aborted && e?.name === 'AbortError') {
+        const message = translate(isLtxDesktop(profile) ? 'ltxDesktop.cancelRequested' : 'ltx.stopped')
+        patchNode(project, nodeId, 'idle', message)
+        await project.save()
+        onProgress?.(nodeId, message)
+      } else {
+        patchNode(project, nodeId, 'failed', e?.message ?? String(e))
+      }
       if (node.type === 'export') patchNode(project, 'final', 'failed', e?.message ?? String(e))
       if (node.type === 'final') patchNode(project, 'export', 'failed', e?.message ?? String(e))
       activity.fail(e)
       throw e
     } finally {
+      if (local) ltxNodeWaits.delete(nodeId)
       pendingRun = {}
     }
   })

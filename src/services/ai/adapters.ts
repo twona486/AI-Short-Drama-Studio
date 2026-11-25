@@ -19,6 +19,7 @@ import {
   type ComfyInputRole
 } from './comfyInputMap'
 import { zealmanWorkflowById } from './zealman'
+import { isLtxDesktop, ltxDesktopError } from './ltxDesktopOptions'
 import { providerVideoResolution } from './modelOptions'
 import { adaptOpenAiChatBody, isOfficialOpenAi, OPENAI_DEFAULT_CHAT_MODEL } from './openAiChat'
 import { throwIfAborted } from './abort'
@@ -1108,6 +1109,18 @@ export async function testEndpointConnection(
   if (!base) return { ok: false, detail: 'API 주소가 없습니다.' }
 
   try {
+    if (kind === 'video' && isLtxDesktop(ep)) {
+      if (!isDesktop() || !desktop().ltxDesktopRequest) {
+        return { ok: false, detail: translate('ltx.desktopOnly') }
+      }
+      const reply = await desktop().ltxDesktopRequest({
+        baseUrl: base, token: ep.apiKey, operation: { kind: 'check' }
+      })
+      return {
+        ok: reply.kind === 'ready',
+        detail: translate(reply.kind === 'ready' ? 'ltxDesktop.ready' : ltxDesktopError(reply))
+      }
+    }
     if (kind === 'llm' || kind === 'vision') {
       const auth = buildAuthHeader(ep.apiKey || '', ep.adapter)
       const authValue = Object.values(auth)[0] || ''

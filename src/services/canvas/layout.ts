@@ -1,3 +1,4 @@
+import { isLtxTask } from '@/services/ai/ltxDesktopOptions'
 import type { CanvasEdge, CanvasGraph, CanvasNode, Project } from '@/types'
 import { emptyCanvas, normalizeVideoGenModel, stillModeForVideoModel, videoStillNeedsCanvas, type VideoGenModel } from '@/types/canvas'
 import { effectiveShotAudioMode, needsExternalTts } from '@/utils/shot'
@@ -531,6 +532,8 @@ export function rebuildCanvasGraph(project: Project, preservePositions = true): 
         shotId: shot.id,
         label: `${i + 1}. ${shot.title}`,
         videoModel: prevVid?.data.videoModel ?? defaultVideoModelPref(),
+        videoProfileId: prevVid?.data.videoProfileId ?? shot.videoProfileId,
+        videoTaskId: isLtxTask(shot.videoTaskId) ? shot.videoTaskId : undefined,
         videoResolution: prevVid?.data.videoResolution ?? project.settings.defaultVideoResolution,
         videoStillMode: resolvedStill,
         aspectRatio: prevVid?.data.aspectRatio ?? project.settings.aspectRatio
