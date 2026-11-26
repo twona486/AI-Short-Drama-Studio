@@ -265,11 +265,13 @@ async function approvePlay(ev: Event) {
 }
 
 async function applyImportedMarkdown(text: string, filename: string) {
-  if (!project.current) return false
-  const existing = (project.current.script?.content || '').trim()
-  if (existing && !confirm(localized('mediaNodes.replaceCurrentScript'))) return false
+  const current = project.current
+  if (!current) return false
+  const existing = (current.script?.content || '').trim()
+  if (existing && !await confirmAction(localized('mediaNodes.replaceCurrentScript'))) return false
+  if (project.current?.id !== current.id) return false
   try {
-    const script = scriptFromImportedPlay(project.current, text, filename)
+    const script = scriptFromImportedPlay(current, text, filename)
     project.setScript(script)
     project.applyPlayTitle(script.topic)
     if (project.current.pipelineMode !== 'img2video') project.setPlayApproved(false)
