@@ -202,7 +202,7 @@ const generateAudio = computed({
 const ltxResume = computed(() => isLtxTask(node.value?.data.videoTaskId))
 const videoKindLabel = computed(() => (isVideo.value ? '' : localized('mediaNodes.imageGeneration')))
 const isH3Fl2va = computed(() => isH3Video.value && h3GenMode.value === 'fl2va')
-const ltxProfile = computed(() => videoModel.value === 'h3' && isLtxProfile(effectiveVideoProfile.value)
+const ltxProfile = computed(() => isVideo.value && videoModel.value === 'h3' && isLtxProfile(effectiveVideoProfile.value)
   ? effectiveVideoProfile.value : undefined)
 const durationCapability = computed(() => videoDurationCapability({
   model: videoModel.value, profile: effectiveVideoProfile.value, resolution: videoResolution.value
@@ -689,6 +689,7 @@ async function removeSelf() {
           :last-required="lastFrameRequired"
         />
         <div v-else class="refs">
+          <span v-if="!isVideo" class="reference-caption">{{ $t('common.referenceImageOptional') }}</span>
           <div v-for="id in refs" :key="id" class="thumb nodrag nopan nowheel">
             <button type="button" class="thumb-preview nodrag" :title="$t('common.fullImage')" @pointerdown.stop @click.stop="previewRef(id)">
               <img v-if="refUrls[id]" :src="refUrls[id]" alt="" />
@@ -790,6 +791,7 @@ async function removeSelf() {
 </template>
 
 <style scoped>
+.reference-caption { flex-basis: 100%; font-size: 11px; color: var(--color-text-4); }
 .ltx-stop { position: absolute; right: 8px; bottom: 8px; z-index: 10; }
 .fnode {
   position: relative;

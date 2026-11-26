@@ -167,13 +167,26 @@ async function probe(client: Client, signal: AbortSignal, timeoutMs: number, sha
           if (!Array.isArray(list)) return resolve({ kind: 'invalidResponse' })
           const models = list.map((entry) => entry?.file)
             .filter((file): file is string => typeof file === 'string' && Boolean(drawThingsPreset(file)))
-          const incompleteModels = [...new Set(files.filter((file) => !models.includes(file)))]
-          const missingComponents = [...new Set(incompleteModels.flatMap(qwenImage21Components))]
-            .filter((file) => !reply.files?.includes(file))
+          // Some Echo replies expose the checkpoint and its dependencies in files before
+          // the model metadata reflects the installation.
+          const inventory = new Set(reply.files)
+          const unlisted = [...new Set(files.filter((file) => !models.includes(file)))]
+          const incompleteModels: string[] = []
+          const missingComponents = new Set<string>()
+          for (const file of unlisted) {
+            const components = qwenImage21Components(file)
+            const missing = components.filter((component) => !inventory.has(component))
+            if (components.length && !missing.length) {
+              models.push(file)
+            } else {
+              incompleteModels.push(file)
+              for (const component of missing) missingComponents.add(component)
+            }
+          }
           resolve({
             kind: 'ready', models: [...new Set(models)],
             ...(incompleteModels.length ? { incompleteModels } : {}),
-            ...(missingComponents.length ? { missingComponents } : {})
+            ...(missingComponents.size ? { missingComponents: [...missingComponents] } : {})
           })
         } catch {
           resolve({ kind: 'invalidResponse' })

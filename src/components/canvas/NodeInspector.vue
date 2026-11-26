@@ -325,7 +325,7 @@ const imageResolution = computed({
     if (props.node) project.patchCanvasNode(props.node.id, { imageResolution: v })
   }
 })
-const ltxProfile = computed(() => videoModel.value === 'h3' && isLtxProfile(docVideoProfile.value)
+const ltxProfile = computed(() => isVideoNode.value && videoModel.value === 'h3' && isLtxProfile(docVideoProfile.value)
   ? docVideoProfile.value : undefined)
 const durationCapability = computed(() => videoDurationCapability({
   model: videoModel.value, profile: docVideoProfile.value, resolution: videoResolution.value,
@@ -1134,7 +1134,7 @@ async function optimizeVideoPrompt() {
         />
       </template>
       <div v-if="node.type === 'imageGen' || node.type === 'videoGen'" class="insp-refs">
-        <div class="lab-row"><label>{{ $t('common.referenceImage') }}</label></div>
+        <div class="lab-row"><label>{{ $t(node.type === 'imageGen' ? 'common.referenceImageOptional' : 'common.referenceImage') }}</label></div>
         <div v-if="inspectorRefIds.length" class="insp-ref-list">
           <div v-for="id in inspectorRefIds" :key="id" class="insp-ref">
             <img v-if="inspectorRefUrls[id]" :src="inspectorRefUrls[id]" alt="" />
@@ -1201,8 +1201,8 @@ async function optimizeVideoPrompt() {
         </div>
       </div>
 
-      <div v-if="isImageNode || isVideoNode" class="insp-params">
-        <ImageModelSelect v-if="isImageNode" />
+      <div v-if="isImageNode || isVideoNode || node.type === 'imageGen' || node.type === 'prop'" class="insp-params">
+        <ImageModelSelect v-if="!isVideoNode" />
         <ImageResolutionSeg
           v-if="isImageNode && imageResolutionChoices.length"
           v-model="imageResolution"

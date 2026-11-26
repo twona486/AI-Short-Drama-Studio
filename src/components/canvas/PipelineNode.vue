@@ -564,7 +564,7 @@ watch(
   { immediate: true }
 )
 
-const ltxProfile = computed(() => videoModel.value === 'h3' && isLtxProfile(docVideoProfile.value)
+const ltxProfile = computed(() => type.value === 'shotVideo' && videoModel.value === 'h3' && isLtxProfile(docVideoProfile.value)
   ? docVideoProfile.value : undefined)
 const durationCapability = computed(() => videoDurationCapability({
   model: videoModel.value, profile: docVideoProfile.value, resolution: videoResolution.value,
@@ -1384,7 +1384,7 @@ const cropStyle = computed(() => ({
         :mode="type === 'shotVideo' ? 'video' : type === 'shotBoard' ? 'board' : 'image'"
       />
       <ShotRefStrip
-        v-else-if="type === 'subject' || type === 'sceneProps' || type === 'scene'"
+        v-else-if="type === 'subject' || type === 'prop' || type === 'sceneProps' || type === 'scene'"
         v-model:extra-ids="extraRefIds"
       />
       <div class="prompt-foot">

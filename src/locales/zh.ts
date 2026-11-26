@@ -588,6 +588,7 @@ export default {
     "recreate": "复刻",
     "redrawFailed": "重画失败",
     "referenceImage": "参考图",
+    referenceImageOptional: ko.common.referenceImageOptional,
     "referenceReadFailed": "读取参考图失败",
     "referenceRemoved": "已移除这张参考图",
     "regenerate": "重新生成",
@@ -1086,8 +1087,8 @@ export default {
     "videoDuration": "视频总时长"
   },
   "imageModelSelect": {
-    "generate": "出图",
-    "noModel": "请先在设置里添加出图模型"
+    ...ko.imageModelSelect,
+    "generate": "出图"
   },
   "images": {
     "addReferenceFromLibrary": "从资源库添加参考图",

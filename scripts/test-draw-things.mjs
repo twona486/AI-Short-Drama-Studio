@@ -514,6 +514,13 @@ test('gRPC 인증, 모델 목록, 참조 크기, 진행 단계, 대기열, 제�
   })
   assert.deepEqual(await queue.request(1, request), { kind: 'modelUnavailable', models: [flux] })
   assert.equal(requests.length, attempted)
+  rawFiles.push('qwen_3_vl_8b_instruct_i8x.ckpt')
+  assert.deepEqual(await queue.request(1, { kind: 'check', baseUrl, sharedSecret }), {
+    kind: 'ready', models: [flux, qwen]
+  })
+  assert.equal(drawThingsInputError(qwen, 0, true), undefined)
+  assert.equal(drawThingsInputError(edit, 0, true), 'drawThings.referenceRequired')
+  assert.equal((await queue.request(1, { ...request, model: qwen, referencePixels: [] })).kind, 'pixels')
   echoModels = []
   rawFiles = []
   assert.deepEqual(await queue.request(1, { kind: 'check', baseUrl, sharedSecret }), { kind: 'ready', models: [] })

@@ -710,6 +710,7 @@ export default {
     "recreate": "재현",
     "redrawFailed": "다시 그리기 실패",
     "referenceImage": "참조 이미지",
+    "referenceImageOptional": "참고 이미지(선택)",
     "referenceReadFailed": "참조 이미지를 읽을 수 없어요.",
     "referenceRemoved": "참조 이미지를 제거했어요.",
     "regenerate": "다시 생성",
@@ -1209,7 +1210,13 @@ export default {
   },
   "imageModelSelect": {
     "generate": "이미지 생성",
-    "noModel": "설정에서 이미지 생성 모델을 먼저 추가하세요."
+    "checking": "이미지 연결 확인 중…",
+    "noConnection": "사용할 수 있는 이미지 생성 연결이 없어요.",
+    "connectionFailed": "Draw Things 연결에 실패했습니다.",
+    "serverEmpty": "서버에 사용 가능한 이미지 모델이 없어요.",
+    "chooseModel": "이미지 모델을 선택해요.",
+    "reconnect": "다시 연결",
+    "openSettings": "설정 열기"
   },
   "images": {
     "addReferenceFromLibrary": "리소스 라이브러리에서 참조 이미지 추가",
