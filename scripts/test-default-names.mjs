@@ -135,12 +135,15 @@ test('프로젝트와 노드에서 확인된 기본 이름만 저장한다', asy
 test('이전 프로젝트 이름의 날짜 형식을 구분한다', async () => {
   const path = '/test/project/project.json'
   const { files } = desktopFixture({})
+  const localizedDate = new Intl.DateTimeFormat('ko-KR', {
+    month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', timeZone: 'UTC'
+  }).format(new Date('2000-01-02T03:04:00Z'))
   const cases = [
     ['未命名项目', '제목 없는 프로젝트'],
     ['新项目 2-29 23:59', '새 프로젝트 2-29 23:59'],
     ['视频复刻 11-30 08:04', '영상 재현 11-30 08:04'],
     ['自由剪辑 3-31 1706', '자유 편집 3-31 1706'],
-    ['项目 01/02 03:04', '프로젝트 01. 02. 오전 03:04'],
+    ['项目 01/02 03:04', `프로젝트 ${localizedDate}`],
     ['新项目', '新项目'],
     ['新项目 2-30 23:59', '新项目 2-30 23:59'],
     ['新项目 2-29 23:59 · 후속', '新项目 2-29 23:59 · 후속']

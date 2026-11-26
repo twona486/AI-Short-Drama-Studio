@@ -46,8 +46,6 @@ export function grpcReferencesFit(width: number, height: number, count: number) 
   return count * (headerSize + width * height * 6) <= maxRequestTensorBytes
 }
 
-export const drawThingsGrpcTimeouts = { probeMs: 8_000, generationMs: 20 * 60_000 }
-
 type GenerateRequest = Extract<DrawThingsRequest, { kind: 'generate' }>
 type Preset = NonNullable<ReturnType<typeof drawThingsPreset>>
 
@@ -269,7 +267,7 @@ async function generate(
 
 export async function requestDrawThingsGrpc(
   address: string, port: string, request: DrawThingsRequest, signal: AbortSignal,
-  progress: (progress: DrawThingsProgress) => void, timeouts: typeof drawThingsGrpcTimeouts
+  progress: (progress: DrawThingsProgress) => void, timeouts: { probeMs: number; generationMs: number }
 ): Promise<DrawThingsReply> {
   if (signal.aborted) return { kind: 'cancelled' }
   const client = new Client(`${address}:${port}`, credentials.createInsecure(), {

@@ -1,4 +1,3 @@
-import { requestOpenAiTts } from './openai-tts'
 import type { OpenAiTtsRequest } from '../src/services/ai/openAiTts'
 import { createDrawThingsQueue } from './draw-things'
 import { DRAW_THINGS_MAX_SECRET_BYTES, isDrawThingsGrpc, type DrawThingsDesktopRequest } from '../src/services/ai/drawThingsOptions'
@@ -20,7 +19,7 @@ import {
 import path from 'node:path'
 import os from 'node:os'
 import fs from 'node:fs/promises'
-import { randomUUID } from 'node:crypto'
+import { createHash, randomUUID } from 'node:crypto'
 import { createReadStream, createWriteStream, existsSync, mkdirSync, statSync } from 'node:fs'
 import { Readable } from 'node:stream'
 import { pipeline } from 'node:stream/promises'
@@ -35,7 +34,8 @@ import type { LtxRequest } from '../src/services/ai/ltxOptions'
 import ko from '../src/locales/ko'
 import zh from '../src/locales/zh'
 import { migrateUserData, ROOT_PREF_FILE, USER_DATA_NAME, readStorageRootPreference } from './user-data'
-import { closeAppDb, getDbPath, kvGet, kvSet, openAppDb } from './sqlite'
+import { guardWindowNavigation } from './window-navigation'
+import { closeAppDb, getDbPath, isAppDbOpen, kvGet, kvSet, openAppDb } from './sqlite'
 
 let nativeLocale: 'ko' | 'zh' = 'ko'
 
@@ -496,13 +496,10 @@ function createWindow() {
     }
   })
 
-  win.webContents.setWindowOpenHandler(({ url }) => {
-    if (url === 'https://www.bilibili.com/video/BV1o6n66fE5p/') {
-      void shell.openExternal(url).catch(() => undefined)
-      return { action: 'deny' }
-    }
-    return { action: 'allow' }
-  })
+  const devUrl = process.env.VITE_DEV_SERVER_URL
+  const entry = new URL(devUrl || 'aicut-app://app/index.html')
+
+  guardWindowNavigation(win.webContents, entry, (url) => shell.openExternal(url))
 
   const sendMax = () => {
     win.webContents.send('window:maximized', win.isMaximized())
@@ -510,15 +507,11 @@ function createWindow() {
   win.on('maximize', sendMax)
   win.on('unmaximize', sendMax)
 
-  const devUrl = process.env.VITE_DEV_SERVER_URL
-  if (devUrl) {
-    win.loadURL(devUrl)
-    win.webContents.openDevTools({ mode: 'detach' })
-  } else {
-    win.loadURL('aicut-app://app/index.html')
-  }
-  win.webContents.on('did-finish-load', () => {
-    console.log('[electron] preload', resolvePreload(), 'desktop api via preload.cjs')
+  if (devUrl && !process.env.DRAMA_FLOW_DEV_USER_DATA_DIR) win.webContents.openDevTools({ mode: 'detach' })
+  void win.loadURL(entry.href).catch((error) => {
+    console.error('[electron] startup failed', error)
+    dialog.showErrorBox(ko.common.appName, '시작 화면을 열지 못했습니다.')
+    app.quit()
   })
   win.setMenuBarVisibility(false)
   win.once('ready-to-show', () => win.show())
@@ -550,10 +543,32 @@ if (app.isPackaged && !app.commandLine.hasSwitch('user-data-dir')) {
 
 app.whenReady().then(async () => {
   installApplicationMenu()
-  const root = readStorageRootPreference(rootPreferencePath()) ?? defaultRoot()
-  activeRoot = root
-  await ensureDir(root)
-  await openAppDb(root)
+  const savedRoot = readStorageRootPreference(rootPreferencePath())
+  const root = savedRoot ?? defaultRoot()
+  const fallback = path.join(app.getPath('userData'), 'Recovery')
+  try {
+    if (!savedRoot) await ensureDir(root)
+    await openAppDb(root)
+    activeRoot = root
+  } catch (error) {
+    console.error('[electron] 저장 폴더를 열지 못했습니다.', error)
+    closeAppDb()
+    activeRoot = fallback
+    if (root !== fallback) {
+      try {
+        await ensureDir(fallback)
+        await openAppDb(fallback)
+      } catch (fallbackError) {
+        console.error('[electron] 기본 저장 폴더를 열지 못했습니다.', fallbackError)
+        closeAppDb()
+      }
+    }
+    const message = isAppDbOpen()
+      ? '저장 폴더를 열지 못해 복구 폴더를 사용합니다. 기존 저장 폴더 설정을 보존했습니다.'
+      : '저장 폴더를 열지 못했습니다. 기본 화면에서 저장 폴더를 다시 선택할 수 있습니다.'
+    void dialog.showMessageBox({ type: 'error', title: ko.common.appName, message })
+      .catch(() => dialog.showErrorBox(ko.common.appName, message))
+  }
 
   protocol.handle('aicut-app', appAssetResponse)
 
@@ -620,7 +635,7 @@ app.whenReady().then(async () => {
     ) {
       throw new Error(nativeText('rejectNestedRoot'))
     }
-    if (path.resolve(previousRoot) === nextRoot) return nextRoot
+    if (path.resolve(previousRoot) === nextRoot && isAppDbOpen()) return nextRoot
 
     await ensureDir(nextRoot)
     closeAppDb()
@@ -633,14 +648,28 @@ app.whenReady().then(async () => {
       return nextRoot
     } catch (error) {
       activeRoot = previousRoot
-      await openAppDb(previousRoot)
+      closeAppDb()
+      await openAppDb(previousRoot).catch(() => closeAppDb())
       throw error
     }
   })
 
   ipcMain.handle('desktop:dbPath', () => getDbPath() || path.join(currentRoot(), 'app.db'))
   ipcMain.handle('desktop:getVersion', () => app.getVersion())
-  ipcMain.handle('desktop:kvGet', (_e, key: string) => kvGet(String(key || '')))
+  ipcMain.handle('desktop:kvGet', (_e, key: string) => {
+    if (!isAppDbOpen()) throw new Error('설정 데이터베이스를 열지 못했습니다.')
+    return kvGet(String(key || ''))
+  })
+  ipcMain.handle('desktop:backupSettings', async (_e, raw: string) => {
+    const hash = createHash('sha256').update(raw).digest('hex')
+    const backup = path.join(currentRoot(), `settings.broken-${hash}.json`)
+    try {
+      await fs.writeFile(backup, raw, { flag: 'wx', mode: 0o600 })
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== 'EEXIST' || await fs.readFile(backup, 'utf8') !== raw) throw error
+    }
+    return backup
+  })
   ipcMain.handle('desktop:kvSet', (_e, key: string, value: string) => {
     kvSet(String(key || ''), String(value ?? ''))
   })
@@ -655,6 +684,7 @@ app.whenReady().then(async () => {
   })
 
   ipcMain.handle('desktop:listProjectDirs', async () => {
+    if (!isAppDbOpen()) return []
     const root = currentRoot()
     await ensureDir(root)
     const names = await fs.readdir(root, { withFileTypes: true })
@@ -882,6 +912,7 @@ app.whenReady().then(async () => {
     providerRequests.set(id, controller)
     event.sender.once('destroyed', abort)
     try {
+      const { requestOpenAiTts } = await import('./openai-tts')
       return await requestOpenAiTts(request, controller.signal)
     } finally {
       event.sender.removeListener('destroyed', abort)
@@ -1232,6 +1263,8 @@ app.whenReady().then(async () => {
   })
 }).catch((err) => {
   console.error('[electron] startup failed', err)
+  dialog.showErrorBox(ko.common.appName, '앱을 시작하지 못했습니다.')
+  app.quit()
 })
 
 app.on('before-quit', () => {

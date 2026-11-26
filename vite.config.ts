@@ -34,13 +34,17 @@ export default defineConfig(({ command }) => ({
         entry: 'electron/main.ts',
         onstart({ startup }) {
           const profile = process.env.DRAMA_FLOW_DEV_USER_DATA_DIR
-          return startup(profile ? ['.', '--no-sandbox', `--user-data-dir=${profile}`] : undefined)
+          const args = ['.', '--no-sandbox']
+          if (profile) args.push(`--user-data-dir=${profile}`)
+          if (process.env.DRAMA_FLOW_STARTUP_CHECK === '1') args.push('--remote-debugging-port=0')
+          return startup(args)
         },
         vite: {
           build: {
             rollupOptions: {
-              // Node loads ws and handles its optional native modules at runtime.
-              external: ['node:sqlite', '@grpc/grpc-js', 'flatbuffers', 'protobufjs', 'ws']
+              // Node loads optional provider modules when their features are requested.
+              external: ['node:sqlite', '@grpc/grpc-js', 'flatbuffers', 'protobufjs', 'ws'],
+              output: { inlineDynamicImports: false }
             }
           }
         }

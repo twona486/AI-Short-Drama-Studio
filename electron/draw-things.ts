@@ -2,7 +2,6 @@ import http from 'node:http'
 import https from 'node:https'
 import { isIPv4 } from 'node:net'
 import { lanOrigin, pinAddress } from './lan-origin'
-import { drawThingsGrpcTimeouts, grpcReferencesFit, requestDrawThingsGrpc } from './draw-things-grpc'
 import {
   DRAW_THINGS_GRPC_PORT, DRAW_THINGS_MAX_SECRET_BYTES, DRAW_THINGS_PORT, drawThingsInputError, drawThingsPreset, isDrawThingsGrpc,
   type DrawThingsRequest, type DrawThingsReply, type DrawThingsProgress
@@ -11,6 +10,8 @@ import {
 class HttpFailure extends Error {
   constructor(readonly status: number, detail: string) { super(detail) }
 }
+
+const drawThingsGrpcTimeouts = { probeMs: 8_000, generationMs: 20 * 60_000 }
 
 const MAX_RESPONSE = 24 * 1024 * 1024
 const MAX_REFERENCE = 12 * 1024 * 1024
@@ -77,7 +78,10 @@ async function send(
   const signal = AbortSignal.timeout(request.kind === 'check' ? 8000 : 20 * 60_000)
   try {
     if (request.kind === 'check') {
-      if (grpc) return await requestDrawThingsGrpc(address, origin.port || '80', request, cancel, progress, grpcTimeouts)
+      if (grpc) {
+        const { requestDrawThingsGrpc } = await import('./draw-things-grpc')
+        return await requestDrawThingsGrpc(address, origin.port || '80', request, cancel, progress, grpcTimeouts)
+      }
       const settings = await requestJson(origin, address, '/sdapi/v1/options', signal) as Record<string, unknown> | null
       return settings && typeof settings.width === 'number' && typeof settings.height === 'number'
         ? { kind: 'ready' } : { kind: 'invalidResponse' }
@@ -93,6 +97,7 @@ async function send(
       (reference !== undefined && (typeof reference !== 'string' || !reference || reference.length > MAX_REFERENCE ||
         !/^[a-z\d+/]+={0,2}$/i.test(reference) || reference.length % 4 !== 0))) return { kind: 'invalidRequest' }
     if (grpc) {
+      const { grpcReferencesFit, requestDrawThingsGrpc } = await import('./draw-things-grpc')
       if (!grpcReferencesFit(width, height, count)) return { kind: 'referenceTooLarge' }
       if (!referencePixels?.every((pixels) => pixels instanceof ArrayBuffer && pixels.byteLength === width * height * 4)) {
         return { kind: 'invalidRequest' }

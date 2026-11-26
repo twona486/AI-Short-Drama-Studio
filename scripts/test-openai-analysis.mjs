@@ -111,6 +111,39 @@ test('데스크톱 설정 DB에도 바꾼 이름을 저장해요', async (contex
   assert.deepEqual(savedProfile, { ...profile, name: '기본 언어 모델' })
 })
 
+test('손상된 필드만 복구하고 설정 원문은 덮어쓰지 않습니다', async (context) => {
+  const raw = JSON.stringify({
+    llms: [{ id: 'work', name: '업무 연결', baseUrl: 'https://example.com/v1', apiKey: 'test-key',
+      model: 'valid-model', models: ['other-model', false] }],
+    activeLlmId: 'work',
+    video: { baseUrl: { invalid: true }, apiKey: 'test-video-key', workflowId: 'custom-workflow' },
+    autoSaveInterval: 'invalid'
+  })
+  const backups = []
+  const writes = []
+  const settings = loadSettings(context, null, {
+    onSave: (_key, value) => writes.push(value),
+    desktop: {
+      isDesktop: true,
+      async dbPath() { return 'test.sqlite' },
+      async kvGet() { return raw },
+      async kvSet(_key, value) { writes.push(value) },
+      async backupSettings(text) { backups.push(text); return 'backup.json' }
+    }
+  })
+  await settings.ensureHydrated()
+  assert.equal(settings.config.activeLlmId, 'work')
+  assert.equal(settings.config.llm.apiKey, 'test-key')
+  assert.deepEqual(settings.config.llm.models, ['other-model', 'valid-model'])
+  assert.equal(settings.config.video.apiKey, 'test-video-key')
+  assert.equal(typeof settings.config.video.baseUrl, 'string')
+  assert.equal(typeof settings.config.autoSaveInterval, 'number')
+  settings.update({ debug: true })
+  await assert.rejects(settings.flush(), /기존 설정을 보존했습니다/)
+  assert.deepEqual(backups, [raw])
+  assert.deepEqual(writes, [])
+})
+
 test('새 설치의 대본·비전과 추천 모델은 OpenAI를 사용해요', (context) => {
   const settings = loadSettings(context)
   for (const [config, presets] of [[settings.config.llm, LLM_PROVIDERS], [settings.config.vision, VISION_PROVIDERS]]) {

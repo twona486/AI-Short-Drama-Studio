@@ -70,6 +70,7 @@ export type DesktopAPI = {
   }) => Promise<{ status: number; ok: boolean; text: string }>
   downloadToTemp: (url: string) => Promise<string>
   dbPath: () => Promise<string>
+  backupSettings: (raw: string) => Promise<string>
   kvGet: (key: string) => Promise<string | null>
   kvSet: (key: string, value: string) => Promise<void>
   minimize: () => Promise<void>

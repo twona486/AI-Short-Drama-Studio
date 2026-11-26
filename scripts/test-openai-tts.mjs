@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import { after, test } from 'node:test'
 import { once } from 'node:events'
-import { join } from 'node:path'
+import { posix } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { createPinia, setActivePinia } from 'pinia'
 import { nextTick } from 'vue'
@@ -165,7 +165,7 @@ test('새 설치 설정, 공식 언어 모델 키 재사용, 기존 DashScope �
   globalThis.window = { desktop: {
     isDesktop: true,
     async kvSet() {},
-    async join(...parts) { return join(...parts) },
+    async join(...parts) { return posix.join(...parts) },
     async exists(path) { return files.has(path) },
     async writeBuffer(path, buffer) { files.set(path, Buffer.from(buffer)) },
     async writeText(path, text) { files.set(path, text) },
