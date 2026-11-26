@@ -11,7 +11,7 @@ const built = await build({
     b.onResolve({ filter: /.*/ }, args => {
       const name=basename(args.path).replace(/\.ts$/, '')
       if (['desktop','zealman','client'].includes(name)) return { path:name, namespace:'mock' }
-      if ((!args.path.startsWith('.') && !args.path.startsWith('@/')) || args.resolveDir.includes('/node_modules/')) return
+      if ((!args.path.startsWith('.') && !args.path.startsWith('@/')) || /[\\/]node_modules[\\/]/.test(args.resolveDir)) return
       return { path:resolve(args.path.startsWith('@/')?'src':args.resolveDir,args.path.replace(/^@\//,'')+'.ts') }
     })
     b.onLoad({filter:/.*/,namespace:'mock'},args=>({contents:{

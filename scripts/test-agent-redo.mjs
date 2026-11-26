@@ -52,7 +52,7 @@ const result = await build({
   plugins: [{ name: 'offline-generation', setup(b) {
     b.onResolve({ filter: /.*/ }, args => {
       const name = basename(args.path).replace(/\.ts$/, '')
-      if (args.importer === resolve('src/i18n.ts') || args.importer.includes('/node_modules/')) return
+      if (args.importer === resolve('src/i18n.ts') || /[\\/]node_modules[\\/]/.test(args.importer)) return
       if (name === 'i18n') return { path: resolve('src/i18n.ts') }
       if (real.has(name)) return { path: resolve(args.path.startsWith('@/') ? 'src' : args.resolveDir, args.path.replace(/^@\//, '') + '.ts') }
       if (!(name in mocks)) throw Error('Missing explicit test mock: ' + args.path)
