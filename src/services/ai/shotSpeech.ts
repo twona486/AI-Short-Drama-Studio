@@ -1,4 +1,3 @@
-import { recommendElevenLabsVoice } from './elevenLabsTts'
 import type { Project, Shot, Subject } from '@/types'
 import { OPENAI_TTS_VOICES, recommendOpenAiVoice } from './openAiTts'
 
@@ -26,14 +25,36 @@ function shotSpeechText(shot: Shot, project: Project) {
   })
 }
 
-export function elevenLabsShotSpeech(shot: Shot, project: Project, defaultVoice: string, subject?: Subject) {
+export function elevenLabsShotSpeech(shot: Shot, project: Project, subject?: Subject) {
   const speaker = subject ?? shotSpeakerSubject(shot, project) ??
     (shot.subjectIds?.length === 1 ? project.subjects?.find(({ id }) => id === shot.subjectIds?.[0]) : undefined)
+  const clean = (value: Shot) => shotSpeechText(value, project).replace(
+    /^[ \t]*([^：:\n]{1,32})[：:][ \t]+/gm, (prefix, label: string) =>
+      /^[\p{L}][\p{L} .’-]*$/u.test(bareSpeakerName(label)) ? '' : prefix
+  ).trim()
+  const sameSpeaker = (adjacent: Shot) => speaker && (
+    shotSpeakerSubject(adjacent, project)?.id === speaker.id ||
+    (!/^[^：:\n]{1,32}[：:]/.test(adjacent.voiceover) && adjacent.subjectIds?.length === 1 && adjacent.subjectIds[0] === speaker.id)
+  )
+  const index = project.shots.findIndex(({ id }) => id === shot.id)
+  const sameScene = (adjacent?: Shot) => adjacent && (!shot.sceneId || !adjacent.sceneId || adjacent.sceneId === shot.sceneId)
+    ? adjacent : undefined
+  const before = index > 0 ? sameScene(project.shots[index - 1]) : undefined
+  const after = index >= 0 ? sameScene(project.shots[index + 1]) : undefined
+  const scene = project.scenes?.find(({ id }) => id === shot.sceneId)
   return {
-    text: shotSpeechText(shot, project),
-    voice: speaker?.elevenLabsVoiceId ||
-      recommendElevenLabsVoice(speaker?.voicePrompt || shot.speakerVoice, speaker?.name, [], defaultVoice).id,
-    instruction: shot.ttsInstruction
+    text: clean(shot),
+    voice: speaker?.elevenLabsVoiceId,
+    speakerId: speaker?.id,
+    instruction: shot.ttsInstruction,
+    delivery: {
+      voiceDescription: speaker?.voicePrompt?.trim() || shot.speakerVoice,
+      scene: [scene?.name, scene?.description, shot.visualPrompt].filter(Boolean).join('\n'),
+      previousDialogue: before?.voiceover,
+      nextDialogue: after?.voiceover,
+      previousText: before && sameSpeaker(before) ? clean(before) : undefined,
+      nextText: after && sameSpeaker(after) ? clean(after) : undefined
+    }
   }
 }
 

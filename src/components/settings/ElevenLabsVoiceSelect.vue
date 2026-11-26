@@ -2,29 +2,31 @@
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { useSettingsStore } from '@/stores'
 import { elevenLabsRequest } from '@/services/ai/elevenLabsDesktop'
-import { ELEVENLABS_CAST, recommendElevenLabsVoice, type ElevenLabsVoice } from '@/services/ai/elevenLabsTts'
+import { recommendElevenLabsVoice, type ElevenLabsVoice } from '@/services/ai/elevenLabsTts'
 
 const props = defineProps<{
   modelValue: string
   name?: string
   description?: string
+  usedVoiceIds?: string[]
 }>()
 const emit = defineEmits<{ 'update:modelValue': [id: string] }>()
 const settings = useSettingsStore()
 const key = computed(() => settings.config.tts.encryptedElevenLabsKey)
 const expanded = ref(false)
 const search = ref('')
-const source = ref<'account' | 'library'>('library')
+const source = ref<'account' | 'library'>('account')
 const results = ref<ElevenLabsVoice[]>([])
 const next = ref<string>()
 const busy = ref(false)
+const adding = ref(false)
 const error = ref('')
 let controller: AbortController | undefined
 
-const automatic = computed(() => recommendElevenLabsVoice(props.description, props.name, [], settings.config.tts.voice))
-const recommended = computed(() => recommendElevenLabsVoice(props.description, props.name, results.value, settings.config.tts.voice))
+const recommended = computed(() =>
+  recommendElevenLabsVoice(props.description, results.value, new Set(props.usedVoiceIds)))
 const options = computed(() => {
-  const items = new Map([...ELEVENLABS_CAST, ...results.value].map((voice) => [voice.id, voice]))
+  const items = new Map(results.value.map((voice) => [voice.id, voice]))
   if (props.modelValue && !items.has(props.modelValue)) {
     items.set(props.modelValue, { id: props.modelValue, name: props.modelValue })
   }
@@ -54,6 +56,33 @@ async function load(cursor?: string) {
   }
 }
 
+async function selectVoice(id: string) {
+  const voice = options.value.find((voice) => voice.id === id)
+  if (!voice?.publicUserId || id === props.modelValue) {
+    emit('update:modelValue', id)
+    return
+  }
+  adding.value = true
+  error.value = ''
+  try {
+    const reply = await elevenLabsRequest(key.value, {
+      kind: 'addVoice', voice: voice.id, publicUserId: voice.publicUserId, name: voice.name
+    })
+    emit('update:modelValue', reply.voice)
+  } catch (cause) {
+    error.value = cause instanceof Error ? cause.message : String(cause)
+  } finally {
+    adding.value = false
+  }
+}
+
+function onSelect(event: Event) {
+  const select = event.target as HTMLSelectElement
+  const id = select.value
+  select.value = props.modelValue
+  void selectVoice(id)
+}
+
 function toggle() {
   expanded.value = !expanded.value
   if (expanded.value && key.value) void load()
@@ -69,9 +98,9 @@ onBeforeUnmount(() => controller?.abort())
   <div class="eleven-voice nodrag nowheel">
     <label>
       {{ $t(name !== undefined ? 'openAiTts.characterVoice' : 'common.voice') }}
-      <select :value="modelValue" @change="emit('update:modelValue', ($event.target as HTMLSelectElement).value)">
-        <option v-if="name !== undefined" value="">
-          {{ $t('openAiTts.automaticVoice') }} · {{ automatic.name }}
+      <select :value="modelValue" :disabled="adding" @change="onSelect">
+        <option value="">
+          {{ $t('openAiTts.automaticVoice') }}
         </option>
         <option v-for="voice in options" :key="voice.id" :value="voice.id">{{ voice.name }}</option>
       </select>
@@ -80,10 +109,11 @@ onBeforeUnmount(() => controller?.abort())
     <template v-if="expanded">
       <p v-if="!key">{{ $t('elevenLabs.missingKey') }}</p>
       <template v-else>
-        <select v-model="source" :aria-label="$t('elevenLabs.source')">
+        <select v-model="source" :disabled="adding" :aria-label="$t('elevenLabs.source')">
           <option value="library">{{ $t('elevenLabs.library') }}</option>
           <option value="account">{{ $t('elevenLabs.account') }}</option>
         </select>
+        <p v-if="source === 'library'">{{ $t('elevenLabs.sharedVoiceHint') }}</p>
         <form class="search" @submit.prevent="load()">
           <input v-model="search" :aria-label="$t('elevenLabs.search')" :placeholder="$t('elevenLabs.searchPlaceholder')" />
           <button type="submit" :disabled="busy">{{ $t('elevenLabs.search') }}</button>
@@ -92,9 +122,10 @@ onBeforeUnmount(() => controller?.abort())
         <p v-else-if="busy" role="status">{{ $t('elevenLabs.loading') }}</p>
         <p v-else-if="!results.length">{{ $t('elevenLabs.empty') }}</p>
         <button
-          v-if="name !== undefined && recommended.id !== automatic.id"
+          v-if="name !== undefined && recommended && recommended.id !== modelValue"
           type="button"
-          @click="emit('update:modelValue', recommended.id)"
+          :disabled="adding"
+          @click="selectVoice(recommended.id)"
         >{{ $t('elevenLabs.useRecommendation', { voice: recommended.name }) }}</button>
         <button v-if="next" type="button" :disabled="busy" @click="load(next)">{{ $t('elevenLabs.more') }}</button>
       </template>

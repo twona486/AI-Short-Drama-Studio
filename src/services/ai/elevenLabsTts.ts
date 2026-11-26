@@ -11,14 +11,8 @@ export interface ElevenLabsVoice {
   name: string
   korean?: boolean
   traits?: string
+  publicUserId?: string
 }
-
-export const ELEVENLABS_CAST: ElevenLabsVoice[] = [
-  { id: 's07IwTCOrCDCaETjUVjx', name: 'Hyunbin', korean: true, traits: 'male middle_aged calm clear' },
-  { id: '9XzsrrLgecsKnylK9yxi', name: 'Siyeong', korean: true, traits: 'female young nervous soft' },
-  { id: 'lO4E4qxAvq4BhWUWF8Ci', name: 'JasonK', korean: true, traits: 'male middle_aged calm neutral deep' }
-]
-export const ELEVENLABS_DEFAULT_VOICE = ELEVENLABS_CAST[0].id
 
 export function elevenLabsModel(model: string | undefined, fallback = ELEVENLABS_MODELS[0]) {
   return model && ELEVENLABS_MODELS.includes(model) ? model : fallback
@@ -38,18 +32,21 @@ const traits = [
 ] as const
 
 export function recommendElevenLabsVoice(
-  description = '', name = '', voices: ElevenLabsVoice[] = [], fallback = ELEVENLABS_DEFAULT_VOICE
-): ElevenLabsVoice {
-  const castIndex = ['역무원', '지연', '승객'].indexOf(name.trim())
-  if (castIndex >= 0) return ELEVENLABS_CAST[castIndex]
-  const candidates = [...ELEVENLABS_CAST, ...voices.filter((voice) => voice.korean)]
+  description = '', voices: ElevenLabsVoice[] = [], excluded: ReadonlySet<string> = new Set()
+): ElevenLabsVoice | undefined {
   const score = (voice: ElevenLabsVoice) => traits.reduce((total, [input, label, weight]) =>
     total + (input.test(description) && label.test(voice.traits || '') ? weight : 0), 0)
-  const best = candidates.reduce((best, voice) => score(voice) > score(best) ? voice : best)
-  return score(best) > 0 ? best : candidates.find(({ id }) => id === fallback) ?? { id: fallback, name: fallback }
+  return voices.filter((voice) => voice.korean && !excluded.has(voice.id))
+    .reduce<ElevenLabsVoice | undefined>((best, voice) => !best || score(voice) > score(best) ? voice : best, undefined)
+}
+
+export function explicitElevenLabsTags(instruction = '') {
+  return instruction.match(/\[[^\[\]\r\n]+\]/g) ?? []
 }
 
 const deliveryTags = [
+  [/서울.*(?:말투|억양|표준어)|(?:표준어|억양).*서울|standard seoul/i, 'standard Seoul Korean accent'],
+  [/자연스러|natural drama/i, 'natural conversational delivery'],
   [/속삭|whisper/i, 'whispers'],
   [/불안|초조|anxious|nervous/i, 'anxiously'],
   [/단호|firm/i, 'firmly'],
@@ -61,15 +58,26 @@ const deliveryTags = [
 ] as const
 
 export function elevenLabsTaggedText(text: string, instruction = ''): string {
-  const explicit = instruction.match(/\[[^\[\]\r\n]{1,80}\]/g)
-  const tags = explicit ?? deliveryTags.filter(([pattern]) => pattern.test(instruction)).map(([, tag]) => `[${tag}]`)
-  return tags.length ? `${tags.slice(0, 4).join(' ')} ${text}` : text
+  const explicit = explicitElevenLabsTags(instruction)
+  const tags = explicit.length ? explicit : deliveryTags.filter(([pattern]) => pattern.test(instruction))
+    .slice(0, 3).map(([, tag]) => `[${tag}]`)
+  return tags.length ? `${tags.join(' ')} ${text}` : text
+}
+
+export interface ElevenLabsSpeechRequest {
+  text: string
+  model_id: string
+  language_code: 'ko'
+  voice_settings: { stability: number; similarity_boost: number }
+  previous_text?: string
+  next_text?: string
 }
 
 export type ElevenLabsOperation =
   | { kind: 'connection'; model: string }
   | { kind: 'voices'; source: 'account' | 'library'; search: string; cursor?: string }
-  | { kind: 'speech'; model: string; voice: string; text: string; instruction?: string }
+  | { kind: 'addVoice'; voice: string; publicUserId: string; name: string }
+  | { kind: 'speech'; model: string; voice: string; text: string; previousText?: string; nextText?: string }
 
 export interface ElevenLabsRequest {
   requestId: string
@@ -80,7 +88,8 @@ export interface ElevenLabsRequest {
 export type ElevenLabsReply =
   | { kind: 'connection'; creditsRemaining?: number }
   | { kind: 'voices'; voices: ElevenLabsVoice[]; next?: string }
-  | { kind: 'speech'; wav: Uint8Array; durationMs: number; credits?: number }
+  | { kind: 'addVoice'; voice: string }
+  | { kind: 'speech'; wav: Uint8Array; durationMs: number; credits?: number; request: ElevenLabsSpeechRequest }
   | { kind: 'http'; status: number }
   | { kind: 'cancelled' | 'timeout' | 'network' | 'unauthorized' | 'credits' | 'unsupportedLanguage'
       | 'invalidModel' | 'invalidVoice' | 'emptySpeech' | 'textLimit' | 'invalidRequest' | 'invalidResponse'

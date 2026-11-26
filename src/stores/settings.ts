@@ -1,4 +1,4 @@
-import { ELEVENLABS_DEFAULT_VOICE, ELEVENLABS_MODELS, elevenLabsModel, isElevenLabsTts } from '@/services/ai/elevenLabsTts'
+import { ELEVENLABS_MODELS, elevenLabsModel, isElevenLabsTts } from '@/services/ai/elevenLabsTts'
 import { isOpenAiTts, OPENAI_TTS_DEFAULT_VOICE, OPENAI_TTS_MODELS, OPENAI_TTS_VOICES } from '@/services/ai/openAiTts'
 import { isLtxDesktop } from '@/services/ai/ltxDesktopOptions'
 import { t } from '@/i18n'
@@ -250,7 +250,7 @@ function asTts(ep: TtsEndpoint): TtsEndpoint {
       encryptedElevenLabsKey: ep.encryptedElevenLabsKey,
       model: elevenLabsModel(ep.model),
       models: [...ELEVENLABS_MODELS],
-      voice: /^[a-zA-Z0-9_-]{1,100}$/.test(ep.voice) ? ep.voice : ELEVENLABS_DEFAULT_VOICE
+      voice: /^[a-zA-Z0-9_-]{1,100}$/.test(ep.voice) ? ep.voice : ''
     }
   }
   return {

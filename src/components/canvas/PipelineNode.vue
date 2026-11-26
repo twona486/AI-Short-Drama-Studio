@@ -1315,6 +1315,7 @@ const cropStyle = computed(() => ({
           :model-value="subject.elevenLabsVoiceId || ''"
           :name="subject.name"
           :description="voicePromptText"
+          :used-voice-ids="project.current?.subjects?.flatMap((other) => other.id !== subject?.id && other.elevenLabsVoiceId ? [other.elevenLabsVoiceId] : [])"
           @update:model-value="project.updateSubject(subject.id, { elevenLabsVoiceId: $event })"
         />
         <label v-else-if="isOpenAiTts(settings.config.tts)">

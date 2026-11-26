@@ -1198,6 +1198,10 @@ async function optimizeVideoPrompt() {
             @input="project.updateShot(shot.id, { ttsInstruction: ($event.target as HTMLTextAreaElement).value })"
           />
         </template>
+        <details v-if="shot.elevenLabsSentText" class="nodrag nowheel">
+          <summary>{{ $t('elevenLabs.sentText') }}</summary>
+          <textarea rows="4" readonly :value="shot.elevenLabsSentText" :aria-label="$t('elevenLabs.sentText')" />
+        </details>
         <label>{{ $t('nodeInspector.speakingVoice') }}</label>
         <textarea
           rows="2"

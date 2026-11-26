@@ -200,7 +200,7 @@ function isStale(shot: Shot | undefined) {
   return meta.prompt.trim() !== (shot.voiceover || '').trim()
 }
 
-async function saveVoiceover(shot: Shot, blob: Blob, mimeType: string, text: string) {
+async function saveVoiceover(shot: Shot, blob: Blob, mimeType: string, text: string, elevenLabsSentText?: string) {
   const typed = blob.type.startsWith('audio/') ? blob : new Blob([blob], { type: mimeType || 'audio/mpeg' })
   const asset = await assets.add(typed, 'audio', 'ai-generated', {
     filename: `vo_${shot.index + 1}_${Date.now().toString(36)}`,
@@ -209,6 +209,7 @@ async function saveVoiceover(shot: Shot, blob: Blob, mimeType: string, text: str
     shotId: shot.id
   })
   project.assignShotAudio(shot.id, asset.id)
+  project.updateShot(shot.id, { elevenLabsSentText })
   await project.save()
   const url = await assets.getUrl(asset.id)
   if (url) audioUrls.value[shot.id] = url
@@ -237,12 +238,14 @@ async function generateLine(shotId: string, batchSignal?: AbortSignal) {
   const signal = controller && batchSignal ? AbortSignal.any([controller.signal, batchSignal]) : controller?.signal ?? batchSignal
   generating.value.add(shotId)
   try {
-    const speech = elevenLabs.value && project.current
-      ? elevenLabsShotSpeech(shot, project.current, settings.config.tts.voice)
+    const current = project.current
+    const speech = elevenLabs.value && current
+      ? { ...elevenLabsShotSpeech(shot, current), subjects: current.subjects }
       : openAi.value && project.current ? openAiShotSpeech(shot, project.current) : { text, voice: ttsVoice.value }
     const result = await generateSpeech({ ...speech, signal })
     signal?.throwIfAborted()
-    await saveVoiceover(shot, result.blob, result.mimeType, text)
+    if (project.current?.id !== current?.id) return false
+    await saveVoiceover(shot, result.blob, result.mimeType, text, result.elevenLabsRequest?.text)
     toast.success(translate('caption.clipVoiceReady', { p0: shot.index + 1 }))
     return true
   } catch (e: any) {

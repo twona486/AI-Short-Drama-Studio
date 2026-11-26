@@ -1437,9 +1437,12 @@ export async function generateShotVideo(shot: Shot, onProgress?: (msg: string) =
       lipSyncPrompt = ltxLipSyncPrompt(target, !first)
       onProgress?.(translate('lipSync.synthesizing', { current: 1, total: 1 }))
       const delivery = tts.elevenLabs
-        ? { ...elevenLabsShotSpeech(shot, p, tts.voice, subject), text: speech.text }
+        ? { ...elevenLabsShotSpeech(shot, p, subject), subjects: p.subjects, text: speech.text }
         : speech
       const result = await generateSpeech({ ...delivery, signal })
+      if (result.elevenLabsRequest && project.current?.id === p.id) {
+        project.updateShot(shot.id, { elevenLabsSentText: result.elevenLabsRequest.text })
+      }
       const wav = await result.blob.arrayBuffer()
       let joined: ReturnType<typeof joinLipSyncWavs>
       try {
@@ -2036,17 +2039,19 @@ export async function generateShotAudio(shot: Shot, onProgress?: (msg: string) =
   if (!needsExternalTts(shot, project.current)) throw new Error('이 샷에 후반 작업용 TTS가 선택되지 않아 별도의 더빙이 필요 없습니다.')
   const p = project.current
   const tts = getTtsConfig()
-  const speech = tts.elevenLabs ? elevenLabsShotSpeech(shot, p, tts.voice) : tts.openAi ? openAiShotSpeech(shot, p) : undefined
+  const speech = tts.elevenLabs ? { ...elevenLabsShotSpeech(shot, p), subjects: p.subjects } : tts.openAi ? openAiShotSpeech(shot, p) : undefined
   const text = speech?.text ?? spokenTextOnly(shot.voiceover || '')
   if (!text.trim()) throw new Error('이 샷에 내레이션 원고가 없습니다.')
   const speaker = shotSpeakerSubject(shot, p)
   let blob: Blob
   let durationMs: number | undefined
+  let elevenLabsSentText: string | undefined
   if (speech) {
     onProgress?.('내레이션을 합성하는 중…')
     const result = await generateSpeech({ ...speech, signal })
     blob = result.blob
     durationMs = result.durationMs
+    elevenLabsSentText = result.elevenLabsRequest?.text
   } else if (speaker?.voiceRefAssetId || speaker?.clonedVoiceId) {
     // 참조 오디오가 있으면 Bailian Qwen3-TTS-VC로 처음 한 번 음성을 복제하고 음색 ID를 저장한다.
     let voiceId = speaker.clonedVoiceId
@@ -2093,7 +2098,9 @@ export async function generateShotAudio(shot: Shot, onProgress?: (msg: string) =
     projectId: p.id,
     shotId: shot.id
   })
+  if (project.current?.id !== p.id) throw new DOMException(translate('ltx.projectChanged'), 'AbortError')
   project.assignShotAudio(shot.id, asset.id)
+  project.updateShot(shot.id, { elevenLabsSentText })
   await project.save()
   return asset
 }
@@ -2427,6 +2434,7 @@ function mergeShotAssets(next: Shot[], prev: Shot[]): Shot[] {
       referenceAssetIds: old.referenceAssetIds,
       captionOverride: old.captionOverride,
       ttsInstruction: old.ttsInstruction,
+      elevenLabsSentText: old.elevenLabsSentText,
       notes: old.notes,
       status: old.videoAssetId ? 'video-generated' : old.imageAssetId ? 'image-generated' : shot.status
     }

@@ -19,7 +19,7 @@ export async function elevenLabsRequest<Operation extends ElevenLabsOperation>(
     if (reply.kind === 'http') throw new Error(t('elevenLabsErrors.http', { status: reply.status }))
     if (reply.kind === 'missingKey') throw new Error(t('elevenLabs.missingKey'))
     if (reply.kind !== operation.kind) {
-      const kind = reply.kind === 'speech' || reply.kind === 'voices' || reply.kind === 'connection' ? 'invalidResponse' : reply.kind
+      const kind = reply.kind === 'speech' || reply.kind === 'voices' || reply.kind === 'connection' || reply.kind === 'addVoice' ? 'invalidResponse' : reply.kind
       throw new Error(t(`elevenLabsErrors.${kind}`))
     }
     return reply as Extract<ElevenLabsReply, { kind: Operation['kind'] }>
