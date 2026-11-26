@@ -1,8 +1,9 @@
 <script setup lang="ts">
+import { isElevenLabsTts } from '@/services/ai/elevenLabsTts'
 import { t as translate } from '@/i18n'
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { Handle, Position, useVueFlow } from '@vue-flow/core'
-import { useAssetsStore, useProjectStore, useToastStore } from '@/stores'
+import { useAssetsStore, useProjectStore, useSettingsStore, useToastStore } from '@/stores'
 import { runCanvasNode } from '@/services/canvas/runner'
 import { isNodeRunning } from '@/services/canvas/jobs'
 import { needsPlayReview } from '@/services/canvas/playGate'
@@ -33,9 +34,11 @@ const AUDIO_MODES: { id: ShotAudioMode; label: string }[] = [
 const project = useProjectStore()
 const assets = useAssetsStore()
 const toast = useToastStore()
+const settings = useSettingsStore()
 const { findNode, removeSelectedNodes } = useVueFlow()
 
 const panelOpen = ref(false)
+const elevenLabsRequest = ref<AbortController>()
 const playing = ref(false)
 const audioEl = ref<HTMLAudioElement | null>(null)
 const mediaUrl = ref('')
@@ -84,6 +87,7 @@ watch(
 )
 
 onBeforeUnmount(() => {
+  elevenLabsRequest.value?.abort()
   audioEl.value?.pause()
 })
 
@@ -120,10 +124,13 @@ async function generateThis(ev?: Event) {
   panelOpen.value = false
   const n = findNode(props.id)
   if (n) removeSelectedNodes([n])
+  if (isElevenLabsTts(settings.config.tts)) elevenLabsRequest.value = new AbortController()
   try {
-    await runCanvasNode(props.id)
+    await runCanvasNode(props.id, undefined, elevenLabsRequest.value?.signal)
   } catch {
     /* 노드에서 오류를 표시한다. */
+  } finally {
+    elevenLabsRequest.value = undefined
   }
 }
 
@@ -169,6 +176,9 @@ function openDetail() {
       <span v-else class="hint">{{ canTts ? $t('audioNode.pendingTts') : mode === 'none' ? $t('common.noNarration') : $t('audioNode.embedded') }}</span>
     </div>
     <NodeBusyOverlay v-if="generating" :label="$t('audioNode.composing')" />
+    <button v-if="elevenLabsRequest" type="button" class="cancel-tts nodrag" @click.stop="elevenLabsRequest.abort()">
+      {{ $t('common.cancel') }}
+    </button>
 
     <transition name="float-down">
       <div v-if="selected && panelOpen" class="panel nodrag nowheel" @mousedown.stop @click.stop>
@@ -224,6 +234,17 @@ function openDetail() {
   color: var(--color-text-1);
   box-shadow: var(--shadow-node);
   overflow: visible;
+}
+.cancel-tts {
+  position: absolute;
+  bottom: 8px;
+  right: 10px;
+  z-index: 6;
+  border: 1px solid var(--color-border);
+  border-radius: 4px;
+  background: var(--color-bg-2);
+  color: var(--color-text-1);
+  cursor: pointer;
 }
 .anode.on {
   border-color: var(--color-text-1);

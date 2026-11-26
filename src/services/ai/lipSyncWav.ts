@@ -2,7 +2,7 @@ const SAMPLE_RATE = 24_000
 const HEADER_BYTES = 44
 const BYTES_PER_SAMPLE = 2
 
-/** OpenAI 더빙에서 저장하는 24 kHz, 16비트 모노 PCM WAV를 읽는다. */
+/** 더빙에서 저장하는 24 kHz, 16비트 모노 PCM WAV를 읽는다. */
 export function lipSyncPcm(wav: ArrayBuffer): Uint8Array {
   const data = new DataView(wav)
   if (data.byteLength <= HEADER_BYTES || data.byteLength % 2 ||

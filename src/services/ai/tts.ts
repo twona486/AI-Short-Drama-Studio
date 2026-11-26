@@ -1,3 +1,4 @@
+import { elevenLabsRequest } from './elevenLabsDesktop'
 import { t } from '@/i18n'
 import { desktop, isDesktop } from '@/services/desktop'
 import { isOfficialOpenAiUrl, OPENAI_TTS_DEFAULT_VOICE, OPENAI_TTS_VOICES } from './openAiTts'
@@ -303,6 +304,13 @@ export function compatibleVoice(model: string, requested?: string): string {
 export async function generateSpeech(input: TTSInput): Promise<TTSOutput> {
   const cfg = getTtsConfig()
   const model = input.model?.trim() || cfg.model
+  if (cfg.elevenLabs) {
+    const { wav, durationMs } = await elevenLabsRequest(cfg.encryptedElevenLabsKey, {
+      kind: 'speech', model, voice: input.voice || cfg.voice, text: input.text, instruction: input.instruction
+    }, input.signal)
+    const blob = new Blob([new Uint8Array(wav)], { type: 'audio/wav' })
+    return { blob, mimeType: blob.type, durationMs, model }
+  }
   if (cfg.openAi) {
     if (!isOfficialOpenAiUrl(cfg.baseUrl)) throw new Error('설정에서 공식 OpenAI TTS API 주소를 사용해야 합니다.')
     if (!input.text.trim()) throw new Error('내레이션 원고가 없어 더빙할 수 없습니다.')

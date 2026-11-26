@@ -1,3 +1,4 @@
+import { ELEVENLABS_BASE_URL, ELEVENLABS_MODELS } from './elevenLabsTts'
 /**
  * 공식 공급자만 기본 제공한다. 중계 및 통합 서비스는 사용자 지정 연결을 사용한다.
  * 언어 및 비전 모델은 OpenAI 호환 /chat/completions 경로를 사용한다.
@@ -213,6 +214,15 @@ export const IMAGE_PROVIDERS: ProviderPreset[] = [
 ]
 
 export const TTS_PROVIDERS: ProviderPreset[] = [
+  {
+    id: 'elevenlabs',
+    name: 'ElevenLabs',
+    get hint() { return t('elevenLabs.hint') },
+    baseUrl: ELEVENLABS_BASE_URL,
+    models: ELEVENLABS_MODELS,
+    defaultModel: ELEVENLABS_MODELS[0],
+    includeModelsByDefault: true
+  },
   {
     id: 'openai',
     name: 'OpenAI TTS',

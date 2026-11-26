@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import ElevenLabsVoiceSelect from '@/components/settings/ElevenLabsVoiceSelect.vue'
+import { isElevenLabsTts } from '@/services/ai/elevenLabsTts'
 import { isOpenAiTts, OPENAI_TTS_VOICES, recommendOpenAiVoice } from '@/services/ai/openAiTts'
 import { ltxShotSpeechTooFast } from '@/services/ai/ltxShotPrompt'
 import { nearestVideoDuration, videoDurationCapability, shotDurationWarning } from '@/services/ai/videoDuration'
@@ -1308,7 +1310,14 @@ const cropStyle = computed(() => ({
           :placeholder="$t('pipelineNode.voiceDescriptionPlaceholder')"
           @input="voicePromptText = ($event.target as HTMLTextAreaElement).value"
         />
-        <label v-if="isOpenAiTts(settings.config.tts)">
+        <ElevenLabsVoiceSelect
+          v-if="isElevenLabsTts(settings.config.tts)"
+          :model-value="subject.elevenLabsVoiceId || ''"
+          :name="subject.name"
+          :description="voicePromptText"
+          @update:model-value="project.updateSubject(subject.id, { elevenLabsVoiceId: $event })"
+        />
+        <label v-else-if="isOpenAiTts(settings.config.tts)">
           {{ $t('openAiTts.characterVoice') }}
           <select
             :value="subject.openAiTtsVoice || ''"

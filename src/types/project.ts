@@ -460,6 +460,7 @@ export interface Subject {
   /** TTS와 음성 묘사를 지원하는 모델에 전달할 캐릭터 음색 설명. */
   voicePrompt?: string
   openAiTtsVoice?: string
+  elevenLabsVoiceId?: string
   /** Model Studio Qwen3-TTS-VC 등 음성 복제를 지원하는 모델에서 쓸 참조 오디오 에셋. */
   voiceRefAssetId?: ID
   /** 참조 오디오를 처음 사용해 내레이션을 생성할 때 얻은 복제 음성 ID. */

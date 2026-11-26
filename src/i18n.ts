@@ -19,7 +19,7 @@ export const i18n = createI18n({
   legacy: false,
   locale: loadLocale(),
   fallbackLocale: 'zh',
-  messages: { ko, zh }
+  messages: { ko, zh: { ...zh, elevenLabs: ko.elevenLabs } }
 })
 
 export const { locale, t } = i18n.global

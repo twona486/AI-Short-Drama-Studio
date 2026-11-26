@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { ELEVENLABS_MODELS, elevenLabsModel, isElevenLabsTts } from '@/services/ai/elevenLabsTts'
 import { t as localized } from '@/i18n'
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { Handle, Position, useVueFlow } from '@vue-flow/core'
@@ -55,11 +56,14 @@ const title = computed(() => node.value?.data.label || props.data.label || local
 const failMsg = computed(() =>
   node.value?.status === 'failed' ? node.value.error || localized('mediaNodes.generationFailed') : ''
 )
+const elevenLabs = computed(() => isElevenLabsTts(settings.config.tts))
+const ttsWait = ref<AbortController>()
 const modelOptions = computed(() => {
   const profile =
     settings.config.ttsProfiles.find((item) => item.id === settings.config.activeTtsId) ||
     settings.config.ttsProfiles[0]
   const openAi = isOpenAiTts(settings.config.tts)
+  if (elevenLabs.value) return ELEVENLABS_MODELS
   const names = [
     node.value?.data.ttsModel,
     settings.config.tts.model,
@@ -69,9 +73,11 @@ const modelOptions = computed(() => {
   return [...new Set(names.map((item) => (item || '').trim()).filter(Boolean))]
 })
 const selectedModel = computed(
-  () => node.value?.data.ttsModel?.trim() || settings.config.tts.model || modelOptions.value[0] || ''
+  () => elevenLabs.value
+    ? elevenLabsModel(node.value?.data.ttsModel, settings.config.tts.model)
+    : node.value?.data.ttsModel?.trim() || settings.config.tts.model || modelOptions.value[0] || ''
 )
-const acceptsRef = computed(() => !isOpenAiTts(settings.config.tts) && modelAcceptsReferenceAudio(selectedModel.value))
+const acceptsRef = computed(() => !isOpenAiTts(settings.config.tts) && !elevenLabs.value && modelAcceptsReferenceAudio(selectedModel.value))
 const refId = computed(() => node.value?.data.referenceAudioAssetId || '')
 
 watch(
@@ -112,6 +118,7 @@ watch(
 )
 
 onBeforeUnmount(() => {
+  ttsWait.value?.abort()
   mediaSeq += 1
   mediaUrl.value = ''
   refUrl.value = ''
@@ -231,11 +238,12 @@ async function generate() {
     toast.warn(localized('mediaNodes.referenceRequired'))
     return
   }
+  if (elevenLabs.value) ttsWait.value = new AbortController()
   busyLabel.value = localized('mediaNodes.generatingAudio')
   try {
     await runCanvasNode(props.id, (_id, msg) => {
       busyLabel.value = msg
-    })
+    }, ttsWait.value?.signal)
     const next = project.current?.canvas?.nodes.find((item) => item.id === props.id)
     if (next?.data.outputAssetId) {
       updateNodeData(props.id, { ...next.data, nodeType: 'audioGen' })
@@ -244,6 +252,7 @@ async function generate() {
   } catch (e: unknown) {
     if (shouldToastAiError(e)) toast.error(friendlyAiError(e) || localized('mediaNodes.generationFailed'), 10000)
   } finally {
+    ttsWait.value = undefined
     busyLabel.value = ''
   }
 }
@@ -285,7 +294,8 @@ function removeSelf() {
     <transition name="float-up">
       <div v-if="selected && panelOpen" class="toolbar-wrap nodrag nowheel" @mousedown.stop @click.stop>
         <div class="toolbar">
-          <button type="button" :disabled="generating" @click="generate"><span>↺</span>{{ hasAsset ? $t('mediaNodes.redo') : $t('mediaNodes.generateAudio') }}</button>
+          <button v-if="ttsWait" type="button" @click="ttsWait.abort()">{{ $t('common.cancel') }}</button>
+          <button v-else type="button" :disabled="generating" @click="generate"><span>↺</span>{{ hasAsset ? $t('mediaNodes.redo') : $t('mediaNodes.generateAudio') }}</button>
           <button type="button" :disabled="uploading || generating" @click="uploadOutput"><span>↑</span>{{ uploading ? $t('mediaNodes.uploading') : $t('common.upload') }}</button>
           <button type="button" @click="duplicateSelf"><span>❐</span>{{ $t('common.copy') }}</button>
           <button v-if="hasAsset" type="button" @click="downloadAsset"><span>⬇</span>{{ $t('common.download') }}</button>

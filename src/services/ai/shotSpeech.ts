@@ -1,4 +1,5 @@
-import type { Project, Shot } from '@/types'
+import { recommendElevenLabsVoice } from './elevenLabsTts'
+import type { Project, Shot, Subject } from '@/types'
 import { OPENAI_TTS_VOICES, recommendOpenAiVoice } from './openAiTts'
 
 function bareSpeakerName(label: string): string {
@@ -17,13 +18,28 @@ export function shotSpeakerSubject(shot: Shot, project: Project) {
     })
 }
 
-export function openAiShotSpeech(shot: Shot, project: Project, matchShotDuration = true) {
-  const speaker = shotSpeakerSubject(shot, project)
-  const text = (shot.voiceover || '').replace(/^([^：:\n]{1,32})[：:][ \t]*/gm, (prefix, label: string) => {
+function shotSpeechText(shot: Shot, project: Project) {
+  return (shot.voiceover || '').replace(/^([^：:\n]{1,32})[：:][ \t]*/gm, (prefix, label: string) => {
     const name = bareSpeakerName(label)
     return /^(?:내레이션|해설|대사|화면 밖 음성|narrator|voiceover)$/i.test(name) ||
       project.subjects?.some((subject) => subject.name.trim() === name) ? '' : prefix
   })
+}
+
+export function elevenLabsShotSpeech(shot: Shot, project: Project, defaultVoice: string, subject?: Subject) {
+  const speaker = subject ?? shotSpeakerSubject(shot, project) ??
+    (shot.subjectIds?.length === 1 ? project.subjects?.find(({ id }) => id === shot.subjectIds?.[0]) : undefined)
+  return {
+    text: shotSpeechText(shot, project),
+    voice: speaker?.elevenLabsVoiceId ||
+      recommendElevenLabsVoice(speaker?.voicePrompt || shot.speakerVoice, speaker?.name, [], defaultVoice).id,
+    instruction: shot.ttsInstruction
+  }
+}
+
+export function openAiShotSpeech(shot: Shot, project: Project, matchShotDuration = true) {
+  const speaker = shotSpeakerSubject(shot, project)
+  const text = shotSpeechText(shot, project)
   const tag = speaker?.voicePrompt?.trim() || shot.speakerVoice?.trim()
   const configured = speaker?.openAiTtsVoice
   return {

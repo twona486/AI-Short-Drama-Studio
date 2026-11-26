@@ -1,3 +1,4 @@
+import { registerElevenLabsIpc } from './elevenlabs-ipc'
 import type { OpenAiTtsRequest } from '../src/services/ai/openAiTts'
 import { createDrawThingsQueue } from './draw-things'
 import { DRAW_THINGS_MAX_SECRET_BYTES, isDrawThingsGrpc, type DrawThingsDesktopRequest } from '../src/services/ai/drawThingsOptions'
@@ -902,6 +903,7 @@ app.whenReady().then(async () => {
   }
 
   const providerRequests = new Map<string, AbortController>()
+  registerElevenLabsIpc(providerRequests)
   ipcMain.on('desktop:cancelProviderFetch', (event, requestId: string) => {
     providerRequests.get(`${event.sender.id}:${requestId}`)?.abort()
   })

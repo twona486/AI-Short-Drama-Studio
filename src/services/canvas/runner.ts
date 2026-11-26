@@ -50,7 +50,8 @@ import {
 import { blobToChatImageUrl, callLLM } from '@/services/ai/client'
 import { stripReasoningLeak } from '@/utils/jsonRepair'
 import { resolveImageAdapter } from '@/services/ai/adapters'
-import { openAiLipSyncLines, openAiShotSpeech, shotSpeakerSubject } from '@/services/ai/shotSpeech'
+import { elevenLabsModel } from '@/services/ai/elevenLabsTts'
+import { elevenLabsShotSpeech, openAiLipSyncLines, openAiShotSpeech, shotSpeakerSubject } from '@/services/ai/shotSpeech'
 import { DRAW_THINGS_PROVIDER } from '@/services/ai/drawThingsOptions'
 import { observeMediaPrompts } from '@/services/ai/mediaPromptObserver'
 import { getImageConfig, imageModelForProject, getVideoPromptStyle, getTtsConfig } from '@/services/ai/runtime'
@@ -1425,7 +1426,8 @@ export async function generateShotVideo(shot: Shot, onProgress?: (msg: string) =
       if (!await project.checkShotLipSync(shot)) throw new Error(translate('lipSync.unavailable'))
       ensureNotCancelled(signal)
       if (project.current?.id !== p.id) throw new DOMException(translate('ltx.projectChanged'), 'AbortError')
-      if (!getTtsConfig().openAi) throw new Error(translate('lipSync.openAiRequired'))
+      const tts = getTtsConfig()
+      if (!tts.openAi && !tts.elevenLabs) throw new Error(translate('lipSync.openAiRequired'))
       const { speaker, speakerName, ...speech } = lines[0]
       const cast = subjectsForShot(shot, p)
       const subject = speaker ?? (!speakerName && cast.length === 1 ? cast[0] : undefined)
@@ -1433,7 +1435,10 @@ export async function generateShotVideo(shot: Shot, onProgress?: (msg: string) =
       first = await tryLoadRefImageBlob(shot.firstFrameAssetId)
       lipSyncPrompt = ltxLipSyncPrompt(target, !first)
       onProgress?.(translate('lipSync.synthesizing', { current: 1, total: 1 }))
-      const result = await generateSpeech({ ...speech, signal })
+      const delivery = tts.elevenLabs
+        ? { ...elevenLabsShotSpeech(shot, p, tts.voice, subject), text: speech.text }
+        : speech
+      const result = await generateSpeech({ ...delivery, signal })
       const joined = joinLipSyncWavs([await result.blob.arrayBuffer()])
       const max = ltxDesktopAudioMax(ltxDesktopAudioResolution(videoResolution))
       if (joined.duration > max) throw new Error(translate('lipSync.tooLong', { actual: joined.duration.toFixed(2), max }))
@@ -2021,8 +2026,8 @@ export async function generateShotAudio(shot: Shot, onProgress?: (msg: string) =
   if (!project.current) throw new Error('열려 있는 프로젝트가 없습니다.')
   if (!needsExternalTts(shot, project.current)) throw new Error('이 샷에 후반 작업용 TTS가 선택되지 않아 별도의 더빙이 필요 없습니다.')
   const p = project.current
-  const openAi = getTtsConfig().openAi
-  const speech = openAi ? openAiShotSpeech(shot, p) : undefined
+  const tts = getTtsConfig()
+  const speech = tts.elevenLabs ? elevenLabsShotSpeech(shot, p, tts.voice) : tts.openAi ? openAiShotSpeech(shot, p) : undefined
   const text = speech?.text ?? spokenTextOnly(shot.voiceover || '')
   if (!text.trim()) throw new Error('이 샷에 내레이션 원고가 없습니다.')
   const speaker = shotSpeakerSubject(shot, p)
@@ -2069,8 +2074,10 @@ export async function generateShotAudio(shot: Shot, onProgress?: (msg: string) =
     })
     blob = result.blob
   }
+  ensureNotCancelled(signal)
   const quality = await reviewSpeechQuality(blob, text, shot.duration, durationMs)
   if (!quality.passed) throw new Error(`더빙 파일 또는 길이 검사에 실패했습니다. ${quality.issues.join(uiPunctuation.semicolon)}${uiPunctuation.sentenceSeparator}${quality.retryHint || ''}`)
+  ensureNotCancelled(signal)
   const asset = await assets.add(blob, 'audio', 'ai-generated', {
     filename: `voice_${shot.index + 1}_${Date.now().toString(36)}`,
     prompt: speech ? shot.voiceover : text,
@@ -2093,12 +2100,13 @@ export async function generateFreeformAudio(
   const p = project.current
   const node = p?.canvas?.nodes.find((n) => n.id === nodeId)
   if (!p || !node || node.type !== 'audioGen') throw new Error('오디오 노드를 찾을 수 없어요.')
-  const openAi = getTtsConfig().openAi
+  const tts = getTtsConfig()
+  const nativeTts = tts.openAi || tts.elevenLabs
   const prompt = node.data.prompt || ''
-  const text = openAi ? prompt : spokenTextOnly(prompt) || prompt.trim()
+  const text = nativeTts ? prompt : spokenTextOnly(prompt) || prompt.trim()
   if (!text.trim()) throw new Error('말할 내용을 먼저 입력해야 합니다.')
-  const model = node.data.ttsModel?.trim() || useSettingsStore().config.tts.model
-  const wantsClone = !openAi && modelAcceptsReferenceAudio(model)
+  const model = tts.elevenLabs ? elevenLabsModel(node.data.ttsModel, tts.model) : node.data.ttsModel?.trim() || tts.model
+  const wantsClone = !nativeTts && modelAcceptsReferenceAudio(model)
   let blob: Blob
   if (wantsClone) {
     if (!node.data.referenceAudioAssetId && !node.data.clonedVoiceId) {
@@ -2127,11 +2135,12 @@ export async function generateFreeformAudio(
     const result = await generateSpeech({
       text,
       model,
-      language: openAi ? undefined : 'Chinese',
+      language: nativeTts ? undefined : 'Chinese',
       signal
     })
     blob = result.blob
   }
+  ensureNotCancelled(signal)
   const asset = await assets.add(blob, 'audio', 'ai-generated', {
     filename: `audio_${Date.now().toString(36)}`,
     prompt: text,
@@ -2368,6 +2377,7 @@ function mergeSubjectAssets(next: Subject[], prev: Subject[]): Subject[] {
         : old.voicePrompt || fresh.voicePrompt,
     id: old.id,
     openAiTtsVoice: old.openAiTtsVoice,
+    elevenLabsVoiceId: old.elevenLabsVoiceId,
     designSheetAssetId: old.designSheetAssetId,
     designSheetHistoryIds: old.designSheetHistoryIds,
     propSheetAssetId: old.propSheetAssetId,
