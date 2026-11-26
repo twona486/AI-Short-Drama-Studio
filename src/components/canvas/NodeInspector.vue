@@ -386,12 +386,12 @@ const firstFrameId = computed({
   get: () =>
     props.node?.type === 'videoGen'
       ? props.node.data.firstFrameAssetId
-      : shot.value?.firstFrameAssetId,
+      : (shot.value?.firstFrameAssetId ?? (usesLipSync.value ? shot.value?.lipSyncFrame?.assetId : undefined)),
   set: (v: ID | undefined) => {
     if (props.node?.type === 'videoGen') {
       project.patchCanvasNode(props.node.id, { firstFrameAssetId: v })
     } else if (shot.value) {
-      project.updateShot(shot.value.id, { firstFrameAssetId: v })
+      project.updateShot(shot.value.id, { firstFrameAssetId: v, ...(usesLipSync.value && !v ? { lipSyncFrame: undefined } : {}) })
     }
   }
 })
@@ -1044,7 +1044,7 @@ async function optimizeVideoPrompt() {
       </template>
 
       <template v-else-if="node.type === 'shotVideo' && shot">
-        <div class="lab-row">
+        <div v-if="!usesLipSync" class="lab-row">
           <label>{{ $t('nodeInspector.actualVideoPrompt') }}</label>
           <div class="lab-actions">
             <button
@@ -1062,6 +1062,7 @@ async function optimizeVideoPrompt() {
           {{ $t(effectiveShotAudioMode(shot) === 'ltx-lip-sync' ? 'lipSync.promptHint' : 'nodeInspector.h3EditableNarration', { tag: '<d>' }) }}
         </p>
         <textarea
+          v-if="!usesLipSync"
           rows="16"
           :value="shot.compiledVideoPrompt ?? ''"
           :placeholder="videoPromptPlaceholder"
@@ -1107,13 +1108,17 @@ async function optimizeVideoPrompt() {
       </template>
 
       <H3GenModeSelect v-if="isH3Video" v-model="h3GenMode" />
+      <p v-if="usesLipSync" class="hint">{{ $t('lipSync.singleSpeaker') }}</p>
+      <p v-if="usesLipSync && shot?.imageAssetId && !shot.firstFrameAssetId && !shot.lipSyncFrame" class="hint">
+        {{ $t('lipSync.smallFaceHint') }}
+      </p>
       <FramePairSlots
         v-if="isH3Fl2va || (ltxProfile && !node.data.captureId)"
         v-model:first-id="firstFrameId"
         v-model:last-id="lastFrameId"
         :first-only="usesLipSync"
         :last-required="lastFrameRequired"
-        :first-hint="node.type === 'shotVideo' && shot?.imageAssetId ? $t('common.useShotImage') : ''"
+        :first-hint="usesLipSync ? $t(shot?.firstFrameAssetId ? 'lipSync.smallFaceHint' : 'lipSync.speakerFrameHint') : node.type === 'shotVideo' && shot?.imageAssetId ? $t('common.useShotImage') : ''"
       />
       <ShotRefStrip
         v-else-if="shot && (node.type === 'shotBoard' || node.type === 'shotImage' || node.type === 'shotVideo')"

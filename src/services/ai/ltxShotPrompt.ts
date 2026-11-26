@@ -1,6 +1,5 @@
-import type { Shot } from '@/types'
+import type { Shot, Subject } from '@/types'
 import { effectiveShotAudioMode, isVideoVoiceMode } from '@/utils/shot'
-import { withVideoReferenceBlock } from '@/utils/videoReferenceBlock'
 import { spokenTextOnly } from './dialogue'
 
 const SPEECH_DIRECTION = /\b(?:says?|speaks?|speaking|spoken|talks?|talking|asks?|replies|whispers?|shouts?|utters?|dialogue|narrat\w*|voice[- ]?over|lip[- ]?sync)\b|말한다|말해요|말하며|대사|내레이션/i
@@ -59,22 +58,25 @@ export function ltxShotPrompt(shot: Shot, speakerVoice?: string) {
 }
 
 
-export function ltxLipSyncPrompt(shot: Shot) {
-  const spoken = spokenLines(shot.voiceover || '').map(({ words }) => words)
-  const scene = oneLine(withoutSpeech(shot.visualPrompt, spoken))
-  const compiled = withVideoReferenceBlock(shot.compiledVideoPrompt || '', [])
-  const visualBody = compiled.match(/integrated_multimodal_description:\s*([\s\S]*?)(?=\n\s*overall_soundscape:|$)/i)?.[1] ?? compiled
-  const motion = oneLine(withoutSpeech(visualBody, spoken)) || oneLine(withoutSpeech(shot.videoPrompt, spoken))
-  const camera = {
-    push: 'The camera slowly pushes in.',
-    pull: 'The camera slowly pulls back.',
-    pan: 'The camera pans smoothly.',
-    tilt: 'The camera tilts smoothly.',
-    static: 'The camera holds steady.',
-    orbit: 'The camera moves smoothly around the subject.'
-  }[shot.cameraMovement]
-  // LTX Desktop v1.3.3의 A2V 예제처럼 전사 대신 화면의 동작과 표정을 묘사한다.
-  return [scene, motion, camera,
-    'Maintain the starting frame’s character appearance and lighting. Show natural eye movements and subtle expressions. Synchronize visible mouth movements to the supplied audio.']
+export function ltxLipSyncSpeaker(subject?: Subject, name?: string) {
+  const appearance = oneLine(subject?.description).split(/[.!?。！？](?:\s|$)|[;；]/u)
+    .map((detail) => detail.trim())
+    .filter((detail) => detail && !/(?:\b(?:beat|silent|silence|speech|speaks?|speaking|dialogue|mouth|lips?|talks?|talking|quiet|mute|still|motionless|camera|shot)\b|침묵|말없이|입을|대사|카메라|샷)/i.test(detail))
+    .join(', ').trim().slice(0, 160)
+  const identity = oneLine(subject?.name ?? name).replace(/[^\p{L}\p{N} .'-]/gu, '').trim().slice(0, 32)
+  return identity ? `The speaker named ${identity}${appearance ? ` (${appearance})` : ''}` : 'The featured speaker'
+}
+
+export function ltxLipSyncPrompt(speaker: string, focusedFrame: boolean) {
+  // A2V uses the input audio for timing and the first frame for appearance.
+  const target = focusedFrame ? `${speaker}, centered in a medium close-up,` : speaker
+  return `${target} looks at the camera and speaks naturally. Keep the mouth clearly visible in a steady, continuous take.`
+}
+
+export function ltxLipSyncFramePrompt(speaker: string, scene?: string) {
+  const location = oneLine(scene).slice(0, 100)
+  return [`A cinematic close-up to upper-body portrait of one person. ${speaker} is centered at eye level, facing the camera straight on or at a three-quarter angle. Keep the face large, sharp and evenly lit, with the entire mouth visible.`,
+    location && `Set the portrait in ${location}, with the background softly out of focus.`,
+    'Preserve the character’s appearance and wardrobe from the character reference. Keep other people outside the frame.']
     .filter(Boolean).join(' ')
 }
