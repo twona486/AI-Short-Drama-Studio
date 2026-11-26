@@ -76,25 +76,7 @@ export function isH3VideoFamily(model: VideoGenModel): boolean {
   return model !== 'wan-prime'
 }
 
-export function videoMinSeconds(model: VideoGenModel): number {
-  return model === 'wan-prime' ? 2 : 1
-}
-
-export function videoMaxSeconds(model: VideoGenModel): number {
-  if (model === 'wan-prime') return 30
-  if (model === 'h3-v5') return 10
-  return 15
-}
-
-export function videoMaxRefImages(_model?: VideoGenModel): number {
-  return 9
-}
-
-export function videoDurationOptions(model: VideoGenModel): number[] {
-  const min = videoMinSeconds(model)
-  const max = videoMaxSeconds(model)
-  return Array.from({ length: max - min + 1 }, (_, i) => min + i)
-}
+export { videoMinSeconds, videoMaxSeconds, videoMaxRefImages, videoDurationOptions } from '../services/ai/capabilities/index'
 
 export function videoAllows1080p(model: VideoGenModel): boolean {
   return model === 'h3-v5'

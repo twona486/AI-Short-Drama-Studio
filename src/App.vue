@@ -46,7 +46,7 @@ onMounted(async () => {
     <div class="app-body">
       <ToastContainer />
       <ImageLightbox />
-      <template v-if="showLayout">
+      <template v-if="settings.diskReady && showLayout">
         <AppLayout>
           <router-view v-slot="{ Component }">
             <transition name="fade" mode="out-in">
@@ -55,7 +55,7 @@ onMounted(async () => {
           </router-view>
         </AppLayout>
       </template>
-      <template v-else>
+      <template v-else-if="settings.diskReady">
         <router-view />
       </template>
     </div>

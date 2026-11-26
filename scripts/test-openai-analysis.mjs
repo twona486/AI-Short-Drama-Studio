@@ -86,7 +86,7 @@ test('저장된 중국어 기본 이름만 한국어로 바꾸고 다시 저장�
   assert.equal(writes.length, 1)
   const savedAgain = writes[0]
   for (const key of ['llms', 'visions', 'images', 'ttsProfiles', 'videos', 'musics']) {
-    assert.deepEqual(savedAgain[key].map(({ name, ...rest }) => rest), saved[key].map(({ name, ...rest }) => rest))
+    assert.deepEqual(savedAgain[key].map(({ name, ...rest }) => rest), saved[key].map(({ name, apiKey, ...rest }) => rest))
   }
   assert.deepEqual({ ...savedAgain.directorSkill, name: saved.directorSkill.name }, saved.directorSkill)
   loadSettings(context, savedAgain, { onSave: (_key, value) => writes.push(JSON.parse(value)) })
@@ -165,7 +165,10 @@ test('새 설치의 대본·비전과 추천 모델은 OpenAI를 사용해요', 
   assert.deepEqual(LLM_PROVIDERS.map(({ id }) => id), ['openai', 'deepseek', 'dashscope', 'volcengine', 'moonshot', 'zhipu', 'minimax', 'custom'])
   assert.equal(settings.config.visionEnabled, false)
   assert.equal(settings.config.image.model, 'gpt-image-2.6-sunburst')
-  assert.equal(settings.config.video.workflowId, 'minimax_h3_lightx2v_v5_15s')
+  assert.equal(settings.config.video.workflowId, '')
+  assert.equal(settings.config.video.baseUrl, '')
+  assert.equal(settings.config.music.baseUrl, '')
+  assert.equal(settings.config.music.model, '')
   assert.equal(settings.config.tts.model, 'eleven_v4')
   assert.ok(suggestedPresetModels(IMAGE_PROVIDERS[0], []).length)
 })

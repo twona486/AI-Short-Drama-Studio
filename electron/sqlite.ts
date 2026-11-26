@@ -3,7 +3,6 @@
  * 모델 API 키 등 사용자 설정을 브라우저 localStorage 대신 여기에 보관한다.
  */
 import path from 'node:path'
-import { existsSync, readFileSync } from 'node:fs'
 
 type Stmt = {
   run: (...params: unknown[]) => unknown
@@ -34,22 +33,14 @@ export async function openAppDb(root: string) {
   }
   db = new mod.DatabaseSync(filePath)
   db.exec(`
+    PRAGMA secure_delete = ON;
     CREATE TABLE IF NOT EXISTS kv (
       key TEXT PRIMARY KEY NOT NULL,
       value TEXT NOT NULL,
       updated_at INTEGER NOT NULL
     );
   `)
-  migrateLegacySettingsJson(root)
   return filePath
-}
-
-function migrateLegacySettingsJson(root: string) {
-  if (kvGet('settings') !== null) return
-  const jsonPath = path.join(root, 'settings.json')
-  if (!existsSync(jsonPath)) return
-  const text = readFileSync(jsonPath, 'utf8')
-  kvSet('settings', text)
 }
 
 export function kvGet(key: string): string | null {

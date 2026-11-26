@@ -24,7 +24,7 @@ const vite = await createServer({
 after(() => vite.close())
 
 const { createDrawThingsQueue } = await vite.ssrLoadModule('/electron/draw-things.ts')
-const { lanOrigin, pinAddress } = await vite.ssrLoadModule('/electron/lan-origin.ts')
+const { lanOrigin, pinAddress } = await vite.ssrLoadModule('/electron/net-policy.ts')
 const {
   DRAW_THINGS_MODELS, DRAW_THINGS_PROVIDER, DRAW_THINGS_URL, drawThingsEditAlternative, drawThingsInputError, drawThingsPreset, drawThingsReferenceCapability, drawThingsSize
 } = await vite.ssrLoadModule('/src/services/ai/drawThingsOptions.ts')

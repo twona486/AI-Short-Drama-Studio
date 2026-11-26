@@ -1,17 +1,12 @@
+import { LTX_DESKTOP_AUDIO_RESOLUTIONS, LTX_DESKTOP_MODELS, LTX_DESKTOP_RESOLUTIONS, LTX_DESKTOP_WORKFLOW } from './capabilities/index'
+export { LTX_DESKTOP_AUDIO_RESOLUTIONS, LTX_DESKTOP_MODELS, LTX_DESKTOP_RESOLUTIONS, LTX_DESKTOP_WORKFLOW, ltxDesktopAudioMax } from './capabilities/index'
+
 export const LTX_DESKTOP_PROVIDER = 'ltx-desktop'
-export const LTX_DESKTOP_URL_PLACEHOLDER = 'http://<호스트>:41955'
-export const LTX_DESKTOP_WORKFLOW = 'ltx-2.3-fast'
-export const LTX_DESKTOP_MODELS = [LTX_DESKTOP_WORKFLOW, 'ltx-2.5-fast']
-export const LTX_DESKTOP_LOW_RESOLUTIONS = ['270p', '360p', '540p'] as const
-export const LTX_DESKTOP_RESOLUTIONS = [...LTX_DESKTOP_LOW_RESOLUTIONS, '720p', '1080p'] as const
 export type LtxDesktopResolution = typeof LTX_DESKTOP_RESOLUTIONS[number]
 
 export function ltxDesktopResolution(value?: string): LtxDesktopResolution {
   return LTX_DESKTOP_RESOLUTIONS.find((resolution) => resolution === value) ?? '720p'
 }
-
-export const LTX_DESKTOP_DURATIONS = [2, 3, 4, 5, 6, 8, 10, 20]
-export const LTX_DESKTOP_AUDIO_RESOLUTIONS: readonly LtxDesktopResolution[] = ['540p', '720p', '1080p']
 
 export function ltxDesktopAudioResolution(value?: string): LtxDesktopResolution {
   return LTX_DESKTOP_AUDIO_RESOLUTIONS.find((resolution) => resolution === value) ?? '540p'
@@ -19,10 +14,6 @@ export function ltxDesktopAudioResolution(value?: string): LtxDesktopResolution 
 
 export function ltxDesktopModel(workflowId?: string) {
   return workflowId && LTX_DESKTOP_MODELS.includes(workflowId) ? workflowId : LTX_DESKTOP_WORKFLOW
-}
-
-export function ltxDesktopAudioMax(resolution?: string) {
-  return resolution === '1080p' ? 10 : 20
 }
 
 export function isLtxDesktop(profile?: { provider?: string }) {
@@ -60,7 +51,7 @@ export type LtxDesktopRequest = {
 
 export type LtxDesktopReply =
   | { kind: 'paired'; token: string }
-  | { kind: 'ready' }
+  | { kind: 'ready'; maxAudioSeconds?: number }
   | { kind: 'submitted'; id: string }
   | { kind: 'pending' | 'processing'; percent?: number; remainingSeconds?: number }
   | { kind: 'completed'; path: string }

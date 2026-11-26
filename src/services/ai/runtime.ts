@@ -7,7 +7,7 @@ import { isLtxDesktop } from './ltxDesktopOptions'
 
 import { useSettingsStore } from '@/stores'
 import { isAutodlHost, normalizeStoredVideoEndpoint } from './adapters'
-import { envDefaults, migrateVideoBaseUrl, migrateVideoWorkflowId } from './env'
+import { envDefaults } from './env'
 import { zealmanWorkflowById } from './zealman'
 import type { AIMode, ServiceEndpoint } from '@/stores/settings'
 import type { VideoPromptStyle } from '@/utils/shotPrompt'
@@ -146,9 +146,9 @@ export function getVideoConfig(profileId?: string) {
   }
   return {
     ltxHostOverride: isLtxDesktop(s) ? s?.ltxHostOverride : undefined,
-    baseUrl: isLtxDesktop(s) ? comfyBaseUrl : nativeComfy ? comfyBaseUrl : migrateVideoBaseUrl(s?.baseUrl || d.baseUrl),
+    baseUrl: isLtxDesktop(s) ? comfyBaseUrl : nativeComfy ? comfyBaseUrl : (s?.baseUrl ?? d.baseUrl),
     apiKey: nativeComfy ? videoKeyForProfile(s, '') : videoKeyForProfile(s, d.apiKey),
-    workflowId: nativeComfy ? (s?.workflowId || 'comfyui-local') : migrateVideoWorkflowId(s?.workflowId || d.workflowId),
+    workflowId: nativeComfy ? (s?.workflowId || 'comfyui-local') : s?.workflowId ?? d.workflowId,
     promptStyle: getVideoPromptStyle(),
     adapter: s?.adapter,
     provider: s?.provider,

@@ -1,4 +1,55 @@
 export default {
+  "elevenLabsErrors": {
+    "cancelled": "ElevenLabs 요청을 취소했습니다.",
+    "network": "ElevenLabs에 연결하지 못했습니다.",
+    "unauthorized": "ElevenLabs API 키와 요청 권한을 확인해야 합니다.",
+    "credits": "ElevenLabs 구독 또는 사용 가능한 크레딧을 확인해야 합니다.",
+    "unsupportedLanguage": "선택한 ElevenLabs 모델로 한국어 더빙을 사용할 수 없습니다.",
+    "invalidModel": "지원하는 ElevenLabs 모델을 선택해야 합니다.",
+    "invalidVoice": "ElevenLabs 목소리를 선택해야 합니다.",
+    "emptySpeech": "내레이션 원고가 없어 더빙할 수 없습니다.",
+    "textLimit": "더빙 원고 길이가 ElevenLabs 모델 한도를 초과했습니다.",
+    "invalidRequest": "ElevenLabs 요청 형식이 올바르지 않습니다.",
+    "http": "ElevenLabs 요청에 실패했습니다 (HTTP {status}).",
+    "invalidResponse": "ElevenLabs 응답 형식이 올바르지 않습니다.",
+    "timeout": "ElevenLabs 응답 대기 시간이 초과되었습니다.",
+    "storedKey": "저장된 ElevenLabs API 키를 읽을 수 없습니다. 설정에서 키를 다시 등록해야 합니다.",
+    "desktopRequired": "ElevenLabs 더빙을 사용하려면 데스크톱 앱이 필요합니다."
+  },
+  "networkAddresses": {
+    "invalid": "https://api.example.com/v1 형식으로 전체 API 주소를 입력해야 합니다.",
+    "credentials": "API 주소에서 계정, 키, 쿼리 매개변수와 프래그먼트를 제거해야 합니다.",
+    "protocol": "원격 API 주소에는 HTTPS가 필요합니다. 로컬·사설망·Tailscale 주소에서는 HTTP를 사용할 수 있습니다.",
+    "ltxExample": "http://<호스트>:41955",
+    "grpcExample": "grpc://<호스트>:{port}"
+  },
+  "providerRequestErrors": {
+    "aborted": "작업을 취소했습니다.",
+    "videoAddressRequired": "설정에서 영상 API 주소를 입력해야 합니다.",
+    "digitalHumanAudio": "디지털 휴먼 내레이션에는 대사에 맞는 오디오를 업로드해야 합니다.",
+    "digitalHumanInputs": "디지털 휴먼 내레이션에는 캐릭터 참조 이미지와 해당 오디오가 필요합니다.",
+    "invalidWav": "립싱크에 사용할 더빙 WAV 형식을 확인하지 못했습니다.",
+    "noDialogue": "립싱크로 합성할 대사가 없습니다."
+  },
+  "openAiTtsErrors": {
+    "unauthorized": "OpenAI 더빙 API 키 또는 프로젝트의 모델 권한을 확인해야 합니다.",
+    "rateLimit": "OpenAI 더빙 사용 한도를 초과했습니다. 결제 상태와 한도 확인이 필요합니다.",
+    "failed": "OpenAI 더빙 요청에 실패했습니다. 모델 접근 권한과 네트워크 연결 확인이 필요합니다.",
+    "timeout": "OpenAI 더빙 응답 시간이 초과됐습니다.",
+    "cancelled": "OpenAI 더빙이 취소됐습니다.",
+    "closed": "오디오를 받기 전에 OpenAI 더빙 연결이 종료됐습니다.",
+    "invalidAudio": "OpenAI 더빙에서 올바른 PCM 오디오를 받지 못했습니다.",
+    "invalidResponse": "OpenAI 더빙 응답을 처리하지 못했습니다.",
+    "keyRequired": "설정에서 OpenAI 더빙 API 키를 입력해야 합니다.",
+    "invalidVoiceOrModel": "OpenAI 더빙에서 지원하는 모델과 목소리를 선택해야 합니다.",
+    "invalidText": "OpenAI 더빙 원고를 1자 이상 12,000자 이하로 입력해야 합니다.",
+    "officialAddress": "설정에서 공식 OpenAI TTS API 주소를 사용해야 합니다.",
+    "emptySpeech": "내레이션 원고가 없어 더빙할 수 없습니다.",
+    "linkKey": "설정에서 OpenAI 더빙 API 키를 입력하거나 OpenAI 언어 모델의 키를 연결해야 합니다.",
+    "desktopRequired": "OpenAI 더빙을 사용하려면 데스크톱 앱이 필요합니다.",
+    "speechKeyRequired": "설정에서 더빙 API 키를 입력해야 합니다.",
+    "speechFailed": "TTS에 실패했습니다."
+  },
   "lipSync": {
     "mode": "정확한 대사(TTS 립싱크)",
     "unavailable": "현재 영상 연결에서 Audio to Video를 사용할 수 없습니다. LTX Desktop 연결, 다운로드한 모델, 해상도와 화면 비율을 확인해 주세요.",
@@ -331,7 +382,7 @@ export default {
     "imageReferenceSize": "{number}번째 참조 이미지의 업로드 크기를 줄일 수 없습니다.",
     "imageEditing": "OpenAI에서 참조 이미지를 편집하고 있어요…",
     "imageGenerating": "OpenAI에서 이미지를 생성하고 있어요…",
-    "requestTimeout": "모델이 {seconds}초 안에 응답을 완료하지 못했어요. 다시 시도해 주세요.",
+    "requestTimeout": "모델이 {seconds}초 안에 응답을 완료하지 못했습니다.",
     "generationFailed": "생성에 실패했어요.",
     "invalidRewrite": "새 프롬프트의 시간 구간이나 연출 정보가 부족하거나 화면 문구가 바뀌었어요. 기존 프롬프트를 보관했어요.",
     "timeout": "모델이 {seconds}초 안에 대본을 다 쓰지 못했어요. 긴 대본은 시간이 더 걸릴 수 있으니 다시 시도해 보세요."
@@ -693,7 +744,6 @@ export default {
     "h3Dialogue": "영상 속 대사 + 립싱크",
     "videoVoiceUnsupported": "이 연결은 영상 속 음성을 지원하지 않아요. 영상 속 대사나 내레이션을 선택한 샷은 후반 작업 TTS로 바뀌어요.",
     "videoVoiceSupported": "영상 속 음성을 지원해요.",
-    "videoVoiceVerifying": "영상 속 음성 지원을 확인 중이에요. 지금은 선택할 수 있어요.",
     "hide": "숨기기",
     "history": "버전 기록",
     "image": "이미지",
@@ -1069,7 +1119,7 @@ export default {
     "llmConnectionFailed": "언어 모델에 연결할 수 없어요.",
     "llmEndpoint": "chat/completions 또는 /models에만 요청할 수 있어요.",
     "llmNetwork": "언어 모델에 연결하지 못했어요. 네트워크를 확인하고 다시 시도해 주세요.",
-    "llmProtocol": "언어 모델 주소는 HTTPS를 사용해야 해요.",
+    "llmProtocol": "원격 언어 모델 주소에는 HTTPS가 필요합니다. 로컬·사설망·Tailscale 주소에서는 HTTP를 사용할 수 있습니다.",
     "llmRequestTooLarge": "언어 모델 요청의 크기가 너무 커요.",
     "llmTimeout": "언어 모델 요청 시간이 넘었어요. ({seconds}초)",
     "lookupFailed": "영상 소스의 도메인을 확인할 수 없어요. ({host})",
@@ -2723,7 +2773,7 @@ export default {
     "checkProp": "소품 이미지 파일을 확인하고 있어요…",
     "checkKeyProp": "주요 소품 이미지 파일을 확인하고 있어요…",
     "checkScene": "장면 이미지 파일을 확인하고 있어요…",
-    "aborted": "작업을 취소했어요."
+    "aborted": "작업을 취소했습니다."
   },
   "scriptContinuation": {
     "empty": "이어 쓰기 결과가 비어 있어요.",

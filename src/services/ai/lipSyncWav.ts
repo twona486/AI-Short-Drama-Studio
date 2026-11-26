@@ -1,9 +1,17 @@
+import { LTX_DESKTOP_MIN_AUDIO_SECONDS } from './capabilities/index'
+
+export class LipSyncWavError extends Error {
+  constructor(readonly kind: 'invalidWav' | 'noDialogue') {
+    super(kind)
+  }
+}
+
 const SAMPLE_RATE = 24_000
 const HEADER_BYTES = 44
 const BYTES_PER_SAMPLE = 2
 const LTX_FPS = 24
 const LTX_FRAME_STEP = 8
-const LTX_MIN_AUDIO_SECONDS = 2
+
 
 /** 더빙에서 저장하는 24 kHz, 16비트 모노 PCM WAV를 읽는다. */
 export function lipSyncPcm(wav: ArrayBuffer): Uint8Array {
@@ -16,7 +24,7 @@ export function lipSyncPcm(wav: ArrayBuffer): Uint8Array {
     data.getUint32(28, true) !== SAMPLE_RATE * BYTES_PER_SAMPLE ||
     data.getUint16(32, true) !== BYTES_PER_SAMPLE || data.getUint16(34, true) !== 16 ||
     data.getUint32(36) !== 0x64617461 || data.getUint32(40, true) !== wav.byteLength - HEADER_BYTES) {
-    throw new Error('립싱크에 사용할 더빙 WAV 형식을 확인하지 못했습니다.')
+    throw new LipSyncWavError('invalidWav')
   }
   return new Uint8Array(wav, HEADER_BYTES)
 }
@@ -26,12 +34,12 @@ export function lipSyncDuration(pcm: Uint8Array) {
 }
 
 export function joinLipSyncWavs(wavs: ArrayBuffer[]) {
-  if (!wavs.length) throw new Error('립싱크로 합성할 대사가 없습니다.')
+  if (!wavs.length) throw new LipSyncWavError('noDialogue')
   const samples = wavs.map(lipSyncPcm)
   const gap = SAMPLE_RATE * BYTES_PER_SAMPLE * 0.15
   const speechBytes = samples.reduce((sum, pcm) => sum + pcm.byteLength, 0) + gap * (samples.length - 1)
   const bytesPerFrame = SAMPLE_RATE / LTX_FPS * BYTES_PER_SAMPLE
-  const minBytes = LTX_MIN_AUDIO_SECONDS * SAMPLE_RATE * BYTES_PER_SAMPLE
+  const minBytes = LTX_DESKTOP_MIN_AUDIO_SECONDS * SAMPLE_RATE * BYTES_PER_SAMPLE
   // LTX Desktop A2V는 8k+1 프레임으로 내린다. 다음 경계에 한 프레임 여유를 둔다.
   const frames = Math.max(minBytes, speechBytes) / bytesPerFrame
   const boundary = Math.ceil((frames - 1) / LTX_FRAME_STEP) * LTX_FRAME_STEP + 1

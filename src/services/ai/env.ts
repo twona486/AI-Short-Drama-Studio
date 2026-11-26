@@ -28,14 +28,15 @@ export function isLegacyVideoConfig(value: string): boolean {
 
 export function migrateVideoBaseUrl(url: string): string {
   const raw = (url || '').trim().replace(/\/+$/, '')
-  if (!raw || isLegacyVideoConfig(raw) || /minimaxi\.com/i.test(raw)) return VIDEO_AUTODL_ROOT
+  if (!raw) return ''
+  if (isLegacyVideoConfig(raw) || /minimaxi\.com/i.test(raw)) return VIDEO_AUTODL_ROOT
   try {
     const u = new URL(raw.includes('://') ? raw : `https://${raw}`)
     u.pathname = u.pathname.replace(/\/api\/v1(?:\/comfyui)?\/?$/i, '') || '/'
     const path = u.pathname.replace(/\/+$/, '')
     return `${u.protocol}//${u.host}${path === '/' ? '' : path}`
   } catch {
-    return raw.replace(/\/api\/v1(?:\/comfyui)?$/i, '') || VIDEO_AUTODL_ROOT
+    return raw.replace(/\/api\/v1(?:\/comfyui)?$/i, '')
   }
 }
 
@@ -81,18 +82,18 @@ export function envDefaults() {
     tts: {
       baseUrl: ttsBaseUrl,
       apiKey: elevenLabs ? '' : envStr('VITE_TTS_API_KEY'),
-      model: envStr('VITE_TTS_MODEL', elevenLabs ? ELEVENLABS_MODELS[0] : openAiTts ? OPENAI_TTS_MODELS[0] : 'qwen-audio-3.0-tts-flash'),
-      voice: envStr('VITE_TTS_VOICE', elevenLabs ? ELEVENLABS_DEFAULT_VOICE : openAiTts ? OPENAI_TTS_DEFAULT_VOICE : 'longanhuan_v3.6')
+      model: envStr('VITE_TTS_MODEL', elevenLabs ? ELEVENLABS_MODELS[0] : openAiTts ? OPENAI_TTS_MODELS[0] : ''),
+      voice: envStr('VITE_TTS_VOICE', elevenLabs ? ELEVENLABS_DEFAULT_VOICE : openAiTts ? OPENAI_TTS_DEFAULT_VOICE : '')
     },
     video: {
-      baseUrl: migrateVideoBaseUrl(envStr('VITE_VIDEO_BASE_URL', VIDEO_AUTODL_ROOT)),
+      baseUrl: envStr('VITE_VIDEO_BASE_URL'),
       apiKey: envStr('VITE_VIDEO_API_KEY'),
-      workflowId: migrateVideoWorkflowId(envStr('VITE_VIDEO_WORKFLOW_ID', 'MiniMax-Hailuo-2.3'))
+      workflowId: envStr('VITE_VIDEO_WORKFLOW_ID')
     },
     music: {
-      baseUrl: envStr('VITE_MUSIC_BASE_URL', 'https://api.minimaxi.com/v1'),
+      baseUrl: envStr('VITE_MUSIC_BASE_URL'),
       apiKey: envStr('VITE_MUSIC_API_KEY'),
-      model: envStr('VITE_MUSIC_MODEL', 'music-3.0')
+      model: envStr('VITE_MUSIC_MODEL')
     }
   }
 }

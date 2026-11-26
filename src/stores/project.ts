@@ -1,3 +1,4 @@
+import { ltxDesktopAudioMax } from '@/services/ai/capabilities/index'
 /**
  * 프로젝트 스토어.
  *
@@ -21,7 +22,7 @@ import { isDesktop, desktop } from '@/services/desktop'
 import { emptyCanvas, normalizeH3GenMode, normalizeVideoGenModel, normalizeVideoResolution } from '@/types/canvas'
 import { useSettingsStore } from './settings'
 import { ltxDesktopAudioResolution, ltxDesktopModel } from '@/services/ai/ltxDesktopOptions'
-import { videoDurationCapability } from '@/services/ai/videoDuration'
+import { videoDurationCapability } from '@/services/ai/capabilities/video'
 import { compatibleShotAudioMode, effectiveShotAudioMode, isDigitalHumanSpeechProject, pushHistory, shotPlaybackDuration } from '@/utils/shot'
 import { rebuildCanvasGraph } from '@/services/canvas/layout'
 import { removeCanvasNodeReference } from '@/services/canvas/references'
@@ -534,7 +535,7 @@ export const useProjectStore = defineStore('project', () => {
     return videoDurationCapability({ model, profile }).voice !== 'unsupported'
   }
 
-  const lipSyncAvailability = reactive(new Map<string, boolean>())
+  const lipSyncAvailability = reactive(new Map<string, number>())
   const lipSyncChecks = new Map<string, Promise<boolean>>()
 
   function lipSyncConnection(shot: Shot) {
@@ -566,18 +567,22 @@ export const useProjectStore = defineStore('project', () => {
       hostOverride: profile.ltxHostOverride,
       token: profile.apiKey,
       operation: { kind: 'checkAudio', model: workflow, resolution, aspect }
-    }).then((reply) => reply.kind === 'ready', () => false).then((ready) => {
-      lipSyncAvailability.set(key, ready)
+    }).then((reply) => reply.kind === 'ready' ? reply.maxAudioSeconds ?? ltxDesktopAudioMax(resolution) : 0, () => 0).then((max) => {
+      lipSyncAvailability.set(key, max)
       lipSyncChecks.delete(key)
-      return ready
+      return max > 0
     })
     lipSyncChecks.set(key, check)
     return check
   }
 
   function shotSupportsLipSync(shot: Shot) {
+    return shotLipSyncLimit(shot) > 0
+  }
+
+  function shotLipSyncLimit(shot: Shot) {
     const connection = lipSyncConnection(shot)
-    return connection ? lipSyncAvailability.get(connection.key) === true : false
+    return connection ? lipSyncAvailability.get(connection.key) ?? 0 : 0
   }
 
   watch(
@@ -974,6 +979,7 @@ export const useProjectStore = defineStore('project', () => {
     shotSupportsVideoVoice,
     shotSupportsLipSync,
     checkShotLipSync,
+    shotLipSyncLimit,
     assignShotBoard,
     assignShotImage,
     assignShotVideo,

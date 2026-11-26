@@ -36,6 +36,7 @@ function fixture({ firstFrameAssetId, imageAssetId, videoTaskId, imageKey = 'fix
   const project = {
     current: { id: 'p', subjects: [speaker, { id: 'other' }] },
     async checkShotLipSync() { return true },
+    shotLipSyncLimit() { return 20 },
     updateShot(_id, patch) {
       Object.assign(shot, patch)
       if (patch.firstFrameAssetId) events.push('assign start')

@@ -1,16 +1,12 @@
-import { videoDurationOptions, type VideoGenModel } from '@/types/canvas'
-import { VIDEO_FL2VA_WORKFLOW_ID } from './env'
-import { autodlWorkflowById } from './autodl'
-import { zealmanWorkflowById } from './zealman'
-import { isLtxProfile, ltxDurationOptions, LTX_DEFAULT_MODEL, LTX_MODELS } from './ltxOptions'
-import { isLtxDesktop, LTX_DESKTOP_MODELS, LTX_DESKTOP_WORKFLOW } from './ltxDesktopOptions'
+import type { VideoGenModel } from '@/types/canvas'
+import { LTX_DESKTOP_MODELS, LTX_DESKTOP_WORKFLOW, ltxDurationOptions, videoDurationOptions } from './index'
+import { VIDEO_FL2VA_WORKFLOW_ID } from '../env'
+import { autodlWorkflowById } from '../autodl'
+import { zealmanWorkflowById } from '../zealman'
+import { isLtxProfile, LTX_DEFAULT_MODEL, LTX_MODELS } from '../ltxOptions'
+import { isLtxDesktop } from '../ltxDesktopOptions'
 
-export type VideoVoiceSupport = 'supported' | 'unsupported' | 'verifying'
-
-const LTX_VIDEO_VOICE: Record<'ltx' | 'ltx-desktop', VideoVoiceSupport> = {
-  ltx: 'supported',
-  'ltx-desktop': 'supported'
-}
+export type VideoVoiceSupport = 'supported' | 'unsupported'
 
 export type VideoDurationProfile = {
   provider?: string
@@ -28,8 +24,8 @@ export function videoDurationCapability(input: {
 } = {}) {
   const { model = 'h3', profile, resolution, durationLimit } = input
   const workflowId = profile?.workflowId || ''
-  const autoDl = !profile || profile.provider === 'autodl' || /(?:^|\/)autodl\.art(?=[:/]|$)/i.test(profile.baseUrl || '') ||
-    Boolean(autodlWorkflowById(workflowId))
+  const autoDl = Boolean(profile && (profile.provider === 'autodl' || /(?:^|\/)autodl\.art(?=[:/]|$)/i.test(profile.baseUrl || '') ||
+    autodlWorkflowById(workflowId)))
   const id = autoDl && input.startEndFrames ? VIDEO_FL2VA_WORKFLOW_ID : workflowId
   let durations = videoDurationOptions(model)
   if (model === 'h3') {
@@ -50,7 +46,7 @@ export function videoDurationCapability(input: {
   let voice: VideoVoiceSupport = 'unsupported'
   if (model === 'h3-v5' || model === 'wan-prime') voice = 'supported'
   else if (profile?.options?.videoAudio === false) voice = 'unsupported'
-  else if (profile?.provider === 'ltx' || profile?.provider === 'ltx-desktop') voice = LTX_VIDEO_VOICE[profile.provider]
+  else if (profile?.provider === 'ltx' || profile?.provider === 'ltx-desktop') voice = 'supported'
   else if (profile?.options?.videoAudio === true || autoDl || zealmanWorkflowById(workflowId) ||
     /grok-imagine-1\.5/i.test(workflowId)) voice = 'supported'
   const audioToVideo = model === 'h3' && isLtxDesktop(profile ?? undefined) &&

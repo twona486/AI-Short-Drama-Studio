@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { nearestVideoDuration, videoDurationCapability } from '@/services/ai/videoDuration'
+import { nearestVideoDuration, videoDurationCapability } from '@/services/ai/capabilities/video'
 import { isLtxTask, isLtxDesktop } from '@/services/ai/ltxDesktopOptions'
 import { isLtxProfile, LTX_DEFAULT_MODEL } from '@/services/ai/ltxOptions'
 import { t as localized } from '@/i18n'

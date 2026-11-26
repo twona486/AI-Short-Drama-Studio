@@ -33,13 +33,13 @@ export function llmAbortError(e: unknown, signal?: AbortSignal, timeoutMs = 120_
     return new DOMException(t('aiError.requestTimeout', { seconds: sec }), 'TimeoutError')
   }
   if (signal?.aborted || isAbortError(e)) {
-    return new DOMException('작업을 취소했어요.', 'AbortError')
+    return new DOMException(t('providerRequestErrors.aborted'), 'AbortError')
   }
   return e instanceof Error ? e : new Error(errMessage(e))
 }
 
 export function friendlyAiError(e: unknown): string {
-  if (isAbortError(e) && !isTimeoutAbort(e)) return t('common.cancelled')
+  if (isAbortError(e) && !isTimeoutAbort(e)) return t('providerRequestErrors.aborted')
   return errMessage(e).replace(/^Error invoking remote method '[^']+':\s*(?:Error:\s*)?/i, '').trim() || t('aiError.generationFailed')
 }
 
@@ -49,11 +49,11 @@ export function shouldToastAiError(e: unknown): boolean {
 
 export function controlledSignal(parent?: AbortSignal, timeoutMs = 120_000) {
   const controller = new AbortController()
-  const abort = () => controller.abort(parent?.reason ?? new DOMException('작업을 취소했어요.', 'AbortError'))
+  const abort = () => controller.abort(parent?.reason ?? new DOMException(t('providerRequestErrors.aborted'), 'AbortError'))
   if (parent?.aborted) abort()
   else parent?.addEventListener('abort', abort, { once: true })
   const timer = setTimeout(
-    () => controller.abort(new DOMException(`요청 시간이 ${Math.round(timeoutMs / 1000)}초를 초과했어요.`, 'TimeoutError')),
+    () => controller.abort(new DOMException(t('aiError.requestTimeout', { seconds: Math.round(timeoutMs / 1000) }), 'TimeoutError')),
     timeoutMs
   )
   return {

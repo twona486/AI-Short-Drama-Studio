@@ -17,6 +17,13 @@ const projects = path.join(fixture, 'projects')
 const settings = {
   llms: [{ id: 'fixture', name: '기존 대본 연결', baseUrl: 'https://example.com/v1', apiKey: 'test-key', model: 'fixture-model' }],
   activeLlmId: 'fixture',
+  images: [{ id: 'draw', name: 'Draw Things', provider: 'draw-things', baseUrl: 'grpc://localhost',
+    apiKey: '', model: 'qwen_image_2.1_q8p.ckpt', drawThingsSharedSecret: 'test-shared-secret' }],
+  activeImageId: 'draw',
+  videos: [{ id: 'ltx-local', name: 'LTX Desktop', provider: 'ltx-desktop', baseUrl: 'http://localhost:41955',
+    apiKey: 'test-pairing-token', workflowId: 'ltx-2.3-fast' }],
+  activeVideoId: 'ltx-local',
+  autodlToken: 'test-autodl-token',
   music: { baseUrl: 'https://example.com', apiKey: 'test-music-key', model: 'music', models: ['music'] }
 }
 const damaged = JSON.stringify({ ...settings, music: { ...settings.music, models: { invalid: true } } })
@@ -150,14 +157,33 @@ try {
   assert.equal(await evaluate('window.desktop?.isDesktop'), true)
   assert.deepEqual((await targets()).filter(({ type }) => type === 'page').map(({ id }) => id).sort(), initialPages)
 
-  const ttsError = await evaluate("window.desktop.openAiTts({ requestId: 'smoke' }).catch(error => error.message)")
-  assert.match(ttsError, /OpenAI 더빙 API 키/)
+  const ttsError = await evaluate("window.desktop.openAiTts({ requestId: 'smoke' })")
+  assert.deepEqual(ttsError, { kind: 'keyRequired' })
+  const savedFields = `[ (${config}).llm.apiKey, (${config}).activeLlmId, (${config}).music.apiKey,
+    (${config}).video.apiKey, (${config}).activeVideoId, (${config}).image.drawThingsSharedSecret,
+    (${config}).activeImageId, (${config}).autodlToken ]`
+  const expectedFields = ['test-key', 'fixture', 'test-music-key', 'test-pairing-token', 'ltx-local',
+    'test-shared-secret', 'draw', 'test-autodl-token']
+  await until(() => evaluate(`(() => {
+    const mirror = JSON.parse(localStorage.getItem('ai-cut:settings') || '{}')
+    return mirror.activeLlmId === 'fixture' &&
+      !JSON.stringify(mirror).match(/"(?:apiKey|autodlToken|drawThingsSharedSecret|encryptedElevenLabsKey|headers)"/)
+  })()`), '설정 미러에 비밀 필드가 남아 있습니다.')
+  assert.deepEqual(await evaluate(savedFields), expectedFields)
   const grpc = await evaluate("window.desktop.drawThingsRequest({ kind: 'check', baseUrl: 'grpc://127.0.0.1:1' })")
   assert.equal(grpc.kind, 'offline')
 
   await stop()
+  await launch()
+  await until(() => evaluate(`(${config}).llm.apiKey === 'test-key'`), '암호화한 설정을 다시 읽지 못했습니다.')
+  assert.deepEqual(await evaluate(savedFields), expectedFields)
+  await stop()
+
   const db = new DatabaseSync(path.join(projects, 'app.db'))
   try {
+    const { value } = db.prepare("SELECT value FROM kv WHERE key = 'settings'").get()
+    assert.equal(JSON.parse(value).schemaVersion, 1)
+    assert.doesNotMatch(value, /test-key|test-music-key|test-pairing-token|test-shared-secret|test-autodl-token/)
     db.prepare("UPDATE kv SET value = ? WHERE key = 'settings'").run(damaged)
   } finally {
     db.close()
@@ -167,13 +193,13 @@ try {
     '손상된 설정의 백업 알림이 표시되지 않았습니다.')
   assert.deepEqual(await evaluate(`[ (${config}).llm.apiKey, (${config}).activeLlmId, (${config}).music.apiKey ]`),
     ['test-key', 'fixture', 'test-music-key'])
-  assert.equal(await evaluate(`(${config}).music.models.includes('music-3.0')`), true)
+  assert.equal(await evaluate(`(${config}).music.models.includes('music-3.0')`), false)
   const backups = (await readdir(projects)).filter((file) => /^settings\.broken-.*\.json$/.test(file))
   assert.equal(backups.length, 1)
-  assert.equal(await readFile(path.join(projects, backups[0]), 'utf8'), damaged)
+  assert.equal(JSON.parse(await readFile(path.join(projects, backups[0]), 'utf8')).schemaVersion, 1)
   await evaluate("window.dispatchEvent(new Event('beforeunload'))")
   assert.equal(await evaluate("window.desktop.kvGet('settings')"), damaged)
-  assert.equal(await readFile(path.join(projects, 'settings.json'), 'utf8'), JSON.stringify(settings))
+  assert.equal(JSON.parse(await readFile(path.join(projects, 'settings.json'), 'utf8')).schemaVersion, 1)
 
   if (verifyFallback) {
     await stop()

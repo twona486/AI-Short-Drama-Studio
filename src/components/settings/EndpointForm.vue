@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { t } from '@/i18n'
 import { runEnterShortcut } from '@/utils/enterShortcut'
 import { computed, ref, watch } from 'vue'
 import type { ProviderPreset } from '@/services/ai/providers'
@@ -62,7 +63,7 @@ const apiKeyModel = computed({
 const currentPreset = computed(() => findProvider(providerId.value, props.presets))
 const drawThings = computed(() => currentPreset.value.id === DRAW_THINGS_PROVIDER)
 const addressPlaceholder = computed(() => drawThings.value
-  ? `grpc://<호스트>:${DRAW_THINGS_GRPC_PORT}`
+  ? t('networkAddresses.grpcExample', { port: DRAW_THINGS_GRPC_PORT })
   : currentPreset.value.baseUrl || 'https://…/v1')
 
 watch(

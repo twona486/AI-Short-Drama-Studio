@@ -1,3 +1,4 @@
+import { ltxCloudDimensions, type LtxCloudResolution } from './capabilities/index'
 import type { LtxBody, LtxReply } from './ltxOptions'
 
 export function ltxRequestBody(input: {
@@ -6,18 +7,17 @@ export function ltxRequestBody(input: {
   prompt: string
   model: string
   duration: number
-  resolution: '720p' | '1080p'
+  resolution: LtxCloudResolution
   portrait: boolean
   audio?: boolean
 }): LtxBody {
-  const [width, height] = input.resolution === '1080p' ? [1920, 1080] : [1280, 720]
   return {
     image_uri: input.first,
     last_frame_uri: input.last,
     prompt: input.prompt.trim(),
     model: input.model,
     duration: input.duration,
-    resolution: input.portrait ? `${height}x${width}` : `${width}x${height}`,
+    resolution: ltxCloudDimensions(input.resolution, input.portrait),
     fps: 24,
     generate_audio: input.audio ?? true
   }

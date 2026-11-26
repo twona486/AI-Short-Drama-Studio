@@ -1,6 +1,6 @@
 import { pcm16ToWav } from "./pcm-wav"
 import WebSocket from 'ws'
-import { OPENAI_TTS_MODELS, OPENAI_TTS_VOICES, type OpenAiTtsReply, type OpenAiTtsRequest } from '../src/services/ai/openAiTts'
+import { OPENAI_TTS_MODELS, OPENAI_TTS_VOICES, type OpenAiTtsAudio, type OpenAiTtsErrorKind, type OpenAiTtsReply, type OpenAiTtsRequest } from '../src/services/ai/openAiTts'
 
 const SAMPLE_RATE = 24_000
 const MAX_CHUNK = 400
@@ -49,22 +49,28 @@ export function speechEvents(text: string, voice: string, instruction?: string) 
   }
 }
 
-export function pcmToWav(pcm: Buffer): OpenAiTtsReply {
+export function pcmToWav(pcm: Buffer): OpenAiTtsAudio {
   return pcm16ToWav(pcm, SAMPLE_RATE)
 }
 
-function providerError(code: unknown): Error {
+class TtsError extends Error {
+  constructor(readonly kind: OpenAiTtsErrorKind) {
+    super(kind)
+  }
+}
+
+function providerError(code: unknown): TtsError {
   switch (code) {
     case 401:
     case 403:
     case 'invalid_api_key':
-      return new Error('OpenAI 더빙 API 키 또는 프로젝트의 모델 권한을 확인해야 합니다.')
+      return new TtsError('unauthorized')
     case 429:
     case 'rate_limit_exceeded':
     case 'insufficient_quota':
-      return new Error('OpenAI 더빙 사용 한도를 초과했습니다. 결제 상태와 한도를 확인해 주세요.')
+      return new TtsError('rateLimit')
     default:
-      return new Error('OpenAI 더빙 요청이 실패했습니다. 모델 접근 권한과 네트워크 연결을 확인해 주세요.')
+      return new TtsError('failed')
   }
 }
 
@@ -82,8 +88,8 @@ function synthesizeChunk(request: OpenAiTtsRequest, text: string, signal: AbortS
     const audio: Buffer[] = []
     let requested = false
     let settled = false
-    const timer = setTimeout(() => finish(new Error('OpenAI 더빙 응답 시간이 초과됐습니다.')), 120_000)
-    const abort = () => finish(new Error('OpenAI 더빙이 취소됐습니다.'))
+    const timer = setTimeout(() => finish(new TtsError('timeout')), 120_000)
+    const abort = () => finish(new TtsError('cancelled'))
 
     function finish(error?: Error, pcm?: Buffer) {
       if (settled) return
@@ -102,7 +108,7 @@ function synthesizeChunk(request: OpenAiTtsRequest, text: string, signal: AbortS
       response.destroy()
       finish(providerError(response.statusCode))
     })
-    socket.on('close', () => finish(new Error('오디오를 받기 전에 OpenAI 더빙 연결이 종료됐습니다.')))
+    socket.on('close', () => finish(new TtsError('closed')))
     socket.on('message', (data) => {
       if (settled) return
       try {
@@ -120,13 +126,13 @@ function synthesizeChunk(request: OpenAiTtsRequest, text: string, signal: AbortS
           if (event.response?.status !== 'completed') {
             finish(providerError(event.response?.status_details?.error?.code))
           } else if (!pcm.length || pcm.length % 2) {
-            finish(new Error('OpenAI 더빙에서 올바른 PCM 오디오를 받지 못했습니다.'))
+            finish(new TtsError('invalidAudio'))
           } else {
             finish(undefined, pcm)
           }
         }
       } catch {
-        finish(new Error('OpenAI 더빙 응답을 처리하지 못했습니다.'))
+        finish(new TtsError('invalidResponse'))
       }
     })
   })
@@ -138,22 +144,22 @@ export async function requestOpenAiTts(
   connect: Connect = (url, options) => new WebSocket(url, options)
 ): Promise<OpenAiTtsReply> {
   if (typeof request?.apiKey !== 'string' || !/^[!-~]+$/.test(request.apiKey.trim())) {
-    throw new Error('설정에서 OpenAI 더빙 API 키를 입력해야 합니다.')
+    return { kind: 'keyRequired' }
   }
   if (!OPENAI_TTS_MODELS.includes(request.model) || !OPENAI_TTS_VOICES.includes(request.voice)) {
-    throw new Error('OpenAI 더빙에서 지원하는 모델과 목소리를 선택해야 합니다.')
+    return { kind: 'invalidVoiceOrModel' }
   }
   if (typeof request.text !== 'string' || !request.text.trim() || Array.from(request.text).length > MAX_TEXT) {
-    throw new Error('OpenAI 더빙 원고를 1자 이상 12,000자 이하로 입력해야 합니다.')
+    return { kind: 'invalidText' }
   }
   const audio: Buffer[] = []
   for (const text of splitSpeech(request.text).filter((chunk) => chunk.trim())) {
     try {
       audio.push(await synthesizeChunk(request, text, signal, connect))
     } catch (error) {
-      if (signal.aborted) throw new Error('OpenAI 더빙이 취소됐습니다.')
-      throw error
+      if (signal.aborted) return { kind: signal.reason?.name === 'TimeoutError' ? 'timeout' : 'cancelled' }
+      return { kind: error instanceof TtsError ? error.kind : 'failed' }
     }
   }
-  return pcmToWav(Buffer.concat(audio))
+  return { kind: 'audio', ...pcmToWav(Buffer.concat(audio)) }
 }

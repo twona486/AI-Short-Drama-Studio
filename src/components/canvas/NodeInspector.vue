@@ -2,7 +2,7 @@
 import { isElevenLabsTts } from '@/services/ai/elevenLabsTts'
 import { isOpenAiTts } from '@/services/ai/openAiTts'
 import { ltxShotSpeechTooFast } from '@/services/ai/ltxShotPrompt'
-import { nearestVideoDuration, videoDurationCapability, shotDurationWarning } from '@/services/ai/videoDuration'
+import { nearestVideoDuration, videoDurationCapability, shotDurationWarning } from '@/services/ai/capabilities/video'
 import { isLtxDesktop, LTX_DESKTOP_AUDIO_RESOLUTIONS, ltxDesktopAudioResolution } from '@/services/ai/ltxDesktopOptions'
 import { isLtxProfile, LTX_DEFAULT_MODEL } from '@/services/ai/ltxOptions'
 import { confirmAction } from '@/utils/confirmAction'

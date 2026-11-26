@@ -141,7 +141,7 @@ test('저장한 작업 ID로 재조회하고 다운로드한 MP4를 프로젝트
       async exists(path) { return files.has(path) },
       async writeText(path, text) { files.set(path, text) },
       async join(...parts) { return parts.join('/') },
-      async kvGet(key) { return keys.get(key) },
+      async kvGet(key) { return keys.get(key) ?? null },
       async kvSet(key, value) { keys.set(key, value) },
       async dbPath() { return '/store/app.db' }
     }
@@ -160,7 +160,9 @@ test('저장한 작업 ID로 재조회하고 다운로드한 MP4를 프로젝트
     setActiveProjectDir(null)
   })
   setActivePinia(createPinia())
-  const profileId = useSettingsStore().addVideo({
+  const settings = useSettingsStore()
+  await settings.ensureHydrated()
+  const profileId = settings.addVideo({
     name: 'LTX', provider: 'ltx', workflowId: 'ltx-2-3-fast', baseUrl: 'https://api.ltx.io', apiKey: 'fake'
   })
   await assert.rejects(generateVideo({

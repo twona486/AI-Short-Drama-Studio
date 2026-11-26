@@ -592,7 +592,7 @@ export async function httpCustomMediaGenerate(opts: {
     const started = Date.now()
     const timeoutMs = kind === 'video' ? 15 * 60_000 : 6 * 60_000
     while (Date.now() - started < timeoutMs) {
-      if (opts.signal?.aborted) throw new DOMException('작업을 취소했어요.', 'AbortError')
+      if (opts.signal?.aborted) throw new DOMException(translate('providerRequestErrors.aborted'), 'AbortError')
       await new Promise((r) => setTimeout(r, 1500))
       const pollUrl = /^https?:\/\//i.test(pollTpl)
         ? pollTpl.replace(/\{id\}/g, encodeURIComponent(taskId))
@@ -998,7 +998,7 @@ export async function comfyPromptGenerate(opts: {
   // Allow up to 30 minutes for local video generation.
   const timeoutMs = opts.kind === 'video' ? 30 * 60_000 : 6 * 60_000
   while (Date.now() - started < timeoutMs) {
-    if (opts.signal?.aborted) throw new DOMException('작업을 취소했어요.', 'AbortError')
+    if (opts.signal?.aborted) throw new DOMException(translate('providerRequestErrors.aborted'), 'AbortError')
     await new Promise((r) => setTimeout(r, 1500))
     const pollUrl = joinUrl(base, pollPath.replace(/\{id\}/g, encodeURIComponent(promptId)))
     const poll = await providerHttp(pollUrl, {
