@@ -581,9 +581,7 @@ export async function generateImage(
   if (getAIMode() === 'real') {
     const cfg = imageConfig(input.model)
     if (cfg.provider === DRAW_THINGS_PROVIDER) {
-      const prompt = await prepareMediaPrompt('image', input.prompt, input.signal)
-      const result = await generateDrawThings(cfg, { ...input, prompt }, onProgress)
-      return { ...result, prompt: input.prompt }
+      return await generateDrawThings(cfg, input, onProgress)
     }
     const adapterType = resolveImageAdapter(cfg)
     if (adapterType === 'openai-images' && isOfficialOpenAi(cfg.baseUrl) && isOpenAiImageModel(model)) {

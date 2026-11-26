@@ -3,14 +3,14 @@ import { Client, credentials, status, type ServiceError } from '@grpc/grpc-js'
 import { Builder } from 'flatbuffers'
 import protobuf from 'protobufjs'
 import {
-  drawThingsPreset, type DrawThingsProgress, type DrawThingsReply, type DrawThingsRequest
+  drawThingsPreset, qwenImage21Components, type DrawThingsProgress, type DrawThingsReply, type DrawThingsRequest
 } from '../src/services/ai/drawThingsOptions'
 
 // Fields used from draw-things-community's Libraries/GRPC/Models/Sources/imageService/imageService.proto.
 const protocol = protobuf.parse(`
   syntax = "proto3";
   message EchoRequest { string name = 1; optional string sharedSecret = 2; }
-  message EchoReply { string message = 1; Metadata override = 3; bool sharedSecretMissing = 4; }
+  message EchoReply { string message = 1; repeated string files = 2; Metadata override = 3; bool sharedSecretMissing = 4; }
   message Metadata { bytes models = 1; }
   message GenerateRequest {
     bytes image = 1;
@@ -146,7 +146,7 @@ function grpcError(error: ServiceError): DrawThingsReply {
   return { kind: 'invalidResponse' }
 }
 
-type EchoReply = { message?: string; sharedSecretMissing?: boolean; override?: { models?: Uint8Array } }
+type EchoReply = { message?: string; files?: string[]; sharedSecretMissing?: boolean; override?: { models?: Uint8Array } }
 
 async function probe(client: Client, signal: AbortSignal, timeoutMs: number, sharedSecret?: string): Promise<DrawThingsReply> {
   return new Promise((resolve) => {
@@ -158,13 +158,23 @@ async function probe(client: Client, signal: AbortSignal, timeoutMs: number, sha
         if (error) return resolve(grpcError(error))
         if (reply?.sharedSecretMissing) return resolve({ kind: 'grpcSecret' })
         if (!reply?.message?.startsWith('HELLO ')) return resolve({ kind: 'invalidResponse' })
-        if (!reply.override?.models?.length) return resolve({ kind: 'ready' })
+        const files = reply.files?.filter((file) => Boolean(drawThingsPreset(file))) ?? []
+        if (!reply.override?.models?.length) {
+          return resolve({ kind: 'ready', ...(reply.files?.length ? { models: [...new Set(files)] } : {}) })
+        }
         try {
           const list: unknown = JSON.parse(Buffer.from(reply.override.models).toString('utf8'))
           if (!Array.isArray(list)) return resolve({ kind: 'invalidResponse' })
           const models = list.map((entry) => entry?.file)
             .filter((file): file is string => typeof file === 'string' && Boolean(drawThingsPreset(file)))
-          resolve({ kind: 'ready', models: [...new Set(models)] })
+          const incompleteModels = [...new Set(files.filter((file) => !models.includes(file)))]
+          const missingComponents = [...new Set(incompleteModels.flatMap(qwenImage21Components))]
+            .filter((file) => !reply.files?.includes(file))
+          resolve({
+            kind: 'ready', models: [...new Set(models)],
+            ...(incompleteModels.length ? { incompleteModels } : {}),
+            ...(missingComponents.length ? { missingComponents } : {})
+          })
         } catch {
           resolve({ kind: 'invalidResponse' })
         }
@@ -247,7 +257,14 @@ export async function requestDrawThingsGrpc(
   try {
     const ready = await probe(client, signal, timeouts.probeMs, request.sharedSecret || undefined)
     if (request.kind === 'check' || ready.kind !== 'ready') return ready
-    if (ready.models && !ready.models.includes(request.model)) return { kind: 'missingModel' }
+    if (ready.models && !ready.models.includes(request.model)) {
+      if (ready.incompleteModels?.includes(request.model)) {
+        const missingComponents = qwenImage21Components(request.model)
+          .filter((file) => ready.missingComponents?.includes(file))
+        return { kind: 'modelIncomplete', models: ready.models, ...(missingComponents.length ? { missingComponents } : {}) }
+      }
+      return { kind: 'modelUnavailable', models: ready.models }
+    }
     const preset = drawThingsPreset(request.model)
     if (!preset) return { kind: 'invalidRequest' }
     if (signal.aborted) return { kind: 'cancelled' }

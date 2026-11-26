@@ -1,31 +1,24 @@
 import { t } from '@/i18n'
-import { desktop, isDesktop } from '@/services/desktop'
+import { checkDrawThings, drawThingsApi, drawThingsReplyMessage } from './drawThingsConnection'
+import { useSettingsStore } from '@/stores/settings'
 import { throwIfAborted } from './abort'
+import { prepareMediaPrompt } from './mediaPrompt'
 import { drawThingsInputError, drawThingsSize, isDrawThingsGrpc, type DrawThingsReply } from './drawThingsOptions'
 import type { ImageGenInput, ImageGenOutput } from './image'
 
-function drawThingsApi() {
-  if (!isDesktop() || !desktop().drawThingsRequest) throw new Error(t('drawThings.desktopOnly'))
-  return desktop()
-}
+const catalogRequests = new Map<string, ReturnType<typeof checkDrawThings>>()
 
-function replyMessage(reply: DrawThingsReply) {
-  return t(`drawThings.${reply.kind}`, reply.kind === 'http' ? { status: reply.status } : {})
-}
-
-export async function checkDrawThings(baseUrl: string, encryptedSharedSecret?: string) {
-  try {
-    const reply = await drawThingsApi().drawThingsRequest({
-      kind: 'check', baseUrl, encryptedSharedSecret: isDrawThingsGrpc(baseUrl) ? encryptedSharedSecret : undefined
-    })
-    return {
-      ok: reply.kind === 'ready', detail: replyMessage(reply),
-      models: reply.kind === 'ready' ? reply.models : undefined
-    }
-  } catch (error) {
-    const unavailable = !isDesktop() || !desktop().drawThingsRequest
-    return { ok: false, detail: t(unavailable ? 'drawThings.desktopOnly' : 'drawThings.offline') }
-  }
+export function refreshDrawThingsModels(profileId: string, baseUrl: string, encryptedSharedSecret?: string) {
+  const key = JSON.stringify([profileId, baseUrl, encryptedSharedSecret])
+  const existing = catalogRequests.get(key)
+  if (existing) return existing
+  const settings = useSettingsStore()
+  const request = checkDrawThings(baseUrl, encryptedSharedSecret).then((result) => {
+    if (result.ok) settings.setDrawThingsServerModels(profileId, baseUrl, encryptedSharedSecret, result.models)
+    return result
+  }).finally(() => catalogRequests.delete(key))
+  catalogRequests.set(key, request)
+  return request
 }
 
 function imageCanvas(width: number, height: number, transparent: boolean) {
@@ -72,17 +65,33 @@ async function pixelsToPng(reply: Extract<DrawThingsReply, { kind: 'pixels' }>) 
 }
 
 export async function generateDrawThings(
-  config: { baseUrl: string; model: string; drawThingsSharedSecret?: string },
+  config: { baseUrl: string; model: string; drawThingsSharedSecret?: string; drawThingsServerModels?: string[] },
   input: ImageGenInput, onProgress?: (message: string) => void
 ): Promise<ImageGenOutput> {
   const { baseUrl, model, drawThingsSharedSecret } = config
   const { signal } = input
   throwIfAborted(signal)
   const grpc = isDrawThingsGrpc(baseUrl)
+  const settings = useSettingsStore()
+  const profileId = settings.config.activeImageId
+  if (grpc && !model && config.drawThingsServerModels !== undefined) {
+    throw new Error(t(config.drawThingsServerModels.length ? 'drawThings.modelUnavailable' : 'drawThings.noInstalledModels'))
+  }
+  if (grpc && config.drawThingsServerModels && !config.drawThingsServerModels.includes(model)) {
+    const refreshed = await refreshDrawThingsModels(profileId, baseUrl, drawThingsSharedSecret)
+    throwIfAborted(signal)
+    if (!refreshed.ok) throw new Error(refreshed.detail)
+    if (refreshed.models && !refreshed.models.includes(model)) {
+      throw new Error(drawThingsReplyMessage(refreshed.incompleteModels?.includes(model)
+        ? { kind: 'modelIncomplete', models: refreshed.models, missingComponents: refreshed.missingComponents }
+        : { kind: 'modelUnavailable', models: refreshed.models }))
+    }
+  }
   const references = input.referenceImages || []
   const problem = drawThingsInputError(model, references.length, grpc)
   if (problem) throw new Error(t(problem))
   const api = drawThingsApi()
+  const prompt = await prepareMediaPrompt('image', input.prompt, signal)
   const [width, height] = drawThingsSize(input.aspectRatio, input.width, input.height)
   let reference: string | undefined
   let referencePixels: ArrayBuffer[] | undefined
@@ -106,7 +115,7 @@ export async function generateDrawThings(
     onProgress?.(t('drawThings.queued'))
     throwIfAborted(signal)
     const pending = api.drawThingsRequest({
-      baseUrl, kind: 'generate', id, model, prompt: input.prompt, width, height, reference, referencePixels,
+      baseUrl, kind: 'generate', id, model, prompt, width, height, reference, referencePixels,
       encryptedSharedSecret: grpc ? drawThingsSharedSecret : undefined
     }).catch(() => { throw new Error(t('drawThings.offline')) })
     const cancelled = new Promise<DrawThingsReply>((resolve) => {
@@ -118,14 +127,17 @@ export async function generateDrawThings(
       if (signal?.aborted) cancel()
     })
     const reply = await Promise.race([pending, cancelled])
-    if (reply.kind === 'cancelled') throw new DOMException(replyMessage(reply), 'AbortError')
+    if (reply.kind === 'cancelled') throw new DOMException(drawThingsReplyMessage(reply), 'AbortError')
     throwIfAborted(signal)
+    if (reply.kind === 'modelUnavailable' || reply.kind === 'modelIncomplete') {
+      settings.setDrawThingsServerModels(profileId, baseUrl, drawThingsSharedSecret, reply.models)
+    }
     if (reply.kind === 'pixels') {
       const blob = await pixelsToPng(reply)
       throwIfAborted(signal)
       return { blob, mimeType: 'image/png', prompt: input.prompt }
     }
-    if (reply.kind !== 'image') throw new Error(replyMessage(reply))
+    if (reply.kind !== 'image') throw new Error(drawThingsReplyMessage(reply))
     return { blob: new Blob([reply.data], { type: reply.mimeType }), mimeType: reply.mimeType, prompt: input.prompt }
   } finally {
     off()

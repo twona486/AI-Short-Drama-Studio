@@ -11,17 +11,17 @@ export const isDrawThingsGrpc = (url: string) => /^grpc:\/\//i.test(url.trim())
 // Draw Things의 configs.json에 있는 권장 설정과 기본 체크포인트.
 const PRESETS = [
   {
-    file: 'qwen_image_2.1_q8p.ckpt', name: 'Qwen Image 2.1', family: /^qwen_image_2\.1_(?!turbo)/i,
+    file: 'qwen_image_2.1_q8p.ckpt', name: 'Qwen Image 2.1', family: /^qwen_image_2[._]1(?:_(?:q\d+p|i\d+x|bf16|f16|fp16))*\.ckpt$/i,
     steps: 40, cfg_scale: 1, sampler_name: 'DDIM Trailing', shift: 1,
     resolution_dependent_shift: true, mode: 'text'
   },
   {
-    file: 'qwen_image_edit_2511_q6p.ckpt', name: 'Qwen Image Edit 2511', family: /^qwen_image_edit_2511_/i,
+    file: 'qwen_image_edit_2511_q8p.ckpt', name: 'Qwen Image Edit 2511', family: /^qwen_image_edit_2511(?:_(?:q\d+p|i\d+x|bf16|f16|fp16))*\.ckpt$/i,
     steps: 30, cfg_scale: 4, sampler_name: 'UniPC Trailing', shift: 2,
     resolution_dependent_shift: false, mode: 'edit'
   },
   {
-    file: 'flux_2_klein_4b_q6p.ckpt', name: 'FLUX.2 [klein] 4B', family: /^flux_2_klein_4b_(?!base)/i,
+    file: 'flux_2_klein_4b_q8p.ckpt', name: 'FLUX.2 [klein] 4B', family: /^flux_2_klein_4b(?:_(?:q\d+p|i\d+x|bf16|f16|fp16))*\.ckpt$/i,
     steps: 4, cfg_scale: 1, sampler_name: 'DDIM Trailing', shift: 3,
     resolution_dependent_shift: false, mode: 'both'
   }
@@ -35,7 +35,19 @@ export function drawThingsPreset(model: string) {
 
 export function drawThingsModelLabel(model: string) {
   const preset = drawThingsPreset(model)
-  return preset?.file === model ? preset.name : model
+  if (!preset || preset.name === model) return model
+  const variant = model.match(/_(q\d+p|i\d+x|[bf]+16)\.ckpt$/i)?.[1]
+  return variant ? `${preset.name} · ${variant}` : model
+}
+
+// These names are the dependencies in Draw Things' official ModelZoo entries.
+export function qwenImage21Components(model: string): string[] {
+  const variant = /^qwen_image_2\.1_(q[68]p|i[48]x|f16)\.ckpt$/i.exec(model)?.[1]?.toLowerCase()
+  if (!variant) return []
+  return [
+    `qwen_3_vl_8b_instruct_${variant === 'f16' ? 'f16' : 'i8x'}.ckpt`,
+    'qwen_image_2.1_vae_f16.ckpt'
+  ]
 }
 
 export function drawThingsInputError(model: string, count: number, grpc = false) {
@@ -73,7 +85,9 @@ export type DrawThingsRequest = { baseUrl: string; sharedSecret?: string } & (
     })
 
 export type DrawThingsReply =
-  | { kind: 'ready'; models?: string[] }
+  | { kind: 'ready'; models?: string[]; incompleteModels?: string[]; missingComponents?: string[] }
+  | { kind: 'modelUnavailable'; models: string[] }
+  | { kind: 'modelIncomplete'; models: string[]; missingComponents?: string[] }
   | { kind: 'image'; data: ArrayBuffer; mimeType: 'image/png' | 'image/jpeg' }
   | { kind: 'pixels'; data: ArrayBuffer; width: number; height: number }
   | { kind: 'http'; status: number }

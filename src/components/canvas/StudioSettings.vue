@@ -9,7 +9,7 @@ import { useProjectStore, useSettingsStore, uniqueProfileName } from '@/stores'
 import { desktop, isDesktop } from '@/services/desktop'
 import { isLtxDesktop, LTX_DESKTOP_URL_PLACEHOLDER, LTX_DESKTOP_MODELS, ltxDesktopError } from '@/services/ai/ltxDesktopOptions'
 import { DRAW_THINGS_PROVIDER, drawThingsModelLabel, isDrawThingsGrpc } from '@/services/ai/drawThingsOptions'
-import { checkDrawThings } from '@/services/ai/drawThings'
+import { refreshDrawThingsModels } from '@/services/ai/drawThings'
 import { LTX_MODELS, isLtxProfile } from '@/services/ai/ltxOptions'
 import { TTS_VOICES } from '@/services/ai/tts'
 import EndpointForm from '@/components/settings/EndpointForm.vue'
@@ -32,7 +32,7 @@ import {
   type ProviderPreset
 } from '@/services/ai/providers'
 
-defineProps<{
+const props = defineProps<{
   module: 'llm' | 'vision' | 'image' | 'tts' | 'video'
 }>()
 
@@ -202,6 +202,7 @@ function imageProfile(p: (typeof settings.config.images)[number]) {
 
 const drawThings = computed(() => settings.config.image.provider === DRAW_THINGS_PROVIDER)
 const drawThingsBusy = ref(false)
+let drawThingsProbeId = 0
 const drawThingsStatus = ref('')
 const savedDrawThingsSecret = computed(() => settings.config.image.drawThingsSharedSecret)
 const drawThingsSecretDraft = ref('')
@@ -243,24 +244,33 @@ function removeDrawThingsSecret() {
 }
 
 async function probeDrawThings() {
+  const probeId = ++drawThingsProbeId
   const connection = drawThingsConnection.value
   const secret = savedDrawThingsSecret.value
   drawThingsBusy.value = true
   drawThingsStatus.value = ''
   try {
-    const result = await checkDrawThings(settings.config.image.baseUrl, secret)
-    if (drawThingsConnection.value !== connection || savedDrawThingsSecret.value !== secret) return
+    const { activeImageId, image } = settings.config
+    const result = await refreshDrawThingsModels(activeImageId, image.baseUrl, secret)
+    if (probeId !== drawThingsProbeId || drawThingsConnection.value !== connection || savedDrawThingsSecret.value !== secret) return
     drawThingsStatus.value = result.detail
-    if (result.models?.length) {
-      const current = settings.config.image.model
-      settings.patchImage({ models: result.models, model: result.models.includes(current) ? current : result.models[0] })
-    } else if (result.models) {
+    if (result.missingComponents?.length) {
+      drawThingsStatus.value = t('drawThings.missingComponents', { files: result.missingComponents.join(', ') })
+    } else if (result.incompleteModels?.length) {
+      drawThingsStatus.value = t('drawThings.incompleteList', { models: result.incompleteModels.join(', ') })
+    } else if (result.models?.length === 0) {
       drawThingsStatus.value = t('drawThings.noInstalledModels')
     }
   } finally {
-    drawThingsBusy.value = false
+    if (probeId === drawThingsProbeId) drawThingsBusy.value = false
   }
 }
+
+watch([() => props.module, drawThingsConnection, savedDrawThingsSecret], (_, __, onCleanup) => {
+  if (props.module !== 'image' || !drawThings.value || !isDrawThingsGrpc(settings.config.image.baseUrl)) return
+  const timer = setTimeout(() => void probeDrawThings(), 400)
+  onCleanup(() => clearTimeout(timer))
+}, { immediate: true })
 
 function videoProfile(p: (typeof settings.config.videos)[number]) {
   const workflow = zealmanVideoWorkflowLabel(p.workflowId)
@@ -475,6 +485,7 @@ function patchAdapter(
           :model="settings.config.image.model"
           :models="settings.config.image.models"
           :provider="settings.config.image.provider"
+          :server-models-only="drawThings && settings.config.image.drawThingsServerModels !== undefined"
           @patch="settings.patchImage($event)"
           @add-model="settings.addModel('image', $event)"
           @remove-model="settings.removeModel('image', $event)"
@@ -494,7 +505,9 @@ function patchAdapter(
                 <button v-if="savedDrawThingsSecret" type="button" :disabled="drawThingsSecretBusy || drawThingsBusy" @click="removeDrawThingsSecret">{{ $t('drawThings.removeSecret') }}</button>
               </div>
             </template>
-            <button type="button" :disabled="drawThingsBusy || drawThingsSecretBusy || !!drawThingsSecretDraft" @click="probeDrawThings">{{ $t('drawThings.check') }}</button>
+            <button type="button" :disabled="drawThingsBusy || drawThingsSecretBusy || !!drawThingsSecretDraft" @click="probeDrawThings">
+              {{ $t(isDrawThingsGrpc(settings.config.image.baseUrl) ? 'drawThings.refreshModels' : 'drawThings.check') }}
+            </button>
             <p v-if="drawThingsBusy || drawThingsStatus" class="hint" role="status">
               {{ drawThingsBusy ? $t('drawThings.checking') : drawThingsStatus }}
             </p>

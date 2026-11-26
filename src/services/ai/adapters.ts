@@ -24,7 +24,7 @@ import { providerVideoResolution } from './modelOptions'
 import { adaptOpenAiChatBody, isOfficialOpenAi, OPENAI_DEFAULT_CHAT_MODEL } from './openAiChat'
 import { throwIfAborted } from './abort'
 import { DRAW_THINGS_PROVIDER } from './drawThingsOptions'
-import { checkDrawThings } from './drawThings'
+import { checkDrawThings } from './drawThingsConnection'
 
 function timeoutSignal(ms: number): AbortSignal {
   const c = new AbortController()

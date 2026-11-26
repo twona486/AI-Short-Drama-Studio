@@ -29,10 +29,11 @@ const {
   DRAW_THINGS_MODELS, DRAW_THINGS_PROVIDER, DRAW_THINGS_URL, drawThingsInputError, drawThingsPreset, drawThingsSize
 } = await vite.ssrLoadModule('/src/services/ai/drawThingsOptions.ts')
 const { applyProviderPreset, IMAGE_PROVIDERS } = await vite.ssrLoadModule('/src/services/ai/providers.ts')
-const { endpointReady, useSettingsStore } = await vite.ssrLoadModule('/src/stores/settings.ts')
+const { endpointReady, namedModelGroups, useSettingsStore } = await vite.ssrLoadModule('/src/stores/settings.ts')
 const { generateImage } = await vite.ssrLoadModule('/src/services/ai/image.ts')
 const { generateVideo } = await vite.ssrLoadModule('/src/services/ai/video.ts')
-const { checkDrawThings } = await vite.ssrLoadModule('/src/services/ai/drawThings.ts')
+const { refreshDrawThingsModels } = await vite.ssrLoadModule('/src/services/ai/drawThings.ts')
+const { checkDrawThings } = await vite.ssrLoadModule('/src/services/ai/drawThingsConnection.ts')
 const { observeMediaPrompts } = await vite.ssrLoadModule('/src/services/ai/mediaPromptObserver.ts')
 const [qwen, edit, flux] = DRAW_THINGS_MODELS
 const png = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jgSEAAAAASUVORK5CYII=', 'base64')
@@ -190,6 +191,34 @@ test('저장한 암호문은 해당 Draw Things 연결에서만 전달합니다'
   assert.equal(settings.config.image.drawThingsSharedSecret, undefined)
 })
 
+test('서버 목록을 우선하고 새로고침으로 제거된 모델을 다시 선택할 수 없게 합니다', async (context) => {
+  setActivePinia(createPinia())
+  const settings = useSettingsStore()
+  const baseUrl = 'grpc://100.64.0.1:7859'
+  const profile = settings.addImage({
+    name: 'Fixture', baseUrl, provider: DRAW_THINGS_PROVIDER, model: qwen, models: DRAW_THINGS_MODELS
+  })
+  let models = [qwen, 'qwen_image_2.1_i8x.ckpt']
+  globalThis.window.desktop = {
+    isDesktop: true,
+    async kvSet() {},
+    async drawThingsRequest() { return { kind: 'ready', models } }
+  }
+  context.after(() => { delete globalThis.window.desktop })
+  const choices = () => namedModelGroups(settings.config.images).find((item) => item.id === profile).models
+  await refreshDrawThingsModels(profile, baseUrl)
+  assert.deepEqual(choices(), models)
+  settings.selectImageModel(profile, edit)
+  assert.equal(settings.config.image.model, qwen)
+  models = []
+  await refreshDrawThingsModels(profile, baseUrl)
+  assert.deepEqual(choices(), [])
+  assert.equal(settings.config.image.model, '')
+  models = undefined
+  await refreshDrawThingsModels(profile, baseUrl)
+  assert.deepEqual(choices(), DRAW_THINGS_MODELS)
+})
+
 test('HTTP 연결, 모델 전환, 한 장 편집 요청과 응답 오류', async (context) => {
   const calls = []
   const baseUrl = await httpFixture(context, async (req, res) => {
@@ -338,6 +367,8 @@ test('gRPC 인증, 모델 목록, 참조 크기, 진행 단계, 대기열, 제�
   }]))
   const requests = []
   let needKey = false
+  let rawFiles = []
+  let echoModels = [edit, flux, qwen, 'irrelevant.ckpt']
   const sharedSecret = 'mock-shared-secret'
   let compressed = false
   let cancelled
@@ -350,8 +381,11 @@ test('gRPC 인증, 모델 목록, 참조 크기, 진행 단계, 대기열, 제�
       assert.equal(req.get(1)[0].toString(), 'Drama Flow Studio')
       const response = Writer.create().uint32(10).string('HELLO Drama Flow Studio')
       if (needKey && req.get(2)?.[0].toString() !== sharedSecret) response.uint32(32).bool(true)
-      const models = JSON.stringify([{ file: edit }, { file: flux }, { file: qwen }, { file: 'irrelevant.ckpt' }])
-      response.uint32(26).fork().uint32(10).bytes(Buffer.from(models)).ldelim()
+      for (const file of rawFiles) response.uint32(18).string(file)
+      if (echoModels) {
+        const models = JSON.stringify(echoModels.map((file) => ({ file })))
+        response.uint32(26).fork().uint32(10).bytes(Buffer.from(models)).ldelim()
+      }
       reply(null, Buffer.from(response.finish()))
     },
     GenerateImage(call) {
@@ -468,4 +502,26 @@ test('gRPC 인증, 모델 목록, 참조 크기, 진행 단계, 대기열, 제�
   assert.equal((await queue.request(1, {
     ...request, width: 1344, height: 768, referencePixels: Array(4).fill(large)
   })).kind, 'pixels')
+
+  rawFiles = [flux, qwen, 'qwen_3_vl_8b_instruct_q8p.ckpt', 'qwen_image_2.1_vae_f16.ckpt']
+  echoModels = [flux]
+  const attempted = requests.length
+  assert.deepEqual(await queue.request(1, { kind: 'check', baseUrl, sharedSecret }), {
+    kind: 'ready', models: [flux], incompleteModels: [qwen], missingComponents: ['qwen_3_vl_8b_instruct_i8x.ckpt']
+  })
+  assert.deepEqual(await queue.request(1, { ...request, model: qwen, referencePixels: [] }), {
+    kind: 'modelIncomplete', models: [flux], missingComponents: ['qwen_3_vl_8b_instruct_i8x.ckpt']
+  })
+  assert.deepEqual(await queue.request(1, request), { kind: 'modelUnavailable', models: [flux] })
+  assert.equal(requests.length, attempted)
+  echoModels = []
+  rawFiles = []
+  assert.deepEqual(await queue.request(1, { kind: 'check', baseUrl, sharedSecret }), { kind: 'ready', models: [] })
+  echoModels = undefined
+  rawFiles = ['qwen_image_2.1_i8x.ckpt', 'qwen_image_2.1_f16.ckpt', 'qwen_image_2.1_vae_f16.ckpt']
+  assert.deepEqual(await queue.request(1, { kind: 'check', baseUrl, sharedSecret }), {
+    kind: 'ready', models: ['qwen_image_2.1_i8x.ckpt', 'qwen_image_2.1_f16.ckpt']
+  })
+  rawFiles = []
+  assert.deepEqual(await queue.request(1, { kind: 'check', baseUrl, sharedSecret }), { kind: 'ready' })
 })

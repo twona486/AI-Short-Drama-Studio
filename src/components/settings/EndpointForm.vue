@@ -14,6 +14,7 @@ const props = defineProps<{
   model: string
   models: string[]
   provider?: string
+  serverModelsOnly?: boolean
 }>()
 
 const emit = defineEmits<{
@@ -73,7 +74,7 @@ watch(
 )
 
 const suggested = computed(() =>
-  suggestedPresetModels(currentPreset.value, props.models)
+  props.serverModelsOnly ? [] : suggestedPresetModels(currentPreset.value, props.models)
 )
 
 function onAdd() {
@@ -133,7 +134,7 @@ function onAdd() {
       >
         {{ drawThings ? drawThingsModelLabel(m) : m }}
         <span
-          v-if="models.length > 1"
+          v-if="!serverModelsOnly && models.length > 1"
           class="x"
           :title="$t('endpointForm.removeModel')"
           @click.stop="emit('removeModel', m)"
@@ -154,8 +155,8 @@ function onAdd() {
       </button>
     </div>
 
-    <label>{{ $t('endpointForm.addModel') }}</label>
-    <div class="add-row">
+    <label v-if="!serverModelsOnly">{{ $t('endpointForm.addModel') }}</label>
+    <div v-if="!serverModelsOnly" class="add-row">
       <input
         v-model="draft"
         :placeholder="currentPreset.id === 'custom' || !currentPreset.models.length
