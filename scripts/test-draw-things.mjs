@@ -476,6 +476,7 @@ test('gRPC 인증, 모델 목록, 참조 크기, 진행 단계, 대기열, 제�
   })
   assert.deepEqual([...new Uint8Array(alphaResult.data)], [255, 0, 128, 128])
   assert.equal(requests[2].has(1), false)
+  assert.equal(requests[2].has(8), false)
 
   compressed = true
   assert.deepEqual(await queue.request(1, { ...request, model: flux }), { kind: 'grpcCompression' })
@@ -516,18 +517,53 @@ test('gRPC 인증, 모델 목록, 참조 크기, 진행 단계, 대기열, 제�
   assert.equal(requests.length, attempted)
   rawFiles.push('qwen_3_vl_8b_instruct_i8x.ckpt')
   assert.deepEqual(await queue.request(1, { kind: 'check', baseUrl, sharedSecret }), {
-    kind: 'ready', models: [flux, qwen]
+    kind: 'ready', models: [flux, qwen], unverifiedModels: [qwen]
   })
   assert.equal(drawThingsInputError(qwen, 0, true), undefined)
   assert.equal(drawThingsInputError(edit, 0, true), 'drawThings.referenceRequired')
-  assert.equal((await queue.request(1, { ...request, model: qwen, referencePixels: [] })).kind, 'pixels')
+  const recovered = { ...request, model: qwen, width: 1344, height: 768, referencePixels: [] }
+  assert.equal((await queue.request(1, recovered)).kind, 'pixels')
+  const recoveredWire = requests.at(-1)
+  const models = JSON.parse(scan(recoveredWire.get(8)[0]).get(1)[0].toString())
+  assert.deepEqual(models, [{
+    name: 'Qwen Image 2.1', file: qwen, version: 'qwen_image_2.1',
+    text_encoder: 'qwen_3_vl_8b_instruct_i8x.ckpt', autoencoder: 'qwen_image_2.1_vae_f16.ckpt',
+    prefix: '', modifier: 'kontext', default_scale: 24, hires_fix_scale: 40,
+    upcast_attention: false, high_precision_autoencoder: true, hugging_face_link: 'Qwen/Qwen-Image-2.1',
+    objective: { u: { condition_scale: 1000 } },
+    noise_discretization: { rf: { _0: { sigma_min: 0, sigma_max: 1, condition_scale: 1000, shift_terminal: 0.02 } } }
+  }])
+  const qwenConfig = new ByteBuffer(recoveredWire.get(7)[0])
+  const qwenRoot = qwenConfig.readInt32(0)
+  const qwenOffset = (id) => qwenConfig.__offset(qwenRoot, 4 + 2 * id)
+  assert.equal(qwenConfig.readUint16(qwenRoot + qwenOffset(1)), 21)
+  assert.equal(qwenConfig.readUint16(qwenRoot + qwenOffset(2)), 12)
+  assert.equal(qwenConfig.readUint32(qwenRoot + qwenOffset(4)), 40)
+  assert.equal(qwenConfig.readFloat32(qwenRoot + qwenOffset(5)), 1)
+  assert.equal(qwenConfig.readFloat32(qwenRoot + qwenOffset(6)), 1)
+  assert.equal(qwenConfig.__string(qwenRoot + qwenOffset(7)), qwen)
+  assert.equal(qwenConfig.readInt8(qwenRoot + qwenOffset(8)), 16)
+  assert.equal(qwenConfig.readInt8(qwenRoot + qwenOffset(17)), 2)
+  for (const id of [11, 18, 49, 53, 71, 75]) assert.equal(qwenOffset(id), 0)
+  assert.equal(recoveredWire.get(6)[0].toString(), '')
+
+  const unknown = 'qwen_image_2.1_bf16.ckpt'
+  rawFiles.push(unknown)
+  const warnings = []
+  assert.equal((await queue.request(1, { ...recovered, model: unknown }, value => warnings.push(value))).kind, 'pixels')
+  assert.deepEqual(warnings, [undefined, { warning: 'unverifiedModel' }, { step: 3, total: 40 }])
+  assert.equal(requests.at(-1).has(8), false)
   echoModels = []
   rawFiles = []
   assert.deepEqual(await queue.request(1, { kind: 'check', baseUrl, sharedSecret }), { kind: 'ready', models: [] })
   echoModels = undefined
-  rawFiles = ['qwen_image_2.1_i8x.ckpt', 'qwen_image_2.1_f16.ckpt', 'qwen_image_2.1_vae_f16.ckpt']
+  rawFiles = [
+    'qwen_image_2.1_i8x.ckpt', 'qwen_image_2.1_f16.ckpt', 'qwen_image_2.1_vae_f16.ckpt',
+    'qwen_3_vl_8b_instruct_i8x.ckpt', 'qwen_3_vl_8b_instruct_f16.ckpt'
+  ]
   assert.deepEqual(await queue.request(1, { kind: 'check', baseUrl, sharedSecret }), {
-    kind: 'ready', models: ['qwen_image_2.1_i8x.ckpt', 'qwen_image_2.1_f16.ckpt']
+    kind: 'ready', models: ['qwen_image_2.1_i8x.ckpt', 'qwen_image_2.1_f16.ckpt'],
+    unverifiedModels: ['qwen_image_2.1_i8x.ckpt', 'qwen_image_2.1_f16.ckpt']
   })
   rawFiles = []
   assert.deepEqual(await queue.request(1, { kind: 'check', baseUrl, sharedSecret }), { kind: 'ready' })

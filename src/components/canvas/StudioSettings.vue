@@ -195,7 +195,7 @@ function subtitle(p: { models?: string[]; model?: string }) {
 }
 
 function imageProfile(p: (typeof settings.config.images)[number]) {
-  const model = p.provider === DRAW_THINGS_PROVIDER ? drawThingsModelLabel(p.model) : zealmanImageWorkflowLabel(p.model)
+  const model = p.provider === DRAW_THINGS_PROVIDER ? drawThingsModelLabel(p.model, t('drawThings.nonCommercialLicense')) : zealmanImageWorkflowLabel(p.model)
   const name = zealmanImageProfileLabel(p.name, p.model)
   return { id: p.id, name, subtitle: subtitle({ model, models: p.models }) }
 }

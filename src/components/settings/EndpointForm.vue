@@ -132,7 +132,7 @@ function onAdd() {
         :title="drawThings ? m : undefined"
         @click="emit('patch', { model: m })"
       >
-        {{ drawThings ? drawThingsModelLabel(m) : m }}
+        {{ drawThings ? drawThingsModelLabel(m, $t('drawThings.nonCommercialLicense')) : m }}
         <span
           v-if="!serverModelsOnly && models.length > 1"
           class="x"
@@ -151,7 +151,7 @@ function onAdd() {
         class="chip ghost"
         @click="emit('addModel', m)"
       >
-        + {{ drawThings ? drawThingsModelLabel(m) : m }}
+        + {{ drawThings ? drawThingsModelLabel(m, $t('drawThings.nonCommercialLicense')) : m }}
       </button>
     </div>
 

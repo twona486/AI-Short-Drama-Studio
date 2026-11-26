@@ -82,7 +82,7 @@ const model = computed({
       <ParamSelect :label="label ?? $t('imageModelSelect.generate')" :model-value="model" @update:model-value="model = $event">
         <option v-if="!model" value="" disabled>{{ $t(state ? `imageModelSelect.${state}` : 'imageModelSelect.chooseModel') }}</option>
         <optgroup v-for="group in groups" :key="group.id" :label="group.name">
-          <option v-for="name in group.models" :key="name" :value="llmChoiceKey(group.id, name)">{{ drawThingsModelLabel(zealmanImageWorkflowLabel(name)) }}</option>
+          <option v-for="name in group.models" :key="name" :value="llmChoiceKey(group.id, name)">{{ drawThingsModelLabel(zealmanImageWorkflowLabel(name), $t('drawThings.nonCommercialLicense')) }}</option>
         </optgroup>
       </ParamSelect>
       <button v-if="canProbe && state !== 'checking' && (state || isDrawThingsGrpc(image.baseUrl))"

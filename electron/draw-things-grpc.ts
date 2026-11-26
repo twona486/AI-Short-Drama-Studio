@@ -2,8 +2,9 @@ import { randomInt } from 'node:crypto'
 import { Client, credentials, status, type ServiceError } from '@grpc/grpc-js'
 import { Builder } from 'flatbuffers'
 import protobuf from 'protobufjs'
+import communityModels from './draw-things-community-models.json'
 import {
-  drawThingsPreset, qwenImage21Components, type DrawThingsProgress, type DrawThingsReply, type DrawThingsRequest
+  drawThingsPreset, type DrawThingsProgress, type DrawThingsReply, type DrawThingsRequest
 } from '../src/services/ai/drawThingsOptions'
 
 // Fields used from draw-things-community's Libraries/GRPC/Models/Sources/imageService/imageService.proto.
@@ -19,6 +20,7 @@ const protocol = protobuf.parse(`
     string prompt = 5;
     string negativePrompt = 6;
     bytes configuration = 7;
+    Metadata override = 8;
     string user = 10;
     int32 device = 11;
     optional string sharedSecret = 13;
@@ -48,6 +50,14 @@ export const drawThingsGrpcTimeouts = { probeMs: 8_000, generationMs: 20 * 60_00
 
 type GenerateRequest = Extract<DrawThingsRequest, { kind: 'generate' }>
 type Preset = NonNullable<ReturnType<typeof drawThingsPreset>>
+
+// Model specifications from https://models.drawthings.ai/models.json.
+const communityDefinitions = new Map(communityModels.map(model => [model.file, model]))
+
+function modelComponents(file: string) {
+  const definition = communityDefinitions.get(file)
+  return definition ? [definition.text_encoder, definition.autoencoder] : []
+}
 
 function configuration(request: GenerateRequest, preset: Preset) {
   // Stable field IDs from Libraries/DataModels/Sources/config.fbs, including deprecated slots.
@@ -159,32 +169,32 @@ async function probe(client: Client, signal: AbortSignal, timeoutMs: number, sha
         if (reply?.sharedSecretMissing) return resolve({ kind: 'grpcSecret' })
         if (!reply?.message?.startsWith('HELLO ')) return resolve({ kind: 'invalidResponse' })
         const files = reply.files?.filter((file) => Boolean(drawThingsPreset(file))) ?? []
-        if (!reply.override?.models?.length) {
-          return resolve({ kind: 'ready', ...(reply.files?.length ? { models: [...new Set(files)] } : {}) })
-        }
         try {
-          const list: unknown = JSON.parse(Buffer.from(reply.override.models).toString('utf8'))
+          const metadata = reply.override?.models
+          const list: unknown = metadata?.length ? JSON.parse(Buffer.from(metadata).toString('utf8')) : []
           if (!Array.isArray(list)) return resolve({ kind: 'invalidResponse' })
           const models = list.map((entry) => entry?.file)
             .filter((file): file is string => typeof file === 'string' && Boolean(drawThingsPreset(file)))
-          // Some Echo replies expose the checkpoint and its dependencies in files before
-          // the model metadata reflects the installation.
+          if (!metadata?.length && !reply.files?.length) return resolve({ kind: 'ready' })
           const inventory = new Set(reply.files)
           const unlisted = [...new Set(files.filter((file) => !models.includes(file)))]
+          const unverifiedModels: string[] = []
           const incompleteModels: string[] = []
           const missingComponents = new Set<string>()
           for (const file of unlisted) {
-            const components = qwenImage21Components(file)
+            const components = modelComponents(file)
             const missing = components.filter((component) => !inventory.has(component))
-            if (components.length && !missing.length) {
-              models.push(file)
-            } else {
+            if (missing.length) {
               incompleteModels.push(file)
               for (const component of missing) missingComponents.add(component)
+            } else {
+              models.push(file)
+              unverifiedModels.push(file)
             }
           }
           resolve({
             kind: 'ready', models: [...new Set(models)],
+            ...(unverifiedModels.length ? { unverifiedModels } : {}),
             ...(incompleteModels.length ? { incompleteModels } : {}),
             ...(missingComponents.size ? { missingComponents: [...missingComponents] } : {})
           })
@@ -206,7 +216,7 @@ type GenerateResponse = {
 }
 
 async function generate(
-  client: Client, request: GenerateRequest, preset: Preset,
+  client: Client, request: GenerateRequest, preset: Preset, definition: (typeof communityModels)[number] | undefined,
   signal: AbortSignal, progress: (progress: DrawThingsProgress) => void, timeoutMs: number
 ): Promise<DrawThingsReply> {
   const { width, height } = request
@@ -219,6 +229,7 @@ async function generate(
       hints: refs.length ? [{ hintType: 'shuffle', tensors: refs.map(tensor => ({ tensor, weight: 1 })) }] : [],
       prompt: request.prompt, negativePrompt: preset.mode === 'edit' ? ' ' : '',
       configuration: configuration(request, preset), user: 'Drama Flow Studio', device: 2, chunked: true,
+      override: definition ? { models: Buffer.from(JSON.stringify([definition])) } : undefined,
       sharedSecret: request.sharedSecret || undefined
     },
     { deadline: Date.now() + timeoutMs }
@@ -272,7 +283,7 @@ export async function requestDrawThingsGrpc(
     if (request.kind === 'check' || ready.kind !== 'ready') return ready
     if (ready.models && !ready.models.includes(request.model)) {
       if (ready.incompleteModels?.includes(request.model)) {
-        const missingComponents = qwenImage21Components(request.model)
+        const missingComponents = modelComponents(request.model)
           .filter((file) => ready.missingComponents?.includes(file))
         return { kind: 'modelIncomplete', models: ready.models, ...(missingComponents.length ? { missingComponents } : {}) }
       }
@@ -281,7 +292,10 @@ export async function requestDrawThingsGrpc(
     const preset = drawThingsPreset(request.model)
     if (!preset) return { kind: 'invalidRequest' }
     if (signal.aborted) return { kind: 'cancelled' }
-    return await generate(client, request, preset, signal, progress, timeouts.generationMs)
+    const unverified = ready.models === undefined || ready.unverifiedModels?.includes(request.model)
+    const definition = unverified ? communityDefinitions.get(request.model) : undefined
+    if (unverified && !definition) progress({ warning: 'unverifiedModel' })
+    return await generate(client, request, preset, definition, signal, progress, timeouts.generationMs)
   } finally {
     client.close()
   }

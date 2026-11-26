@@ -107,8 +107,15 @@ export async function generateDrawThings(
     reference = canvas.toDataURL('image/jpeg', 0.95).split(',')[1]
   }
   const id = crypto.randomUUID()
+  let warning = ''
   const off = api.onDrawThingsProgress(id, (progress) => {
-    onProgress?.(progress ? t('drawThings.sampling', progress) : t('drawThings.generating'))
+    if (progress && 'warning' in progress) {
+      warning = t('drawThings.unverifiedModel')
+      onProgress?.(warning)
+      return
+    }
+    const message = progress ? t('drawThings.sampling', progress) : t('drawThings.generating')
+    onProgress?.(warning ? `${warning} ${message}` : message)
   })
   let cancel: (() => void) | undefined
   try {

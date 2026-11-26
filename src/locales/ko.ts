@@ -22,6 +22,8 @@ export default {
     "ready": "Draw Things API에 연결했습니다.",
     "noInstalledModels": "Draw Things에 연결했습니다. 지원하는 이미지 모델을 먼저 받아 주세요.",
     "modelUnavailable": "이 서버에 없는 모델입니다. 새로고침된 목록에서 모델을 다시 골라 주세요.",
+    "nonCommercialLicense": "비상업 라이선스",
+    "unverifiedModel": "서버의 이 모델 지원 여부를 확인할 수 없습니다. 생성 결과가 깨질 수 있습니다.",
     "modelIncomplete": "서버에 모델 파일은 있지만 생성에 사용할 수 없습니다. Draw Things에서 텍스트 인코더와 VAE를 확인한 뒤 모델 목록을 새로고침해 주세요.",
     "missingComponents": "서버 목록에서 필요한 구성 파일을 확인할 수 없습니다. Draw Things에서 다음 파일을 받은 뒤 모델 목록을 새로고침해 주세요. {files}",
     "incompleteList": "서버가 생성에 사용할 수 없다고 보고한 모델입니다. Draw Things에서 모델과 구성 파일을 확인해 주세요. {models}",

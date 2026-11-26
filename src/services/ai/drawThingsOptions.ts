@@ -33,21 +33,12 @@ export function drawThingsPreset(model: string) {
   return PRESETS.find(({ family, name }) => model === name || (/^[a-z0-9_.-]+\.ckpt$/i.test(model) && family.test(model)))
 }
 
-export function drawThingsModelLabel(model: string) {
+export function drawThingsModelLabel(model: string, nonCommercialLabel: string) {
   const preset = drawThingsPreset(model)
-  if (!preset || preset.name === model) return model
+  if (!preset) return model
   const variant = model.match(/_(q\d+p|i\d+x|[bf]+16)\.ckpt$/i)?.[1]
-  return variant ? `${preset.name} · ${variant}` : model
-}
-
-// These names are the dependencies in Draw Things' official ModelZoo entries.
-export function qwenImage21Components(model: string): string[] {
-  const variant = /^qwen_image_2\.1_(q[68]p|i[48]x|f16)\.ckpt$/i.exec(model)?.[1]?.toLowerCase()
-  if (!variant) return []
-  return [
-    `qwen_3_vl_8b_instruct_${variant === 'f16' ? 'f16' : 'i8x'}.ckpt`,
-    'qwen_image_2.1_vae_f16.ckpt'
-  ]
+  const label = variant ? `${preset.name} · ${variant}` : model
+  return preset.name === 'Qwen Image 2.1' ? `${label} · ${nonCommercialLabel}` : label
 }
 
 export function drawThingsInputError(model: string, count: number, grpc = false) {
@@ -85,7 +76,7 @@ export type DrawThingsRequest = { baseUrl: string; sharedSecret?: string } & (
     })
 
 export type DrawThingsReply =
-  | { kind: 'ready'; models?: string[]; incompleteModels?: string[]; missingComponents?: string[] }
+  | { kind: 'ready'; models?: string[]; unverifiedModels?: string[]; incompleteModels?: string[]; missingComponents?: string[] }
   | { kind: 'modelUnavailable'; models: string[] }
   | { kind: 'modelIncomplete'; models: string[]; missingComponents?: string[] }
   | { kind: 'image'; data: ArrayBuffer; mimeType: 'image/png' | 'image/jpeg' }
@@ -98,4 +89,4 @@ export type DrawThingsDesktopRequest = { encryptedSharedSecret?: string } & (
   | Omit<Extract<DrawThingsRequest, { kind: 'generate' }>, 'sharedSecret'>
 )
 
-export type DrawThingsProgress = { step: number; total: number } | undefined
+export type DrawThingsProgress = { step: number; total: number } | { warning: 'unverifiedModel' } | undefined
