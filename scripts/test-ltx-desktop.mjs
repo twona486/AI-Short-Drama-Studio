@@ -297,7 +297,7 @@ test('한국어 립싱크의 단일 화자, WAV, Remote 계약, 재조회, 후�
   context.after(() => new Promise((resolve) => server.close(resolve)))
   const baseUrl = `http://127.0.0.1:${server.address().port}`
   const generated = []
-  let speechSamples = 12_000
+  let speechSamples = 55_200
   let frameReads = 0
   globalThis.window = {
     addEventListener() {},
@@ -392,31 +392,38 @@ test('한국어 립싱크의 단일 화자, WAV, Remote 계약, 재조회, 후�
   assert.equal(uploaded[1].body.toString(), 'hello')
   const wav = uploaded[0].body
   assert.equal(wav.readUInt32LE(24), 24_000)
-  assert.equal(wav.readUInt32LE(40), 96_000)
+  assert.equal(wav.readUInt32LE(40), 116_000)
   const pcm = wav.subarray(44)
   assert.deepEqual(pcm, Buffer.concat([
-    Buffer.alloc(36_000), Buffer.alloc(24_000, 1), Buffer.alloc(36_000)
+    Buffer.alloc(110_400, 1), Buffer.alloc(5_600)
   ]))
-  assert.equal(joinLipSyncWavs([Uint8Array.from(pcmToWav(Buffer.alloc(48_000 * 3)).wav).buffer]).duration, 3)
+  for (const samples of [48_000, 49_000, 49_001, 55_200, 57_000, 72_000]) {
+    const source = Uint8Array.from(pcmToWav(Buffer.alloc(samples * 2, 1)).wav).buffer
+    const { duration, uploadDuration } = joinLipSyncWavs([source])
+    const generatedFrames = Math.floor((Math.floor(uploadDuration * 24) - 1) / 8) * 8 + 1
+    assert.equal(duration, samples / 24_000)
+    assert.ok(generatedFrames / 24 >= duration)
+    assert.ok(uploadDuration - duration <= 0.4)
+  }
   assert.match(submitted[0].params.prompt, /Minji \(Short hair and a blue jacket\) looks at the camera and speaks/)
   assert.doesNotMatch(submitted[0].params.prompt, /beat|silent|no speech|mouth closed|wide shot/i)
   assert.equal(requests.filter(({ kind }) => kind === 'submitAudio').length, 1)
   assert.equal(requests.filter(({ kind }) => kind === 'submit').length, 0)
   assert.doesNotMatch(submitted[0].params.prompt, /[가-힣\n]/)
-  assert.deepEqual(persisted, [{ id: 'ltx-desktop:lip-job', duration: 2 }, { id: undefined, duration: undefined }])
-  assert.equal(shotPlaybackDuration(project.current.shots[0]), 2)
+  assert.deepEqual(persisted, [{ id: 'ltx-desktop:lip-job', duration: 2.3 }, { id: undefined, duration: undefined }])
+  assert.equal(shotPlaybackDuration(project.current.shots[0]), 2.3)
   assert.equal(project.current.shots[0].duration, 6)
-  assert.equal(project.current.timeline[0].duration, 2)
-  assert.match(project.current.captionSrt, /00:00:02,000/)
+  assert.equal(project.current.timeline[0].duration, 2.3)
+  assert.match(project.current.captionSrt, /00:00:02,300/)
   assert.deepEqual(clipAudioSelection(project.current, { ...project.current.timeline[0], voiceAssetId: 'old-dub' }, false), {
     keepSource: true, embeddedLipSync: true, voiceAssetId: undefined
   })
-  assert.equal(clipCaptionDuration(project.current, { ...project.current.timeline[0], duration: 6 }), 2)
+  assert.equal(clipCaptionDuration(project.current, { ...project.current.timeline[0], duration: 6 }), 2.3)
   assert.equal(clipLipSyncDuration(project.current, { ...project.current.timeline[0], assetId: 'older-video' }), undefined)
   project.setShotAudioMode(shot.id, 'tts')
   assert.equal(needsExternalTts(project.current.shots[0], project.current), false)
 
-  project.updateShot(shot.id, { videoTaskId: 'ltx-desktop:lip-job', lipSyncTask: { id: 'ltx-desktop:lip-job', duration: 2 } })
+  project.updateShot(shot.id, { videoTaskId: 'ltx-desktop:lip-job', lipSyncTask: { id: 'ltx-desktop:lip-job', duration: 2.3 } })
   requests.length = 0
   await generateShotVideo(project.current.shots[0])
   assert.deepEqual(requests.map(({ kind }) => kind), ['status', 'download'])
@@ -428,10 +435,12 @@ test('한국어 립싱크의 단일 화자, WAV, Remote 계약, 재조회, 후�
   await assert.rejects(generateShotVideo(project.current.shots[0]), /최대 20초를 초과합니다.*대사를 여러 샷으로/)
   project.current.settings.defaultVideoResolution = '1080p'
   await assert.rejects(generateShotVideo(project.current.shots[0]), /최대 10초를 초과합니다/)
+  speechSamples = 237_600
+  await assert.rejects(generateShotVideo(project.current.shots[0]), /무음을 넣으면 립싱크 최대 10초를 초과합니다/)
   assert.equal(submitted.length, 1)
   supportsAudio = false
   assert.equal(await project.checkShotLipSync(project.current.shots[0]), false)
   assert.equal(project.shotSupportsLipSync(project.current.shots[0]), false)
   await assert.rejects(generateShotVideo(project.current.shots[0]), /Audio to Video/)
-  assert.equal(generated.length, 3)
+  assert.equal(generated.length, 4)
 })

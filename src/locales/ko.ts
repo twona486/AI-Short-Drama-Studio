@@ -6,6 +6,7 @@ export default {
     "noDialogue": "립싱크로 합성할 대사가 없습니다.",
     "synthesizing": "립싱크 대사를 합성하고 있어요. ({current}/{total})",
     "tooLong": "립싱크 음성이 {actual}초로 최대 {max}초를 초과합니다. 대사를 여러 샷으로 나눠 주세요.",
+    "paddingTooLong": "대사 끝을 보호하는 무음을 넣으면 립싱크 최대 {max}초를 초과합니다. 대사를 줄이거나 여러 샷으로 나눠 주세요.",
     "durationMismatch": "립싱크 음성은 {actual}초예요. 스토리보드에는 {planned}초로 설정돼 있어요.",
     "embedded": "영상에 립싱크 음성이 들어 있어요.",
     "pending": "영상 노드에서 립싱크를 생성해 주세요.",

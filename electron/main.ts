@@ -1,4 +1,3 @@
-import { registerElevenLabsIpc } from './elevenlabs-ipc'
 import type { OpenAiTtsRequest } from '../src/services/ai/openAiTts'
 import { createDrawThingsQueue } from './draw-things'
 import { DRAW_THINGS_MAX_SECRET_BYTES, isDrawThingsGrpc, type DrawThingsDesktopRequest } from '../src/services/ai/drawThingsOptions'
@@ -31,6 +30,7 @@ import { isIP } from 'node:net'
 import http from 'node:http'
 import https from 'node:https'
 import { requestLtx } from './ltx'
+import { registerElevenLabsIpc } from './elevenlabs-ipc'
 import type { LtxRequest } from '../src/services/ai/ltxOptions'
 import ko from '../src/locales/ko'
 import zh from '../src/locales/zh'
@@ -544,6 +544,7 @@ if (app.isPackaged && !app.commandLine.hasSwitch('user-data-dir')) {
 
 app.whenReady().then(async () => {
   installApplicationMenu()
+  registerElevenLabsIpc()
   const savedRoot = readStorageRootPreference(rootPreferencePath())
   const root = savedRoot ?? defaultRoot()
   const fallback = path.join(app.getPath('userData'), 'Recovery')
@@ -903,7 +904,6 @@ app.whenReady().then(async () => {
   }
 
   const providerRequests = new Map<string, AbortController>()
-  registerElevenLabsIpc(providerRequests)
   ipcMain.on('desktop:cancelProviderFetch', (event, requestId: string) => {
     providerRequests.get(`${event.sender.id}:${requestId}`)?.abort()
   })

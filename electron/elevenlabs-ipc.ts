@@ -27,7 +27,11 @@ function openKey(encryptedKey: unknown): string {
   }
 }
 
-export function registerElevenLabsIpc(requests: Map<string, AbortController>) {
+export function registerElevenLabsIpc() {
+  const requests = new Map<string, AbortController>()
+  ipcMain.on('desktop:cancelProviderFetch', ({ sender }, requestId: string) => {
+    requests.get(`${sender.id}:${requestId}`)?.abort()
+  })
   ipcMain.handle('desktop:protectElevenLabsKey', (_event, key: unknown) => protectKey(key))
   ipcMain.handle('desktop:elevenLabs', async ({ sender }, request: ElevenLabsRequest) => {
     const id = `${sender.id}:${request?.requestId}`

@@ -50,12 +50,13 @@ import {
 import { blobToChatImageUrl, callLLM } from '@/services/ai/client'
 import { stripReasoningLeak } from '@/utils/jsonRepair'
 import { resolveImageAdapter } from '@/services/ai/adapters'
-import { elevenLabsModel } from '@/services/ai/elevenLabsTts'
-import { elevenLabsShotSpeech, openAiLipSyncLines, openAiShotSpeech, shotSpeakerSubject } from '@/services/ai/shotSpeech'
+import { openAiLipSyncLines, openAiShotSpeech, shotSpeakerSubject } from '@/services/ai/shotSpeech'
 import { DRAW_THINGS_PROVIDER } from '@/services/ai/drawThingsOptions'
 import { observeMediaPrompts } from '@/services/ai/mediaPromptObserver'
 import { getImageConfig, imageModelForProject, getVideoPromptStyle, getTtsConfig } from '@/services/ai/runtime'
 import { pickDocImageResolution } from '@/services/ai/modelOptions'
+import { elevenLabsModel } from '@/services/ai/elevenLabsTts'
+import { elevenLabsShotSpeech } from '@/services/ai/shotSpeech'
 import { importedDirectorPrefix } from '@/services/settings/directorSkill'
 import { collectShotRefIds, collectShotBoardRefIds, collectShotKeyframeRefIds, collectShotVideoEntries, packVideoRefEntries, boundSubjectIds, sceneAssetForShot, sceneForShot, subjectsForShot, sceneHasKeyProps } from '@/utils/consistency'
 import { resolveShotPlace } from '@/utils/shotPlace'
@@ -1442,6 +1443,7 @@ export async function generateShotVideo(shot: Shot, onProgress?: (msg: string) =
       const joined = joinLipSyncWavs([await result.blob.arrayBuffer()])
       const max = ltxDesktopAudioMax(ltxDesktopAudioResolution(videoResolution))
       if (joined.duration > max) throw new Error(translate('lipSync.tooLong', { actual: joined.duration.toFixed(2), max }))
+      if (joined.uploadDuration > max) throw new Error(translate('lipSync.paddingTooLong', { max }))
       lipSyncWav = joined.wav
       lipSyncDuration = joined.duration
       ensureNotCancelled(signal)

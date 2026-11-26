@@ -103,7 +103,7 @@ function fixture({ firstFrameAssetId, imageAssetId, videoTaskId, imageKey = 'fix
       return `${subject} speaks to the camera`
     },
     generateSpeech: async () => ({ blob: new Blob(['speech']) }),
-    joinLipSyncWavs: ([wav]) => ({ wav, duration: 2 }),
+    joinLipSyncWavs: ([wav]) => ({ wav, duration: 2, uploadDuration: 50 / 24 }),
     ltxDesktopAudioMax: () => 20,
     ltxDesktopAudioResolution: (value) => value,
     ltxLipSyncFramePrompt: (subject, scene) => `Close-up of ${subject} at the ${scene}`,

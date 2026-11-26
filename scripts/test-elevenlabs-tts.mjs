@@ -42,7 +42,9 @@ test('원문, 캐릭터 선택, 말투를 한국어 PCM 요청에 반영하고 �
   assert.equal(result.credits, 18)
   const wav = result.wav.buffer.slice(result.wav.byteOffset, result.wav.byteOffset + result.wav.byteLength)
   assert.equal(lipSyncPcm(wav).byteLength, 48_000)
-  assert.equal(joinLipSyncWavs([wav]).duration, 2)
+  const lipSync = joinLipSyncWavs([wav])
+  assert.equal(lipSync.duration, 1)
+  assert.equal(lipSync.uploadDuration, 50 / 24)
 })
 
 test('공유 라이브러리에서 한국어와 검색어를 사용하고 요청을 취소합니다', async (context) => {
