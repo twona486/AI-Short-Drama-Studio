@@ -9,7 +9,7 @@ export function validLtxImage(uri: unknown): uri is string {
   return typeof uri === 'string' && uri.length <= 7_000_000 && IMAGE_URI.test(uri)
 }
 
-export async function requestLtx(fetcher: typeof fetch, request: LtxRequest): Promise<LtxReply> {
+export async function requestLtx(fetcher: typeof fetch, request: LtxRequest, signal?: AbortSignal): Promise<LtxReply> {
   if (!request || typeof request.apiKey !== 'string' || !request.apiKey.trim()) return { kind: 'invalid' }
   let url = LTX_BASE_URL + '/v2/image-to-video'
   const headers = { Authorization: `Bearer ${request.apiKey.trim()}`, 'Content-Type': 'application/json' }
@@ -28,10 +28,11 @@ export async function requestLtx(fetcher: typeof fetch, request: LtxRequest): Pr
     if (typeof request.jobId !== 'string' || !JOB_ID.test(request.jobId)) return { kind: 'invalid' }
     url += '/' + request.jobId
   }
+  const timeout = AbortSignal.timeout(30_000)
   try {
     const response = await fetcher(url, {
       method: body ? 'POST' : 'GET', headers, body,
-      redirect: 'error', signal: AbortSignal.timeout(30_000)
+      redirect: 'error', signal: signal ? AbortSignal.any([signal, timeout]) : timeout
     })
     if (!response.ok) {
       const retryAfter = response.headers.get('retry-after')
@@ -57,6 +58,7 @@ export async function requestLtx(fetcher: typeof fetch, request: LtxRequest): Pr
       default: return { kind: 'invalid' }
     }
   } catch {
+    signal?.throwIfAborted()
     return { kind: 'network' }
   }
 }

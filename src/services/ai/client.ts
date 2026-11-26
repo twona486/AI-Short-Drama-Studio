@@ -6,7 +6,7 @@ export type { AIMode } from '@/stores/settings'
 export { getAIMode } from './runtime'
 
 import { t as translate } from '@/i18n'
-import { desktop, isDesktop } from '@/services/desktop'
+import { desktop, isDesktop, providerRequest } from '@/services/desktop'
 import { parseJsonRobust } from '@/utils/jsonRepair'
 import { finalAnswerText } from './finalAnswer'
 import { mockLLM } from './mock'
@@ -104,22 +104,6 @@ function friendlyNetworkError(e: unknown): Error {
   return new Error('언어 모델에 연결하지 못했어요. 네트워크와 브라우저 설정을 확인한 뒤 다시 시도해 주세요.')
 }
 
-async function withAbort<T>(promise: Promise<T>, signal: AbortSignal): Promise<T> {
-  if (signal.aborted) throw new DOMException('작업을 취소했어요.', 'AbortError')
-  let onAbort: (() => void) | undefined
-  try {
-    return await Promise.race([
-      promise,
-      new Promise<never>((_, reject) => {
-        onAbort = () => reject(new DOMException('작업을 취소했어요.', 'AbortError'))
-        signal.addEventListener('abort', onAbort, { once: true })
-      })
-    ])
-  } finally {
-    if (onAbort) signal.removeEventListener('abort', onAbort)
-  }
-}
-
 type LlmHttpResult = {
   ok: boolean
   status: number
@@ -192,15 +176,13 @@ export async function callLLM(req: LLMRequest): Promise<LLMResponse> {
     const payloadBody = JSON.stringify(adaptOpenAiChatBody(baseUrl, payload))
     const authorization = `Bearer ${apiKey}`
     if (isDesktop() && typeof desktop().llmFetch === 'function') {
-      const res = await withAbort(
-        desktop().llmFetch({
-          url,
-          authorization,
-          body: payloadBody,
-          timeoutMs
-        }),
-        signal
-      )
+      const res = await providerRequest(signal, (requestId) => desktop().llmFetch({
+        requestId,
+        url,
+        authorization,
+        body: payloadBody,
+        timeoutMs
+      }))
       return {
         ok: res.ok,
         status: res.status,

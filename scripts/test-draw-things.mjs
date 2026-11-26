@@ -311,7 +311,7 @@ test('HTTP 연결, 모델 전환, 한 장 편집 요청과 응답 오류', async
   assert.deepEqual(await queue.request(1, job(baseUrl, qwen, 'err', 'invalid')), { kind: 'invalidResponse' })
 })
 
-test('HTTP 생성은 순서대로 보내고 대기 중인 요청은 전송 전에 취소', async (context) => {
+test('HTTP 생성은 대기 및 실행 중 취소를 처리하고 응답이 늦어도 다음 작업을 실행', async (context) => {
   let start
   const started = new Promise((resolve) => { start = resolve })
   let release
@@ -338,14 +338,12 @@ test('HTTP 생성은 순서대로 보내고 대기 중인 요청은 전송 전�
     queue.cancel(1, 'queued')
     queue.cancel(1, 'first')
     assert.deepEqual(await queued, { kind: 'cancelled' })
-    await setImmediate()
-    assert.deepEqual(prompts, ['first'])
+    assert.deepEqual(await first, { kind: 'cancelled' })
+    assert.equal((await last).kind, 'image')
+    assert.deepEqual(prompts, ['first', 'last'])
   } finally {
     release()
   }
-  assert.equal((await first).kind, 'image')
-  assert.equal((await last).kind, 'image')
-  assert.deepEqual(prompts, ['first', 'last'])
 })
 
 function scan(bytes) {

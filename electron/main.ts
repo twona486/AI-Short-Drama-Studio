@@ -1,3 +1,5 @@
+import { registerProviderRequests } from './provider-requests'
+import { ProviderResponseTooLarge, readAutoDlResponse } from './provider-response'
 import type { OpenAiTtsRequest } from '../src/services/ai/openAiTts'
 import { createDrawThingsQueue } from './draw-things'
 import { DRAW_THINGS_MAX_SECRET_BYTES, isDrawThingsGrpc, type DrawThingsDesktopRequest } from '../src/services/ai/drawThingsOptions'
@@ -40,8 +42,8 @@ import { closeAppDb, getDbPath, isAppDbOpen, kvGet, kvSet, openAppDb } from './s
 let nativeLocale: 'ko' | 'zh' = 'ko'
 
 function nativeText(key: keyof typeof ko.electron, fields: Record<string, string | number> = {}) {
-  const messages = nativeLocale === 'zh' ? zh.electron : ko.electron
-  return messages[key].replace(/\{(\w+)\}/g, (placeholder, field: string) =>
+  const messages: Partial<typeof ko.electron> = nativeLocale === 'zh' ? zh.electron : ko.electron
+  return (messages[key] ?? ko.electron[key]).replace(/\{(\w+)\}/g, (placeholder, field: string) =>
     Object.hasOwn(fields, field) ? String(fields[field]) : placeholder
   )
 }
@@ -160,10 +162,13 @@ async function assertPublicHttpsUrl(raw: string): Promise<URL> {
 async function downloadPublicVideo(
   rawUrl: string,
   dest: string,
-  redirectsLeft = 5
+  redirectsLeft = 5,
+  signal?: AbortSignal
 ): Promise<void> {
+  signal?.throwIfAborted()
   const parsed = await assertPublicHttpsUrl(rawUrl)
   await new Promise<void>((resolve, reject) => {
+    let received = false
     const req = https.get(
       parsed,
       {
@@ -171,9 +176,11 @@ async function downloadPublicVideo(
           Accept: 'video/*,application/octet-stream;q=0.9,*/*;q=0.1',
           'User-Agent': 'AI-Cut-Desktop/1.0'
         },
+        signal,
         timeout: 180_000
       },
       (res) => {
+        received = true
         const status = res.statusCode || 0
         const location = res.headers.location
         if (status >= 300 && status < 400 && location) {
@@ -183,7 +190,7 @@ async function downloadPublicVideo(
             return
           }
           const next = new URL(location, parsed).toString()
-          downloadPublicVideo(next, dest, redirectsLeft - 1).then(resolve, reject)
+          downloadPublicVideo(next, dest, redirectsLeft - 1, signal).then(resolve, reject)
           return
         }
         if (status < 200 || status >= 300) {
@@ -204,11 +211,11 @@ async function downloadPublicVideo(
           return
         }
 
-        pipeline(res, createWriteStream(dest)).then(resolve, reject)
+        pipeline(res, createWriteStream(dest), { signal }).then(resolve, reject)
       }
     )
     req.once('timeout', () => req.destroy(new Error(nativeText('downloadTimeout'))))
-    req.once('error', reject)
+    req.on('error', (error) => { if (!received) reject(error) })
   })
 }
 
@@ -901,22 +908,14 @@ app.whenReady().then(async () => {
     )
   }
 
-  const providerRequests = new Map<string, AbortController>()
-  ipcMain.on('desktop:cancelProviderFetch', (event, requestId: string) => {
-    providerRequests.get(`${event.sender.id}:${requestId}`)?.abort()
-  })
-  ipcMain.handle('desktop:openAiTts', async (event, request: OpenAiTtsRequest) => {
-    const id = `${event.sender.id}:${request?.requestId}`
-    const controller = new AbortController()
-    const abort = () => controller.abort()
-    providerRequests.set(id, controller)
-    event.sender.once('destroyed', abort)
+  const startProviderRequest = registerProviderRequests(ipcMain)
+  ipcMain.handle('desktop:openAiTts', async ({ sender }, request: OpenAiTtsRequest) => {
+    const task = startProviderRequest(sender, request?.requestId)
     try {
       const { requestOpenAiTts } = await import('./openai-tts')
-      return await requestOpenAiTts(request, controller.signal)
+      return await requestOpenAiTts(request, task.signal)
     } finally {
-      event.sender.removeListener('destroyed', abort)
-      providerRequests.delete(id)
+      task.dispose()
     }
   })
   ipcMain.handle('desktop:autodlFetch', async (event, opts?: {
@@ -929,6 +928,7 @@ app.whenReady().then(async () => {
     bodyBytes?: ArrayBuffer
     requestId?: string
     contentType?: string
+    binary?: boolean
     timeoutMs?: number
   }) => {
     const url = String(opts?.url || '')
@@ -942,10 +942,7 @@ app.whenReady().then(async () => {
     const method = String(opts?.method || 'GET').toUpperCase()
     if (method !== 'GET' && method !== 'POST') throw new Error(nativeText('comfyMethod'))
     const timeoutMs = Math.min(600000, Math.max(5000, Number(opts?.timeoutMs) || 120000))
-    const controller = new AbortController()
-    const requestKey = opts?.requestId ? `${event.sender.id}:${opts.requestId}` : undefined
-    if (requestKey) providerRequests.set(requestKey, controller)
-    const timer = setTimeout(() => controller.abort(new DOMException('Request timed out', 'TimeoutError')), timeoutMs)
+    const task = startProviderRequest(event.sender, opts?.requestId, timeoutMs)
     try {
       const headers: Record<string, string> = { Accept: 'application/json' }
       for (const [name, value] of Object.entries(opts?.extraHeaders || {})) {
@@ -966,26 +963,17 @@ app.whenReady().then(async () => {
         method,
         headers,
         body: rawBody,
-        signal: controller.signal
+        signal: task.signal
       })
-      const contentType = res.headers.get('content-type') || ''
-      const bytes = Buffer.from(await res.arrayBuffer())
-      const textual = /json|text|xml|javascript|x-www-form-urlencoded/i.test(contentType)
-      return {
-        status: res.status,
-        ok: res.ok,
-        text: textual ? bytes.toString('utf8') : '',
-        dataBase64: textual ? undefined : bytes.toString('base64'),
-        contentType
-      }
+      return await readAutoDlResponse(res, Boolean(opts?.binary), task.signal)
     } catch (err: any) {
-      if (controller.signal.reason?.name === 'TimeoutError') {
+      if (err instanceof ProviderResponseTooLarge) throw new Error(nativeText('autoDlResponseTooLarge'))
+      if (task.signal.reason?.name === 'TimeoutError') {
         throw new Error(nativeText('autoDlTimeout', { seconds: Math.round(timeoutMs / 1000) }))
       }
       throw err
     } finally {
-      if (requestKey) providerRequests.delete(requestKey)
-      clearTimeout(timer)
+      task.dispose()
     }
   })
 
@@ -1002,10 +990,11 @@ app.whenReady().then(async () => {
     const finish = (run: () => void) => {
       if (settled) return
       settled = true
+      signal.removeEventListener('abort', onAbort)
       run()
     }
     if (signal.aborted) {
-      finish(() => reject(Object.assign(new Error('aborted'), { name: 'AbortError' })))
+      reject(signal.reason)
       return
     }
     const secure = target.protocol === 'https:'
@@ -1043,7 +1032,7 @@ app.whenReady().then(async () => {
     })
     const onAbort = () => {
       req.destroy()
-      fail(Object.assign(new Error('aborted'), { name: 'AbortError' }))
+      fail(signal.reason)
     }
     signal.addEventListener('abort', onAbort, { once: true })
     req.on('timeout', () => {
@@ -1051,18 +1040,16 @@ app.whenReady().then(async () => {
       err.code = 'ETIMEDOUT'
       req.destroy(err)
     })
-    req.on('error', (err) => {
-      signal.removeEventListener('abort', onAbort)
-      fail(err)
-    })
+    req.on('error', fail)
     if (method === 'POST') req.write(body || '')
     req.end()
   })
 
-  ipcMain.handle('desktop:llmFetch', async (_e, opts?: {
+  ipcMain.handle('desktop:llmFetch', async (event, opts?: {
     url?: string
     authorization?: string
     body?: string
+    requestId?: string
     timeoutMs?: number
   }) => {
     const url = String(opts?.url || '')
@@ -1089,8 +1076,7 @@ app.whenReady().then(async () => {
       throw new Error(nativeText('llmRequestTooLarge'))
     }
     const timeoutMs = Math.min(900000, Math.max(5000, Number(opts?.timeoutMs) || 120000))
-    const controller = new AbortController()
-    const timer = setTimeout(() => controller.abort(), timeoutMs)
+    const task = startProviderRequest(event.sender, opts?.requestId, timeoutMs)
     try {
       const headers: Record<string, string> = {
         Accept: 'application/json'
@@ -1098,11 +1084,12 @@ app.whenReady().then(async () => {
       if (method === 'POST') headers['Content-Type'] = 'application/json'
       const token = String(opts?.authorization || '').trim()
       if (token) headers.Authorization = token
-      return await readLlmText(parsed, method, headers, method === 'POST' ? body : undefined, timeoutMs, controller.signal)
+      return await readLlmText(parsed, method, headers, method === 'POST' ? body : undefined, timeoutMs, task.signal)
     } catch (err: any) {
-      if (controller.signal.aborted || err?.code === 'ETIMEDOUT' || err?.name === 'AbortError') {
+      if (task.signal.reason?.name === 'TimeoutError' || err?.code === 'ETIMEDOUT') {
         throw new Error(nativeText('llmTimeout', { seconds: Math.round(timeoutMs / 1000) }))
       }
+      task.signal.throwIfAborted()
       const code = String(err?.code || '')
       const msg = err instanceof Error ? err.message : String(err ?? '')
       const reason = code || msg || nativeText('unknownNetworkError')
@@ -1114,16 +1101,17 @@ app.whenReady().then(async () => {
       }
       throw new Error(msg || nativeText('llmConnectionFailed'))
     } finally {
-      clearTimeout(timer)
+      task.dispose()
     }
   })
 
-  ipcMain.handle('desktop:dashscopeFetch', async (_e, opts?: {
+  ipcMain.handle('desktop:dashscopeFetch', async (event, opts?: {
     url?: string
     method?: string
     authorization?: string
     extraHeaders?: Record<string, string>
     body?: string
+    requestId?: string
     timeoutMs?: number
   }) => {
     const url = String(opts?.url || '')
@@ -1147,8 +1135,7 @@ app.whenReady().then(async () => {
     }
     const method = String(opts?.method || 'GET').toUpperCase()
     const timeoutMs = Math.min(600000, Math.max(5000, Number(opts?.timeoutMs) || 120000))
-    const controller = new AbortController()
-    const timer = setTimeout(() => controller.abort(), timeoutMs)
+    const task = startProviderRequest(event.sender, opts?.requestId, timeoutMs)
     try {
       const headers: Record<string, string> = { Accept: 'application/json' }
       const token = String(opts?.authorization || '').trim()
@@ -1163,17 +1150,17 @@ app.whenReady().then(async () => {
         method,
         headers,
         body: method === 'POST' ? String(opts?.body || '') : undefined,
-        signal: controller.signal
+        signal: task.signal
       })
       const text = await res.text()
       return { status: res.status, ok: res.ok, text }
     } catch (err: any) {
-      if (controller.signal.aborted) {
+      if (task.signal.reason?.name === 'TimeoutError') {
         throw new Error(nativeText('bailianTimeout', { seconds: Math.round(timeoutMs / 1000) }))
       }
       throw err
     } finally {
-      clearTimeout(timer)
+      task.dispose()
     }
   })
 
@@ -1213,20 +1200,33 @@ app.whenReady().then(async () => {
   ipcMain.on('desktop:cancelDrawThings', ({ sender }, id: unknown) => {
     if (typeof id === 'string') drawThings.cancel(sender.id, id)
   })
-  ipcMain.handle('desktop:ltxDesktopRequest', (_event, request: LtxDesktopRequest) => requestLtxDesktop(request))
+  ipcMain.handle('desktop:ltxDesktopRequest', async ({ sender }, request: LtxDesktopRequest) => {
+    const task = startProviderRequest(sender, request?.requestId)
+    try {
+      return await requestLtxDesktop(request, task.signal)
+    } finally {
+      task.dispose()
+    }
+  })
 
-  ipcMain.handle('desktop:ltxRequest', (_event, request: LtxRequest) =>
-    requestLtx((url, options) => net.fetch(url, options), request)
-  )
+  ipcMain.handle('desktop:ltxRequest', async ({ sender }, request: LtxRequest) => {
+    const task = startProviderRequest(sender, request?.requestId)
+    try {
+      return await requestLtx((url, options) => net.fetch(url, options), request, task.signal)
+    } finally {
+      task.dispose()
+    }
+  })
 
-  ipcMain.handle('desktop:downloadToTemp', async (_e, url: string) => {
+  ipcMain.handle('desktop:downloadToTemp', async ({ sender }, url: string, requestId?: string) => {
+    const task = startProviderRequest(sender, requestId)
     const target = String(url || '')
     const dest = path.join(
       os.tmpdir(),
       `aicuts-dl-${Date.now()}-${Math.random().toString(36).slice(2, 8)}.mp4`
     )
     try {
-      await downloadPublicVideo(target, dest)
+      await downloadPublicVideo(target, dest, 5, task.signal)
       return dest
     } catch (error) {
       try {
@@ -1235,6 +1235,8 @@ app.whenReady().then(async () => {
         /* ignore incomplete temp file */
       }
       throw error
+    } finally {
+      task.dispose()
     }
   })
 

@@ -4,7 +4,7 @@
  */
 
 import { t as translate, uiPunctuation } from '@/i18n'
-import { desktop, isDesktop } from '@/services/desktop'
+import { consumeProviderFile, desktop, isDesktop, providerRequest } from '@/services/desktop'
 import {
   applyComfyInputs,
   comfyRoleLabel,
@@ -274,6 +274,7 @@ export async function providerHttp(
     contentType?: string
     signal?: AbortSignal
     timeoutMs?: number
+    binary?: boolean
   } = {}
 ): Promise<ProxyHttpResult> {
   throwIfAborted(init.signal)
@@ -296,12 +297,8 @@ export async function providerHttp(
     const multipart = init.form ? new Response(init.form) : undefined
     const bodyBytes = await multipart?.arrayBuffer()
     throwIfAborted(init.signal)
-    const requestId = init.signal && typeof api.cancelProviderFetch === 'function' ? crypto.randomUUID() : undefined
-    const onAbort = () => {
-      if (requestId) api.cancelProviderFetch(requestId)
-    }
-    init.signal?.addEventListener('abort', onAbort, { once: true })
-    const res = await api.autodlFetch({
+    const res = await providerRequest(init.signal, (requestId) => api.autodlFetch({
+      binary: init.binary,
       url,
       method,
       authorization: String(auth || ''),
@@ -314,25 +311,18 @@ export async function providerHttp(
       bodyBase64: init.bodyBase64,
       contentType: multipart?.headers.get('content-type') || init.contentType,
       timeoutMs
-    }).catch((error: unknown) => {
-      throwIfAborted(init.signal)
-      throw error
-    }).finally(() => {
-      init.signal?.removeEventListener('abort', onAbort)
+    }), async (reply) => {
+      if (reply.filePath) await api.remove(reply.filePath).catch(() => {})
     })
-    throwIfAborted(init.signal)
+    const blob = res.filePath ? await consumeProviderFile(res.filePath, init.signal) : undefined
     return {
       ok: res.ok,
       status: res.status,
       text: async () => res.text,
       json: async () => JSON.parse(res.text || '{}'),
-      blob: async () => {
-        if (!res.dataBase64) return new Blob([res.text || ''], { type: res.contentType || 'application/octet-stream' })
-        const binary = atob(res.dataBase64)
-        const bytes = new Uint8Array(binary.length)
-        for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i)
-        return new Blob([bytes], { type: res.contentType || 'application/octet-stream' })
-      }
+      blob: async () => blob && blob.type === res.contentType ? blob : new Blob(
+        [blob ?? res.text ?? ''], { type: res.contentType || 'application/octet-stream' }
+      )
     }
   }
 
@@ -1054,7 +1044,8 @@ export async function comfyPromptGenerate(opts: {
         method: 'GET',
         headers: buildAuthHeader(opts.apiKey || '', adapter),
         signal: opts.signal,
-        timeoutMs: 180_000
+        timeoutMs: 180_000,
+        binary: true
       })
       if (!r.ok) throw new Error(`[comfyui] 다운로드에 실패했습니다. ${r.status}`)
       const blob = await r.blob()
@@ -1076,7 +1067,8 @@ export async function comfyPromptGenerate(opts: {
         method: 'GET',
         headers: buildAuthHeader(opts.apiKey || '', adapter),
         signal: opts.signal,
-        timeoutMs: 180_000
+        timeoutMs: 180_000,
+        binary: true
       })
       if (!view.ok) {
         throw new Error(`[comfyui]  /view 요청에 실패했습니다. ${view.status}`)

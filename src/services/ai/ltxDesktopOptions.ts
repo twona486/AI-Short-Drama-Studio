@@ -52,6 +52,7 @@ export type LtxDesktopOperation =
 
 export type LtxDesktopRequest = {
   baseUrl: string
+  requestId?: string
   hostOverride?: string
   token?: string
   operation: LtxDesktopOperation
@@ -63,14 +64,16 @@ export type LtxDesktopReply =
   | { kind: 'submitted'; id: string }
   | { kind: 'pending' | 'processing'; percent?: number; remainingSeconds?: number }
   | { kind: 'completed'; path: string }
-  | { kind: 'video'; data: ArrayBuffer }
+  | { kind: 'video'; path: string }
   | { kind: 'failed'; code: string }
   | { kind: 'http'; status: number }
-  | { kind: 'unsafeAddress' | 'offline' | 'invalid' | 'unsupported' | 'invalidHostOverride' }
+  | { kind: 'unsafeAddress' | 'offline' | 'invalidResponse' | 'fileError' | 'invalid' | 'unsupported' | 'invalidHostOverride' }
 
 export function ltxDesktopError(reply: LtxDesktopReply, pairing = false) {
   if (reply.kind === 'invalidHostOverride') return 'ltxDesktop.hostOverrideError'
   if (reply.kind === 'invalid' && pairing) return 'ltxDesktop.codeError'
+  if (reply.kind === 'invalidResponse') return 'ltxDesktop.invalidResponse'
+  if (reply.kind === 'fileError') return 'ltxDesktop.fileError'
   if (reply.kind === 'offline') return 'ltxDesktop.offline'
   if (reply.kind === 'unsafeAddress') return 'ltxDesktop.addressError'
   if (reply.kind === 'unsupported') return 'ltxDesktop.unsupported'
@@ -82,4 +85,11 @@ export function ltxDesktopError(reply: LtxDesktopReply, pairing = false) {
     if (reply.status === 429) return 'ltxDesktop.rateLimit'
   }
   return 'ltxDesktop.failed'
+}
+
+// Explicitly stopping a Desktop job also requests cancellation at the provider.
+export class LtxStopRequest extends DOMException {
+  constructor(message: string) {
+    super(message, 'AbortError')
+  }
 }

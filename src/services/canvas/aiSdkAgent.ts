@@ -2,7 +2,7 @@
 import { generateText, tool, type ModelMessage } from 'ai'
 import { createOpenAICompatible } from '@ai-sdk/openai-compatible'
 import { z } from 'zod'
-import { desktop, isDesktop } from '@/services/desktop'
+import { desktop, isDesktop, providerRequest } from '@/services/desktop'
 import { getLlmConfig } from '@/services/ai/runtime'
 import { finalAnswerText } from '@/services/ai/finalAnswer'
 import { adaptOpenAiChatBody } from '@/services/ai/openAiChat'
@@ -120,15 +120,14 @@ async function studioLlmFetch(input: RequestInfo | URL, init?: RequestInit): Pro
     return fetch(input, init)
   }
   const request = new Request(input, init)
-  if (request.signal.aborted) throw new DOMException('작업을 취소했어요.', 'AbortError')
   const body = request.method === 'GET' ? '' : await request.text()
-  const res = await desktop().llmFetch({
+  const res = await providerRequest(request.signal, (requestId) => desktop().llmFetch({
+    requestId,
     url: request.url,
     authorization: request.headers.get('authorization') || '',
     body,
     timeoutMs: 120_000
-  })
-  if (request.signal.aborted) throw new DOMException('작업을 취소했어요.', 'AbortError')
+  }))
   return new Response(res.text, {
     status: res.status,
     headers: { 'content-type': 'application/json' }

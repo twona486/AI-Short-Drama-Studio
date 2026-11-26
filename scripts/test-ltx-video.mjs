@@ -100,7 +100,10 @@ test('일시 오류에서 대기하고 다운로드 실패 뒤 서명 URL을 다
 })
 
 test('저장한 작업 ID로 재조회하고 다운로드한 MP4를 프로젝트 에셋 경로에 기록합니다', async (context) => {
-  context.mock.method(globalThis, 'fetch', () => assert.fail('unexpected network request'))
+  context.mock.method(globalThis, 'fetch', async (url) => {
+    assert.equal(new URL(url).searchParams.get('path'), '/tmp/result.mp4')
+    return new Response(bytes, { headers: { 'Content-Type': 'video/mp4' } })
+  })
   const keys = new Map()
   const files = new Map()
   const controller = new AbortController()
@@ -121,7 +124,8 @@ test('저장한 작업 ID로 재조회하고 다운로드한 MP4를 프로젝트
           controller.abort()
           return { kind: 'submitted', id: 'job123' }
         }
-        assert.deepEqual(request, { apiKey: 'fake', jobId: 'job123' })
+        assert.equal(request.apiKey, 'fake')
+        assert.equal(request.jobId, 'job123')
         return { kind: 'completed', url: resultUrl }
       },
       async downloadToTemp(url) {

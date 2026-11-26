@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict'
 import http from 'node:http'
 import { once } from 'node:events'
+import { readFile, rm } from 'node:fs/promises'
 import { setImmediate } from 'node:timers/promises'
 import { after, test } from 'node:test'
 import { fileURLToPath } from 'node:url'
@@ -50,6 +51,11 @@ test('페어링, 파일 업로드, 대기열, 진행률, 서명 MP4, 취소, 미
   let status = 'queued'
   let assets = 0
   const calls = []
+  let startSlow
+  let closeSlow
+  const slowStarted = new Promise((resolve) => { startSlow = resolve })
+  const slowClosed = new Promise((resolve) => { closeSlow = resolve })
+  const slowPath = signedPath.replace('clip-1', 'slow')
   const server = http.createServer(async (req, res) => {
     try {
       calls.push(req.url)
@@ -64,6 +70,14 @@ test('페어링, 파일 업로드, 대기열, 진행률, 서명 MP4, 취소, 미
       if (req.url === '/api/pairing/exchange') {
         assert.deepEqual(JSON.parse(bytes), { code: 'grant' })
         return json({ token, device_id: 'd1' })
+      }
+      if (req.url === '/api/generations/malformed') return res.end('<html>Invalid response</html>')
+      if (req.url === slowPath) {
+        res.on('close', closeSlow)
+        res.writeHead(200, { 'Content-Type': 'video/mp4' })
+        res.write(mp4)
+        startSlow()
+        return
       }
       if (req.url === signedPath) {
         assert.equal(req.headers.authorization, undefined)
@@ -137,7 +151,21 @@ test('페어링, 파일 업로드, 대기열, 진행률, 서명 MP4, 취소, 미
   assert.deepEqual(await call({ kind: 'status', id: 'job-1' }), { kind: 'completed', path: signedPath })
   const download = await call({ kind: 'download', path: signedPath })
   assert.equal(download.kind, 'video')
-  assert.deepEqual(Buffer.from(download.data), mp4)
+  try {
+    assert.deepEqual(await readFile(download.path), mp4)
+  } finally {
+    await rm(download.path, { force: true })
+  }
+  const malformed = await call({ kind: 'status', id: 'malformed' })
+  assert.deepEqual(malformed, { kind: 'invalidResponse' })
+  assert.equal(ltxDesktopError(malformed), 'ltxDesktop.invalidResponse')
+  const controller = new AbortController()
+  const slow = requestLtxDesktop({ baseUrl, hostOverride: 'localhost:41955', token,
+    operation: { kind: 'download', path: slowPath } }, controller.signal)
+  await slowStarted
+  controller.abort()
+  await assert.rejects(slow, { name: 'AbortError' })
+  await slowClosed
   assert.deepEqual(await call({ kind: 'download', path: 'http://192.168.1.2/a.mp4' }), { kind: 'invalid' })
   assert.deepEqual(await call({ kind: 'cancel', id: 'job-1' }), { kind: 'failed', code: 'cancelled' })
   assert.equal(calls.filter((url) => url === '/api/assets/upload').length, 2)
@@ -149,6 +177,11 @@ test('페어링, 파일 업로드, 대기열, 진행률, 서명 MP4, 취소, 미
 
 test('저장된 LAN 작업 ID로 결과만 받아 프로젝트 MP4 경로에 기록합니다', async (context) => {
   const files = new Map()
+  const removed = []
+  context.mock.method(globalThis, 'fetch', async (url) => {
+    assert.equal(new URL(url).searchParams.get('path'), '/tmp/fixture.mp4')
+    return new Response(mp4, { headers: { 'Content-Type': 'video/mp4' } })
+  })
   const calls = []
   context.mock.timers.enable({ apis: ['setTimeout'] })
   globalThis.document = { addEventListener() {} }
@@ -161,12 +194,15 @@ test('저장된 LAN 작업 ID로 결과만 받아 프로젝트 MP4 경로에 기
         assert.equal(baseUrl, 'studio.local:41955')
         calls.push(operation)
         if (operation.kind === 'status') {
-          const path = calls.length === 1 ? signedPath : signedPath.replace('exp=123', 'exp=456')
+          if (calls.length === 1) return { kind: 'offline' }
+          if (calls.length === 2) return { kind: 'http', status: 503 }
+          const path = calls.length === 3 ? signedPath : signedPath.replace('exp=123', 'exp=456')
           return { kind: 'completed', path }
         }
         if (operation.path === signedPath) return { kind: 'http', status: 403 }
-        return { kind: 'video', data: Uint8Array.from(mp4).buffer }
+        return { kind: 'video', path: '/tmp/fixture.mp4' }
       },
+      async remove(path) { removed.push(path) },
       async exists(path) { return files.has(path) },
       async writeText(path, data) { files.set(path, data) },
       async writeBuffer(path, data) { files.set(path, data) },
@@ -191,14 +227,21 @@ test('저장된 LAN 작업 ID로 결과만 받아 프로젝트 MP4 경로에 기
     prompt: '', duration: 5, width: 1280, height: 720,
     videoProfileId: profileId, resumeTaskId: 'ltx-desktop:job-1'
   })
-  context.mock.timers.tick(3000)
-  await setImmediate()
-  context.mock.timers.tick(3000)
+  for (const delay of [3000, 6000, 12000, 24000]) {
+    context.mock.timers.tick(delay - 1)
+    await setImmediate()
+    const count = calls.length
+    context.mock.timers.tick(1)
+    await setImmediate()
+    assert.ok(calls.length > count)
+  }
   const result = await pending
   assert.deepEqual(calls, [
+    { kind: 'status', id: 'job-1' }, { kind: 'status', id: 'job-1' },
     { kind: 'status', id: 'job-1' }, { kind: 'download', path: signedPath },
     { kind: 'status', id: 'job-1' }, { kind: 'download', path: signedPath.replace('exp=123', 'exp=456') }
   ])
+  assert.deepEqual(removed, ['/tmp/fixture.mp4'])
   assert.equal(result.mimeType, 'video/mp4')
   setActiveProjectDir('/project')
   await saveAsset({
@@ -296,6 +339,12 @@ test('한국어 립싱크의 단일 화자, WAV, Remote 계약, 재조회, 후�
   await once(server, 'listening')
   context.after(() => new Promise((resolve) => server.close(resolve)))
   const baseUrl = `http://127.0.0.1:${server.address().port}`
+  const realFetch = globalThis.fetch
+  context.mock.method(globalThis, 'fetch', async (url, init) => {
+    if (!String(url).startsWith('aicuts://')) return realFetch(url, init)
+    const file = new URL(url).searchParams.get('path')
+    return new Response(await readFile(file), { headers: { 'Content-Type': 'video/mp4' } })
+  })
   const generated = []
   let speechSamples = 12_000
   let frameReads = 0
@@ -309,6 +358,7 @@ test('한국어 립싱크의 단일 화자, WAV, Remote 계약, 재조회, 후�
       },
       async kvGet() { return '{}' },
       async kvSet() {},
+      async remove(path) { await rm(path, { force: true }) },
       async openAiTts({ text, voice }) {
         generated.push({ text, voice })
         return pcmToWav(Buffer.alloc(speechSamples * 2, voice === 'marin' ? 1 : 2))

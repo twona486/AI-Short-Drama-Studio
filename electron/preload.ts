@@ -52,13 +52,15 @@ export type DesktopAPI = {
     bodyBytes?: ArrayBuffer
     requestId?: string
     contentType?: string
+    binary?: boolean
     timeoutMs?: number
-  }) => Promise<{ status: number; ok: boolean; text: string; dataBase64?: string; contentType?: string }>
+  }) => Promise<{ status: number; ok: boolean; text: string; filePath?: string; contentType?: string }>
   cancelProviderFetch: (requestId: string) => void
   llmFetch: (opts: {
     url: string
     authorization?: string
     body?: string
+    requestId?: string
     timeoutMs?: number
   }) => Promise<{ status: number; ok: boolean; text: string }>
   dashscopeFetch: (opts: {
@@ -67,9 +69,10 @@ export type DesktopAPI = {
     authorization?: string
     extraHeaders?: Record<string, string>
     body?: string
+    requestId?: string
     timeoutMs?: number
   }) => Promise<{ status: number; ok: boolean; text: string }>
-  downloadToTemp: (url: string) => Promise<string>
+  downloadToTemp: (url: string, requestId?: string) => Promise<string>
   dbPath: () => Promise<string>
   backupSettings: (raw: string) => Promise<string>
   kvGet: (key: string) => Promise<string | null>
@@ -123,7 +126,7 @@ const api: DesktopAPI = {
   cancelProviderFetch: (requestId) => ipcRenderer.send('desktop:cancelProviderFetch', requestId),
   llmFetch: (opts) => ipcRenderer.invoke('desktop:llmFetch', opts),
   dashscopeFetch: (opts) => ipcRenderer.invoke('desktop:dashscopeFetch', opts),
-  downloadToTemp: (url) => ipcRenderer.invoke('desktop:downloadToTemp', url),
+  downloadToTemp: (url, requestId) => ipcRenderer.invoke('desktop:downloadToTemp', url, requestId),
   dbPath: () => ipcRenderer.invoke('desktop:dbPath'),
   backupSettings: (raw) => ipcRenderer.invoke('desktop:backupSettings', raw),
   kvGet: (key) => ipcRenderer.invoke('desktop:kvGet', key),

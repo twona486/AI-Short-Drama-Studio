@@ -1,7 +1,7 @@
 import { ltxLipSyncFramePrompt, ltxLipSyncPrompt, ltxLipSyncSpeaker, ltxShotPrompt, ltxShotSpeechTooFast } from '@/services/ai/ltxShotPrompt'
 import { videoDurationCapability, nearestVideoDuration } from '@/services/ai/videoDuration'
 import { joinLipSyncWavs } from '@/services/ai/lipSyncWav'
-import { isLtxDesktop, isLtxTask, ltxDesktopAudioMax, ltxDesktopAudioResolution } from '@/services/ai/ltxDesktopOptions'
+import { isLtxDesktop, isLtxTask, ltxDesktopAudioMax, ltxDesktopAudioResolution, LtxStopRequest } from '@/services/ai/ltxDesktopOptions'
 import { isLtxProfile } from '@/services/ai/ltxOptions'
 import { uiPunctuation } from '@/i18n'
 import { t as translate } from "@/i18n"
@@ -3134,7 +3134,7 @@ export function stopDrawThingsNodeWait(nodeId: string) {
 }
 
 export function stopLtxNodeWait(nodeId: string) {
-  ltxNodeWaits.get(nodeId)?.abort(new DOMException(translate('ltx.stopped'), 'AbortError'))
+  ltxNodeWaits.get(nodeId)?.abort(new LtxStopRequest(translate('ltx.stopped')))
 }
 
 export async function runCanvasNode(

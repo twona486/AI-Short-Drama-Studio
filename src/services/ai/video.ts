@@ -1,6 +1,6 @@
 import { prepareMediaPrompt } from './mediaPrompt'
 import { nearestVideoDuration, videoDurationCapability } from './videoDuration'
-import { isLtxDesktop, isLtxTask, ltxDesktopResolution, ltxDesktopAudioResolution, ltxDesktopModel, ltxDesktopError, type LtxDesktopOperation, type LtxDesktopReply } from './ltxDesktopOptions'
+import { isLtxDesktop, isLtxTask, ltxDesktopResolution, ltxDesktopAudioResolution, ltxDesktopModel, ltxDesktopError, LtxStopRequest, type LtxDesktopOperation, type LtxDesktopReply } from './ltxDesktopOptions'
 /**
  * AutoDL.art ComfyUI 워크플로를 이용한 AI 영상 생성
  *
@@ -14,7 +14,7 @@ import { isLtxDesktop, isLtxTask, ltxDesktopResolution, ltxDesktopAudioResolutio
 
 import { t as translate, uiPunctuation } from '@/i18n'
 import { LTX_DEFAULT_MODEL, LTX_MODELS, ltxDuration, type LtxReply } from './ltxOptions'
-import { ltxRequestBody, pollLtxJob, waitForLtxRead } from './ltxJob'
+import { isTransientLtxHttp, ltxRequestBody, pollLtx, pollLtxJob } from './ltxJob'
 import { getAIMode } from './client'
 import { comfyPromptGenerate, httpCustomMediaGenerate, isApimartHost, resolveVideoAdapter } from './adapters'
 import { apimartGenerateVideo, isApimartEndpoint } from './apimart'
@@ -35,7 +35,7 @@ import { normalizeVideoResolution } from '@/types'
 import { pickDocVideoResolution, videoResolutionApiValue, videoResolutionChoices } from '@/services/ai/modelOptions'
 import { abortableDelay, controlledSignal, isTimeoutAbort, throwIfAborted } from './abort'
 import type { VideoPromptStyle } from '@/utils/shotPrompt'
-import { blobFromPath, desktop, isDesktop } from '@/services/desktop'
+import { consumeProviderFile, desktop, isDesktop, providerRequest } from '@/services/desktop'
 import { isLandscapeAspect } from '@/utils/aspect'
 import { toDigitalHumanWav } from '@/services/ffmpeg'
 import { normalizeZealmanBaseUrl, zealmanWorkflowById } from './zealman'
@@ -354,14 +354,15 @@ export async function autodlRequest(
       throw new Error('AI Short Drama Studio를 완전히 종료한 뒤 다시 시작하세요. 데스크톱 앱에 새 AutoDL 연결이 필요합니다.')
     }
     const headers = init.headers || {}
-    const res = await api.autodlFetch({
+    const res = await providerRequest(init.signal, (requestId) => api.autodlFetch({
+      requestId,
       url,
       method: init.method || 'GET',
       authorization: headers.Authorization || '',
       extraHeaders: headers,
       body: init.body,
       timeoutMs
-    })
+    }))
     throwIfAborted(init.signal)
     return {
       ok: res.ok,
@@ -414,14 +415,15 @@ async function dashscopeRequest(
     if (typeof api.dashscopeFetch !== 'function') {
       throw new Error('AI Short Drama Studio를 완전히 종료한 뒤 다시 시작하세요. 데스크톱 앱에 새 Bailian 연결이 필요합니다.')
     }
-    const res = await api.dashscopeFetch({
+    const res = await providerRequest(init.signal, (requestId) => api.dashscopeFetch({
+      requestId,
       url,
       method: init.method || 'GET',
       authorization: init.authorization,
       extraHeaders: init.extraHeaders,
       body: init.body,
       timeoutMs
-    })
+    }))
     throwIfAborted(init.signal)
     return {
       ok: res.ok,
@@ -554,17 +556,10 @@ async function fetchVideoBytes(
   throwIfAborted(signal)
 
   if (isDesktop() && typeof desktop().downloadToTemp === 'function') {
-    const dest = await desktop().downloadToTemp(videoUrl)
-    try {
-      const blob = await blobFromPath(dest)
-      return { blob, mime: blob.type || fallbackMime }
-    } finally {
-      try {
-        await desktop().remove(dest)
-      } catch {
-        /* ignore */
-      }
-    }
+    const dest = await providerRequest(signal, (id) => desktop().downloadToTemp(videoUrl, id),
+      (path) => desktop().remove(path).catch(() => {}))
+    const blob = await consumeProviderFile(dest, signal)
+    return { blob, mime: blob.type || fallbackMime }
   }
 
   const vResp = await fetch(videoUrl, { signal })
@@ -1381,11 +1376,11 @@ async function realLtxVideo(
   progress('pending')
   const blob = await pollLtxJob({
     signal: input.signal,
-    status: () => waitForLtxRead(() => desktop().ltxRequest({ apiKey, jobId: acceptedId }), input.signal),
-    download: (url) => waitForLtxRead(async () => {
+    status: () => providerRequest(input.signal, (requestId) => desktop().ltxRequest({ apiKey, jobId: acceptedId, requestId })),
+    download: async (url) => {
       const result = await fetchVideoBytes(url, input.signal)
       return assertVideoBlob(result.blob)
-    }, input.signal),
+    },
     wait: (ms) => abortableDelay(ms, input.signal),
     progress,
     timeout: () => error('timeout'),
@@ -1402,8 +1397,12 @@ async function realLtxDesktopVideo(
 ): Promise<VideoGenOutput> {
   if (!isDesktop() || !desktop().ltxDesktopRequest) throw new Error(translate('ltx.desktopOnly'))
   if (!cfg.apiKey) throw new Error(translate('ltxDesktop.unpaired'))
-  const request = (operation: LtxDesktopOperation) =>
-    desktop().ltxDesktopRequest({ baseUrl: cfg.baseUrl, hostOverride: cfg.ltxHostOverride, token: cfg.apiKey, operation })
+  const request = (operation: LtxDesktopOperation, signal?: AbortSignal) =>
+    providerRequest(signal, (requestId) => desktop().ltxDesktopRequest({
+      baseUrl: cfg.baseUrl, hostOverride: cfg.ltxHostOverride, token: cfg.apiKey, operation, requestId
+    }), async (reply) => {
+      if (reply.kind === 'video') await desktop().remove(reply.path).catch(() => {})
+    })
   const fail = (reply: LtxDesktopReply): never => {
     throw new Error(translate(ltxDesktopError(reply)))
   }
@@ -1429,43 +1428,55 @@ async function realLtxDesktopVideo(
       const fields = { first, model, prompt, resolution, aspect }
       const reply = await request(input.lipSyncWav
         ? { ...fields, kind: 'submitAudio', audio: input.lipSyncWav }
-        : { ...fields, kind: 'submit', last, duration })
+        : { ...fields, kind: 'submit', last, duration }, input.signal)
       if (reply.kind !== 'submitted') return fail(reply)
       id = reply.id
       await input.onTaskSubmitted?.(`ltx-desktop:${id}`)
     }
 
     const jobId = id
-    const deadline = Date.now() + 60 * 60_000
     let expiredDownloads = 0
-    while (Date.now() < deadline) {
-      await abortableDelay(3000, input.signal)
-      const reply = await waitForLtxRead(() => request({ kind: 'status', id: jobId }), input.signal)
-      if (reply.kind === 'pending') onProgress?.(translate('ltxDesktop.queued'))
-      else if (reply.kind === 'processing') {
-        const status = reply.percent === undefined ? translate('ltxDesktop.processing')
-          : translate('ltxDesktop.percent', { percent: reply.percent })
-        const eta = reply.remainingSeconds === undefined ? ''
-          : translate('ltxDesktop.eta', { seconds: reply.remainingSeconds })
-        onProgress?.([status, eta].filter(Boolean).join(' · '))
-      } else if (reply.kind === 'completed') {
-        onProgress?.(translate('ltx.downloading'))
-        const download = await waitForLtxRead(() => request({ kind: 'download', path: reply.path }), input.signal)
-        if (download.kind === 'http' && download.status === 403 && expiredDownloads++ < 2) continue
-        if (download.kind !== 'video') return fail(download)
-        const blob = await assertVideoBlob(new Blob([download.data]), undefined)
-        return { blob, mimeType: blob.type, prompt, duration }
-      } else {
+    const transient = (reply: LtxDesktopReply) =>
+      reply.kind === 'offline' || (reply.kind === 'http' && isTransientLtxHttp(reply.status))
+    return await pollLtx<VideoGenOutput>({
+      intervalMs: 3000,
+      deadlineMs: 60 * 60_000,
+      wait: (ms) => abortableDelay(ms, input.signal),
+      timeout: () => { throw new Error(translate('ltx.timeout')) },
+      async step() {
+        const reply = await request({ kind: 'status', id: jobId }, input.signal)
+        if (transient(reply)) return { kind: 'retry' }
+        if (reply.kind === 'pending') {
+          onProgress?.(translate('ltxDesktop.queued'))
+          return { kind: 'waiting' }
+        }
+        if (reply.kind === 'processing') {
+          const status = reply.percent === undefined ? translate('ltxDesktop.processing')
+            : translate('ltxDesktop.percent', { percent: reply.percent })
+          const eta = reply.remainingSeconds === undefined ? ''
+            : translate('ltxDesktop.eta', { seconds: reply.remainingSeconds })
+          onProgress?.([status, eta].filter(Boolean).join(' · '))
+          return { kind: 'waiting' }
+        }
+        if (reply.kind === 'completed') {
+          onProgress?.(translate('ltx.downloading'))
+          const download = await request({ kind: 'download', path: reply.path }, input.signal)
+          if (transient(download) || (download.kind === 'http' && download.status === 403 && expiredDownloads++ < 2)) {
+            return { kind: 'retry' }
+          }
+          if (download.kind !== 'video') return fail(download)
+          const blob = await assertVideoBlob(await consumeProviderFile(download.path, input.signal))
+          return { kind: 'done', value: { blob, mimeType: blob.type, prompt, duration } }
+        }
         if (reply.kind === 'failed' || (reply.kind === 'http' && reply.status === 404)) {
           await input.onTaskTerminalFailure?.()
         }
         return fail(reply)
       }
-    }
-    throw new Error(translate('ltx.timeout'))
+    })
   } catch (error) {
     const reason = input.signal?.reason
-    if (id && reason instanceof DOMException && reason.message === translate('ltx.stopped')) {
+    if (id && reason instanceof LtxStopRequest) {
       const reply = await request({ kind: 'cancel', id })
       if (reply.kind === 'failed' && reply.code === 'cancelled') await input.onTaskTerminalFailure?.()
       else if (!['processing', 'completed'].includes(reply.kind)) throw new Error(translate('ltxDesktop.cancelFailed'))
