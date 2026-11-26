@@ -1394,13 +1394,16 @@ const cropStyle = computed(() => ({
       />
       <H3GenModeSelect v-if="isH3VideoNode" v-model="h3GenMode" />
       <p v-if="usesLipSync" class="hint">{{ $t('lipSync.singleSpeaker') }}</p>
+      <p v-if="usesLipSync && shot?.imageAssetId && !shot.firstFrameAssetId && !shot.lipSyncFrame" class="hint">
+        {{ $t('lipSync.smallFaceHint') }}
+      </p>
       <FramePairSlots
         v-if="isH3Fl2va || ltxProfile"
         v-model:first-id="firstFrameId"
         v-model:last-id="lastFrameId"
         :first-only="usesLipSync"
         :last-required="lastFrameRequired"
-        :first-hint="usesLipSync ? $t('lipSync.speakerFrameHint') : shot?.imageAssetId ? $t('common.useShotImage') : $t('common.chooseFirstFrame')"
+        :first-hint="usesLipSync ? $t(shot?.firstFrameAssetId ? 'lipSync.smallFaceHint' : 'lipSync.speakerFrameHint') : shot?.imageAssetId ? $t('common.useShotImage') : $t('common.chooseFirstFrame')"
       />
       <ShotRefStrip
         v-else-if="shot && (type === 'shotBoard' || type === 'shotImage' || type === 'shotVideo')"

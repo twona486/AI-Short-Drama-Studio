@@ -398,7 +398,7 @@ test('한국어 립싱크의 단일 화자, WAV, Remote 계약, 재조회, 후�
     Buffer.alloc(36_000), Buffer.alloc(24_000, 1), Buffer.alloc(36_000)
   ]))
   assert.equal(joinLipSyncWavs([Uint8Array.from(pcmToWav(Buffer.alloc(48_000 * 3)).wav).buffer]).duration, 3)
-  assert.match(submitted[0].params.prompt, /Minji \(Short hair and a blue jacket\) looks toward the camera and speaks/)
+  assert.match(submitted[0].params.prompt, /Minji \(Short hair and a blue jacket\) looks at the camera and speaks/)
   assert.doesNotMatch(submitted[0].params.prompt, /beat|silent|no speech|mouth closed|wide shot/i)
   assert.equal(requests.filter(({ kind }) => kind === 'submitAudio').length, 1)
   assert.equal(requests.filter(({ kind }) => kind === 'submit').length, 0)

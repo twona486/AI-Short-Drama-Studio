@@ -70,12 +70,12 @@ export function ltxLipSyncSpeaker(subject?: Subject, name?: string) {
 export function ltxLipSyncPrompt(speaker: string, focusedFrame: boolean) {
   // A2V uses the input audio for timing and the first frame for appearance.
   const target = focusedFrame ? `${speaker}, centered in a medium close-up,` : speaker
-  return `${target} looks toward the camera and speaks naturally with clear, visible mouth movements that follow the supplied audio. Keep the camera steady in a single continuous take and preserve the opening lighting and appearance.`
+  return `${target} looks at the camera and speaks naturally. Keep the mouth clearly visible in a steady, continuous take.`
 }
 
 export function ltxLipSyncFramePrompt(speaker: string, scene?: string) {
   const location = oneLine(scene).slice(0, 100)
-  return [`A single cinematic medium close-up of one person. ${speaker} is centered, facing the camera at eye level, framed from chest to head. The face is large, sharp and evenly lit, with the entire mouth visible.`,
+  return [`A cinematic close-up to upper-body portrait of one person. ${speaker} is centered at eye level, facing the camera straight on or at a three-quarter angle. Keep the face large, sharp and evenly lit, with the entire mouth visible.`,
     location && `Set the portrait in ${location}, with the background softly out of focus.`,
     'Preserve the character’s appearance and wardrobe from the character reference. Keep other people outside the frame.']
     .filter(Boolean).join(' ')

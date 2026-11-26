@@ -1109,13 +1109,16 @@ async function optimizeVideoPrompt() {
 
       <H3GenModeSelect v-if="isH3Video" v-model="h3GenMode" />
       <p v-if="usesLipSync" class="hint">{{ $t('lipSync.singleSpeaker') }}</p>
+      <p v-if="usesLipSync && shot?.imageAssetId && !shot.firstFrameAssetId && !shot.lipSyncFrame" class="hint">
+        {{ $t('lipSync.smallFaceHint') }}
+      </p>
       <FramePairSlots
         v-if="isH3Fl2va || (ltxProfile && !node.data.captureId)"
         v-model:first-id="firstFrameId"
         v-model:last-id="lastFrameId"
         :first-only="usesLipSync"
         :last-required="lastFrameRequired"
-        :first-hint="usesLipSync ? $t('lipSync.speakerFrameHint') : node.type === 'shotVideo' && shot?.imageAssetId ? $t('common.useShotImage') : ''"
+        :first-hint="usesLipSync ? $t(shot?.firstFrameAssetId ? 'lipSync.smallFaceHint' : 'lipSync.speakerFrameHint') : node.type === 'shotVideo' && shot?.imageAssetId ? $t('common.useShotImage') : ''"
       />
       <ShotRefStrip
         v-else-if="shot && (node.type === 'shotBoard' || node.type === 'shotImage' || node.type === 'shotVideo')"

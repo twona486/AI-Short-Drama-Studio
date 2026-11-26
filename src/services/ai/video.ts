@@ -1479,13 +1479,6 @@ export async function generateVideo(
   onProgress?: (msg: string) => void
 ): Promise<VideoGenOutput> {
   const mode = getAIMode()
-  if (input.lipSyncWav) {
-    const cfg = getVideoConfig(input.videoProfileId)
-    if (mode !== 'real' || !isLtxDesktop(cfg) || input.resumeTaskId || input.videoModel === 'h3-v5' || input.videoModel === 'wan-prime') {
-      throw new Error(translate('lipSync.unavailable'))
-    }
-    return realLtxDesktopVideo(input, cfg, onProgress)
-  }
   if (mode === 'real') {
     const resumeLtx = isLtxTask(input.resumeTaskId)
     if (resumeLtx || (input.videoModel !== 'h3-v5' && input.videoModel !== 'wan-prime')) {
@@ -1493,6 +1486,7 @@ export async function generateVideo(
       if (isLtxDesktop(cfg) && (!resumeLtx || input.resumeTaskId?.startsWith('ltx-desktop:'))) {
         return realLtxDesktopVideo(input, cfg, onProgress)
       }
+      if (input.lipSyncWav) throw new Error(translate('lipSync.unavailable'))
       if (cfg.provider === 'ltx' && (!resumeLtx || input.resumeTaskId?.startsWith('ltx:'))) {
         return realLtxVideo(input, cfg, onProgress)
       }
