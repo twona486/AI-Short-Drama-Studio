@@ -35,14 +35,16 @@ export function buildTimelineCaptionCues(project: Project, clips = project.timel
   }))
 }
 
-/** 립싱크가 들어 있는 클립은 원본 음성을 사용하고 별도의 대사 트랙을 합성하지 않는다. */
+/** 후반 더빙이나 내레이션 없음을 선택하면 기존 립싱크 영상의 소리를 끈다. */
 export function clipAudioSelection(project: Project, clip: TimelineClip, keepAmbient: boolean) {
   const shot = project.shots.find((item) => item.id === clip.shotId)
-  const embeddedLipSync = clipLipSyncDuration(project, clip) !== undefined
+  const hasLipSync = clipLipSyncDuration(project, clip) !== undefined
   const mode = shot && effectiveShotAudioMode(shot)
+  const muteLipSync = hasLipSync && (mode === 'tts' || mode === 'none')
+  const embeddedLipSync = hasLipSync && !muteLipSync
   return {
-    keepSource: embeddedLipSync || project.pipelineMode === 'smart-speech' ||
-      mode === 'h3-dialogue' || mode === 'h3-voiceover' || keepAmbient,
+    keepSource: !muteLipSync && (embeddedLipSync || project.pipelineMode === 'smart-speech' ||
+      mode === 'h3-dialogue' || mode === 'h3-voiceover' || keepAmbient),
     embeddedLipSync,
     voiceAssetId: embeddedLipSync ? undefined : clip.voiceAssetId
   }

@@ -12,7 +12,7 @@ import { useProjectStore, useAssetsStore, useToastStore, useSettingsStore } from
 import { llmChoiceKey, llmModelGroups, parseLlmChoiceKey } from '@/stores/settings'
 import { runCanvasNode, runScriptNode, rewriteShotPerformance, optimizeShotVideoPrompt, optimizeFreeformVideoPrompt, isFl2vaChainActive, regenerateShotFrame } from '@/services/canvas/runner'
 import { isNodeRunning } from '@/services/canvas/jobs'
-import { effectiveShotAudioMode, needsExternalTts } from '@/utils/shot'
+import { effectiveShotAudioMode, needsExternalTts, shotLipSyncDuration } from '@/utils/shot'
 import { applyShotVideoModel, applyShotVideoProfile } from '@/services/canvas/videoModel'
 import { videoRequiresStoryboard } from '@/utils/storyboardGate'
 import { stillModeForShot } from '@/utils/videoStill'
@@ -1185,6 +1185,9 @@ async function optimizeVideoPrompt() {
           @input="project.updateShot(shot.id, { voiceover: ($event.target as HTMLTextAreaElement).value })"
         />
         <TtsModelSelect v-if="effectiveShotAudioMode(shot) === 'tts'" />
+        <p v-if="effectiveShotAudioMode(shot) === 'tts' && shotLipSyncDuration(shot) !== undefined" class="hint">
+          {{ $t('lipSync.postTtsReplacement') }}
+        </p>
         <template v-if="['tts', 'ltx-lip-sync'].includes(effectiveShotAudioMode(shot)) && (isOpenAiTts(settings.config.tts) || isElevenLabsTts(settings.config.tts))">
           <p class="hint">{{ $t(isElevenLabsTts(settings.config.tts) ? 'elevenLabs.shotHint' : 'openAiTts.generatedVoiceHint') }}</p>
           <label>{{ $t('openAiTts.shotInstruction') }}</label>

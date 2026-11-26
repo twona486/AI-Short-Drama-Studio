@@ -68,7 +68,8 @@ export function shotPlaybackDuration(shot: Shot): number {
 }
 
 export function isLipSyncShot(shot: Shot): boolean {
-  return effectiveShotAudioMode(shot) === 'ltx-lip-sync' || shotLipSyncDuration(shot) !== undefined
+  return effectiveShotAudioMode(shot) === 'ltx-lip-sync' ||
+    (shot.audioMode === undefined && !shot.audioAssetId && shotLipSyncDuration(shot) !== undefined)
 }
 
 export function needsExternalTts(
@@ -76,7 +77,7 @@ export function needsExternalTts(
   project?: { pipelineMode?: string; speechWorkflow?: { mode?: string } | null } | null
 ): boolean {
   if (isDigitalHumanSpeechProject(project)) return false
-  return !isLipSyncShot(shot) && effectiveShotAudioMode(shot) === 'tts' && Boolean(shot.voiceover.trim())
+  return effectiveShotAudioMode(shot) === 'tts' && Boolean(shot.voiceover.trim())
 }
 
 /** 새 에셋을 현재 결과로 지정하고 기존 에셋은 이력에 보관한다. 중복을 제거하고 최대 12개를 유지한다. */

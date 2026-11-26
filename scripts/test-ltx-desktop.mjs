@@ -272,7 +272,7 @@ test('한국어 립싱크의 단일 화자, WAV, Remote 계약, 재조회, 후�
   const { generateShotVideo, generateShotAudio } = await vite.ssrLoadModule('/src/services/canvas/runner.ts')
   const { useProjectStore } = await vite.ssrLoadModule('/src/stores/project.ts')
   const { useAssetsStore } = await vite.ssrLoadModule('/src/stores/assets.ts')
-  const { needsExternalTts, shotPlaybackDuration } = await vite.ssrLoadModule('/src/utils/shot.ts')
+  const { isLipSyncShot, needsExternalTts, shotPlaybackDuration } = await vite.ssrLoadModule('/src/utils/shot.ts')
   const { buildTimelineFromShots, buildTimelineCaptionCues, clipAudioSelection, clipCaptionDuration, clipLipSyncDuration } = await vite.ssrLoadModule('/src/utils/timeline.ts')
   const { toSRT } = await vite.ssrLoadModule('/src/services/ffmpeg/subtitle.ts')
   const { joinLipSyncWavs } = await vite.ssrLoadModule('/src/services/ai/lipSyncWav.ts')
@@ -471,7 +471,33 @@ test('한국어 립싱크의 단일 화자, WAV, Remote 계약, 재조회, 후�
   assert.equal(clipCaptionDuration(project.current, { ...project.current.timeline[0], duration: 6 }), 2.3)
   assert.equal(clipLipSyncDuration(project.current, { ...project.current.timeline[0], assetId: 'older-video' }), undefined)
   project.setShotAudioMode(shot.id, 'tts')
-  assert.equal(needsExternalTts(project.current.shots[0], project.current), false)
+  const switched = project.current.shots[0]
+  const clip = { ...project.current.timeline[0], voiceAssetId: 'new-dub' }
+  assert.equal(needsExternalTts(switched, project.current), true)
+  assert.equal(isLipSyncShot(switched), false)
+  assert.equal(isLipSyncShot({ ...switched, audioMode: undefined }), true)
+  assert.equal(isLipSyncShot({ ...switched, audioMode: undefined, audioAssetId: 'legacy-dub' }), false)
+  assert.equal(needsExternalTts({ ...switched, voiceover: ' ' }, project.current), false)
+  assert.equal(needsExternalTts(switched, { pipelineMode: 'smart-speech', speechWorkflow: { mode: 'digital-human' } }), false)
+  assert.equal(shotPlaybackDuration(switched), 2.3)
+  assert.equal(clipCaptionDuration(project.current, clip), 2.3)
+  for (const keepAmbient of [true, false]) {
+    assert.deepEqual(clipAudioSelection(project.current, clip, keepAmbient), {
+      keepSource: false, embeddedLipSync: false, voiceAssetId: 'new-dub'
+    })
+    assert.deepEqual(clipAudioSelection(project.current, { ...clip, assetId: 'other-video' }, keepAmbient), {
+      keepSource: keepAmbient, embeddedLipSync: false, voiceAssetId: 'new-dub'
+    })
+  }
+
+  for (const audioMode of ['none', 'h3-dialogue', 'h3-voiceover', 'ltx-lip-sync']) {
+    project.updateShot(shot.id, { audioMode })
+    assert.equal(needsExternalTts(project.current.shots[0], project.current), false)
+    const keepSource = audioMode !== 'none'
+    assert.deepEqual(clipAudioSelection(project.current, clip, true), {
+      keepSource, embeddedLipSync: keepSource, voiceAssetId: keepSource ? undefined : 'new-dub'
+    })
+  }
 
   project.updateShot(shot.id, { videoTaskId: 'ltx-desktop:lip-job', lipSyncTask: { id: 'ltx-desktop:lip-job', duration: 2.3 } })
   requests.length = 0
