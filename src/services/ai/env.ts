@@ -1,4 +1,4 @@
-import { ELEVENLABS_BASE_URL, ELEVENLABS_DEFAULT_VOICE, ELEVENLABS_MODELS, isElevenLabsTts } from './elevenLabsTts'
+import { ELEVENLABS_BASE_URL, ELEVENLABS_MODELS, isElevenLabsTts } from './elevenLabsTts'
 /** 개발 기본값은 Vite .env에서 읽으며 설치 빌드에는 포함하지 않는다. */
 
 import { isOfficialOpenAiUrl, OPENAI_TTS_DEFAULT_VOICE, OPENAI_TTS_MODELS } from './openAiTts'
@@ -83,7 +83,7 @@ export function envDefaults() {
       baseUrl: ttsBaseUrl,
       apiKey: elevenLabs ? '' : envStr('VITE_TTS_API_KEY'),
       model: envStr('VITE_TTS_MODEL', elevenLabs ? ELEVENLABS_MODELS[0] : openAiTts ? OPENAI_TTS_MODELS[0] : ''),
-      voice: envStr('VITE_TTS_VOICE', elevenLabs ? ELEVENLABS_DEFAULT_VOICE : openAiTts ? OPENAI_TTS_DEFAULT_VOICE : '')
+      voice: envStr('VITE_TTS_VOICE', openAiTts ? OPENAI_TTS_DEFAULT_VOICE : '')
     },
     video: {
       baseUrl: envStr('VITE_VIDEO_BASE_URL'),

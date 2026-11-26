@@ -94,6 +94,7 @@ export interface Shot {
    */
   speakerVoice?: string
   ttsInstruction?: string
+  elevenLabsSentText?: string
   /** 샷 길이(초). */
   duration: number
   /** 카메라 움직임. 밀기, 당기기, 팬, 틸트, 고정, 회전. */

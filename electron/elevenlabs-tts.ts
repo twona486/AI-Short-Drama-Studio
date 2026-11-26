@@ -1,5 +1,5 @@
 import {
-  ELEVENLABS_MODELS, elevenLabsTaggedText,
+  ELEVENLABS_MODELS, type ElevenLabsSpeechRequest,
   type ElevenLabsError, type ElevenLabsOperation, type ElevenLabsReply
 } from '../src/services/ai/elevenLabsTts'
 import { pcm16ToWav } from './pcm-wav'
@@ -9,6 +9,7 @@ const SAMPLE_RATE = 24_000
 
 interface RawVoice {
   voice_id: string
+  public_owner_id?: string
   name: string
   language?: string
   verified_languages?: { language?: string }[]
@@ -16,6 +17,7 @@ interface RawVoice {
   gender?: string
   age?: string
   descriptive?: string
+  description?: string
 }
 
 export async function requestElevenLabs(
@@ -87,31 +89,49 @@ export async function requestElevenLabs(
           voices: result.voices.filter((voice) => /^[a-zA-Z0-9_-]{1,100}$/.test(voice.voice_id)).map((voice) => ({
             id: voice.voice_id,
             name: voice.name,
-            korean: shared || voice.labels?.language === 'ko' ||
+            korean: shared || voice.language === 'ko' || voice.labels?.language === 'ko' ||
               voice.verified_languages?.some(({ language }) => language === 'ko'),
-            traits: [voice.gender, voice.age, voice.descriptive, ...Object.values(voice.labels ?? {})].filter(Boolean).join(' ')
+            ...(shared && voice.public_owner_id ? { publicUserId: voice.public_owner_id } : {}),
+            traits: [voice.gender, voice.age, voice.descriptive, voice.description, ...Object.values(voice.labels ?? {})].filter(Boolean).join(' ')
           })),
           next: result.has_more ? shared ? String(Number(operation.cursor || '0') + 1) : result.next_page_token : undefined
         }
       }
+      case 'addVoice': {
+        const { voice, publicUserId, name } = operation
+        if (typeof voice !== 'string' || !/^[a-zA-Z0-9_-]{1,100}$/.test(voice) ||
+            typeof publicUserId !== 'string' || !/^[a-zA-Z0-9_-]{1,128}$/.test(publicUserId) ||
+            typeof name !== 'string' || !name.trim()) throw new RequestError({ kind: 'invalidRequest' })
+        const result = await (await request(`/v1/voices/add/${publicUserId}/${voice}`, { new_name: name.trim().slice(0, 100) })).json()
+        if (typeof result.voice_id !== 'string' || !/^[a-zA-Z0-9_-]{1,100}$/.test(result.voice_id)) {
+          throw new RequestError({ kind: 'invalidResponse' })
+        }
+        return { kind: 'addVoice', voice: result.voice_id }
+      }
       case 'speech': {
-        const { model, voice, text, instruction } = operation
+        const { model, voice, text, previousText, nextText } = operation
         if (!ELEVENLABS_MODELS.includes(model)) throw new RequestError({ kind: 'invalidModel' })
         if (!/^[a-zA-Z0-9_-]{1,100}$/.test(voice)) throw new RequestError({ kind: 'invalidVoice' })
         if (typeof text !== 'string' || !text.trim()) throw new RequestError({ kind: 'emptySpeech' })
-        const tagged = elevenLabsTaggedText(text, typeof instruction === 'string' ? instruction : '')
-        if (tagged.length > (model === 'eleven_v3' ? 5000 : 100_000)) {
+        if (text.length > (model === 'eleven_v3' ? 5000 : 100_000)) {
           throw new RequestError({ kind: 'textLimit' })
         }
-        const response = await request(`/v1/text-to-speech/${voice}?output_format=pcm_24000`, {
-          text: tagged,
+        const body: ElevenLabsSpeechRequest = {
+          text,
           model_id: model,
           language_code: 'ko',
-          voice_settings: { stability: 0.5, similarity_boost: 0.75 }
-        })
+          // ElevenLabs v4 supports stability and similarity. Style and speed are unavailable.
+          voice_settings: { stability: model === 'eleven_v3' ? 0.5 : 0.4, similarity_boost: 0.75 },
+          ...(model !== 'eleven_v3' && typeof previousText === 'string' && previousText.trim()
+            ? { previous_text: previousText.slice(-1000) } : {}),
+          ...(model !== 'eleven_v3' && typeof nextText === 'string' && nextText.trim()
+            ? { next_text: nextText.slice(0, 1000) } : {})
+        }
+        if (process.env.DRAMA_FLOW_DEBUG_TTS === '1') console.info('[ElevenLabs TTS]', JSON.stringify({ voice, ...body }))
+        const response = await request(`/v1/text-to-speech/${voice}?output_format=pcm_24000`, { ...body })
         const creditHeader = response.headers.get('character-cost')
         const pcm = Buffer.from(await response.arrayBuffer())
-        return { kind: 'speech', ...pcm16ToWav(pcm, SAMPLE_RATE), credits: creditHeader ? Number(creditHeader) : undefined }
+        return { kind: 'speech', ...pcm16ToWav(pcm, SAMPLE_RATE), request: body, credits: creditHeader ? Number(creditHeader) : undefined }
       }
       default:
         throw new RequestError({ kind: 'invalidRequest' })

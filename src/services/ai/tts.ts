@@ -1,3 +1,6 @@
+import { directElevenLabsDelivery, loadKoreanElevenLabsVoices, recommendProjectElevenLabsVoice, type ElevenLabsDeliveryContext } from './elevenLabsDelivery'
+import type { ElevenLabsSpeechRequest } from './elevenLabsTts'
+import type { Subject } from '@/types'
 import { elevenLabsRequest } from './elevenLabsDesktop'
 import { t } from '@/i18n'
 import { desktop, isDesktop } from '@/services/desktop'
@@ -14,12 +17,16 @@ export interface TTSInput {
   /** 노드에서 모델을 따로 선택할 수 있다. 선택하지 않으면 현재 더빙 설정을 사용한다. */
   model?: string
   signal?: AbortSignal
+  delivery?: ElevenLabsDeliveryContext
+  speakerId?: string
+  subjects?: Subject[]
 }
 
 export interface TTSOutput {
   blob: Blob
   mimeType: string
   durationMs?: number
+  elevenLabsRequest?: ElevenLabsSpeechRequest
   model: string
 }
 
@@ -305,11 +312,26 @@ export async function generateSpeech(input: TTSInput): Promise<TTSOutput> {
   const cfg = getTtsConfig()
   const model = input.model?.trim() || cfg.model
   if (cfg.elevenLabs) {
-    const { wav, durationMs } = await elevenLabsRequest(cfg.encryptedElevenLabsKey, {
-      kind: 'speech', model, voice: input.voice || cfg.voice, text: input.text, instruction: input.instruction
+    if (!input.text.trim()) throw new Error(t('elevenLabsErrors.emptySpeech'))
+    if (!cfg.encryptedElevenLabsKey) throw new Error(t('elevenLabs.missingKey'))
+    const voiceForSpeech = async () => {
+      if (input.voice) return input.voice
+      if (!input.speakerId && cfg.voice) return cfg.voice
+      const voices = await loadKoreanElevenLabsVoices(cfg.encryptedElevenLabsKey, input.signal)
+      const voice = recommendProjectElevenLabsVoice(input.subjects ?? [], input.speakerId, voices,
+        cfg.voice, input.delivery?.voiceDescription)
+      if (!voice) throw new Error(t('elevenLabsErrors.invalidVoice'))
+      return voice
+    }
+    const [voice, text] = await Promise.all([
+      voiceForSpeech(),
+      directElevenLabsDelivery(input.text, input.instruction, input.delivery, input.signal)
+    ])
+    const { wav, durationMs, request } = await elevenLabsRequest(cfg.encryptedElevenLabsKey, {
+      kind: 'speech', model, voice, text, previousText: input.delivery?.previousText, nextText: input.delivery?.nextText
     }, input.signal)
     const blob = new Blob([new Uint8Array(wav)], { type: 'audio/wav' })
-    return { blob, mimeType: blob.type, durationMs, model }
+    return { blob, mimeType: blob.type, durationMs, model, elevenLabsRequest: request }
   }
   if (cfg.openAi) {
     if (!isOfficialOpenAiUrl(cfg.baseUrl)) throw new Error(t('openAiTtsErrors.officialAddress'))
