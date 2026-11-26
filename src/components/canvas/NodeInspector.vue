@@ -663,7 +663,8 @@ watch(
   () => {
     refreshPreview()
     loadHistory()
-  }
+  },
+  { immediate: true }
 )
 
 watch(running, (now, was) => {
