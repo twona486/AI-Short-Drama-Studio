@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { spawn, spawnSync } from 'node:child_process'
-import { mkdtemp, mkdir, readFile, readdir, rm, writeFile } from 'node:fs/promises'
+import { mkdtemp, mkdir, readFile, readdir, realpath, rm, writeFile } from 'node:fs/promises'
 import { once } from 'node:events'
 import { setTimeout as delay } from 'node:timers/promises'
 import { DatabaseSync } from 'node:sqlite'
@@ -183,7 +183,7 @@ try {
     await launch()
     await until(() => evaluate(`Boolean((${config}) && document.querySelector('.app-root'))`),
       '저장 폴더 없이 첫 화면을 열지 못했습니다.')
-    assert.equal(await evaluate('window.desktop.getRoot()'), path.join(profile, 'Recovery'))
+    assert.equal(await realpath(await evaluate('window.desktop.getRoot()')), await realpath(path.join(profile, 'Recovery')))
     assert.equal(await readFile(preference, 'utf8'), unavailable)
     assert.match(output, /저장 폴더를 열지 못했습니다/)
     console.log('저장 폴더가 없어도 첫 화면을 열고 기존 저장 폴더 설정을 보존했습니다.')
