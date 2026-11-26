@@ -32,10 +32,15 @@ export default defineConfig(({ command }) => ({
     electron({
       main: {
         entry: 'electron/main.ts',
+        onstart({ startup }) {
+          const profile = process.env.DRAMA_FLOW_DEV_USER_DATA_DIR
+          return startup(profile ? ['.', '--no-sandbox', `--user-data-dir=${profile}`] : undefined)
+        },
         vite: {
           build: {
             rollupOptions: {
-              external: ['node:sqlite', '@grpc/grpc-js', 'flatbuffers', 'protobufjs']
+              // Node loads ws and handles its optional native modules at runtime.
+              external: ['node:sqlite', '@grpc/grpc-js', 'flatbuffers', 'protobufjs', 'ws']
             }
           }
         }
