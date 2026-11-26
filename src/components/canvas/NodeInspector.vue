@@ -542,7 +542,8 @@ async function refreshPreview() {
   preview.value = ''
   const id = currentAssetId.value
   if (!id || !props.node) return
-  preview.value = (await assets.getUrl(id)) || ''
+  const url = await assets.getUrl(id)
+  if (currentAssetId.value === id) preview.value = url || ''
 }
 
 async function loadHistory() {
@@ -662,7 +663,8 @@ watch(
   () => {
     refreshPreview()
     loadHistory()
-  }
+  },
+  { immediate: true }
 )
 
 watch(running, (now, was) => {
@@ -808,7 +810,7 @@ async function optimizeVideoPrompt() {
 
       <AspectRatioSeg v-if="showAspect" v-model="nodeAspectRatio" />
 
-      <div v-if="preview && (node.type === 'shotVideo' || node.type === 'final')" class="prev prev-video">
+      <div v-if="preview && (node.type === 'shotVideo' || node.type === 'videoGen' || node.type === 'final')" class="prev prev-video">
         <div class="prev-frame" :style="{ aspectRatio: previewAspect }">
           <video :src="preview" controls playsinline preload="auto" />
         </div>

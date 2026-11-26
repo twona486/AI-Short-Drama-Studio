@@ -4,7 +4,7 @@ import { t } from '@/i18n'
 export const PLAY_LLM_TIMEOUT_MS = 480_000
 
 export function throwIfAborted(signal?: AbortSignal) {
-  if (signal?.aborted) throw new DOMException('작업을 취소했어요.', 'AbortError')
+  signal?.throwIfAborted()
 }
 
 function errName(e: unknown) {
@@ -20,21 +20,17 @@ function errMessage(e: unknown) {
 /** Chrome의 fetch 취소 오류는 signal.reason으로 취소와 시간 초과를 구분한다. */
 export function isAbortError(e: unknown): boolean {
   const name = errName(e)
-  if (name === 'AbortError' || name === 'TimeoutError') return true
-  return /aborted a request|operation was aborted|任务已取消|작업을 취소했어요|The user aborted/i.test(errMessage(e))
+  return name === 'AbortError' || name === 'TimeoutError'
 }
 
 export function isTimeoutAbort(e: unknown, signal?: AbortSignal): boolean {
-  const reason = signal?.reason
-  if (errName(reason) === 'TimeoutError' || /请求超过/.test(errMessage(reason))) return true
-  if (errName(e) === 'TimeoutError') return true
-  return /请求超过|模型超过 \d+ 秒|모델이 \d+초 안에 응답을 완료하지 못했어요/.test(errMessage(e))
+  return errName(signal?.reason) === 'TimeoutError' || errName(e) === 'TimeoutError'
 }
 
 export function llmAbortError(e: unknown, signal?: AbortSignal, timeoutMs = 120_000): Error {
   if (isTimeoutAbort(e, signal)) {
     const sec = Math.max(1, Math.round(timeoutMs / 1000))
-    return new Error(t('aiError.requestTimeout', { seconds: sec }))
+    return new DOMException(t('aiError.requestTimeout', { seconds: sec }), 'TimeoutError')
   }
   if (signal?.aborted || isAbortError(e)) {
     return new DOMException('작업을 취소했어요.', 'AbortError')
@@ -54,7 +50,8 @@ export function shouldToastAiError(e: unknown): boolean {
 export function controlledSignal(parent?: AbortSignal, timeoutMs = 120_000) {
   const controller = new AbortController()
   const abort = () => controller.abort(parent?.reason ?? new DOMException('작업을 취소했어요.', 'AbortError'))
-  parent?.addEventListener('abort', abort, { once: true })
+  if (parent?.aborted) abort()
+  else parent?.addEventListener('abort', abort, { once: true })
   const timer = setTimeout(
     () => controller.abort(new DOMException(`요청 시간이 ${Math.round(timeoutMs / 1000)}초를 초과했어요.`, 'TimeoutError')),
     timeoutMs
@@ -75,7 +72,7 @@ export function abortableDelay(ms: number, signal?: AbortSignal) {
     const timer = setTimeout(resolve, ms)
     abortHandler = () => {
       clearTimeout(timer)
-      reject(new DOMException('작업을 취소했어요.', 'AbortError'))
+      reject(signal?.reason)
     }
     signal?.addEventListener('abort', abortHandler, { once: true })
   }).finally(() => {

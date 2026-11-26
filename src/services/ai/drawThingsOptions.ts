@@ -103,3 +103,9 @@ export type DrawThingsDesktopRequest = { encryptedSharedSecret?: string } & (
 )
 
 export type DrawThingsProgress = { step: number; total: number } | { warning: 'unverifiedModel' } | undefined
+
+export class DrawThingsStopRequest extends DOMException {
+  constructor(message: string) {
+    super(message, 'AbortError')
+  }
+}

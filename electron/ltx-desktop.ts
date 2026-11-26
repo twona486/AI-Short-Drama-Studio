@@ -1,3 +1,5 @@
+import { open, rm } from 'node:fs/promises'
+import { boundedChunks, ProviderResponseTooLarge, streamProviderFile } from './provider-response'
 import { lanOrigin, pinAddress, tailscaleIPv4 } from './lan-origin'
 import { isIPv4 } from 'node:net'
 import http from 'node:http'
@@ -36,47 +38,39 @@ export function desktopHostHeader(origin: URL, address: string, override?: strin
   return `${host}:${port}`
 }
 
-function requestBytes(origin: URL, address: string, hostHeader: string, path: string, config: {
+function requestResponse<T>(origin: URL, address: string, hostHeader: string, path: string, read: (response: http.IncomingMessage, signal: AbortSignal) => Promise<T>, config: {
   method?: 'GET' | 'POST'
   token?: string
   body?: Uint8Array
   contentType?: string
   video?: boolean
-} = {}) {
-  const maxBytes = config.video ? 256 * 1024 * 1024 : 8 * 1024 * 1024
+}, cancellation?: AbortSignal) {
+  const timeout = AbortSignal.timeout(config.video ? 180_000 : 30_000)
+  const signal = cancellation ? AbortSignal.any([cancellation, timeout]) : timeout
   const secure = origin.protocol === 'https:'
   const transport = secure ? https : http
   const port = origin.port || (secure ? '443' : '80')
-  return new Promise<{ status: number; data: Buffer }>((resolve, reject) => {
+  return new Promise<T>((resolve, reject) => {
     const headers: Record<string, string | number> = { Host: hostHeader }
     if (config.token) headers.Authorization = `Bearer ${config.token}`
     if (config.contentType) headers['Content-Type'] = config.contentType
     if (config.body) headers['Content-Length'] = config.body.byteLength
+    let received = false
     const req = transport.request({
       hostname: address, servername: isIPv4(origin.hostname) ? undefined : origin.hostname,
       headers, method: config.method || 'GET', port, path,
-      signal: AbortSignal.timeout(config.video ? 180_000 : 30_000)
+      signal
     }, async (res) => {
-      try {
-        const status = res.statusCode || 500
-        if (status < 200 || status >= 300) {
-          res.destroy()
-          resolve({ status, data: Buffer.alloc(0) })
-          return
-        }
-        const chunks: Buffer[] = []
-        let length = 0
-        for await (const chunk of res) {
-          length += chunk.length
-          if (length > maxBytes) throw new Error('Response too large')
-          chunks.push(chunk)
-        }
-        resolve({ status, data: Buffer.concat(chunks, length) })
-      } catch (error) {
-        reject(error)
+      received = true
+      const status = res.statusCode || 500
+      if (status < 200 || status >= 300) {
+        res.destroy()
+        reject(new HttpFailure(status))
+        return
       }
+      read(res, signal).then(resolve, reject)
     })
-    req.once('error', reject)
+    req.on('error', (error) => { if (!received) reject(error) })
     req.end(config.body)
   })
 }
@@ -85,7 +79,36 @@ class HttpFailure extends Error {
   constructor(readonly status: number) { super() }
 }
 
-export async function requestLtxDesktop(request: LtxDesktopRequest): Promise<LtxDesktopReply> {
+class InvalidResponse extends Error {}
+
+async function readJson(response: http.IncomingMessage) {
+  const chunks: Uint8Array[] = []
+  for await (const chunk of boundedChunks(response, 8 * 1024 * 1024)) chunks.push(chunk)
+  const value = JSON.parse(Buffer.concat(chunks).toString('utf8'))
+  if (!value || typeof value !== 'object' || Array.isArray(value)) throw new InvalidResponse()
+  return value
+}
+
+async function readVideo(response: http.IncomingMessage, signal: AbortSignal) {
+  const path = await streamProviderFile(response, 256 * 1024 * 1024, signal, 'mp4')
+  try {
+    const file = await open(path, 'r')
+    try {
+      const header = Buffer.alloc(12)
+      const { bytesRead } = await file.read(header)
+      if (bytesRead < header.length || header.toString('ascii', 4, 8) !== 'ftyp') throw new InvalidResponse()
+    } finally {
+      await file.close()
+    }
+    signal.throwIfAborted()
+    return path
+  } catch (error) {
+    await rm(path, { force: true })
+    throw error
+  }
+}
+
+export async function requestLtxDesktop(request: LtxDesktopRequest, signal?: AbortSignal): Promise<LtxDesktopReply> {
   let origin: URL
   try {
     origin = desktopOrigin(request.baseUrl)
@@ -103,18 +126,12 @@ export async function requestLtxDesktop(request: LtxDesktopRequest): Promise<Ltx
     }
     const op = request.operation
     const token = request.token
-    const raw = async (path: string, config?: Parameters<typeof requestBytes>[4]) => {
-      const response = await requestBytes(origin, address, hostHeader, path, config)
-      if (response.status < 200 || response.status >= 300) throw new HttpFailure(response.status)
-      return response.data
-    }
-    const json = async (path: string, body?: object) => JSON.parse(
-      (await raw(path, {
-        method: body ? 'POST' : 'GET', token,
-        body: body ? Buffer.from(JSON.stringify(body)) : undefined,
-        contentType: body ? 'application/json' : undefined
-      })).toString('utf8')
-    )
+    signal?.throwIfAborted()
+    const json = (path: string, body?: object) => requestResponse(origin, address, hostHeader, path, readJson, {
+      method: body ? 'POST' : 'GET', token,
+      body: body ? Buffer.from(JSON.stringify(body)) : undefined,
+      contentType: body ? 'application/json' : undefined
+    }, signal)
     if (op.kind === 'pair') {
       if (typeof op.code !== 'string' || !op.code || op.code.length > 2048) return { kind: 'invalid' }
       let code = op.code
@@ -130,7 +147,7 @@ export async function requestLtxDesktop(request: LtxDesktopRequest): Promise<Ltx
       if (!code || code.length > 128) return { kind: 'invalid' }
       const paired = await json('/api/pairing/exchange', { code })
       return typeof paired?.token === 'string' && paired.token.length >= 16
-        ? { kind: 'paired', token: paired.token } : { kind: 'invalid' }
+        ? { kind: 'paired', token: paired.token } : { kind: 'invalidResponse' }
     }
     if (!token || typeof token !== 'string' || token.length > 512) return { kind: 'http', status: 401 }
     if (op.kind === 'check') {
@@ -158,7 +175,8 @@ export async function requestLtxDesktop(request: LtxDesktopRequest): Promise<Ltx
       }
 
       const specs = await json('/api/generate/models-specs')
-      const local = Array.isArray(specs.downloaded_local_models) ? specs.downloaded_local_models : []
+      if (!Array.isArray(specs.downloaded_local_models)) throw new InvalidResponse()
+      const local = specs.downloaded_local_models
       const offering = local.find((entry: any) => entry?.model === op.model)
       const spec = offering?.spec
       const aspectSpec = spec?.aspect_specs?.[op.aspect]
@@ -176,22 +194,22 @@ export async function requestLtxDesktop(request: LtxDesktopRequest): Promise<Ltx
         if (op.kind === 'checkAudio') return { kind: 'ready' }
       }
 
-      const upload = async (bytes: ArrayBuffer, mime: string, filename: string, expectedKind?: string) => {
+      const upload = async (bytes: BlobPart, mime: string, filename: string, expectedKind?: string) => {
         const form = new FormData()
         form.set('file', new Blob([bytes], { type: mime }), filename)
         const multipart = new Request(origin, { method: 'POST', body: form })
-        const asset = JSON.parse((await raw('/api/assets/upload', {
+        const asset = await requestResponse(origin, address, hostHeader, '/api/assets/upload', readJson, {
           method: 'POST', token, body: new Uint8Array(await multipart.arrayBuffer()),
           contentType: multipart.headers.get('content-type') || undefined
-        })).toString('utf8'))
-        if (typeof asset?.id !== 'string' || !ID.test(asset.id) || (expectedKind && asset.media_kind !== expectedKind)) throw new Error('Invalid asset ID')
+        }, signal)
+        if (typeof asset?.id !== 'string' || !ID.test(asset.id) || (expectedKind && asset.media_kind !== expectedKind)) throw new InvalidResponse()
         return { assetId: asset.id }
       }
       const uploadFrame = (image: string) => {
         const [meta, bytes] = image.split(',')
         const mime = meta.slice(5, -7)
         const ext = mime === 'image/jpeg' ? 'jpg' : mime.slice(6)
-        return upload(Uint8Array.from(Buffer.from(bytes, 'base64')).buffer, mime, `frame.${ext}`)
+        return upload(Buffer.from(bytes, 'base64'), mime, `frame.${ext}`)
       }
       const audio = op.kind === 'submitAudio' ? await upload(op.audio, 'audio/wav', 'dialogue.wav', 'audio') : undefined
       const startFrame = op.first ? await uploadFrame(op.first) : undefined
@@ -205,23 +223,23 @@ export async function requestLtxDesktop(request: LtxDesktopRequest): Promise<Ltx
           inputs: { startFrame, endFrame: op.last ? await uploadFrame(op.last) : undefined }
         })
       return typeof job?.id === 'string' && ID.test(job.id)
-        ? { kind: 'submitted', id: job.id } : { kind: 'invalid' }
+        ? { kind: 'submitted', id: job.id } : { kind: 'invalidResponse' }
     }
     if (op.kind === 'download') {
       if (typeof op.path !== 'string' || !SIGNED_VIDEO.test(op.path)) return { kind: 'invalid' }
-      const data = await raw(op.path, { video: true })
-      if (data.length < 12 || data.toString('ascii', 4, 8) !== 'ftyp') return { kind: 'invalid' }
-      return { kind: 'video', data: Uint8Array.from(data).buffer }
+      const path = await requestResponse(origin, address, hostHeader, op.path, readVideo, { video: true }, signal)
+      return { kind: 'video', path }
     }
     if (op.kind !== 'status' && op.kind !== 'cancel') return { kind: 'invalid' }
     if (typeof op.id !== 'string' || !ID.test(op.id)) return { kind: 'invalid' }
     const jobPath = '/api/generations/' + op.id
     const job = op.kind === 'cancel' ? await json(jobPath + '/cancel', {}) : await json(jobPath)
-    if (job?.id !== op.id) return { kind: 'invalid' }
+    if (job?.id !== op.id) return { kind: 'invalidResponse' }
     if (job.status === 'queued') return { kind: 'pending' }
     if (job.status === 'running' || job.status === 'cancelling') {
       if (op.kind === 'cancel') return { kind: 'processing' }
       const queue = await json('/api/generation-queue').catch(() => undefined)
+      signal?.throwIfAborted()
       const entry = Array.isArray(queue?.active) && queue.active.find((item: any) => item?.generation?.id === op.id)
       const progress = entry?.progress
       return {
@@ -237,8 +255,16 @@ export async function requestLtxDesktop(request: LtxDesktopRequest): Promise<Ltx
         return { kind: 'completed', path: output.bytes_url }
       }
     }
-    return { kind: 'invalid' }
+    return { kind: 'invalidResponse' }
   } catch (error) {
-    return error instanceof HttpFailure ? { kind: 'http', status: error.status } : { kind: 'offline' }
+    signal?.throwIfAborted()
+    if (error instanceof HttpFailure) return { kind: 'http', status: error.status }
+    if (error instanceof SyntaxError || error instanceof InvalidResponse || error instanceof ProviderResponseTooLarge) {
+      return { kind: 'invalidResponse' }
+    }
+    // Transport failures carry Node error codes. Local file failures are reported separately.
+    const code = (error as NodeJS.ErrnoException)?.code
+    if (code && /^(?:ENOSPC|EACCES|EROFS|EPERM|EIO|EMFILE|ENFILE)$/.test(code)) return { kind: 'fileError' }
+    return { kind: 'offline' }
   }
 }

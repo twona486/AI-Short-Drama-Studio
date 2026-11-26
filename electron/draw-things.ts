@@ -75,7 +75,8 @@ async function send(
     const code = (error as NodeJS.ErrnoException)?.code
     return { kind: code && /^(?:ENOTFOUND|EAI_AGAIN)$/.test(code) ? 'offline' : 'unsafeAddress' }
   }
-  const signal = AbortSignal.timeout(request.kind === 'check' ? 8000 : 20 * 60_000)
+  const timeout = AbortSignal.timeout(request.kind === 'check' ? 8000 : 20 * 60_000)
+  const signal = AbortSignal.any([cancel, timeout])
   try {
     if (request.kind === 'check') {
       if (grpc) {
@@ -124,7 +125,8 @@ async function send(
     const data = Uint8Array.from(bytes).buffer
     return { kind: 'image', data, mimeType: png ? 'image/png' : 'image/jpeg' }
   } catch (error) {
-    if (signal.aborted) return { kind: 'timeout' }
+    if (cancel.aborted) return { kind: 'cancelled' }
+    if (timeout.aborted) return { kind: 'timeout' }
     if (error instanceof HttpFailure) {
       if (error.status === 422 && /missing (?:files|file)|unrecognized model name/i.test(error.message)) {
         return { kind: 'missingModel' }
@@ -147,17 +149,27 @@ export function createDrawThingsQueue(grpcTimeouts = drawThingsGrpcTimeouts) {
   const pending: Job[] = []
   let active: Job | undefined
 
-  async function drain() {
+  function drain() {
     if (active) return
-    try {
-      while ((active = pending.shift())) {
-        const job = active
-        job.onProgress(undefined)
-        job.resolve(await send(job.request, job.controller.signal, job.onProgress, grpcTimeouts))
-      }
-    } finally {
-      active = undefined
+    const job = pending.shift()
+    if (!job) return
+    active = job
+    const progress = (value: DrawThingsProgress) => {
+      if (active === job) job.onProgress(value)
     }
+    void (async () => {
+      try {
+        progress(undefined)
+        job.resolve(await send(job.request, job.controller.signal, progress, grpcTimeouts))
+      } catch {
+        job.resolve({ kind: 'offline' })
+      } finally {
+        if (active === job) {
+          active = undefined
+          drain()
+        }
+      }
+    })()
   }
 
   return {
@@ -171,16 +183,20 @@ export function createDrawThingsQueue(grpcTimeouts = drawThingsGrpcTimeouts) {
       })
     },
     cancel(owner: number, id?: string) {
-      // HTTP에는 중단 API가 없다. 실행 중인 요청의 응답을 받은 후 다음 요청을 시작한다.
-      if (active?.owner === owner && (id === undefined || active.request.id === id) &&
-        typeof active.request.baseUrl === 'string' && isDrawThingsGrpc(active.request.baseUrl)) {
-        active.controller.abort()
+      if (active?.owner === owner && (id === undefined || active.request.id === id)) {
+        const job = active
+        job.controller.abort()
+        if (typeof job.request.baseUrl !== 'string' || !isDrawThingsGrpc(job.request.baseUrl)) {
+          active = undefined
+          job.resolve({ kind: 'cancelled' })
+        }
       }
       for (let i = pending.length - 1; i >= 0; i--) {
         if (pending[i].owner !== owner || (id !== undefined && pending[i].request.id !== id)) continue
         const [job] = pending.splice(i, 1)
         job.resolve({ kind: 'cancelled' })
       }
+      drain()
     }
   }
 }

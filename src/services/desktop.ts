@@ -51,13 +51,15 @@ export type DesktopAPI = {
     bodyBytes?: ArrayBuffer
     requestId?: string
     contentType?: string
+    binary?: boolean
     timeoutMs?: number
-  }) => Promise<{ status: number; ok: boolean; text: string; dataBase64?: string; contentType?: string }>
+  }) => Promise<{ status: number; ok: boolean; text: string; filePath?: string; contentType?: string }>
   cancelProviderFetch: (requestId: string) => void
   llmFetch: (opts: {
     url: string
     authorization?: string
     body?: string
+    requestId?: string
     timeoutMs?: number
   }) => Promise<{ status: number; ok: boolean; text: string }>
   dashscopeFetch: (opts: {
@@ -66,9 +68,10 @@ export type DesktopAPI = {
     authorization?: string
     extraHeaders?: Record<string, string>
     body?: string
+    requestId?: string
     timeoutMs?: number
   }) => Promise<{ status: number; ok: boolean; text: string }>
-  downloadToTemp: (url: string) => Promise<string>
+  downloadToTemp: (url: string, requestId?: string) => Promise<string>
   dbPath: () => Promise<string>
   backupSettings: (raw: string) => Promise<string>
   kvGet: (key: string) => Promise<string | null>
@@ -93,6 +96,40 @@ export function isDesktop(): boolean {
 export function desktop(): DesktopAPI {
   if (!window.desktop) throw new Error(t('desktop.required'))
   return window.desktop
+}
+
+export async function providerRequest<T>(
+  signal: AbortSignal | undefined,
+  request: (requestId?: string) => Promise<T>,
+  discard?: (value: T) => Promise<void>
+): Promise<T> {
+  signal?.throwIfAborted()
+  const requestId = signal ? crypto.randomUUID() : undefined
+  const cancel = () => { if (requestId) desktop().cancelProviderFetch?.(requestId) }
+  signal?.addEventListener('abort', cancel, { once: true })
+  try {
+    const result = await request(requestId)
+    if (signal?.aborted) {
+      await discard?.(result)
+      signal.throwIfAborted()
+    }
+    return result
+  } catch (error) {
+    signal?.throwIfAborted()
+    throw error
+  } finally {
+    signal?.removeEventListener('abort', cancel)
+  }
+}
+
+export async function consumeProviderFile(path: string, signal?: AbortSignal): Promise<Blob> {
+  try {
+    const response = await fetch(assetFileUrl(path), { signal })
+    if (!response.ok) throw new Error(t('aiError.generationFailed'))
+    return await response.blob()
+  } finally {
+    await desktop().remove(path).catch(() => {})
+  }
 }
 
 export function assetFileUrl(absPath: string): string {

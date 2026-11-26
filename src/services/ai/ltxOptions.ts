@@ -41,9 +41,10 @@ export type LtxBody = {
   generate_audio: boolean
 }
 
-export type LtxRequest =
+export type LtxRequest = { requestId?: string } & (
   | { apiKey: string; body: LtxBody }
   | { apiKey: string; jobId: string }
+)
 
 export type LtxReply =
   | { kind: 'submitted'; id: string }

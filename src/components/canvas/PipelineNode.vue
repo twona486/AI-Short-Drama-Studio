@@ -726,7 +726,7 @@ async function generateThis(ev?: Event, hd = false) {
   } catch (e: any) {
     // 실패 상태만 표시하면 원인을 알 수 없으므로 오류 내용도 알림으로 표시한다.
     if (shouldToastAiError(e)) toast.error(friendlyAiError(e) || translate('common.generateFailed'))
-    else if (nodeMeta.value?.error && ['ltx.stopped', 'ltxDesktop.cancelRequested', 'drawThings.cancelled'].some(key => nodeMeta.value?.error === translate(key))) {
+    else if (nodeMeta.value?.status === 'idle' && nodeMeta.value.error) {
       toast.info(nodeMeta.value.error)
     }
   } finally {

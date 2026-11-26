@@ -15,7 +15,7 @@ const built = await build({
       return { path:resolve(args.path.startsWith('@/')?'src':args.resolveDir,args.path.replace(/^@\//,'')+'.ts') }
     })
     b.onLoad({filter:/.*/,namespace:'mock'},args=>({contents:{
-      desktop:`export const isDesktop=()=>true; export const desktop=()=>({autodlFetch:req=>globalThis.__comfyTest.request(req)});`,
+      desktop:`export const providerRequest=(_signal,send)=>send(); export const consumeProviderFile=async path=>new Blob([path],{type:'video/mp4'}); export const isDesktop=()=>true; export const desktop=()=>({autodlFetch:req=>globalThis.__comfyTest.request(req)});`,
       zealman:`export const zealmanWorkflowById=()=>undefined;`,
       client:`export const callLLM=()=>{throw Error('Unexpected LLM call in offline test')};`
     }[args.path],loader:'js'}))
@@ -46,7 +46,7 @@ async function generate(f, count, extra={}) {
     }
     if(pathname==='/prompt') { submissions.push(JSON.parse(req.body));return response({prompt_id:'test-job'}) }
     if(pathname==='/history/test-job') return response({'test-job':{outputs:{video:{videos:[{filename:'test.mp4',type:'output'}]}}}})
-    if(pathname==='/view') return {ok:true,status:200,text:'',contentType:'video/mp4',dataBase64:Buffer.from('test-video').toString('base64')}
+    if(pathname==='/view') return {ok:true,status:200,text:'',contentType:'video/mp4',filePath:'test-video'}
     throw Error('Unexpected request: '+req.url)
   }}
   const template=JSON.stringify(f.payload)

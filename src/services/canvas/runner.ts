@@ -1,7 +1,7 @@
 import { ltxLipSyncFramePrompt, ltxLipSyncPrompt, ltxLipSyncSpeaker, ltxShotPrompt, ltxShotSpeechTooFast } from '@/services/ai/ltxShotPrompt'
 import { videoDurationCapability, nearestVideoDuration } from '@/services/ai/videoDuration'
 import { joinLipSyncWavs } from '@/services/ai/lipSyncWav'
-import { isLtxDesktop, isLtxTask, ltxDesktopAudioMax, ltxDesktopAudioResolution } from '@/services/ai/ltxDesktopOptions'
+import { isLtxDesktop, isLtxTask, ltxDesktopAudioMax, ltxDesktopAudioResolution, LtxStopRequest } from '@/services/ai/ltxDesktopOptions'
 import { isLtxProfile } from '@/services/ai/ltxOptions'
 import { uiPunctuation } from '@/i18n'
 import { t as translate } from "@/i18n"
@@ -51,7 +51,7 @@ import { blobToChatImageUrl, callLLM } from '@/services/ai/client'
 import { stripReasoningLeak } from '@/utils/jsonRepair'
 import { resolveImageAdapter } from '@/services/ai/adapters'
 import { openAiLipSyncLines, openAiShotSpeech, shotSpeakerSubject } from '@/services/ai/shotSpeech'
-import { DRAW_THINGS_PROVIDER } from '@/services/ai/drawThingsOptions'
+import { DRAW_THINGS_PROVIDER, DrawThingsStopRequest } from '@/services/ai/drawThingsOptions'
 import { observeMediaPrompts } from '@/services/ai/mediaPromptObserver'
 import { getImageConfig, imageModelForProject, getVideoPromptStyle, getTtsConfig } from '@/services/ai/runtime'
 import { pickDocImageResolution } from '@/services/ai/modelOptions'
@@ -3130,11 +3130,11 @@ export function canStopDrawThingsNodeWait(nodeId: string) {
 }
 
 export function stopDrawThingsNodeWait(nodeId: string) {
-  drawThingsNodeWaits.get(nodeId)?.abort(new DOMException(translate('drawThings.cancelled'), 'AbortError'))
+  drawThingsNodeWaits.get(nodeId)?.abort(new DrawThingsStopRequest(translate('drawThings.cancelled')))
 }
 
 export function stopLtxNodeWait(nodeId: string) {
-  ltxNodeWaits.get(nodeId)?.abort(new DOMException(translate('ltx.stopped'), 'AbortError'))
+  ltxNodeWaits.get(nodeId)?.abort(new LtxStopRequest(translate('ltx.stopped')))
 }
 
 export async function runCanvasNode(

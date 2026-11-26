@@ -483,7 +483,7 @@ async function generate() {
     }
   } catch (e: unknown) {
     if (shouldToastAiError(e)) toast.error(friendlyAiError(e) || translate('common.generateFailed'), 10000)
-    else if (node.value?.error && ['ltx.stopped', 'ltxDesktop.cancelRequested', 'drawThings.cancelled'].some(key => node.value?.error === translate(key))) {
+    else if (node.value?.status === 'idle' && node.value.error) {
       toast.info(node.value.error)
     }
   } finally {
