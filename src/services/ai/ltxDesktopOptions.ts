@@ -1,5 +1,5 @@
 export const LTX_DESKTOP_PROVIDER = 'ltx-desktop'
-export const LTX_DESKTOP_DEFAULT_URL = 'http://Mac-Studio-M5-Ultra.local:41955'
+export const LTX_DESKTOP_URL_PLACEHOLDER = 'http://<호스트>:41955'
 export const LTX_DESKTOP_WORKFLOW = 'ltx-2.3-fast'
 export const LTX_DESKTOP_MODELS = [LTX_DESKTOP_WORKFLOW, 'ltx-2.5-fast']
 export const LTX_DESKTOP_LOW_RESOLUTIONS = ['270p', '360p', '540p'] as const

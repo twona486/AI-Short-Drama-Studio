@@ -3,7 +3,7 @@ import { runEnterShortcut } from '@/utils/enterShortcut'
 import { computed, ref, watch } from 'vue'
 import type { ProviderPreset } from '@/services/ai/providers'
 import { applyProviderPreset, findProvider, matchProviderId, suggestedPresetModels } from '@/services/ai/providers'
-import { DRAW_THINGS_PROVIDER, drawThingsModelLabel } from '@/services/ai/drawThingsOptions'
+import { DRAW_THINGS_GRPC_PORT, DRAW_THINGS_PROVIDER, drawThingsModelLabel } from '@/services/ai/drawThingsOptions'
 
 const props = defineProps<{
   title: string
@@ -58,6 +58,9 @@ const apiKeyModel = computed({
 
 const currentPreset = computed(() => findProvider(providerId.value, props.presets))
 const drawThings = computed(() => currentPreset.value.id === DRAW_THINGS_PROVIDER)
+const addressPlaceholder = computed(() => drawThings.value
+  ? `grpc://<호스트>:${DRAW_THINGS_GRPC_PORT}`
+  : currentPreset.value.baseUrl || 'https://…/v1')
 
 watch(
   () => props.baseUrl,
@@ -98,7 +101,7 @@ function onAdd() {
     <label>{{ $t('endpointForm.baseUrl') }}</label>
     <input
       v-model="baseUrlModel"
-      :placeholder="currentPreset.baseUrl || 'https://…/v1'"
+      :placeholder="addressPlaceholder"
     />
 
     <label v-if="!currentPreset.noApiKey">API Key</label>

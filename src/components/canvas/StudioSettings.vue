@@ -7,7 +7,7 @@ import { computed, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { useProjectStore, useSettingsStore, uniqueProfileName } from '@/stores'
 import { desktop, isDesktop } from '@/services/desktop'
-import { isLtxDesktop, LTX_DESKTOP_DEFAULT_URL, LTX_DESKTOP_MODELS, ltxDesktopError } from '@/services/ai/ltxDesktopOptions'
+import { isLtxDesktop, LTX_DESKTOP_URL_PLACEHOLDER, LTX_DESKTOP_MODELS, ltxDesktopError } from '@/services/ai/ltxDesktopOptions'
 import { DRAW_THINGS_PROVIDER, drawThingsModelLabel, isDrawThingsGrpc } from '@/services/ai/drawThingsOptions'
 import { checkDrawThings } from '@/services/ai/drawThings'
 import { LTX_MODELS, isLtxProfile } from '@/services/ai/ltxOptions'
@@ -488,7 +488,6 @@ function patchAdapter(
                 <button v-if="savedDrawThingsSecret" type="button" :disabled="drawThingsSecretBusy || drawThingsBusy" @click="removeDrawThingsSecret">{{ $t('drawThings.removeSecret') }}</button>
               </div>
             </template>
-            <p class="hint">{{ $t('drawThings.memory') }}</p>
             <button type="button" :disabled="drawThingsBusy || drawThingsSecretBusy || !!drawThingsSecretDraft" @click="probeDrawThings">{{ $t('drawThings.check') }}</button>
             <p v-if="drawThingsBusy || drawThingsStatus" class="hint" role="status">
               {{ drawThingsBusy ? $t('drawThings.checking') : drawThingsStatus }}
@@ -579,9 +578,8 @@ function patchAdapter(
         <p class="hint">{{ $t(videoVoiceHint) }}</p>
         <template v-if="ltxDesktop">
           <p class="hint">{{ $t('ltxDesktop.hint') }}</p>
-          <p class="hint">{{ $t('ltxDesktop.memory') }}</p>
           <label for="ltx-desktop-address">{{ $t('studioSettings.baseUrl') }}</label>
-          <input id="ltx-desktop-address" v-model.trim="desktopAddress" :placeholder="LTX_DESKTOP_DEFAULT_URL" />
+          <input id="ltx-desktop-address" v-model.trim="desktopAddress" :placeholder="LTX_DESKTOP_URL_PLACEHOLDER" />
           <details class="rule-details">
             <summary>{{ $t('ltxDesktop.advanced') }}</summary>
             <label for="ltx-desktop-host">{{ $t('ltxDesktop.hostOverride') }}</label>

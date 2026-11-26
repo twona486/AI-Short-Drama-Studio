@@ -6,7 +6,7 @@
 import { t } from '@/i18n'
 import { OPENAI_BASE_URL, OPENAI_CHAT_MODELS, OPENAI_DEFAULT_CHAT_MODEL } from './openAiChat'
 import { OPENAI_DEFAULT_IMAGE_MODEL, OPENAI_IMAGE_MODELS } from './openAiImage'
-import { LTX_DESKTOP_PROVIDER, LTX_DESKTOP_DEFAULT_URL, LTX_DESKTOP_MODELS, LTX_DESKTOP_WORKFLOW } from './ltxDesktopOptions'
+import { LTX_DESKTOP_PROVIDER, LTX_DESKTOP_MODELS, LTX_DESKTOP_WORKFLOW } from './ltxDesktopOptions'
 import { LTX_BASE_URL, LTX_DEFAULT_MODEL, LTX_MODELS } from './ltxOptions'
 import { isApimartHost } from './adapters'
 import { DRAW_THINGS_MODELS, DRAW_THINGS_PROVIDER, DRAW_THINGS_URL } from './drawThingsOptions'
@@ -240,7 +240,7 @@ export const VIDEO_PROVIDERS: ProviderPreset[] = [
     id: LTX_DESKTOP_PROVIDER,
     get name() { return t('ltxDesktop.name') },
     get hint() { return t('ltxDesktop.hint') },
-    baseUrl: LTX_DESKTOP_DEFAULT_URL,
+    baseUrl: '',
     models: LTX_DESKTOP_MODELS,
     defaultModel: LTX_DESKTOP_WORKFLOW
   },
