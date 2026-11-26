@@ -113,6 +113,8 @@ onBeforeUnmount(() => {
   width: max-content;
   transform-origin: top left;
 }
+/* The scale transform traps the toolbar below the sibling resize controls. */
+.node-scale-content:has(:deep(.toolbar > .more)) { z-index: 41; }
 .grouped-with-raised-title { padding-top: var(--node-title-offset); }
 .node-scale-content :deep(.rz) { display: none; }
 .node-scale-content :deep(.fnode), .node-scale-content :deep(.pnode) { background: transparent; box-shadow: none; }

@@ -1932,6 +1932,9 @@ function goClassic() {
   outline-offset: 3px;
   border-radius: 10px;
 }
+.flow-wrap :deep(.vue-flow__node.selected:has(.toolbar > .more)) {
+  z-index: 13 !important;
+}
 .flow-wrap :deep(.vue-flow__node-groupFrame) {
   overflow: visible !important;
   margin: 0;

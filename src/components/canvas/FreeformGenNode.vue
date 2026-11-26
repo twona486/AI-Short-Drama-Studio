@@ -6,6 +6,7 @@ import { t as localized } from '@/i18n'
 import { confirmAction } from '@/utils/confirmAction'
 import { t as translate } from '@/i18n'
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { useCanvasToolbarMenu } from '@/composables/useCanvasToolbarMenu'
 import { Handle, Position, useVueFlow } from '@vue-flow/core'
 import { useAssetsStore, useLibraryStore, useProjectStore, useSettingsStore, useToastStore } from '@/stores'
 import { runCanvasNode, stopLtxNodeWait, optimizeFreeformVideoPrompt, canStopDrawThingsNodeWait, stopDrawThingsNodeWait } from '@/services/canvas/runner'
@@ -68,7 +69,7 @@ const frameRatio = ref('')
 const pickerOpen = ref(false)
 const pickerMode = ref<'ref' | 'output'>('ref')
 const panelOpen = ref(false)
-const moreOpen = ref(false)
+const { toolbar, moreOpen } = useCanvasToolbarMenu()
 const busyLabel = ref('')
 const optimizingPrompt = ref(false)
 let mediaSeq = 0
@@ -577,7 +578,7 @@ async function removeSelf() {
 
     <transition name="float-up">
       <div v-if="selected && panelOpen" class="toolbar-wrap nodrag nowheel" @mousedown.stop @click.stop>
-        <div class="toolbar">
+        <div ref="toolbar" class="toolbar">
           <button type="button" :disabled="generating || optimizingPrompt || !!drawThingsProblem" :title="drawThingsProblem || undefined" @click="generate">
             <span>↺</span>{{ genLabel }}
           </button>
