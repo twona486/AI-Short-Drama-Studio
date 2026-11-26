@@ -363,9 +363,9 @@ const nav = [
   },
   {
     id: 'comfyui' as const,
-    label: translate('settingsWorkflow.connection'),
-    desc: translate('settingsWorkflow.manage'),
-    lead: translate('settingsWorkflow.hint')
+    get label() { return translate('settingsWorkflow.connection') },
+    get desc() { return translate('settingsWorkflow.manage') },
+    get lead() { return translate('settingsWorkflow.hint') }
   },
   {
     id: 'autodl' as const,
