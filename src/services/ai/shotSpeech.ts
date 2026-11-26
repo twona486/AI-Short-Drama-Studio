@@ -42,7 +42,13 @@ export function openAiShotSpeech(shot: Shot, project: Project, matchShotDuration
 
 export function openAiLipSyncLines(shot: Shot, project: Project) {
   const turns: Array<{ label?: string; name?: string; text: string }> = []
-  for (const line of shot.voiceover.split(/\r?\n/).map((part) => part.trim()).filter(Boolean)) {
+  const knownNames = (project.subjects ?? []).map(({ name }) => name.trim()).filter(Boolean)
+    .sort((a, b) => b.length - a.length).map((name) => name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'))
+  const inlineLabel = knownNames.length
+    ? new RegExp(`[ \t]+(?=(?:${knownNames.join('|')})(?:[（(][^）)\n]*[）)])?[ \t]*[:：])`, 'g')
+    : undefined
+  const dialogue = inlineLabel ? shot.voiceover.replace(inlineLabel, '\n') : shot.voiceover
+  for (const line of dialogue.split(/\r?\n/).map((part) => part.trim()).filter(Boolean)) {
     const prefix = line.match(/^([^：:\n]{1,32})([：:])([ \t]*)(.*)$/)
     const label = prefix?.[1]
     const name = label && bareSpeakerName(label)
@@ -59,6 +65,7 @@ export function openAiLipSyncLines(shot: Shot, project: Project) {
   return turns.filter(({ text }) => text.trim()).map(({ label, text }) => {
     const voiceover = label ? `${label}: ${text}` : text
     const speech = openAiShotSpeech({ ...shot, voiceover, speakerVoice: turns.length === 1 ? shot.speakerVoice : undefined }, project, false)
-    return { ...speech, text: text.trim() }
+    const speaker = label ? shotSpeakerSubject({ ...shot, voiceover }, project) : undefined
+    return { ...speech, text: text.trim(), speaker, speakerName: speaker?.name ?? (label && bareSpeakerName(label)) }
   })
 }

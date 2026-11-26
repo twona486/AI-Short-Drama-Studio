@@ -83,6 +83,7 @@ export interface Shot {
   /** H3 자체 대사나 화면 밖 음성, 후반 TTS 또는 음성 없음. */
   audioMode?: ShotAudioMode
   /** 생성 작업과 영상 에셋에 각각 연결된 립싱크 WAV 길이(초). */
+  lipSyncFrame?: { assetId: ID; prompt: string; aspect: AspectRatio }
   lipSyncTask?: { id: string; duration: number }
   lipSyncVideos?: Record<ID, number>
   /** H3 화자의 음색과 말하는 방식. 예를 들어 자연스럽고 차분한 젊은 여성 목소리. */

@@ -1,4 +1,4 @@
-import { ltxLipSyncPrompt, ltxShotPrompt, ltxShotSpeechTooFast } from '@/services/ai/ltxShotPrompt'
+import { ltxLipSyncFramePrompt, ltxLipSyncPrompt, ltxLipSyncSpeaker, ltxShotPrompt, ltxShotSpeechTooFast } from '@/services/ai/ltxShotPrompt'
 import { videoDurationCapability, nearestVideoDuration } from '@/services/ai/videoDuration'
 import { joinLipSyncWavs } from '@/services/ai/lipSyncWav'
 import { isLtxDesktop, isLtxTask, ltxDesktopAudioMax, ltxDesktopAudioResolution } from '@/services/ai/ltxDesktopOptions'
@@ -699,14 +699,15 @@ async function collectFrameRefBlobs(
   shot: Shot,
   project: Project,
   onProgress?: (msg: string) => void,
-  videoNode?: CanvasNode
+  videoNode?: CanvasNode,
+  speakerFrame = false
 ): Promise<{ refs: ID[]; blobs: Blob[]; labels: string[] }> {
   const assets = useAssetsStore()
   const library = useLibraryStore()
   // 프레임을 만들 때는 캐릭터 4면 설정 이미지, 소품, 장면 기준 이미지를 모두 참고한다.
   // 4분할 키프레임은 격자가 프레임에 들어갈 수 있어 사용하지 않는다.
-  const bundle = videoNode ? collectShotKeyframeRefIds(shot, project) : collectShotRefIds(shot, project)
-  if (videoNode) {
+  const bundle = videoNode || speakerFrame ? collectShotKeyframeRefIds(shot, project) : collectShotRefIds(shot, project)
+  if (videoNode && !speakerFrame) {
     const omitted = new Set([shot.imageAssetId, shot.boardAssetId, ...(shot.omittedRefAssetIds ?? [])])
     for (const id of resolvedCanvasReferenceAssetIds(project, videoNode)) {
       if (bundle.ids.length >= 8) break
@@ -739,13 +740,13 @@ async function renderShotFrame(
   labels: string[],
   onProgress?: (msg: string) => void,
   signal?: AbortSignal,
-  frameContext?: { referenceIds: ID[]; aspectRatio: AspectRatio }
+  frameContext?: { referenceIds: ID[]; aspectRatio: AspectRatio; prompt?: string }
 ) {
   const project = useProjectStore()
   const assets = useAssetsStore()
   if (!project.current) throw new Error('열려 있는 프로젝트가 없습니다.')
   const projectId = project.current.id
-  const prompt = shotFrameSendPrompt(shot, project.current, which, frameContext)
+  const prompt = frameContext?.prompt ?? shotFrameSendPrompt(shot, project.current, which, frameContext)
   const look = lookFromScript(project.current.script)
   const aspectRatio = frameContext?.aspectRatio ?? shotNodeAspect(project.current, shot.id, 'shotImage')
   const size = imageGenSize('shot', aspectRatio)
@@ -1338,11 +1339,20 @@ async function prepareLtxShotStart(
   videoNode: CanvasNode | undefined,
   aspectRatio: AspectRatio,
   onProgress?: (msg: string) => void,
-  signal?: AbortSignal
+  signal?: AbortSignal,
+  speakerFrame?: { prompt: string; subject?: Subject }
 ): Promise<Blob> {
-  const existing = await tryLoadRefImageBlob(shot.firstFrameAssetId) ??
-    await tryLoadRefImageBlob(shot.imageAssetId)
-  if (existing) return existing
+  if (speakerFrame) {
+    const saved = shot.lipSyncFrame
+    if (saved?.prompt === speakerFrame.prompt && saved.aspect === aspectRatio) {
+      const cached = await tryLoadRefImageBlob(saved.assetId)
+      if (cached) return cached
+    }
+  } else {
+    const existing = await tryLoadRefImageBlob(shot.firstFrameAssetId) ??
+      await tryLoadRefImageBlob(shot.imageAssetId)
+    if (existing) return existing
+  }
 
   const cfg = getImageConfig()
   const drawThings = cfg.provider === DRAW_THINGS_PROVIDER
@@ -1355,22 +1365,29 @@ async function prepareLtxShotStart(
   }
 
   ensureNotCancelled(signal)
-  onProgress?.(translate('ltx.preparingStart', { shot: shot.index + 1 }))
+  onProgress?.(translate(speakerFrame ? 'lipSync.preparingSpeaker' : 'ltx.preparingStart', { shot: shot.index + 1 }))
   const project = useProjectStore()
-  const { refs, blobs, labels } = await collectFrameRefBlobs(shot, p, onProgress, videoNode)
+  const referenceProject = speakerFrame
+    ? { ...p, subjects: speakerFrame.subject ? [speakerFrame.subject] : [] }
+    : p
+  const { refs, blobs, labels } = speakerFrame
+    ? await collectFrameRefBlobs(shot, referenceProject, onProgress, videoNode, true)
+    : await collectFrameRefBlobs(shot, p, onProgress, videoNode)
   ensureNotCancelled(signal)
   if (project.current?.id !== p.id) throw new DOMException(translate('ltx.projectChanged'), 'AbortError')
-  const frame = await renderShotFrame(shot, 'start', blobs, labels, onProgress, signal, { referenceIds: refs, aspectRatio })
+  const frame = await renderShotFrame(shot, 'start', blobs, labels, onProgress, signal, speakerFrame ? { referenceIds: refs, aspectRatio, prompt: speakerFrame.prompt } : { referenceIds: refs, aspectRatio })
   ensureNotCancelled(signal)
   if (project.current?.id !== p.id) throw new DOMException(translate('ltx.projectChanged'), 'AbortError')
   const latest = refreshShot(shot.id)
-  if (latest.firstFrameAssetId !== shot.firstFrameAssetId) {
+  if (!speakerFrame && latest.firstFrameAssetId !== shot.firstFrameAssetId) {
     const selected = await tryLoadRefImageBlob(latest.firstFrameAssetId)
     if (selected) return selected
   }
   const blob = await tryLoadRefImageBlob(frame.id)
   if (!blob) throw new Error(translate('ltx.missingFrame'))
-  project.updateShot(shot.id, { firstFrameAssetId: frame.id })
+  project.updateShot(shot.id, speakerFrame
+    ? { lipSyncFrame: { assetId: frame.id, prompt: speakerFrame.prompt, aspect: aspectRatio } }
+    : { firstFrameAssetId: frame.id })
   await project.save()
   return blob
 }
@@ -1386,6 +1403,9 @@ export async function generateShotVideo(shot: Shot, onProgress?: (msg: string) =
   const profile = videoProfileById(profileId)
   const wantsLipSync = shot.audioMode === 'ltx-lip-sync'
   const resuming = isLtxTask(shot.videoTaskId)
+  if (wantsLipSync && resuming && shot.lipSyncTask?.id !== shot.videoTaskId) {
+    throw new Error(translate('lipSync.previousVideoTask'))
+  }
   if (wantsLipSync && !resuming && !videoDurationCapability({ model: canvasVideoModelForShot(shot), profile }).audioToVideo) {
     throw new Error(translate('lipSync.unavailable'))
   }
@@ -1395,35 +1415,45 @@ export async function generateShotVideo(shot: Shot, onProgress?: (msg: string) =
     const aspectRatio = shotNodeAspect(p, shot.id, 'shotVideo')
     const videoResolution = canvasVideoResolutionForShot(shot, 'h3')
     let lipSyncWav: ArrayBuffer | undefined
+    let lipSyncPrompt: string | undefined
+    let first: Blob | undefined
     let lipSyncDuration = resuming && shot.lipSyncTask?.id === resumeTaskId ? shot.lipSyncTask?.duration : undefined
     if (!resuming && wantsLipSync) {
+      const lines = openAiLipSyncLines(shot, p)
+      if (!lines.length) throw new Error(translate('lipSync.noDialogue'))
+      if (lines.length > 1) throw new Error(translate('lipSync.singleSpeakerError'))
       if (!await project.checkShotLipSync(shot)) throw new Error(translate('lipSync.unavailable'))
       ensureNotCancelled(signal)
       if (project.current?.id !== p.id) throw new DOMException(translate('ltx.projectChanged'), 'AbortError')
       if (!getTtsConfig().openAi) throw new Error(translate('lipSync.openAiRequired'))
-      const lines = openAiLipSyncLines(shot, p)
-      if (!lines.length) throw new Error(translate('lipSync.noDialogue'))
+      const { speaker, speakerName, ...speech } = lines[0]
+      const cast = subjectsForShot(shot, p)
+      const subject = speaker ?? (!speakerName && cast.length === 1 ? cast[0] : undefined)
+      const target = ltxLipSyncSpeaker(subject, speakerName)
+      first = await tryLoadRefImageBlob(shot.firstFrameAssetId)
+      lipSyncPrompt = ltxLipSyncPrompt(target, !first)
+      onProgress?.(translate('lipSync.synthesizing', { current: 1, total: 1 }))
+      const result = await generateSpeech({ ...speech, signal })
+      const joined = joinLipSyncWavs([await result.blob.arrayBuffer()])
       const max = ltxDesktopAudioMax(ltxDesktopAudioResolution(videoResolution))
-      const wavs: ArrayBuffer[] = []
-      for (const [index, speech] of lines.entries()) {
-        onProgress?.(translate('lipSync.synthesizing', { current: index + 1, total: lines.length }))
-        const result = await generateSpeech({ ...speech, signal })
-        wavs.push(await result.blob.arrayBuffer())
-        const joined = joinLipSyncWavs(wavs)
-        if (joined.duration > max) throw new Error(translate('lipSync.tooLong', { actual: joined.duration.toFixed(2), max }))
-        lipSyncDuration = joined.duration
-        lipSyncWav = joined.wav
-        ensureNotCancelled(signal)
-        if (project.current?.id !== p.id) throw new DOMException(translate('ltx.projectChanged'), 'AbortError')
-      }
+      if (joined.duration > max) throw new Error(translate('lipSync.tooLong', { actual: joined.duration.toFixed(2), max }))
+      lipSyncWav = joined.wav
+      lipSyncDuration = joined.duration
+      ensureNotCancelled(signal)
+      if (project.current?.id !== p.id) throw new DOMException(translate('ltx.projectChanged'), 'AbortError')
+      first ??= await prepareLtxShotStart(shot, p, videoNode, aspectRatio, onProgress, signal, {
+        prompt: ltxLipSyncFramePrompt(target, sceneForShot(shot, p)?.name),
+        subject
+      })
+    } else if (!resuming) {
+      first = await prepareLtxShotStart(shot, p, videoNode, aspectRatio, onProgress, signal)
     }
-    const first = resuming ? undefined : await prepareLtxShotStart(shot, p, videoNode, aspectRatio, onProgress, signal)
     ensureNotCancelled(signal)
     if (project.current?.id !== p.id) throw new DOMException(translate('ltx.projectChanged'), 'AbortError')
     const duration = nearestVideoDuration(shot.duration, videoDurationCapability({ profile, resolution: videoResolution }).durations)
     if (!resuming && !lipSyncWav && ltxShotSpeechTooFast(shot, duration)) onProgress?.(translate('ltx.speechTooFast', { seconds: duration }))
     const result = await generateVideo({
-      prompt: lipSyncDuration ? ltxLipSyncPrompt(shot) : ltxShotPrompt(shot, resolveShotSpeakerVoice(shot, p)),
+      prompt: lipSyncPrompt ?? (lipSyncDuration ? '' : ltxShotPrompt(shot, resolveShotSpeakerVoice(shot, p))),
       lipSyncWav,
       imageBlob: first,
       lastFrameBlob: resuming || lipSyncWav ? undefined : await tryLoadRefImageBlob(shot.lastFrameAssetId),

@@ -224,7 +224,7 @@ test('LAN 호스트를 변경하면 이전 호스트에 해당하는 페어링 �
 })
 
 
-test('한국어 다중 화자 립싱크의 WAV, Remote 계약, 재조회, 후반 작업 중복 방지를 검증합니다', async (context) => {
+test('한국어 립싱크의 단일 화자, WAV, Remote 계약, 재조회, 후반 작업 중복 방지를 검증합니다', async (context) => {
   const { pcmToWav } = await vite.ssrLoadModule('/electron/openai-tts.ts')
   const { generateShotVideo, generateShotAudio } = await vite.ssrLoadModule('/src/services/canvas/runner.ts')
   const { useProjectStore } = await vite.ssrLoadModule('/src/stores/project.ts')
@@ -355,13 +355,17 @@ test('한국어 다중 화자 립싱크의 WAV, Remote 계약, 재조회, 후반
   })
   const shot = {
     id: 'shot1', index: 0, title: '인사', duration: 6, cameraMovement: 'push',
-    audioMode: 'h3-dialogue', voiceover: '민지: 안녕하세요.\n정우: 네, 반가워요.',
-    visualPrompt: 'Two actors in a sunlit cafe.', compiledVideoPrompt: 'They exchange glances. 민지 says "안녕하세요."',
+    audioMode: 'h3-dialogue', voiceover: 'Minji: 안녕하세요. Jungwoo: 네, 반가워요.',
+    visualPrompt: 'Two actors stand silent in a wide shot.', compiledVideoPrompt: 'Beat 1 (0–4s): No speech. Minji keeps her mouth closed.',
+    firstFrameAssetId: 'keyframe',
     imageAssetId: 'keyframe', videoProfileId: profileId
   }
   project.current = {
     id: 'project', shots: [shot], canvas: undefined,
-    subjects: [{ name: '민지', openAiTtsVoice: 'marin' }, { name: '정우', openAiTtsVoice: 'cedar' }],
+    subjects: [
+      { id: 'minji', name: 'Minji', description: 'Short hair and a blue jacket. She stays silent.', openAiTtsVoice: 'marin' },
+      { id: 'jungwoo', name: 'Jungwoo', openAiTtsVoice: 'cedar' }
+    ],
     settings: { aspectRatio: '16:9', ttsVoice: 'marin' }, timeline: []
   }
   project.current.timeline = buildTimelineFromShots(project.current)
@@ -372,9 +376,18 @@ test('한국어 다중 화자 립싱크의 WAV, Remote 계약, 재조회, 후반
   assert.equal(needsExternalTts(project.current.shots[0], project.current), false)
   await assert.rejects(generateShotAudio(project.current.shots[0]), /별도의 더빙/)
   assert.deepEqual(generated, [])
+  requests.length = 0
+  await assert.rejects(generateShotVideo(shot), /한 명의 화자/)
+  assert.deepEqual(requests, [])
+  assert.deepEqual(generated, [])
+  project.updateShot(shot.id, { videoTaskId: 'ltx-desktop:previous-i2v' })
+  await assert.rejects(generateShotVideo(shot), /이전 영상 작업/)
+  assert.deepEqual(requests, [])
+  project.updateShot(shot.id, { videoTaskId: undefined, voiceover: 'Minji: 안녕하세요.\nMinji: 반가워요.' })
+  project.current.captionSrt = toSRT(buildTimelineCaptionCues(project.current))
   const result = await generateShotVideo(shot)
   assert.equal(result.id, 'lip-video')
-  assert.deepEqual(generated, [{ text: '안녕하세요.', voice: 'marin' }, { text: '네, 반가워요.', voice: 'cedar' }])
+  assert.deepEqual(generated, [{ text: '안녕하세요.\n반가워요.', voice: 'marin' }])
   assert.deepEqual(uploaded.map(({ name }) => name), ['dialogue.wav', 'frame.png'])
   assert.equal(uploaded[1].body.toString(), 'hello')
   const wav = uploaded[0].body
@@ -382,11 +395,13 @@ test('한국어 다중 화자 립싱크의 WAV, Remote 계약, 재조회, 후반
   assert.equal(wav.readUInt32LE(40), 96_000)
   const pcm = wav.subarray(44)
   assert.deepEqual(pcm, Buffer.concat([
-    Buffer.alloc(20_400), Buffer.alloc(24_000, 1), Buffer.alloc(7_200),
-    Buffer.alloc(24_000, 2), Buffer.alloc(20_400)
+    Buffer.alloc(36_000), Buffer.alloc(24_000, 1), Buffer.alloc(36_000)
   ]))
   assert.equal(joinLipSyncWavs([Uint8Array.from(pcmToWav(Buffer.alloc(48_000 * 3)).wav).buffer]).duration, 3)
-  assert.match(submitted[0].params.prompt, /sunlit cafe\. They exchange glances\. The camera slowly pushes in\./)
+  assert.match(submitted[0].params.prompt, /Minji \(Short hair and a blue jacket\) looks toward the camera and speaks/)
+  assert.doesNotMatch(submitted[0].params.prompt, /beat|silent|no speech|mouth closed|wide shot/i)
+  assert.equal(requests.filter(({ kind }) => kind === 'submitAudio').length, 1)
+  assert.equal(requests.filter(({ kind }) => kind === 'submit').length, 0)
   assert.doesNotMatch(submitted[0].params.prompt, /[가-힣\n]/)
   assert.deepEqual(persisted, [{ id: 'ltx-desktop:lip-job', duration: 2 }, { id: undefined, duration: undefined }])
   assert.equal(shotPlaybackDuration(project.current.shots[0]), 2)
@@ -405,7 +420,7 @@ test('한국어 다중 화자 립싱크의 WAV, Remote 계약, 재조회, 후반
   requests.length = 0
   await generateShotVideo(project.current.shots[0])
   assert.deepEqual(requests.map(({ kind }) => kind), ['status', 'download'])
-  assert.equal(generated.length, 2)
+  assert.equal(generated.length, 1)
   assert.equal(frameReads, 1)
 
   project.setShotAudioMode(shot.id, 'ltx-lip-sync')
@@ -418,5 +433,5 @@ test('한국어 다중 화자 립싱크의 WAV, Remote 계약, 재조회, 후반
   assert.equal(await project.checkShotLipSync(project.current.shots[0]), false)
   assert.equal(project.shotSupportsLipSync(project.current.shots[0]), false)
   await assert.rejects(generateShotVideo(project.current.shots[0]), /Audio to Video/)
-  assert.equal(generated.length, 4)
+  assert.equal(generated.length, 3)
 })

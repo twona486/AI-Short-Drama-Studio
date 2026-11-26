@@ -372,9 +372,9 @@ const h3GenMode = computed({
   }
 })
 const firstFrameId = computed({
-  get: () => shot.value?.firstFrameAssetId,
+  get: () => (shot.value?.firstFrameAssetId ?? (usesLipSync.value ? shot.value?.lipSyncFrame?.assetId : undefined)),
   set: (v: ID | undefined) => {
-    if (shot.value) project.updateShot(shot.value.id, { firstFrameAssetId: v })
+    if (shot.value) project.updateShot(shot.value.id, { firstFrameAssetId: v, ...(usesLipSync.value && !v ? { lipSyncFrame: undefined } : {}) })
   }
 })
 const lastFrameId = computed({
@@ -1286,7 +1286,7 @@ const cropStyle = computed(() => ({
     <transition name="float-down">
       <div v-if="selected && panelOpen && showPrompt && !cropOn && !trimOn" class="prompt nodrag nowheel" @pointerdown.stop @mousedown.stop @click.stop>
       <SentMediaPrompts :prompts="nodeMeta?.data.sentMediaPrompts" />
-      <div v-if="type === 'shotVideo'" class="prompt-tools">
+      <div v-if="type === 'shotVideo' && !usesLipSync" class="prompt-tools">
         <button
           type="button"
           class="opt"
@@ -1384,6 +1384,7 @@ const cropStyle = computed(() => ({
           @input="endFramePromptValue = ($event.target as HTMLTextAreaElement).value"
         />
       </div>
+      <p v-else-if="usesLipSync" class="hint">{{ $t('lipSync.promptHint') }}</p>
       <textarea
         v-else
         rows="12"
@@ -1392,13 +1393,14 @@ const cropStyle = computed(() => ({
         @input="promptValue = ($event.target as HTMLTextAreaElement).value"
       />
       <H3GenModeSelect v-if="isH3VideoNode" v-model="h3GenMode" />
+      <p v-if="usesLipSync" class="hint">{{ $t('lipSync.singleSpeaker') }}</p>
       <FramePairSlots
         v-if="isH3Fl2va || ltxProfile"
         v-model:first-id="firstFrameId"
         v-model:last-id="lastFrameId"
         :first-only="usesLipSync"
         :last-required="lastFrameRequired"
-        :first-hint="shot?.imageAssetId ? $t('common.useShotImage') : $t('common.chooseFirstFrame')"
+        :first-hint="usesLipSync ? $t('lipSync.speakerFrameHint') : shot?.imageAssetId ? $t('common.useShotImage') : $t('common.chooseFirstFrame')"
       />
       <ShotRefStrip
         v-else-if="shot && (type === 'shotBoard' || type === 'shotImage' || type === 'shotVideo')"

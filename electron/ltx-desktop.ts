@@ -187,14 +187,14 @@ export async function requestLtxDesktop(request: LtxDesktopRequest): Promise<Ltx
         if (typeof asset?.id !== 'string' || !ID.test(asset.id) || (expectedKind && asset.media_kind !== expectedKind)) throw new Error('Invalid asset ID')
         return { assetId: asset.id }
       }
-      const uploadFrame = (image: string) => {
+      const uploadFrame = (image: string, expectedKind?: string) => {
         const [meta, bytes] = image.split(',')
         const mime = meta.slice(5, -7)
         const ext = mime === 'image/jpeg' ? 'jpg' : mime.slice(6)
-        return upload(Uint8Array.from(Buffer.from(bytes, 'base64')).buffer, mime, `frame.${ext}`)
+        return upload(Uint8Array.from(Buffer.from(bytes, 'base64')).buffer, mime, `frame.${ext}`, expectedKind)
       }
       const audio = op.kind === 'submitAudio' ? await upload(op.audio, 'audio/wav', 'dialogue.wav', 'audio') : undefined
-      const startFrame = op.first ? await uploadFrame(op.first) : undefined
+      const startFrame = op.first ? await uploadFrame(op.first, op.kind === 'submitAudio' ? 'image' : undefined) : undefined
       const params = { model: op.model, prompt: op.prompt, aspectRatio: op.aspect, resolution: op.resolution, fps: 24 }
       const job = op.kind === 'submitAudio'
         ? await json('/api/generations/audio-to-video', {
@@ -204,8 +204,13 @@ export async function requestLtxDesktop(request: LtxDesktopRequest): Promise<Ltx
           contract_version: 1, params: { ...params, duration: op.duration },
           inputs: { startFrame, endFrame: op.last ? await uploadFrame(op.last) : undefined }
         })
-      return typeof job?.id === 'string' && ID.test(job.id)
-        ? { kind: 'submitted', id: job.id } : { kind: 'invalid' }
+      if (typeof job?.id !== 'string' || !ID.test(job.id)) return { kind: 'invalid' }
+      if (op.kind === 'submitAudio') {
+        console.info('[LTX Desktop] /api/generations/audio-to-video', {
+          jobId: job.id, audioAssetId: audio?.assetId, startFrameAssetId: startFrame?.assetId
+        })
+      }
+      return { kind: 'submitted', id: job.id }
     }
     if (op.kind === 'download') {
       if (typeof op.path !== 'string' || !SIGNED_VIDEO.test(op.path)) return { kind: 'invalid' }
