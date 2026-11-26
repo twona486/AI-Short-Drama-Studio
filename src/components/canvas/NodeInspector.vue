@@ -1056,7 +1056,7 @@ async function optimizeVideoPrompt() {
           </div>
         </div>
         <p class="hint">
-          {{ $t('nodeInspector.h3EditableNarration', { tag: '<d>' }) }}
+          {{ $t(effectiveShotAudioMode(shot) === 'ltx-lip-sync' ? 'lipSync.promptHint' : 'nodeInspector.h3EditableNarration', { tag: '<d>' }) }}
         </p>
         <textarea
           rows="16"
@@ -1107,6 +1107,7 @@ async function optimizeVideoPrompt() {
         v-if="isH3Fl2va || (ltxProfile && !node.data.captureId)"
         v-model:first-id="firstFrameId"
         v-model:last-id="lastFrameId"
+        :first-only="Boolean(shot && effectiveShotAudioMode(shot) === 'ltx-lip-sync')"
         :last-required="lastFrameRequired"
         :first-hint="node.type === 'shotVideo' && shot?.imageAssetId ? $t('common.useShotImage') : ''"
       />
@@ -1159,6 +1160,7 @@ async function optimizeVideoPrompt() {
         >
           <option value="h3-dialogue" :disabled="!project.shotSupportsVideoVoice(shot)">{{ $t('common.h3Dialogue') }}</option>
           <option value="h3-voiceover" :disabled="!project.shotSupportsVideoVoice(shot)">{{ $t('nodeInspector.h3Offscreen') }}</option>
+          <option value="ltx-lip-sync" :disabled="!project.shotSupportsLipSync(shot)">{{ $t('lipSync.mode') }}</option>
           <option value="tts">{{ $t('common.postTts') }}</option>
           <option value="none">{{ $t('common.noNarration') }}</option>
         </select>
@@ -1171,7 +1173,7 @@ async function optimizeVideoPrompt() {
           @input="project.updateShot(shot.id, { voiceover: ($event.target as HTMLTextAreaElement).value })"
         />
         <TtsModelSelect v-if="effectiveShotAudioMode(shot) === 'tts'" />
-        <template v-if="effectiveShotAudioMode(shot) === 'tts' && isOpenAiTts(settings.config.tts)">
+        <template v-if="['tts', 'ltx-lip-sync'].includes(effectiveShotAudioMode(shot)) && isOpenAiTts(settings.config.tts)">
           <p class="hint">{{ $t('openAiTts.generatedVoiceHint') }}</p>
           <label>{{ $t('openAiTts.shotInstruction') }}</label>
           <textarea
@@ -1241,7 +1243,7 @@ async function optimizeVideoPrompt() {
           :durations="inspectorDurations"
           :ltx-model="ltxProfile ? ltxProfile.workflowId || LTX_DEFAULT_MODEL : undefined"
           :ltx-desktop="isLtxDesktop(ltxProfile)"
-          :show-audio="showVideoAudio"
+          :show-audio="showVideoAudio && !(shot && effectiveShotAudioMode(shot) === 'ltx-lip-sync')"
           :audio="generateAudio"
           @update:resolution="videoResolution = $event"
           @update:aspect="nodeAspectRatio = $event"

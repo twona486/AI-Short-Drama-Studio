@@ -1,5 +1,6 @@
 import type { Shot } from '@/types'
 import { effectiveShotAudioMode, isVideoVoiceMode } from '@/utils/shot'
+import { withVideoReferenceBlock } from '@/utils/videoReferenceBlock'
 import { spokenTextOnly } from './dialogue'
 
 const SPEECH_DIRECTION = /\b(?:says?|speaks?|speaking|spoken|talks?|talking|asks?|replies|whispers?|shouts?|utters?|dialogue|narrat\w*|voice[- ]?over|lip[- ]?sync)\b|말한다|말해요|말하며|대사|내레이션/i
@@ -55,4 +56,25 @@ export function ltxShotPrompt(shot: Shot, speakerVoice?: string) {
   const mouth = mode === 'h3-voiceover' ? 'The visible characters keep their mouths at rest.'
     : 'Synchronize only the speaking character’s mouth to each line.'
   return `${motion} ${dialogue} ${mouth} Voice direction: ${delivery} ${ambience} Keep any background music subtle and below the dialogue.`
+}
+
+
+export function ltxLipSyncPrompt(shot: Shot) {
+  const spoken = spokenLines(shot.voiceover || '').map(({ words }) => words)
+  const scene = oneLine(withoutSpeech(shot.visualPrompt, spoken))
+  const compiled = withVideoReferenceBlock(shot.compiledVideoPrompt || '', [])
+  const visualBody = compiled.match(/integrated_multimodal_description:\s*([\s\S]*?)(?=\n\s*overall_soundscape:|$)/i)?.[1] ?? compiled
+  const motion = oneLine(withoutSpeech(visualBody, spoken)) || oneLine(withoutSpeech(shot.videoPrompt, spoken))
+  const camera = {
+    push: 'The camera slowly pushes in.',
+    pull: 'The camera slowly pulls back.',
+    pan: 'The camera pans smoothly.',
+    tilt: 'The camera tilts smoothly.',
+    static: 'The camera holds steady.',
+    orbit: 'The camera moves smoothly around the subject.'
+  }[shot.cameraMovement]
+  // LTX Desktop v1.3.3의 A2V 예제처럼 전사 대신 화면의 동작과 표정을 묘사한다.
+  return [scene, motion, camera,
+    'Maintain the starting frame’s character appearance and lighting. Show natural eye movements and subtle expressions. Synchronize visible mouth movements to the supplied audio.']
+    .filter(Boolean).join(' ')
 }

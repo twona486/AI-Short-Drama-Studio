@@ -1,6 +1,6 @@
 import { prepareMediaPrompt } from './mediaPrompt'
 import { nearestVideoDuration, videoDurationCapability } from './videoDuration'
-import { isLtxDesktop, isLtxTask, ltxDesktopResolution, LTX_DESKTOP_MODELS, LTX_DESKTOP_WORKFLOW, ltxDesktopError, type LtxDesktopOperation, type LtxDesktopReply } from './ltxDesktopOptions'
+import { isLtxDesktop, isLtxTask, ltxDesktopResolution, ltxDesktopAudioResolution, ltxDesktopModel, ltxDesktopError, type LtxDesktopOperation, type LtxDesktopReply } from './ltxDesktopOptions'
 /**
  * AutoDL.art ComfyUI 워크플로를 이용한 AI 영상 생성
  *
@@ -43,6 +43,7 @@ import { normalizeZealmanBaseUrl, zealmanWorkflowById } from './zealman'
 export interface VideoGenInput {
   /** 첫 참조는 캐릭터 설정 이미지, 장면 이미지, 스토리 개요판 중 하나다. */
   imageBlob?: Blob
+  lipSyncWav?: ArrayBuffer
   /** 나머지 참조는 캐릭터 설정 이미지, 장면 이미지, 개요판 순으로 제공한다. */
   referenceImages?: Blob[]
   /**
@@ -1407,8 +1408,8 @@ async function realLtxDesktopVideo(
     throw new Error(translate(ltxDesktopError(reply)))
   }
   let prompt = input.prompt.trim()
-  const model = LTX_DESKTOP_MODELS.includes(cfg.workflowId) ? cfg.workflowId : LTX_DESKTOP_WORKFLOW
-  const resolution = ltxDesktopResolution(input.videoResolution)
+  const model = ltxDesktopModel(cfg.workflowId)
+  const resolution = input.lipSyncWav ? ltxDesktopAudioResolution(input.videoResolution) : ltxDesktopResolution(input.videoResolution)
   const duration = ltxDuration(input.duration, model, resolution)
   let id = input.resumeTaskId?.startsWith('ltx-desktop:') ? input.resumeTaskId.slice('ltx-desktop:'.length) : undefined
 
@@ -1419,16 +1420,16 @@ async function realLtxDesktopVideo(
       if (input.aspectRatio && input.aspectRatio !== '16:9' && input.aspectRatio !== '9:16') {
         throw new Error(translate('ltx.aspect'))
       }
-      prompt = await prepareMediaPrompt('video', prompt, input.signal)
+      prompt = await prepareMediaPrompt('video', prompt, input.signal, input.lipSyncWav ? 5000 : undefined, Boolean(input.lipSyncWav))
       const first = await ltxImageUri(input.imageBlob)
       const last = input.lastFrameBlob ? await ltxImageUri(input.lastFrameBlob) : undefined
       throwIfAborted(input.signal)
       onProgress?.(translate('ltxDesktop.submitting'))
-      const reply = await request({
-        kind: 'submit', first, last, model, prompt, duration,
-        resolution,
-        aspect: input.aspectRatio || (input.height > input.width ? '9:16' : '16:9')
-      })
+      const aspect = input.aspectRatio || (input.height > input.width ? '9:16' : '16:9')
+      const fields = { first, model, prompt, resolution, aspect }
+      const reply = await request(input.lipSyncWav
+        ? { ...fields, kind: 'submitAudio', audio: input.lipSyncWav }
+        : { ...fields, kind: 'submit', last, duration })
       if (reply.kind !== 'submitted') return fail(reply)
       id = reply.id
       await input.onTaskSubmitted?.(`ltx-desktop:${id}`)
@@ -1485,6 +1486,7 @@ export async function generateVideo(
       if (isLtxDesktop(cfg) && (!resumeLtx || input.resumeTaskId?.startsWith('ltx-desktop:'))) {
         return realLtxDesktopVideo(input, cfg, onProgress)
       }
+      if (input.lipSyncWav) throw new Error(translate('lipSync.unavailable'))
       if (cfg.provider === 'ltx' && (!resumeLtx || input.resumeTaskId?.startsWith('ltx:'))) {
         return realLtxVideo(input, cfg, onProgress)
       }

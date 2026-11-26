@@ -4,7 +4,7 @@ import { t as translate } from '@/i18n'
 import { ref, computed, onMounted, watch, nextTick } from 'vue'
 import { useRouter } from 'vue-router'
 import { useProjectStore, useToastStore, useAssetsStore, useSettingsStore } from '@/stores'
-import { buildCuesFromClips, parseSRT, renderCaptionPng, toSRT } from '@/services/ffmpeg'
+import { parseSRT, renderCaptionPng, toSRT } from '@/services/ffmpeg'
 import { openAiShotSpeech } from '@/services/ai/shotSpeech'
 import { isOpenAiTts, OPENAI_TTS_VOICES } from '@/services/ai/openAiTts'
 import { generateSpeech, TTS_VOICES } from '@/services/ai'
@@ -14,7 +14,8 @@ import Tag from '@/components/common/Tag.vue'
 import TtsModelSelect from '@/components/settings/TtsModelSelect.vue'
 import type { CaptionStyle, Shot, ShotAudioMode } from '@/types'
 import { ensureTimelineFromShots } from '@/utils/timeline'
-import { effectiveShotAudioMode, isDigitalHumanSpeechProject } from '@/utils/shot'
+import { buildTimelineCaptionCues, clipCaptionDuration } from '@/utils/timeline'
+import { effectiveShotAudioMode, isDigitalHumanSpeechProject, isLipSyncShot, shotLipSyncDuration, shotPlaybackDuration } from '@/utils/shot'
 
 const router = useRouter()
 const project = useProjectStore()
@@ -91,7 +92,7 @@ const lines = computed(() => {
         index: (shot?.index ?? i) + 1,
         title: shot?.title || translate('caption.clipNumber', { p0: i + 1 }),
         start: c.startTime,
-        duration: c.duration,
+        duration: project.current ? clipCaptionDuration(project.current, c) : c.duration,
         text: shot?.voiceover ?? '',
         audioAssetId: shot?.audioAssetId,
         shot
@@ -101,14 +102,15 @@ const lines = computed(() => {
   let t = 0
   return shots.value.map((shot) => {
     const start = t
-    t += shot.duration
+    const duration = shotPlaybackDuration(shot)
+    t += duration
     return {
       key: shot.id,
       shotId: shot.id,
       index: shot.index + 1,
       title: shot.title,
       start,
-      duration: shot.duration,
+      duration,
       text: shot.voiceover,
       audioAssetId: shot.audioAssetId,
       shot
@@ -120,11 +122,11 @@ const voicedCount = computed(
   () => lines.value.filter((l) => {
     if (!l.shot || !l.text.trim()) return false
     const mode = effectiveShotAudioMode(l.shot)
-    return mode === 'h3-dialogue' || mode === 'h3-voiceover' || (mode === 'tts' && Boolean(l.audioAssetId))
+    return shotLipSyncDuration(l.shot) !== undefined || mode === 'h3-dialogue' || mode === 'h3-voiceover' || (mode === 'tts' && Boolean(l.audioAssetId))
   }).length
 )
 const pendingVoice = computed(
-  () => lines.value.filter((l) => l.shot && effectiveShotAudioMode(l.shot) === 'tts' && l.text.trim() && !l.audioAssetId).length
+  () => lines.value.filter((l) => l.shot && !isLipSyncShot(l.shot) && effectiveShotAudioMode(l.shot) === 'tts' && l.text.trim() && !l.audioAssetId).length
 )
 
 const cues = computed(() => {
@@ -206,7 +208,7 @@ async function generateLine(shotId: string) {
     return
   }
   const shot = shots.value.find((s) => s.id === shotId)
-  if (!shot) return
+  if (!shot || isLipSyncShot(shot)) return
   const text = shot.voiceover.trim()
   if (!text) {
     toast.warn(translate('caption.clipMissingDialogue', { p0: shot.index + 1 }))
@@ -235,7 +237,7 @@ async function generateAllVoices() {
     toast.info(translate('caption.digitalSpeechHint'))
     return
   }
-  const todo = lines.value.filter((l) => l.text.trim())
+  const todo = lines.value.filter((l) => l.shot && !isLipSyncShot(l.shot) && l.text.trim())
   if (todo.length === 0) {
     toast.warn(translate('caption.noDialogueToVoice'))
     return
@@ -258,22 +260,7 @@ async function generateAllVoices() {
 
 function buildFromTimeline() {
   if (!project.current) return
-  const source =
-    timeline.value.length > 0
-      ? timeline.value.map((c) => {
-          const shot = shots.value.find((s) => s.id === c.shotId)
-          return {
-            startTime: c.startTime,
-            duration: c.duration,
-            text: shot?.voiceover ?? ''
-          }
-        })
-      : shots.value.map((s, i) => ({
-          startTime: shots.value.slice(0, i).reduce((n, x) => n + x.duration, 0),
-          duration: s.duration,
-          text: s.voiceover
-        }))
-  const parsed = buildCuesFromClips(source)
+  const parsed = buildTimelineCaptionCues(project.current)
   srtText.value = toSRT(parsed)
   project.setCaptionSrt(srtText.value)
   const empty = parsed.filter((c) => !c.text.trim()).length
@@ -459,7 +446,10 @@ function next() {
                   <div class="line-title">{{ line.title }}</div>
                   <div class="line-time">{{ formatClock(line.start) }} · {{ line.duration }}s</div>
                 </div>
-                <Tag v-if="line.shot && effectiveShotAudioMode(line.shot) === 'h3-dialogue'" type="success" size="sm">{{ $t('caption.h3Dialogue') }}</Tag>
+                <Tag v-if="line.shot && isLipSyncShot(line.shot)" :type="shotLipSyncDuration(line.shot) !== undefined ? 'success' : 'warning'" size="sm">
+                  {{ $t(shotLipSyncDuration(line.shot) !== undefined ? 'lipSync.embedded' : 'lipSync.pending') }}
+                </Tag>
+                <Tag v-else-if="line.shot && effectiveShotAudioMode(line.shot) === 'h3-dialogue'" type="success" size="sm">{{ $t('caption.h3Dialogue') }}</Tag>
                 <Tag v-else-if="line.shot && effectiveShotAudioMode(line.shot) === 'h3-voiceover'" type="success" size="sm">{{ $t('caption.h3Voiceover') }}</Tag>
                 <Tag v-else-if="line.shot && effectiveShotAudioMode(line.shot) === 'none'" size="sm">{{ $t('common.noNarration') }}</Tag>
                 <Tag v-else-if="line.audioAssetId && !isStale(line.shot)" type="success" size="sm">{{ $t('caption.ttsReady') }}</Tag>
@@ -483,6 +473,7 @@ function next() {
                 >
                   <option value="h3-dialogue" :disabled="line.shot && !project.shotSupportsVideoVoice(line.shot)">{{ $t('common.h3Dialogue') }}</option>
                   <option value="h3-voiceover" :disabled="line.shot && !project.shotSupportsVideoVoice(line.shot)">{{ $t('caption.h3Offscreen') }}</option>
+                  <option value="ltx-lip-sync" :disabled="!line.shot || !project.shotSupportsLipSync(line.shot)">{{ $t('lipSync.mode') }}</option>
                   <option value="tts">{{ $t('common.postTts') }}</option>
                   <option value="none">{{ $t('common.noNarration') }}</option>
                 </select>
@@ -493,7 +484,7 @@ function next() {
                 <GradientButton
                   size="sm"
                   :loading="generating.has(line.shotId)"
-                  :disabled="!line.text.trim() || generating.has(line.shotId)"
+                  :disabled="!line.text.trim() || generating.has(line.shotId) || Boolean(line.shot && isLipSyncShot(line.shot))"
                   @click="generateLine(line.shotId)"
                 >
                   {{ line.audioAssetId ? $t('caption.regenerateVoice') : $t('caption.generateVoice') }}

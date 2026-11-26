@@ -534,6 +534,7 @@ async function next() {
             >
               <option value="h3-dialogue" :disabled="!project.shotSupportsVideoVoice(shot)">{{ $t('common.h3Dialogue') }}</option>
               <option value="h3-voiceover" :disabled="!project.shotSupportsVideoVoice(shot)">{{ $t('videos.h3Offscreen') }}</option>
+              <option value="ltx-lip-sync" :disabled="!project.shotSupportsLipSync(shot)">{{ $t('lipSync.mode') }}</option>
               <option value="tts">{{ $t('videos.postTtsMode') }}</option>
               <option value="none">{{ $t('videos.environmentOnly') }}</option>
             </select>

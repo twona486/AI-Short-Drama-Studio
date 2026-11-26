@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { shotPlaybackDuration } from '@/utils/shot'
 import { t as translate } from '@/i18n'
 import { ref, computed, nextTick, onMounted, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
@@ -354,7 +355,7 @@ function addShotToTimeline(shot: Shot, preview = true) {
     id: 'tc_' + Date.now().toString(36),
     shotId: shot.id,
     startTime: lastEnd,
-    duration: shot.duration,
+    duration: shotPlaybackDuration(shot),
     sourceIn: 0,
     transitionIn: 'none',
     transitionDuration: 0,
@@ -394,7 +395,7 @@ function appendMissingShots() {
       id: 'tc_' + shot.id,
       shotId: shot.id,
       startTime: cursor,
-      duration: shot.duration,
+      duration: shotPlaybackDuration(shot),
       sourceIn: 0,
       transitionIn: 'none',
       transitionDuration: 0,

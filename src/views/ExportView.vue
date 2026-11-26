@@ -4,13 +4,13 @@ import { t as translate } from '@/i18n'
 import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useProjectStore, useAssetsStore, useToastStore } from '@/stores'
-import { exportVideo, parseSRT, buildCuesFromClips, probeMedia, trimTimelineBySpeech } from '@/services/ffmpeg'
+import { exportVideo, parseSRT, probeMedia, trimTimelineBySpeech } from '@/services/ffmpeg'
 import GlassCard from '@/components/common/GlassCard.vue'
 import GradientButton from '@/components/common/GradientButton.vue'
 import Tag from '@/components/common/Tag.vue'
 import ProgressRing from '@/components/common/ProgressRing.vue'
-import { canBuildExport, ensureTimelineFromShots, timelineClipAssetId } from '@/utils/timeline'
-import { effectiveShotAudioMode, isDigitalHumanSpeechProject, needsExternalTts } from '@/utils/shot'
+import { canBuildExport, buildTimelineCaptionCues, clipAudioSelection, ensureTimelineFromShots, timelineClipAssetId } from '@/utils/timeline'
+import { isDigitalHumanSpeechProject, needsExternalTts } from '@/utils/shot'
 
 const router = useRouter()
 const project = useProjectStore()
@@ -92,13 +92,12 @@ async function doExport() {
   try {
     const mediaMap = new Map<string, { blob: Blob; kind: 'video' | 'image' }>()
     for (const clip of timeline.value) {
-      if (mediaMap.has(clip.shotId)) continue
       const shot = shots.value.find((s) => s.id === clip.shotId)
       const assetId = project.current ? timelineClipAssetId(project.current, clip) : undefined
       if (!assetId) continue
       const blob = await assets.getBlob(assetId)
       if (!blob) continue
-      mediaMap.set(clip.shotId, {
+      mediaMap.set(clip.id, {
         blob,
         kind: (assets.getMeta(assetId)?.kind || (shot?.videoAssetId ? 'video' : 'image')) as 'video' | 'image'
       })
@@ -115,7 +114,7 @@ async function doExport() {
       progressMsg.value = translate('export.trimming')
       workingTimeline = await trimTimelineBySpeech(
         workingTimeline,
-        async (shotId) => mediaMap.get(shotId)?.blob
+        async (shotId) => mediaMap.get(workingTimeline.find((clip) => clip.shotId === shotId)?.id || '')?.blob
       )
       project.setTimeline(workingTimeline)
       for (const clip of workingTimeline) {
@@ -132,26 +131,10 @@ async function doExport() {
       voiceoverMap.set(clip.shotId, shot?.voiceover ?? '')
     }
 
-    const baseCaptionCues = (() => {
-      if (isDigitalHuman.value) {
-        return buildCuesFromClips(
-          workingTimeline.map((c) => ({
-            startTime: c.startTime,
-            duration: c.duration,
-            text: shots.value.find((s) => s.id === c.shotId)?.voiceover ?? ''
-          }))
-        ).filter((c) => c.text.trim())
-      }
-      const srt = project.current!.captionSrt?.trim()
-      if (srt) return parseSRT(srt).filter((c) => c.text.trim())
-      return buildCuesFromClips(
-        workingTimeline.map((c) => ({
-          startTime: c.startTime,
-          duration: c.duration,
-          text: shots.value.find((s) => s.id === c.shotId)?.voiceover ?? ''
-        }))
-      ).filter((c) => c.text.trim())
-    })()
+    const srt = project.current!.captionSrt?.trim()
+    const baseCaptionCues = (!isDigitalHuman.value && srt
+      ? parseSRT(srt)
+      : buildTimelineCaptionCues(project.current!, workingTimeline)).filter((cue) => cue.text.trim() && cue.end > cue.start)
     const captionCues = [
       ...baseCaptionCues,
       ...(project.current.textOverlays || []).map((item, index) => ({
@@ -185,28 +168,23 @@ async function doExport() {
     const sourceAudioMap = new Map<string, boolean>()
     let missingVo = 0
     for (const clip of workingTimeline) {
-      if (!clip.enabled || voiceoverAudioMap.has(clip.shotId)) continue
+      if (!clip.enabled) continue
       const shot = shots.value.find((s) => s.id === clip.shotId)
       if (!shot) continue
-      const audioMode = effectiveShotAudioMode(shot)
-      sourceAudioMap.set(
-        clip.shotId,
-        isSpeech.value ||
-          audioMode === 'h3-dialogue' ||
-          audioMode === 'h3-voiceover' ||
-          keepAmbientAudio.value
-      )
-      if (digitalHuman || !needsExternalTts(shot, project.current)) continue
+      const { embeddedLipSync, keepSource } = clipAudioSelection(project.current!, clip, keepAmbientAudio.value)
+      sourceAudioMap.set(clip.id, keepSource)
+      if (embeddedLipSync || digitalHuman || !needsExternalTts(shot, project.current)) continue
       if (!shot.audioAssetId) {
         missingVo++
         continue
       }
       const blob = await assets.getBlob(shot.audioAssetId)
-      if (blob) voiceoverAudioMap.set(clip.shotId, blob)
+      if (blob) voiceoverAudioMap.set(clip.id, blob)
     }
     for (const clip of workingTimeline) {
-      if (!clip.enabled || !clip.voiceAssetId) continue
-      const blob = await assets.getBlob(clip.voiceAssetId)
+      const { voiceAssetId } = clipAudioSelection(project.current!, clip, keepAmbientAudio.value)
+      if (!clip.enabled || !voiceAssetId) continue
+      const blob = await assets.getBlob(voiceAssetId)
       if (blob) voiceoverAudioMap.set(clip.id, blob)
     }
     if (missingVo > 0 && !digitalHuman) {

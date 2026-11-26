@@ -222,3 +222,201 @@ test('LAN 호스트를 변경하면 이전 호스트에 해당하는 페어링 �
   settings.patchVideo({ baseUrl: '192.168.20.4:41955' })
   assert.equal(settings.config.video.apiKey, '')
 })
+
+
+test('한국어 다중 화자 립싱크의 WAV, Remote 계약, 재조회, 후반 작업 중복 방지를 검증합니다', async (context) => {
+  const { pcmToWav } = await vite.ssrLoadModule('/electron/openai-tts.ts')
+  const { generateShotVideo, generateShotAudio } = await vite.ssrLoadModule('/src/services/canvas/runner.ts')
+  const { useProjectStore } = await vite.ssrLoadModule('/src/stores/project.ts')
+  const { useAssetsStore } = await vite.ssrLoadModule('/src/stores/assets.ts')
+  const { needsExternalTts, shotPlaybackDuration } = await vite.ssrLoadModule('/src/utils/shot.ts')
+  const { buildTimelineFromShots, buildTimelineCaptionCues, clipAudioSelection, clipCaptionDuration, clipLipSyncDuration } = await vite.ssrLoadModule('/src/utils/timeline.ts')
+  const { toSRT } = await vite.ssrLoadModule('/src/services/ffmpeg/subtitle.ts')
+  const { joinLipSyncWavs } = await vite.ssrLoadModule('/src/services/ai/lipSyncWav.ts')
+
+  const requests = []
+  const submitted = []
+  const uploaded = []
+  let supportsAudio = true
+  const server = http.createServer(async (req, res) => {
+    const chunks = []
+    for await (const chunk of req) chunks.push(chunk)
+    const bytes = Buffer.concat(chunks)
+    const json = (response) => {
+      res.setHeader('Content-Type', 'application/json')
+      res.end(JSON.stringify(response))
+    }
+    if (req.url === signedPath) return res.end(mp4)
+    if (req.headers.authorization !== `Bearer ${token}`) {
+      res.statusCode = 401
+      return json({})
+    }
+    if (req.url === '/api/generate/models-specs') {
+      return json({ downloaded_local_models: [{ model: 'ltx-2.5-fast', spec: {
+        capabilities: { a2v: supportsAudio },
+        aspect_specs: { '16:9': {
+          a2v_supported_resolutions_durations: {
+            '540p': { fps_to_durations: { 24: [2, 20] } },
+            '1080p': { fps_to_durations: { 24: [2, 10] } }
+          }
+        } }
+      } }] })
+    }
+    if (req.url === '/api/assets/upload') {
+      const name = bytes.toString().match(/filename="([^"]+)"/)?.[1]
+      const bodyStart = bytes.indexOf('\r\n\r\n') + 4
+      const boundary = req.headers['content-type']?.split('boundary=')[1]
+      if (!boundary || !name) { res.statusCode = 422; return json({}) }
+      const body = bytes.subarray(bodyStart, bytes.lastIndexOf(`\r\n--${boundary}--`))
+      uploaded.push({ name, body })
+      const kind = name === 'dialogue.wav' ? 'audio' : 'image'
+      return json({ id: kind, media_kind: kind })
+    }
+    if (req.url === '/api/generations/audio-to-video') {
+      const body = JSON.parse(bytes)
+      submitted.push(body)
+      const { params, inputs } = body
+      if (body.contract_version !== 1 || Object.keys(body).sort().join() !== 'contract_version,inputs,params' ||
+          Object.keys(params).sort().join() !== 'aspectRatio,fps,model,prompt,resolution' ||
+          params.model !== 'ltx-2.5-fast' || params.fps !== 24 || params.aspectRatio !== '16:9' || params.resolution !== '540p' ||
+          Object.keys(inputs).sort().join() !== 'audio,startFrame' || inputs.audio.assetId !== 'audio' ||
+          inputs.startFrame?.assetId !== 'image') {
+        res.statusCode = 422
+        return json({})
+      }
+      return json({ id: 'lip-job' })
+    }
+    if (req.url === '/api/generations/lip-job') {
+      return json({ id: 'lip-job', status: 'succeeded', outputs: [{ media_kind: 'video', mime_type: 'video/mp4', bytes_url: signedPath }] })
+    }
+    res.statusCode = 404
+    return json({})
+  })
+  server.listen(0, '127.0.0.1')
+  await once(server, 'listening')
+  context.after(() => new Promise((resolve) => server.close(resolve)))
+  const baseUrl = `http://127.0.0.1:${server.address().port}`
+  const generated = []
+  let speechSamples = 12_000
+  let frameReads = 0
+  globalThis.window = {
+    addEventListener() {},
+    desktop: {
+      isDesktop: true,
+      ltxDesktopRequest(request) {
+        requests.push(request.operation)
+        return requestLtxDesktop(request)
+      },
+      async kvGet() { return '{}' },
+      async kvSet() {},
+      async openAiTts({ text, voice }) {
+        generated.push({ text, voice })
+        return pcmToWav(Buffer.alloc(speechSamples * 2, voice === 'marin' ? 1 : 2))
+      }
+    }
+  }
+  globalThis.document = { addEventListener() {} }
+  globalThis.FileReader = class {
+    async readAsDataURL(blob) {
+      this.result = `data:${blob.type};base64,${Buffer.from(await blob.arrayBuffer()).toString('base64')}`
+      this.onload()
+    }
+  }
+  context.after(() => {
+    delete globalThis.window
+    delete globalThis.document
+    delete globalThis.FileReader
+  })
+  setActivePinia(createPinia())
+  const settings = useSettingsStore()
+  const profileId = settings.addVideo({
+    name: 'LTX Desktop', provider: 'ltx-desktop', baseUrl, apiKey: token, workflowId: 'ltx-2.5-fast'
+  })
+  settings.addTts({
+    name: 'OpenAI', provider: 'openai', baseUrl: 'https://api.openai.com/v1', apiKey: token,
+    model: 'gpt-realtime-2.1-mini', models: ['gpt-realtime-2.1-mini']
+  })
+  const project = useProjectStore()
+  const store = useAssetsStore()
+  context.mock.method(store, 'getBlob', async (id) => {
+    assert.equal(id, 'keyframe')
+    frameReads++
+    return new Blob(['hello'], { type: 'image/png' })
+  })
+  context.mock.method(store, 'add', async (blob, kind) => {
+    assert.equal(kind, 'video')
+    assert.deepEqual(Buffer.from(await blob.arrayBuffer()), mp4)
+    return { id: 'lip-video', kind }
+  })
+  const persisted = []
+  context.mock.method(project, 'save', async () => {
+    const shot = project.current.shots[0]
+    persisted.push({ id: shot.videoTaskId, duration: shot.lipSyncTask?.duration })
+  })
+  const shot = {
+    id: 'shot1', index: 0, title: '인사', duration: 6, cameraMovement: 'push',
+    audioMode: 'h3-dialogue', voiceover: '민지: 안녕하세요.\n정우: 네, 반가워요.',
+    visualPrompt: 'Two actors in a sunlit cafe.', compiledVideoPrompt: 'They exchange glances. 민지 says "안녕하세요."',
+    imageAssetId: 'keyframe', videoProfileId: profileId
+  }
+  project.current = {
+    id: 'project', shots: [shot], canvas: undefined,
+    subjects: [{ name: '민지', openAiTtsVoice: 'marin' }, { name: '정우', openAiTtsVoice: 'cedar' }],
+    settings: { aspectRatio: '16:9', ttsVoice: 'marin' }, timeline: []
+  }
+  project.current.timeline = buildTimelineFromShots(project.current)
+  project.current.captionSrt = toSRT(buildTimelineCaptionCues(project.current))
+  assert.equal(await project.checkShotLipSync(shot), true)
+  assert.equal(project.shotSupportsLipSync(shot), true)
+  project.setShotAudioMode(shot.id, 'ltx-lip-sync')
+  assert.equal(needsExternalTts(project.current.shots[0], project.current), false)
+  await assert.rejects(generateShotAudio(project.current.shots[0]), /별도의 더빙/)
+  assert.deepEqual(generated, [])
+  const result = await generateShotVideo(shot)
+  assert.equal(result.id, 'lip-video')
+  assert.deepEqual(generated, [{ text: '안녕하세요.', voice: 'marin' }, { text: '네, 반가워요.', voice: 'cedar' }])
+  assert.deepEqual(uploaded.map(({ name }) => name), ['dialogue.wav', 'frame.png'])
+  assert.equal(uploaded[1].body.toString(), 'hello')
+  const wav = uploaded[0].body
+  assert.equal(wav.readUInt32LE(24), 24_000)
+  assert.equal(wav.readUInt32LE(40), 96_000)
+  const pcm = wav.subarray(44)
+  assert.deepEqual(pcm, Buffer.concat([
+    Buffer.alloc(20_400), Buffer.alloc(24_000, 1), Buffer.alloc(7_200),
+    Buffer.alloc(24_000, 2), Buffer.alloc(20_400)
+  ]))
+  assert.equal(joinLipSyncWavs([Uint8Array.from(pcmToWav(Buffer.alloc(48_000 * 3)).wav).buffer]).duration, 3)
+  assert.match(submitted[0].params.prompt, /sunlit cafe\. They exchange glances\. The camera slowly pushes in\./)
+  assert.doesNotMatch(submitted[0].params.prompt, /[가-힣\n]/)
+  assert.deepEqual(persisted, [{ id: 'ltx-desktop:lip-job', duration: 2 }, { id: undefined, duration: undefined }])
+  assert.equal(shotPlaybackDuration(project.current.shots[0]), 2)
+  assert.equal(project.current.shots[0].duration, 6)
+  assert.equal(project.current.timeline[0].duration, 2)
+  assert.match(project.current.captionSrt, /00:00:02,000/)
+  assert.deepEqual(clipAudioSelection(project.current, { ...project.current.timeline[0], voiceAssetId: 'old-dub' }, false), {
+    keepSource: true, embeddedLipSync: true, voiceAssetId: undefined
+  })
+  assert.equal(clipCaptionDuration(project.current, { ...project.current.timeline[0], duration: 6 }), 2)
+  assert.equal(clipLipSyncDuration(project.current, { ...project.current.timeline[0], assetId: 'older-video' }), undefined)
+  project.setShotAudioMode(shot.id, 'tts')
+  assert.equal(needsExternalTts(project.current.shots[0], project.current), false)
+
+  project.updateShot(shot.id, { videoTaskId: 'ltx-desktop:lip-job', lipSyncTask: { id: 'ltx-desktop:lip-job', duration: 2 } })
+  requests.length = 0
+  await generateShotVideo(project.current.shots[0])
+  assert.deepEqual(requests.map(({ kind }) => kind), ['status', 'download'])
+  assert.equal(generated.length, 2)
+  assert.equal(frameReads, 1)
+
+  project.setShotAudioMode(shot.id, 'ltx-lip-sync')
+  speechSamples = 24_000 * 21
+  await assert.rejects(generateShotVideo(project.current.shots[0]), /최대 20초를 초과합니다.*대사를 여러 샷으로/)
+  project.current.settings.defaultVideoResolution = '1080p'
+  await assert.rejects(generateShotVideo(project.current.shots[0]), /최대 10초를 초과합니다/)
+  assert.equal(submitted.length, 1)
+  supportsAudio = false
+  assert.equal(await project.checkShotLipSync(project.current.shots[0]), false)
+  assert.equal(project.shotSupportsLipSync(project.current.shots[0]), false)
+  await assert.rejects(generateShotVideo(project.current.shots[0]), /Audio to Video/)
+  assert.equal(generated.length, 4)
+})

@@ -8,7 +8,7 @@
 
 import { defineStore } from 'pinia'
 import { t } from '@/i18n'
-import { ref, computed, watch } from 'vue'
+import { ref, computed, watch, reactive } from 'vue'
 import {
   saveProject,
   loadProject,
@@ -18,12 +18,15 @@ import {
   loadProjectFromDir
 } from '@/services/storage'
 import { isDesktop, desktop } from '@/services/desktop'
-import { emptyCanvas, normalizeH3GenMode, normalizeVideoGenModel } from '@/types/canvas'
+import { emptyCanvas, normalizeH3GenMode, normalizeVideoGenModel, normalizeVideoResolution } from '@/types/canvas'
 import { useSettingsStore } from './settings'
+import { ltxDesktopAudioResolution, ltxDesktopModel } from '@/services/ai/ltxDesktopOptions'
 import { videoDurationCapability } from '@/services/ai/videoDuration'
-import { compatibleShotAudioMode, effectiveShotAudioMode, isDigitalHumanSpeechProject, pushHistory } from '@/utils/shot'
+import { compatibleShotAudioMode, effectiveShotAudioMode, isDigitalHumanSpeechProject, pushHistory, shotPlaybackDuration } from '@/utils/shot'
 import { rebuildCanvasGraph } from '@/services/canvas/layout'
 import { removeCanvasNodeReference } from '@/services/canvas/references'
+import { toSRT } from '@/services/ffmpeg/subtitle'
+import { buildTimelineCaptionCues } from '@/utils/timeline'
 import { aspectToSize, isLandscapeAspect } from '@/utils/aspect'
 import type {
   Project,
@@ -387,7 +390,8 @@ export const useProjectStore = defineStore('project', () => {
     current.value.shots[idx] = {
       ...shot,
       compiledVideoPrompt: value,
-      videoTaskId: undefined
+      videoTaskId: undefined,
+      lipSyncTask: undefined
     }
     touch()
   }
@@ -418,15 +422,36 @@ export const useProjectStore = defineStore('project', () => {
   }
 
   /** 영상을 샷에 연결한다. 이전 영상은 리소스 라이브러리와 이력에 남긴다. */
-  function assignShotVideo(shotId: ID, assetId: ID) {
+  function assignShotVideo(shotId: ID, assetId: ID, lipSyncDuration?: number) {
     if (!current.value) return
     const shot = current.value.shots.find((s) => s.id === shotId)
     if (!shot) return
-    updateShot(shotId, {
-      videoAssetId: assetId,
-      videoHistoryIds: pushHistory(shot.videoAssetId, assetId, shot.videoHistoryIds),
-      status: 'video-generated'
-    })
+    const previousDuration = shotPlaybackDuration(shot)
+    const videoHistoryIds = pushHistory(shot.videoAssetId, assetId, shot.videoHistoryIds)
+    const lipSyncVideos = lipSyncDuration
+      ? { ...shot.lipSyncVideos, [assetId]: lipSyncDuration }
+      : shot.lipSyncVideos
+    const nextDuration = lipSyncVideos?.[assetId] ?? shot.duration
+    const changedDuration = previousDuration !== nextDuration
+    const autoCaptions = changedDuration && current.value.captionSrt &&
+      current.value.captionSrt === toSRT(buildTimelineCaptionCues(current.value))
+    updateShot(shotId, { videoAssetId: assetId, videoHistoryIds, lipSyncVideos, status: 'video-generated' })
+
+    if (!changedDuration) return
+    const timeline = current.value.timeline
+    const synced = timeline.filter((clip) => clip.shotId === shotId && !clip.assetId &&
+      !clip.sourceIn && (clip.speed ?? 1) === 1 && Math.abs(clip.duration - previousDuration) < 0.001)
+    if (synced.length) {
+      current.value.timeline = timeline.map((clip) => {
+        const shift = synced.filter((item) => item.id !== clip.id && item.startTime + item.duration <= clip.startTime + 0.001).length
+        return {
+          ...clip,
+          startTime: clip.startTime + shift * (nextDuration - previousDuration),
+          duration: synced.includes(clip) ? nextDuration : clip.duration
+        }
+      })
+    }
+    if (autoCaptions) current.value.captionSrt = toSRT(buildTimelineCaptionCues(current.value))
   }
 
   /** 내레이션 오디오를 샷에 연결한다. */
@@ -509,12 +534,79 @@ export const useProjectStore = defineStore('project', () => {
     return videoDurationCapability({ model, profile }).voice !== 'unsupported'
   }
 
+  const lipSyncAvailability = reactive(new Map<string, boolean>())
+  const lipSyncChecks = new Map<string, Promise<boolean>>()
+
+  function lipSyncConnection(shot: Shot) {
+    const settings = useSettingsStore()
+    const node = current.value?.canvas?.nodes.find((item) =>
+      item.type === 'shotVideo' && item.data.shotId === shot.id)
+    const profileId = node?.data.videoProfileId || shot.videoProfileId
+    const profile = profileId ? settings.config.videos.find((item) => item.id === profileId) : settings.config.video
+    const model = normalizeVideoGenModel(node?.data.videoModel ?? settings.config.defaultVideoModel)
+    const aspect = node?.data.aspectRatio ?? current.value?.settings?.aspectRatio
+    if (!profile?.apiKey || !videoDurationCapability({ model, profile }).audioToVideo ||
+      (aspect !== '16:9' && aspect !== '9:16') || isDigitalHumanSpeechProject(current.value) ||
+      typeof window === 'undefined' || !isDesktop() || !desktop().ltxDesktopRequest) return
+    const resolution = ltxDesktopAudioResolution(normalizeVideoResolution(
+      node?.data.videoResolution ?? current.value?.settings?.defaultVideoResolution, model))
+    const workflow = ltxDesktopModel(profile.workflowId)
+    const key = JSON.stringify([profileId, profile.baseUrl, profile.ltxHostOverride, profile.apiKey, workflow, resolution, aspect])
+    return { profile, workflow, resolution, aspect, key }
+  }
+
+  function checkShotLipSync(shot: Shot): Promise<boolean> {
+    const connection = lipSyncConnection(shot)
+    if (!connection) return Promise.resolve(false)
+    const { profile, workflow, resolution, aspect, key } = connection
+    const pending = lipSyncChecks.get(key)
+    if (pending) return pending
+    const check = desktop().ltxDesktopRequest({
+      baseUrl: profile.baseUrl,
+      hostOverride: profile.ltxHostOverride,
+      token: profile.apiKey,
+      operation: { kind: 'checkAudio', model: workflow, resolution, aspect }
+    }).then((reply) => reply.kind === 'ready', () => false).then((ready) => {
+      lipSyncAvailability.set(key, ready)
+      lipSyncChecks.delete(key)
+      return ready
+    })
+    lipSyncChecks.set(key, check)
+    return check
+  }
+
+  function shotSupportsLipSync(shot: Shot) {
+    const connection = lipSyncConnection(shot)
+    return connection ? lipSyncAvailability.get(connection.key) === true : false
+  }
+
+  watch(
+    () => {
+      const connections = new Map<string, Shot>()
+      for (const shot of current.value?.shots ?? []) {
+        const connection = lipSyncConnection(shot)
+        if (connection) connections.set(connection.key, shot)
+      }
+      return connections
+    },
+    (connections, previous) => {
+      for (const key of lipSyncAvailability.keys()) {
+        if (!connections.has(key)) lipSyncAvailability.delete(key)
+      }
+      for (const [key, shot] of connections) {
+        if (!previous?.has(key)) void checkShotLipSync(shot)
+      }
+    },
+    { immediate: true }
+  )
+
   /** 더빙 설정을 바꿔도 기존 영상은 유지한다. 사용자가 새로 생성할 때 변경 사항을 적용한다. */
   function setShotAudioMode(id: ID, audioMode: ShotAudioMode) {
     if (!current.value) return
     const idx = current.value.shots.findIndex((s) => s.id === id)
     if (idx < 0) return
     const shot = current.value.shots[idx]
+    if (audioMode === 'ltx-lip-sync' && !shotSupportsLipSync(shot)) return
     audioMode = compatibleShotAudioMode(audioMode, shotSupportsVideoVoice(shot))
     if (shot.audioMode === audioMode) return
     const keepTts = audioMode === 'tts'
@@ -880,6 +972,8 @@ export const useProjectStore = defineStore('project', () => {
     setShotVideoPrompt,
     setShotAudioMode,
     shotSupportsVideoVoice,
+    shotSupportsLipSync,
+    checkShotLipSync,
     assignShotBoard,
     assignShotImage,
     assignShotVideo,

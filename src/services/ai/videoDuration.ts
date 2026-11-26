@@ -53,7 +53,9 @@ export function videoDurationCapability(input: {
   else if (profile?.provider === 'ltx' || profile?.provider === 'ltx-desktop') voice = LTX_VIDEO_VOICE[profile.provider]
   else if (profile?.options?.videoAudio === true || autoDl || zealmanWorkflowById(workflowId) ||
     /grok-imagine-1\.5/i.test(workflowId)) voice = 'supported'
-  return { durations, max: durations[durations.length - 1], voice }
+  const audioToVideo = model === 'h3' && isLtxDesktop(profile ?? undefined) &&
+    (!workflowId || LTX_DESKTOP_MODELS.includes(workflowId))
+  return { durations, max: durations[durations.length - 1], voice, audioToVideo }
 }
 
 export function nearestVideoDuration(raw: number, durations: number[]): number {
