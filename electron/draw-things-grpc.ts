@@ -227,7 +227,7 @@ async function generate(
     {
       image, scaleFactor: 1,
       hints: refs.length ? [{ hintType: 'shuffle', tensors: refs.map(tensor => ({ tensor, weight: 1 })) }] : [],
-      prompt: request.prompt, negativePrompt: preset.mode === 'edit' ? ' ' : '',
+      prompt: request.prompt, negativePrompt: preset.references.min > 0 ? ' ' : '',
       configuration: configuration(request, preset), user: 'Drama Flow Studio', device: 2, chunked: true,
       override: definition ? { models: Buffer.from(JSON.stringify([definition])) } : undefined,
       sharedSecret: request.sharedSecret || undefined

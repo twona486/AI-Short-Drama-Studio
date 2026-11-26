@@ -26,6 +26,8 @@ import ImageResolutionSeg from '@/components/common/ImageResolutionSeg.vue'
 import VideoSettingsPopover from '@/components/canvas/VideoSettingsPopover.vue'
 import { pickDocImageResolution, pickDocVideoResolution, videoResolutionChoices, type DocImageResolution } from '@/services/ai/modelOptions'
 import H3GenModeSelect from '@/components/settings/H3GenModeSelect.vue'
+import { DRAW_THINGS_PROVIDER, drawThingsInputError, isDrawThingsGrpc } from '@/services/ai/drawThingsOptions'
+import DrawThingsReferenceHint from '@/components/canvas/DrawThingsReferenceHint.vue'
 import FramePairSlots from '@/components/canvas/FramePairSlots.vue'
 import TtsModelSelect from '@/components/settings/TtsModelSelect.vue'
 import GradientButton from '@/components/common/GradientButton.vue'
@@ -430,6 +432,9 @@ async function redrawFrame(which: 'start' | 'end') {
 
 const canRun = computed(() => {
   if (running.value || gateBlocked.value) return false
+  const image = settings.config.image
+  if (props.node?.type === 'imageGen' && image.provider === DRAW_THINGS_PROVIDER &&
+    drawThingsInputError(image.model, inspectorRefIds.value.length, isDrawThingsGrpc(image.baseUrl))) return false
   if (props.node?.type === 'export' || props.node?.type === 'final') {
     return canBuildExport(project.current)
   }
@@ -1142,6 +1147,7 @@ async function optimizeVideoPrompt() {
           </div>
         </div>
         <p v-else class="hint">{{ $t('nodeInspector.noReferenceHint') }}</p>
+        <DrawThingsReferenceHint v-if="node.type === 'imageGen'" :count="inspectorRefIds.length" />
       </div>
 
       <template v-else-if="node.type === 'audio' && shot">

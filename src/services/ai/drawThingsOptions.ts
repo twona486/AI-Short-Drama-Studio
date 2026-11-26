@@ -13,17 +13,17 @@ const PRESETS = [
   {
     file: 'qwen_image_2.1_q8p.ckpt', name: 'Qwen Image 2.1', family: /^qwen_image_2[._]1(?:_(?:q\d+p|i\d+x|bf16|f16|fp16))*\.ckpt$/i,
     steps: 40, cfg_scale: 1, sampler_name: 'DDIM Trailing', shift: 1,
-    resolution_dependent_shift: true, mode: 'text'
+    resolution_dependent_shift: true, references: { min: 0, max: DRAW_THINGS_MAX_REFERENCES }
   },
   {
     file: 'qwen_image_edit_2511_q8p.ckpt', name: 'Qwen Image Edit 2511', family: /^qwen_image_edit_2511(?:_(?:q\d+p|i\d+x|bf16|f16|fp16))*\.ckpt$/i,
     steps: 30, cfg_scale: 4, sampler_name: 'UniPC Trailing', shift: 2,
-    resolution_dependent_shift: false, mode: 'edit'
+    resolution_dependent_shift: false, references: { min: 1, max: DRAW_THINGS_MAX_REFERENCES }
   },
   {
     file: 'flux_2_klein_4b_q8p.ckpt', name: 'FLUX.2 [klein] 4B', family: /^flux_2_klein_4b(?:_(?:q\d+p|i\d+x|bf16|f16|fp16))*\.ckpt$/i,
     steps: 4, cfg_scale: 1, sampler_name: 'DDIM Trailing', shift: 3,
-    resolution_dependent_shift: false, mode: 'both'
+    resolution_dependent_shift: false, references: { min: 0, max: DRAW_THINGS_MAX_REFERENCES }
   }
 ] as const
 
@@ -41,13 +41,26 @@ export function drawThingsModelLabel(model: string, nonCommercialLabel: string) 
   return preset.name === 'Qwen Image 2.1' ? `${label} · ${nonCommercialLabel}` : label
 }
 
+export function drawThingsReferenceCapability(model: string, grpc = false): { min: number; max: number } | undefined {
+  const references = drawThingsPreset(model)?.references
+  if (!references) return undefined
+  return { min: references.min, max: Math.min(references.max, grpc ? DRAW_THINGS_MAX_REFERENCES : 1) }
+}
+
 export function drawThingsInputError(model: string, count: number, grpc = false) {
-  const preset = drawThingsPreset(model)
-  if (!preset) return 'drawThings.unsupportedModel'
-  if (!grpc && count > 1) return 'drawThings.multipleReferences'
-  if (count > DRAW_THINGS_MAX_REFERENCES) return 'drawThings.referenceLimit'
-  if (count && preset.mode === 'text') return 'drawThings.textOnly'
-  if (!count && preset.mode === 'edit') return 'drawThings.referenceRequired'
+  const capability = drawThingsReferenceCapability(model, grpc)
+  if (!capability) return 'drawThings.unsupportedModel'
+  if (count > 0 && capability.max === 0) return 'drawThings.textOnly'
+  if (count > capability.max) return grpc ? 'drawThings.referenceLimit' : 'drawThings.multipleReferences'
+  if (count < capability.min) return 'drawThings.referenceRequired'
+}
+
+export function drawThingsEditAlternative(models: string[], current: string, count: number, grpc: boolean) {
+  const candidates = models.filter(model => {
+    const capability = drawThingsReferenceCapability(model, grpc)
+    return model !== current && capability && count > 0 && !drawThingsInputError(model, count, grpc)
+  })
+  return candidates.find(model => drawThingsReferenceCapability(model, grpc)?.min) ?? candidates[0]
 }
 
 const sizes: Record<AspectRatio, readonly [number, number]> = {

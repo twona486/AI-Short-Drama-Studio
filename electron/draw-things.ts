@@ -105,7 +105,7 @@ async function send(
     const result = await requestJson(origin, address, path, signal, {
       model, prompt, width, height, steps, cfg_scale, sampler_name, shift, resolution_dependent_shift,
       seed: -1, batch_size: 1, batch_count: 1, hires_fix: false, upscaler: null, refiner_model: null,
-      negative_prompt: preset.mode === 'edit' ? ' ' : '', controls: [], loras: [], tea_cache: false,
+      negative_prompt: preset.references.min > 0 ? ' ' : '', controls: [], loras: [], tea_cache: false,
       ...(reference ? { strength: 1, init_images: [reference] } : {})
     }) as { images?: unknown[] } | null
     const encoded = Array.isArray(result?.images) ? result.images[0] : undefined
