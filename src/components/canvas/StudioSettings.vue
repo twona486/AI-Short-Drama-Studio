@@ -7,7 +7,9 @@ import { computed, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { useProjectStore, useSettingsStore, uniqueProfileName } from '@/stores'
 import { desktop, isDesktop } from '@/services/desktop'
-import { isLtxDesktop, LTX_DESKTOP_DEFAULT_URL, LTX_DESKTOP_MODELS, ltxDesktopError } from '@/services/ai/ltxDesktopOptions'
+import { isLtxDesktop, LTX_DESKTOP_URL_PLACEHOLDER, LTX_DESKTOP_MODELS, ltxDesktopError } from '@/services/ai/ltxDesktopOptions'
+import { DRAW_THINGS_PROVIDER, drawThingsModelLabel, isDrawThingsGrpc } from '@/services/ai/drawThingsOptions'
+import { refreshDrawThingsModels } from '@/services/ai/drawThings'
 import { LTX_MODELS, isLtxProfile } from '@/services/ai/ltxOptions'
 import { TTS_VOICES } from '@/services/ai/tts'
 import EndpointForm from '@/components/settings/EndpointForm.vue'
@@ -30,7 +32,7 @@ import {
   type ProviderPreset
 } from '@/services/ai/providers'
 
-defineProps<{
+const props = defineProps<{
   module: 'llm' | 'vision' | 'image' | 'tts' | 'video'
 }>()
 
@@ -193,10 +195,82 @@ function subtitle(p: { models?: string[]; model?: string }) {
 }
 
 function imageProfile(p: (typeof settings.config.images)[number]) {
-  const model = zealmanImageWorkflowLabel(p.model)
+  const model = p.provider === DRAW_THINGS_PROVIDER ? drawThingsModelLabel(p.model, t('drawThings.nonCommercialLicense')) : zealmanImageWorkflowLabel(p.model)
   const name = zealmanImageProfileLabel(p.name, p.model)
   return { id: p.id, name, subtitle: subtitle({ model, models: p.models }) }
 }
+
+const drawThings = computed(() => settings.config.image.provider === DRAW_THINGS_PROVIDER)
+const drawThingsBusy = ref(false)
+let drawThingsProbeId = 0
+const drawThingsStatus = ref('')
+const savedDrawThingsSecret = computed(() => settings.config.image.drawThingsSharedSecret)
+const drawThingsSecretDraft = ref('')
+const drawThingsSecretBusy = ref(false)
+const drawThingsConnection = computed(() => [
+  settings.config.activeImageId, settings.config.image.provider, settings.config.image.baseUrl
+].join('|'))
+watch(drawThingsConnection, () => {
+  drawThingsStatus.value = ''
+  drawThingsSecretDraft.value = ''
+})
+
+async function saveDrawThingsSecret() {
+  const connection = drawThingsConnection.value
+  const value = drawThingsSecretDraft.value
+  if (!value || drawThingsSecretBusy.value || drawThingsBusy.value) return
+  drawThingsSecretBusy.value = true
+  try {
+    const encrypted = isDesktop() ? await desktop().protectDrawThingsSecret(value) : null
+    if (drawThingsConnection.value !== connection || drawThingsSecretDraft.value !== value) return
+    if (!encrypted) {
+      drawThingsStatus.value = t('drawThings.secretSaveFailed')
+      return
+    }
+    settings.patchImage({ drawThingsSharedSecret: encrypted })
+    drawThingsSecretDraft.value = ''
+    drawThingsStatus.value = ''
+  } catch {
+    if (drawThingsConnection.value === connection) drawThingsStatus.value = t('drawThings.secretSaveFailed')
+  } finally {
+    drawThingsSecretBusy.value = false
+  }
+}
+
+function removeDrawThingsSecret() {
+  settings.patchImage({ drawThingsSharedSecret: undefined })
+  drawThingsSecretDraft.value = ''
+  drawThingsStatus.value = ''
+}
+
+async function probeDrawThings() {
+  const probeId = ++drawThingsProbeId
+  const connection = drawThingsConnection.value
+  const secret = savedDrawThingsSecret.value
+  drawThingsBusy.value = true
+  drawThingsStatus.value = ''
+  try {
+    const { activeImageId, image } = settings.config
+    const result = await refreshDrawThingsModels(activeImageId, image.baseUrl, secret)
+    if (probeId !== drawThingsProbeId || drawThingsConnection.value !== connection || savedDrawThingsSecret.value !== secret) return
+    drawThingsStatus.value = result.detail
+    if (result.missingComponents?.length) {
+      drawThingsStatus.value = t('drawThings.missingComponents', { files: result.missingComponents.join(', ') })
+    } else if (result.incompleteModels?.length) {
+      drawThingsStatus.value = t('drawThings.incompleteList', { models: result.incompleteModels.join(', ') })
+    } else if (result.models?.length === 0) {
+      drawThingsStatus.value = t('drawThings.noInstalledModels')
+    }
+  } finally {
+    if (probeId === drawThingsProbeId) drawThingsBusy.value = false
+  }
+}
+
+watch([() => props.module, drawThingsConnection, savedDrawThingsSecret], (_, __, onCleanup) => {
+  if (props.module !== 'image' || !drawThings.value || !isDrawThingsGrpc(settings.config.image.baseUrl)) return
+  const timer = setTimeout(() => void probeDrawThings(), 400)
+  onCleanup(() => clearTimeout(timer))
+}, { immediate: true })
 
 function videoProfile(p: (typeof settings.config.videos)[number]) {
   const workflow = zealmanVideoWorkflowLabel(p.workflowId)
@@ -371,6 +445,12 @@ function patchAdapter(
     </template>
 
     <template v-else-if="module === 'image'">
+      <label class="media-prompt-toggle">
+        <input type="checkbox" :checked="settings.config.translateMediaPrompts"
+          @change="settings.update({ translateMediaPrompts: ($event.target as HTMLInputElement).checked })" />
+        {{ $t('mediaPrompt.setting') }}
+      </label>
+      <p class="hint">{{ $t('mediaPrompt.settingHint') }}</p>
       <section v-if="zealmanImage" class="owned">
         <h3>{{ $t('studioSettings.zealmanImage') }}</h3>
         <p class="hint">{{ $t('studioSettings.zealmanImageHint') }}</p>
@@ -398,19 +478,43 @@ function patchAdapter(
         />
         <EndpointForm
           :title="$t('studioSettings.api')"
-          :hint="settings.config.image.provider === 'apimart' ? $t('studioSettings.apimartImageHint') : $t('studioSettings.imageHint')"
+          :hint="drawThings ? undefined : settings.config.image.provider === 'apimart' ? $t('studioSettings.apimartImageHint') : $t('studioSettings.imageHint')"
           :presets="IMAGE_PROVIDERS"
           :base-url="settings.config.image.baseUrl"
           :api-key="settings.config.image.apiKey"
           :model="settings.config.image.model"
           :models="settings.config.image.models"
           :provider="settings.config.image.provider"
+          :server-models-only="drawThings && settings.config.image.drawThingsServerModels !== undefined"
           @patch="settings.patchImage($event)"
           @add-model="settings.addModel('image', $event)"
           @remove-model="settings.removeModel('image', $event)"
-        />
+        >
+          <template v-if="drawThings">
+            <p class="hint">{{ $t('drawThings.grpcSetup') }}</p>
+            <template v-if="isDrawThingsGrpc(settings.config.image.baseUrl)">
+              <label for="draw-things-secret">{{ $t('drawThings.sharedSecret') }}</label>
+              <input
+                id="draw-things-secret" v-model="drawThingsSecretDraft" type="password" autocomplete="off"
+                :placeholder="savedDrawThingsSecret ? $t('drawThings.secretSaved') : undefined"
+                :disabled="drawThingsSecretBusy || drawThingsBusy"
+                @keydown.enter.stop.prevent="saveDrawThingsSecret"
+              />
+              <div>
+                <button type="button" :disabled="!drawThingsSecretDraft || drawThingsSecretBusy || drawThingsBusy" @click="saveDrawThingsSecret">{{ $t('common.save') }}</button>
+                <button v-if="savedDrawThingsSecret" type="button" :disabled="drawThingsSecretBusy || drawThingsBusy" @click="removeDrawThingsSecret">{{ $t('drawThings.removeSecret') }}</button>
+              </div>
+            </template>
+            <button type="button" :disabled="drawThingsBusy || drawThingsSecretBusy || !!drawThingsSecretDraft" @click="probeDrawThings">
+              {{ $t(isDrawThingsGrpc(settings.config.image.baseUrl) ? 'drawThings.refreshModels' : 'drawThings.check') }}
+            </button>
+            <p v-if="drawThingsBusy || drawThingsStatus" class="hint" role="status">
+              {{ drawThingsBusy ? $t('drawThings.checking') : drawThingsStatus }}
+            </p>
+          </template>
+        </EndpointForm>
         <AdapterFields
-          v-if="settings.config.image.provider !== 'apimart'"
+          v-if="!drawThings && settings.config.image.provider !== 'apimart'"
           kind="image"
           :adapter="settings.config.image.adapter"
           :base-url="settings.config.image.baseUrl"
@@ -493,9 +597,8 @@ function patchAdapter(
         <p class="hint">{{ $t(videoVoiceHint) }}</p>
         <template v-if="ltxDesktop">
           <p class="hint">{{ $t('ltxDesktop.hint') }}</p>
-          <p class="hint">{{ $t('ltxDesktop.memory') }}</p>
           <label for="ltx-desktop-address">{{ $t('studioSettings.baseUrl') }}</label>
-          <input id="ltx-desktop-address" v-model.trim="desktopAddress" :placeholder="LTX_DESKTOP_DEFAULT_URL" />
+          <input id="ltx-desktop-address" v-model.trim="desktopAddress" :placeholder="LTX_DESKTOP_URL_PLACEHOLDER" />
           <details class="rule-details">
             <summary>{{ $t('ltxDesktop.advanced') }}</summary>
             <label for="ltx-desktop-host">{{ $t('ltxDesktop.hostOverride') }}</label>
@@ -747,6 +850,8 @@ select {
   -webkit-app-region: no-drag;
   app-region: no-drag;
 }
+.media-prompt-toggle { display: flex; align-items: center; gap: 8px; }
+.media-prompt-toggle input { width: auto; }
 .secret {
   display: flex;
   gap: 6px;

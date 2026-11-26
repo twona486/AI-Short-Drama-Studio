@@ -23,6 +23,8 @@ import { isLtxDesktop, ltxDesktopError } from './ltxDesktopOptions'
 import { providerVideoResolution } from './modelOptions'
 import { adaptOpenAiChatBody, isOfficialOpenAi, OPENAI_DEFAULT_CHAT_MODEL } from './openAiChat'
 import { throwIfAborted } from './abort'
+import { DRAW_THINGS_PROVIDER } from './drawThingsOptions'
+import { checkDrawThings } from './drawThingsConnection'
 
 function timeoutSignal(ms: number): AbortSignal {
   const c = new AbortController()
@@ -70,6 +72,7 @@ export interface AdapterConfig {
 }
 
 export type EndpointLike = {
+  drawThingsSharedSecret?: string
   baseUrl?: string
   ltxHostOverride?: string
   apiKey?: string
@@ -1106,6 +1109,7 @@ export async function testEndpointConnection(
   kind: 'llm' | 'vision' | 'image' | 'tts' | 'video' | 'music',
   ep: EndpointLike
 ): Promise<ConnectionTestResult> {
+  if (kind === 'image' && ep.provider === DRAW_THINGS_PROVIDER) return checkDrawThings(ep.baseUrl || '', ep.drawThingsSharedSecret)
   const base = trimSlash(ep.baseUrl || '')
   if (!base) return { ok: false, detail: 'API 주소가 없습니다.' }
 

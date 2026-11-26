@@ -147,7 +147,7 @@ onBeforeUnmount(() => {
 <template>
   <div class="ref-strip nodrag nopan nowheel" @pointerdown.stop @mousedown.stop @click.stop>
     <div class="ref-head">
-      <span>{{ $t('common.referenceImage') }}</span>
+      <span>{{ $t(mode === 'video' ? 'common.referenceImage' : 'common.referenceImageOptional') }}</span>
       <div class="ref-acts">
         <button type="button" @click="pickerOpen = true">{{ $t('common.resourceLibrary') }}</button>
         <button type="button" @click="triggerUpload">{{ $t('shotRefStrip.add') }}</button>

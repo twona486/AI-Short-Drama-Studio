@@ -1,3 +1,4 @@
+import { prepareMediaPrompt } from './mediaPrompt'
 import { nearestVideoDuration, videoDurationCapability } from './videoDuration'
 import { isLtxDesktop, isLtxTask, ltxDesktopResolution, LTX_DESKTOP_MODELS, LTX_DESKTOP_WORKFLOW, ltxDesktopError, type LtxDesktopOperation, type LtxDesktopReply } from './ltxDesktopOptions'
 /**
@@ -659,11 +660,9 @@ async function realWorkflowVideo(
     onProgress?.(`API 제한 ${MIN_DUR}–${MAX_DUR}초에 맞춰 영상 길이를 ${targetDuration}초로 조정했습니다.`)
   }
 
-  let finalPrompt = isAudioSync ? (input.prompt || input.voiceover || 'Digital human narration').trim() : buildPrompt(input)
-  if (finalPrompt.length > 10000) {
-    finalPrompt = finalPrompt.slice(0, 10000)
-    onProgress?.('프롬프트가 10,000자를 넘어 잘랐습니다.')
-  }
+  const finalPrompt = isAudioSync
+    ? (input.prompt || input.voiceover || 'Digital human narration').trim()
+    : await prepareVideoPrompt(input, buildPrompt(input), 10000)
 
   const resolution = autodlResolution(input)
   let audioDuration = Math.max(5, Math.min(15, targetDuration))
@@ -885,9 +884,8 @@ async function realWanVideo(
       : urls.map((url) => ({ type: 'reference_image', url }))
 
   const targetDuration = nearestVideoDuration(input.duration || 5, videoDurationCapability({ model: 'wan-prime' }).durations)
-  let prompt = String(input.prompt || '').trim()
+  const prompt = await prepareVideoPrompt(input, input.prompt.trim(), 20000)
   if (!prompt) throw new Error('[video] 먼저 프롬프트를 작성하세요.')
-  if (prompt.length > 20000) prompt = prompt.slice(0, 20000)
 
   const wanChoices = videoResolutionChoices({ model: 'wan-prime' })
   const wanTier = pickDocVideoResolution(input.videoResolution, wanChoices) || '720p'
@@ -1045,7 +1043,7 @@ function inferH3Mode(input: VideoGenInput): 'I2VA' | 'T2VA' | 'R2VA' | 'FL2VA' |
 }
 
 function buildPrompt(input: VideoGenInput): string {
-  // promptAsIs는 모든 모드에서 입력란 원문을 그대로 보낸다.
+  // promptAsIs는 공급업체 요청 직전의 언어 처리를 제외하고 추가 조합을 생략한다.
   if (input.promptAsIs) return input.prompt
   const raw =
     input.videoModel === 'wan-prime'
@@ -1081,6 +1079,12 @@ function buildPrompt(input: VideoGenInput): string {
   return raw
 }
 
+function prepareVideoPrompt(input: VideoGenInput, prompt: string, limit?: number) {
+  // A resumed task has already been submitted with its original prompt.
+  if (input.resumeTaskId?.trim()) return Promise.resolve(limit ? prompt.slice(0, limit) : prompt)
+  return prepareMediaPrompt('video', prompt, input.signal, limit)
+}
+
 async function realApimartVideo(
   input: VideoGenInput,
   onProgress?: (msg: string) => void
@@ -1089,7 +1093,7 @@ async function realApimartVideo(
   if (!cfg.apiKey) {
     throw new Error(translate('providerErrors.videoApimartKey'))
   }
-  const prompt = input.prompt.trim()
+  const prompt = await prepareVideoPrompt(input, input.prompt.trim())
   if (!prompt) throw new Error('[video] 영상 설명을 입력하세요.')
   const images: Blob[] = []
   if (input.imageBlob) images.push(input.imageBlob)
@@ -1128,7 +1132,7 @@ async function realHttpCustomVideo(
   if (isApimartHost(cfg.baseUrl) && !modelName) {
     throw new Error('[video] APIMart 영상 연결의 워크플로 ID에 MiniMax-H3 같은 모델 이름을 입력하세요.')
   }
-  const prompt = buildPrompt(input)
+  const prompt = await prepareVideoPrompt(input, buildPrompt(input))
   const resolutionChoices = videoResolutionChoices({
     model: input.videoModel,
     profile: { name: cfg.name, workflowId: cfg.workflowId, options: cfg.options }
@@ -1195,7 +1199,7 @@ async function realZealmanVideo(
   onProgress?.(`Zealman ${workflow.mode === 'fl2va' ? '시작·끝 프레임' : '다중 참조 이미지'} 워크플로를 준비하는 중…`)
   const images: string[] = []
   for (const blob of blobs) images.push(await blobToVideoImageDataUrl(blob))
-  const prompt = buildPrompt(input).slice(0, 10000)
+  const prompt = await prepareVideoPrompt(input, buildPrompt(input), 10000)
   const duration = Math.max(1, Math.min(workflow.maxDuration, Math.round(input.duration) || 5))
   const width = Math.max(256, Math.round(input.width) || 864)
   const height = Math.max(256, Math.round(input.height) || 480)
@@ -1280,7 +1284,7 @@ async function realComfyNativeVideo(
   const cfg = getVideoConfig(input.videoProfileId)
   if (!cfg.baseUrl) throw new Error('[video] 자체 호스팅 ComfyUI 주소가 없습니다.')
   onProgress?.('자체 호스팅 ComfyUI에서 영상을 생성하는 중…')
-  const prompt = buildPrompt(input)
+  const prompt = await prepareVideoPrompt(input, buildPrompt(input))
   let imageDataUrl: string | undefined
   if (input.imageBlob) imageDataUrl = await blobToDataUrl(input.imageBlob)
   let imageEndDataUrl: string | undefined
@@ -1333,7 +1337,7 @@ async function realLtxVideo(
   if (!apiKey) return error('missingKey')
   const model = LTX_MODELS.includes(cfg.workflowId) ? cfg.workflowId : LTX_DEFAULT_MODEL
   const duration = ltxDuration(input.duration, model, input.videoResolution)
-  const prompt = input.prompt.trim()
+  let prompt = input.prompt.trim()
   const progress = (status: string) => onProgress?.(translate(`ltx.${status}`))
   const failure = async (reply: LtxReply): Promise<never> => {
     if (reply.kind === 'failed' || (reply.kind === 'http' && reply.status === 404)) {
@@ -1348,6 +1352,7 @@ async function realLtxVideo(
   if (!jobId) {
     if (input.audioSync) return error('audioSync')
     if (!input.imageBlob) return error('missingFrame')
+    prompt = await prepareMediaPrompt('video', prompt, input.signal)
     if (!prompt || [...prompt].length > 5000) return error('prompt')
     if (input.aspectRatio && input.aspectRatio !== '16:9' && input.aspectRatio !== '9:16') return error('aspect')
     const body = ltxRequestBody({
@@ -1401,7 +1406,7 @@ async function realLtxDesktopVideo(
   const fail = (reply: LtxDesktopReply): never => {
     throw new Error(translate(ltxDesktopError(reply)))
   }
-  const prompt = input.prompt.trim()
+  let prompt = input.prompt.trim()
   const model = LTX_DESKTOP_MODELS.includes(cfg.workflowId) ? cfg.workflowId : LTX_DESKTOP_WORKFLOW
   const resolution = ltxDesktopResolution(input.videoResolution)
   const duration = ltxDuration(input.duration, model, resolution)
@@ -1414,6 +1419,7 @@ async function realLtxDesktopVideo(
       if (input.aspectRatio && input.aspectRatio !== '16:9' && input.aspectRatio !== '9:16') {
         throw new Error(translate('ltx.aspect'))
       }
+      prompt = await prepareMediaPrompt('video', prompt, input.signal)
       const first = await ltxImageUri(input.imageBlob)
       const last = input.lastFrameBlob ? await ltxImageUri(input.lastFrameBlob) : undefined
       throwIfAborted(input.signal)

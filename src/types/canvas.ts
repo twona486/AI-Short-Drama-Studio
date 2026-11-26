@@ -135,6 +135,7 @@ export interface CanvasNode {
     canvasScale?: number
     kind?: string
     prompt?: string
+    sentMediaPrompts?: string[]
     /** 연속 촬영 전용 노드는 독립 대기열에서 실행한다. */
     captureId?: string
     /** 연속 촬영 계획을 실행할 JSON이다. 노드에서 원시 JSON을 직접 표시하지 않는다. */

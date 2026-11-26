@@ -3,6 +3,7 @@ import { readFileSync } from 'node:fs'
 import { test } from 'node:test'
 import { transform } from 'esbuild'
 
+const DRAW_THINGS_PROVIDER = 'draw-things'
 const source = readFileSync(new URL('../src/services/canvas/runner.ts', import.meta.url), 'utf8')
 const start = source.indexOf('async function prepareLtxShotStart(')
 const end = source.indexOf('  if (!(shot.compiledVideoPrompt', start)
@@ -14,7 +15,7 @@ const { code } = await transform(
       getImageConfig, resolveImageAdapter, collectFrameRefBlobs, renderShotFrame, ensureNotCancelled,
       translate, aspectToSize, canvasVideoResolutionForShot, shotVideoAudio, generateVideo,
       setActiveProjectDir, nearestVideoDuration, videoDurationCapability, ltxShotSpeechTooFast,
-      ltxShotPrompt, resolveShotSpeakerVoice } = deps
+      ltxShotPrompt, resolveShotSpeakerVoice, DRAW_THINGS_PROVIDER } = deps
     ${source.slice(start, end).replace('export async function generateShotVideo', 'async function generateShotVideo')}
     }
     return generateShotVideo
@@ -23,7 +24,7 @@ const { code } = await transform(
 )
 const { createRunner } = await import('data:text/javascript;base64,' + Buffer.from(code).toString('base64'))
 
-function fixture({ firstFrameAssetId, imageAssetId, videoTaskId, imageKey = 'fixture' } = {}) {
+function fixture({ firstFrameAssetId, imageAssetId, videoTaskId, imageKey = 'fixture', imageProvider, imageModel = 'fixture-model' } = {}) {
   const image = new Blob(['frame'])
   const events = []
   const stored = new Map([['generated', image], ['existing', image]])
@@ -50,7 +51,11 @@ function fixture({ firstFrameAssetId, imageAssetId, videoTaskId, imageKey = 'fix
     isLtxProfile: () => true,
     shotNodeAspect: () => '9:16',
     tryLoadRefImageBlob: (id) => stored.get(id),
-    getImageConfig: () => ({ apiKey: imageKey, model: 'fixture-model', baseUrl: 'https://example.com' }),
+    DRAW_THINGS_PROVIDER,
+    getImageConfig: () => ({
+      apiKey: imageKey, model: imageModel, provider: imageProvider,
+      baseUrl: imageProvider === DRAW_THINGS_PROVIDER ? 'http://127.0.0.1:7860' : 'https://example.com'
+    }),
     resolveImageAdapter: () => 'openai-images',
     async collectFrameRefBlobs(_shot, _project, _progress, videoNode) {
       assert.equal(videoNode, node)
@@ -110,4 +115,16 @@ test('이미지 연결이 없으면 설정 안내를 반환하고 영상을 제�
   const { run, events } = fixture({ imageKey: '' })
   await assert.rejects(run(), /ltx.startImageSettings/)
   assert.deepEqual(events, [])
+})
+
+test('키 없는 Draw Things 연결로 시작 프레임을 준비하고 LTX에 전달합니다', async () => {
+  const options = { imageKey: '', imageProvider: DRAW_THINGS_PROVIDER }
+  const { run, events, shot } = fixture({ ...options, imageModel: 'flux_2_klein_4b_q6p.ckpt' })
+  await run()
+  assert.equal(shot.firstFrameAssetId, 'generated')
+  assert.deepEqual(events.slice(0, 4), ['render', 'assign start', 'save', 'video'])
+
+  const missing = fixture({ ...options, imageModel: '' })
+  await assert.rejects(missing.run(), /ltx.startImageSettings/)
+  assert.deepEqual(missing.events, [])
 })

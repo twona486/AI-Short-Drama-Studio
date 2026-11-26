@@ -8,7 +8,8 @@ import { t as translate } from '@/i18n'
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { Handle, Position, useVueFlow } from '@vue-flow/core'
 import { useAssetsStore, useLibraryStore, useProjectStore, useSettingsStore, useToastStore } from '@/stores'
-import { runCanvasNode, stopLtxNodeWait, optimizeFreeformVideoPrompt } from '@/services/canvas/runner'
+import { runCanvasNode, stopLtxNodeWait, optimizeFreeformVideoPrompt, canStopDrawThingsNodeWait, stopDrawThingsNodeWait } from '@/services/canvas/runner'
+import { DRAW_THINGS_PROVIDER, drawThingsInputError, drawThingsReferenceCapability, isDrawThingsGrpc } from '@/services/ai/drawThingsOptions'
 import { applyShotVideoModel, applyShotVideoProfile } from '@/services/canvas/videoModel'
 import { isNodeRunning } from '@/services/canvas/jobs'
 import { friendlyAiError, shouldToastAiError } from '@/services/ai/abort'
@@ -16,9 +17,11 @@ import { cssAspectRatio } from '@/services/canvas/layout'
 import { openLightbox } from '@/composables/useLightbox'
 import NodeBusyOverlay from '@/components/canvas/NodeBusyOverlay.vue'
 import AssetPicker from '@/components/common/AssetPicker.vue'
+import SentMediaPrompts from './SentMediaPrompts.vue'
 import ImageModelSelect from '@/components/settings/ImageModelSelect.vue'
 import VideoModelSelect from '@/components/settings/VideoModelSelect.vue'
 import H3GenModeSelect from '@/components/settings/H3GenModeSelect.vue'
+import DrawThingsReferenceHint from '@/components/canvas/DrawThingsReferenceHint.vue'
 import FramePairSlots from '@/components/canvas/FramePairSlots.vue'
 import CanvasToolbarIcon from '@/components/canvas/CanvasToolbarIcon.vue'
 import NodeLinkPlus from '@/components/canvas/NodeLinkPlus.vue'
@@ -166,6 +169,18 @@ const isH3Video = computed(() => isVideo.value && !ltxProfile.value && videoMode
 
 /* 노드에 선택한 영상 연결이 우선한다. 선택하지 않았으면 현재 전역 연결을 쓴다. */
 const settings = useSettingsStore()
+const drawThingsImage = computed(() => !isVideo.value && settings.config.image.provider === DRAW_THINGS_PROVIDER)
+const referenceCapability = computed(() => {
+  if (!drawThingsImage.value || isCapture.value) return undefined
+  const { model, baseUrl } = settings.config.image
+  return drawThingsReferenceCapability(model, isDrawThingsGrpc(baseUrl))
+})
+const drawThingsProblem = computed(() => {
+  if (!drawThingsImage.value || isCapture.value) return ''
+  const { model, baseUrl } = settings.config.image
+  const problem = drawThingsInputError(model, refs.value.length, isDrawThingsGrpc(baseUrl))
+  return problem ? translate(problem === 'drawThings.referenceRequired' ? 'drawThings.referenceNeededHint' : problem) : ''
+})
 const VIDEO_PROFILES = computed(() => settings.config.videos ?? [])
 const effectiveVideoProfile = computed(() => {
   const list = VIDEO_PROFILES.value
@@ -193,7 +208,7 @@ const generateAudio = computed({
 const ltxResume = computed(() => isLtxTask(node.value?.data.videoTaskId))
 const videoKindLabel = computed(() => (isVideo.value ? '' : localized('mediaNodes.imageGeneration')))
 const isH3Fl2va = computed(() => isH3Video.value && h3GenMode.value === 'fl2va')
-const ltxProfile = computed(() => videoModel.value === 'h3' && isLtxProfile(effectiveVideoProfile.value)
+const ltxProfile = computed(() => isVideo.value && videoModel.value === 'h3' && isLtxProfile(effectiveVideoProfile.value)
   ? effectiveVideoProfile.value : undefined)
 const durationCapability = computed(() => videoDurationCapability({
   model: videoModel.value, profile: effectiveVideoProfile.value, resolution: videoResolution.value
@@ -422,6 +437,10 @@ function previewFull() {
 
 async function generate() {
   if (generating.value) return
+  if (drawThingsProblem.value) {
+    toast.warn(drawThingsProblem.value)
+    return
+  }
   if (!ltxResume.value && !prompt.value.trim()) {
     toast.warn(translate('common.enterPromptFirst'))
     return
@@ -464,7 +483,7 @@ async function generate() {
     }
   } catch (e: unknown) {
     if (shouldToastAiError(e)) toast.error(friendlyAiError(e) || translate('common.generateFailed'), 10000)
-    else if (node.value?.error === translate('ltx.stopped') || node.value?.error === translate('ltxDesktop.cancelRequested')) {
+    else if (node.value?.error && ['ltx.stopped', 'ltxDesktop.cancelRequested', 'drawThings.cancelled'].some(key => node.value?.error === translate(key))) {
       toast.info(node.value.error)
     }
   } finally {
@@ -559,7 +578,7 @@ async function removeSelf() {
     <transition name="float-up">
       <div v-if="selected && panelOpen" class="toolbar-wrap nodrag nowheel" @mousedown.stop @click.stop>
         <div class="toolbar">
-          <button type="button" :disabled="generating || optimizingPrompt" @click="generate">
+          <button type="button" :disabled="generating || optimizingPrompt || !!drawThingsProblem" :title="drawThingsProblem || undefined" @click="generate">
             <span>↺</span>{{ genLabel }}
           </button>
           <button
@@ -648,6 +667,7 @@ async function removeSelf() {
         {{ isVideo ? '▶' : '＋' }}
       </div>
       <span v-if="isVideo && duration" class="dur-tag">{{ duration }}s</span>
+      <button v-if="canStopDrawThingsNodeWait(props.id)" type="button" class="ltx-stop nodrag" @click.stop="stopDrawThingsNodeWait(props.id)">{{ $t('drawThings.stopWaiting') }}</button>
       <button v-if="isVideo && (ltxProfile || ltxResume) && generating" type="button" class="ltx-stop nodrag" @click.stop="stopLtxNodeWait(props.id)">{{ $t(isLtxDesktop(ltxProfile) ? 'ltxDesktop.cancel' : 'ltx.stop') }}</button>
       <button v-else-if="isVideo && ltxResume" type="button" class="ltx-stop nodrag" @click.stop="generate">{{ $t('ltx.resume') }}</button>
       <NodeBusyOverlay v-if="generating" :label="busyLabel || (isVideo ? $t('freeformGenNode.generatingVideo') : $t('freeformGenNode.generatingImage'))" />
@@ -675,6 +695,11 @@ async function removeSelf() {
           :last-required="lastFrameRequired"
         />
         <div v-else class="refs">
+          <span v-if="!isVideo" class="reference-caption">{{
+            referenceCapability?.max
+              ? $t(referenceCapability.min ? 'drawThings.referenceRequiredCount' : 'drawThings.referenceOptionalCount', { count: referenceCapability.max })
+              : $t('common.referenceImageOptional')
+          }}</span>
           <div v-for="id in refs" :key="id" class="thumb nodrag nopan nowheel">
             <button type="button" class="thumb-preview nodrag" :title="$t('common.fullImage')" @pointerdown.stop @click.stop="previewRef(id)">
               <img v-if="refUrls[id]" :src="refUrls[id]" alt="" />
@@ -690,6 +715,7 @@ async function removeSelf() {
           </div>
           <button type="button" class="add nodrag" :title="$t('common.uploadReference')" @click="uploadRefs">＋</button>
           <button type="button" class="add nodrag" :title="$t('freeformGenNode.referenceSource')" @click="openRefPicker">{{ $t('common.assetPickerShort') }}</button>
+          <DrawThingsReferenceHint v-if="drawThingsImage && !isCapture" :count="refs.length" />
         </div>
         <div v-if="isH3Video" class="prompt-tools">
           <button
@@ -712,6 +738,7 @@ async function removeSelf() {
               : $t('freeformGenNode.imagePlaceholder')
           "
         />
+        <SentMediaPrompts :prompts="node?.data.sentMediaPrompts" />
         <div class="prompt-foot">
           <ImageModelSelect v-if="!isVideo" />
           <VideoModelSelect
@@ -722,7 +749,7 @@ async function removeSelf() {
           />
           <AspectRatioSeg v-if="!isVideo" v-model="aspectRatio" compact />
           <ImageResolutionSeg
-            v-if="!isVideo && imageResolutionChoices.length"
+            v-if="!isVideo && !drawThingsImage && imageResolutionChoices.length"
             v-model="imageResolution"
             :choices="imageResolutionChoices"
           />
@@ -742,7 +769,7 @@ async function removeSelf() {
             @update:duration="duration = $event"
             @update:audio="generateAudio = $event"
           />
-          <button class="go" type="button" :disabled="generating || optimizingPrompt" :title="genLabel" @click="generate">↑</button>
+          <button class="go" type="button" :disabled="generating || optimizingPrompt || !!drawThingsProblem" :title="drawThingsProblem || genLabel" @click="generate">↑</button>
         </div>
       </div>
     </transition>
@@ -775,6 +802,7 @@ async function removeSelf() {
 </template>
 
 <style scoped>
+.reference-caption { flex-basis: 100%; font-size: 11px; color: var(--color-text-4); }
 .ltx-stop { position: absolute; right: 8px; bottom: 8px; z-index: 10; }
 .fnode {
   position: relative;

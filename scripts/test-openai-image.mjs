@@ -58,7 +58,7 @@ test('새 연결은 OpenAI 모델만 선택하고 기존 공급업체는 수동 
   assert.deepEqual(settings.config.image.models, [OPENAI_DEFAULT_IMAGE_MODEL])
   assert.equal(IMAGE_PROVIDERS[0].defaultModel, OPENAI_DEFAULT_IMAGE_MODEL)
   assert.deepEqual(suggestedPresetModels(IMAGE_PROVIDERS[0], settings.config.image.models), ['gpt-image-2.6-flare'])
-  for (const preset of IMAGE_PROVIDERS.slice(1, -1)) {
+  for (const preset of IMAGE_PROVIDERS.filter((item) => !['openai', 'draw-things', 'custom'].includes(item.id))) {
     assert.ok(preset.models.length)
     assert.deepEqual(suggestedPresetModels(preset, []), [])
     assert.equal(applyProviderPreset({ baseUrl: '', model: '', models: [] }, preset).model, '')

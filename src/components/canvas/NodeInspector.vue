@@ -26,6 +26,8 @@ import ImageResolutionSeg from '@/components/common/ImageResolutionSeg.vue'
 import VideoSettingsPopover from '@/components/canvas/VideoSettingsPopover.vue'
 import { pickDocImageResolution, pickDocVideoResolution, videoResolutionChoices, type DocImageResolution } from '@/services/ai/modelOptions'
 import H3GenModeSelect from '@/components/settings/H3GenModeSelect.vue'
+import { DRAW_THINGS_PROVIDER, drawThingsInputError, isDrawThingsGrpc } from '@/services/ai/drawThingsOptions'
+import DrawThingsReferenceHint from '@/components/canvas/DrawThingsReferenceHint.vue'
 import FramePairSlots from '@/components/canvas/FramePairSlots.vue'
 import TtsModelSelect from '@/components/settings/TtsModelSelect.vue'
 import GradientButton from '@/components/common/GradientButton.vue'
@@ -325,7 +327,7 @@ const imageResolution = computed({
     if (props.node) project.patchCanvasNode(props.node.id, { imageResolution: v })
   }
 })
-const ltxProfile = computed(() => videoModel.value === 'h3' && isLtxProfile(docVideoProfile.value)
+const ltxProfile = computed(() => isVideoNode.value && videoModel.value === 'h3' && isLtxProfile(docVideoProfile.value)
   ? docVideoProfile.value : undefined)
 const durationCapability = computed(() => videoDurationCapability({
   model: videoModel.value, profile: docVideoProfile.value, resolution: videoResolution.value,
@@ -430,6 +432,9 @@ async function redrawFrame(which: 'start' | 'end') {
 
 const canRun = computed(() => {
   if (running.value || gateBlocked.value) return false
+  const image = settings.config.image
+  if (props.node?.type === 'imageGen' && image.provider === DRAW_THINGS_PROVIDER &&
+    drawThingsInputError(image.model, inspectorRefIds.value.length, isDrawThingsGrpc(image.baseUrl))) return false
   if (props.node?.type === 'export' || props.node?.type === 'final') {
     return canBuildExport(project.current)
   }
@@ -1134,7 +1139,7 @@ async function optimizeVideoPrompt() {
         />
       </template>
       <div v-if="node.type === 'imageGen' || node.type === 'videoGen'" class="insp-refs">
-        <div class="lab-row"><label>{{ $t('common.referenceImage') }}</label></div>
+        <div class="lab-row"><label>{{ $t(node.type === 'imageGen' ? 'common.referenceImageOptional' : 'common.referenceImage') }}</label></div>
         <div v-if="inspectorRefIds.length" class="insp-ref-list">
           <div v-for="id in inspectorRefIds" :key="id" class="insp-ref">
             <img v-if="inspectorRefUrls[id]" :src="inspectorRefUrls[id]" alt="" />
@@ -1142,6 +1147,7 @@ async function optimizeVideoPrompt() {
           </div>
         </div>
         <p v-else class="hint">{{ $t('nodeInspector.noReferenceHint') }}</p>
+        <DrawThingsReferenceHint v-if="node.type === 'imageGen'" :count="inspectorRefIds.length" />
       </div>
 
       <template v-else-if="node.type === 'audio' && shot">
@@ -1201,8 +1207,8 @@ async function optimizeVideoPrompt() {
         </div>
       </div>
 
-      <div v-if="isImageNode || isVideoNode" class="insp-params">
-        <ImageModelSelect v-if="isImageNode" />
+      <div v-if="isImageNode || isVideoNode || node.type === 'imageGen' || node.type === 'prop'" class="insp-params">
+        <ImageModelSelect v-if="!isVideoNode" />
         <ImageResolutionSeg
           v-if="isImageNode && imageResolutionChoices.length"
           v-model="imageResolution"
