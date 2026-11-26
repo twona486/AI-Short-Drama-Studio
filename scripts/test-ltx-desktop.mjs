@@ -361,7 +361,7 @@ test('한국어 립싱크의 단일 화자, WAV, Remote 계약, 재조회, 후�
       async remove(path) { await rm(path, { force: true }) },
       async openAiTts({ text, voice }) {
         generated.push({ text, voice })
-        return pcmToWav(Buffer.alloc(speechSamples * 2, voice === 'marin' ? 1 : 2))
+        return { kind: 'audio', ...pcmToWav(Buffer.alloc(speechSamples * 2, voice === 'marin' ? 1 : 2)) }
       }
     }
   }

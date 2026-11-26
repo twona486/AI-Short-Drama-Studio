@@ -1,3 +1,4 @@
+import { decryptSecret, encodeSettings, encryptSecret, readSettings, writeSettings } from './settings-storage'
 import { registerProviderRequests } from './provider-requests'
 import { ProviderResponseTooLarge, readAutoDlResponse } from './provider-response'
 import type { OpenAiTtsRequest } from '../src/services/ai/openAiTts'
@@ -15,8 +16,7 @@ import {
   protocol,
   Menu,
   net,
-  session,
-  safeStorage
+  session
 } from 'electron'
 import path from 'node:path'
 import os from 'node:os'
@@ -27,8 +27,7 @@ import { Readable } from 'node:stream'
 import { pipeline } from 'node:stream/promises'
 import { spawn } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
-import { lookup } from 'node:dns/promises'
-import { isIP } from 'node:net'
+import { isAllowedDashscopeFetch, isAllowedProviderFetch, llmAddressError, llmPinnedLookup, publicHttpsTarget } from './net-policy'
 import http from 'node:http'
 import https from 'node:https'
 import { requestLtx } from './ltx'
@@ -95,66 +94,6 @@ function installApplicationMenu() {
 const mainDir = path.dirname(fileURLToPath(import.meta.url))
 
 /**
- * 사용자 지정 영상 워크플로는 여러 제공업체의 임시 CDN에서 결과를 가져온다.
- * 고정 도메인 목록 대신 로컬 및 사설망 주소를 차단해 다운로드 IPC의 SSRF를 막는다.
- * 공용 HTTPS 영상 주소는 허용한다.
- */
-function isPrivateIp(address: string): boolean {
-  const normalized = address.toLowerCase().replace(/^\[|\]$/g, '')
-  if (normalized === '::1' || normalized === '::' || normalized.startsWith('fe80:')) {
-    return true
-  }
-  if (normalized.startsWith('fc') || normalized.startsWith('fd')) return true
-
-  // IPv4 매핑 IPv6의 예는 ::ffff:127.0.0.1이다.
-  const mapped = /^::ffff:(\d+\.\d+\.\d+\.\d+)$/.exec(normalized)
-  const ipv4 = mapped?.[1] ?? (isIP(normalized) === 4 ? normalized : '')
-  if (!ipv4) return false
-  const octets = ipv4.split('.').map(Number)
-  const [a, b] = octets
-  return (
-    a === 0 ||
-    a === 10 ||
-    a === 127 ||
-    (a === 169 && b === 254) ||
-    (a === 172 && b >= 16 && b <= 31) ||
-    (a === 192 && b === 168) ||
-    (a === 100 && b >= 64 && b <= 127) ||
-    a >= 224
-  )
-}
-
-async function assertPublicHttpsUrl(raw: string): Promise<URL> {
-  let parsed: URL
-  try {
-    parsed = new URL(raw)
-  } catch {
-    throw new Error(nativeText('invalidVideoUrl'))
-  }
-  if (parsed.protocol !== 'https:' || parsed.username || parsed.password) {
-    throw new Error(nativeText('requirePublicHttps'))
-  }
-  const host = parsed.hostname.toLowerCase()
-  if (!host || host === 'localhost' || host.endsWith('.localhost')) {
-    throw new Error(nativeText('rejectPrivateHost'))
-  }
-  if (isIP(host)) {
-    if (isPrivateIp(host)) throw new Error(nativeText('rejectPrivateHost'))
-    return parsed
-  }
-  let addresses: Awaited<ReturnType<typeof lookup>>
-  try {
-    addresses = await lookup(host, { all: true, verbatim: true })
-  } catch {
-    throw new Error(nativeText('lookupFailed', { host }))
-  }
-  if (!addresses.length || addresses.some((item) => isPrivateIp(item.address))) {
-    throw new Error(nativeText('rejectPrivateResolution'))
-  }
-  return parsed
-}
-
-/**
  * Electron net.fetch는 응답 헤더를 Web Headers로 변환한다.
  * 일부 CDN이 Content-Disposition에 비 ASCII 파일명을 직접 넣으면
  * undici의 ByteString TypeError가 발생해 메인 프로세스에서 처리되지 않을 수 있다.
@@ -167,7 +106,7 @@ async function downloadPublicVideo(
   signal?: AbortSignal
 ): Promise<void> {
   signal?.throwIfAborted()
-  const parsed = await assertPublicHttpsUrl(rawUrl)
+  const { url: parsed, lookup } = await publicHttpsTarget(rawUrl, nativeText)
   await new Promise<void>((resolve, reject) => {
     let received = false
     const req = https.get(
@@ -178,6 +117,7 @@ async function downloadPublicVideo(
           'User-Agent': 'AI-Cut-Desktop/1.0'
         },
         signal,
+        lookup,
         timeout: 180_000
       },
       (res) => {
@@ -667,20 +607,28 @@ app.whenReady().then(async () => {
   ipcMain.handle('desktop:getVersion', () => app.getVersion())
   ipcMain.handle('desktop:kvGet', (_e, key: string) => {
     if (!isAppDbOpen()) throw new Error('설정 데이터베이스를 열지 못했습니다.')
-    return kvGet(String(key || ''))
+    const name = String(key || '')
+    return name === 'settings' ? readSettings(currentRoot()) : kvGet(name)
   })
   ipcMain.handle('desktop:backupSettings', async (_e, raw: string) => {
     const hash = createHash('sha256').update(raw).digest('hex')
     const backup = path.join(currentRoot(), `settings.broken-${hash}.json`)
+    const encrypted = encodeSettings(raw)
     try {
-      await fs.writeFile(backup, raw, { flag: 'wx', mode: 0o600 })
+      await fs.writeFile(backup, encrypted, { flag: 'wx', mode: 0o600 })
     } catch (error) {
-      if ((error as NodeJS.ErrnoException).code !== 'EEXIST' || await fs.readFile(backup, 'utf8') !== raw) throw error
+      if ((error as NodeJS.ErrnoException).code !== 'EEXIST') throw error
+      const stored = await fs.readFile(backup, 'utf8')
+      if (stored === raw) await fs.writeFile(backup, encrypted, { mode: 0o600 })
+      else if (decryptSecret(JSON.parse(stored).data) !== raw) throw error
     }
     return backup
   })
   ipcMain.handle('desktop:kvSet', (_e, key: string, value: string) => {
-    kvSet(String(key || ''), String(value ?? ''))
+    const name = String(key || '')
+    const raw = String(value ?? '')
+    if (name === 'settings') writeSettings(currentRoot(), raw)
+    else kvSet(name, raw)
   })
 
   ipcMain.handle('desktop:ensureProjectDir', async (_e, name: string, id: string) => {
@@ -899,17 +847,6 @@ app.whenReady().then(async () => {
     return shell.openPath(filePath)
   })
 
-  function isAllowedProviderFetch(parsed: URL) {
-    // 사용자가 저장한 모델 주소에 CORS 제한 없이 접근할 수 있도록 메인 프로세스에서 요청한다.
-    // 사용자가 운영하는 클라우드 ComfyUI도 연결할 수 있도록 공급업체나 localhost로 제한하지 않는다.
-    return (
-      (parsed.protocol === 'http:' || parsed.protocol === 'https:') &&
-      Boolean(parsed.hostname) &&
-      !parsed.username &&
-      !parsed.password
-    )
-  }
-
   const startProviderRequest = registerProviderRequests(ipcMain)
   ipcMain.handle('desktop:openAiTts', async ({ sender }, request: OpenAiTtsRequest) => {
     const task = startProviderRequest(sender, request?.requestId)
@@ -981,6 +918,7 @@ app.whenReady().then(async () => {
 
   // 긴 LLM 응답에서 Chromium의 HTTP/2 연결이 일찍 끊길 수 있어 Node의 HTTP/1.1을 사용한다.
   const readLlmText = (
+    lookup: Awaited<ReturnType<typeof llmPinnedLookup>>,
     target: URL,
     method: 'GET' | 'POST',
     headers: Record<string, string>,
@@ -1010,7 +948,7 @@ app.whenReady().then(async () => {
       agent.destroy()
       finish(() => reject(err))
     }
-    const req = lib.request(target, { method, headers: reqHeaders, agent, timeout: timeoutMs }, (res) => {
+    const req = lib.request(target, { method, headers: reqHeaders, agent, lookup, timeout: timeoutMs }, (res) => {
       const chunks: Buffer[] = []
       let size = 0
       res.on('data', (chunk: Buffer | string) => {
@@ -1061,14 +999,9 @@ app.whenReady().then(async () => {
     } catch {
       throw new Error('invalid url')
     }
-    if (parsed.protocol !== 'https:') {
-      const host = parsed.hostname.toLowerCase()
-      const localHttp =
-        parsed.protocol === 'http:' && (host === '127.0.0.1' || host === 'localhost')
-      if (!localHttp) throw new Error(nativeText('llmProtocol'))
-    }
+    if (llmAddressError(parsed)) throw new Error(nativeText('llmProtocol'))
     const isModels = /\/models\/?$/i.test(parsed.pathname)
-    const isChat = parsed.pathname.includes('/chat/completions')
+    const isChat = /\/chat\/completions\/?$/i.test(parsed.pathname)
     if (!isModels && !isChat) {
       throw new Error(nativeText('llmEndpoint'))
     }
@@ -1086,7 +1019,7 @@ app.whenReady().then(async () => {
       if (method === 'POST') headers['Content-Type'] = 'application/json'
       const token = String(opts?.authorization || '').trim()
       if (token) headers.Authorization = token
-      return await readLlmText(parsed, method, headers, method === 'POST' ? body : undefined, timeoutMs, task.signal)
+      return await readLlmText(await llmPinnedLookup(parsed), parsed, method, headers, method === 'POST' ? body : undefined, timeoutMs, task.signal)
     } catch (err: any) {
       if (task.signal.reason?.name === 'TimeoutError' || err?.code === 'ETIMEDOUT') {
         throw new Error(nativeText('llmTimeout', { seconds: Math.round(timeoutMs / 1000) }))
@@ -1123,16 +1056,7 @@ app.whenReady().then(async () => {
     } catch {
       throw new Error('invalid url')
     }
-    const host = parsed.hostname.toLowerCase()
-    const pathName = parsed.pathname
-    const allowedHost =
-      host === 'dashscope.aliyuncs.com' ||
-      host.endsWith('.dashscope.aliyuncs.com') ||
-      host.endsWith('.maas.aliyuncs.com')
-    const allowedPath =
-      pathName.includes('/services/aigc/video-generation/') ||
-      /\/api\/v1\/tasks\/[^/]+$/.test(pathName)
-    if (parsed.protocol !== 'https:' || !allowedHost || !allowedPath) {
+    if (!isAllowedDashscopeFetch(parsed)) {
       throw new Error(nativeText('bailianEndpoint'))
     }
     const method = String(opts?.method || 'GET').toUpperCase()
@@ -1171,9 +1095,7 @@ app.whenReady().then(async () => {
   ipcMain.handle('desktop:protectDrawThingsSecret', (_event, secret: unknown) => {
     if (typeof secret !== 'string' || !secret || Buffer.byteLength(secret) > DRAW_THINGS_MAX_SECRET_BYTES) return null
     try {
-      if (!safeStorage.isEncryptionAvailable() ||
-        (process.platform === 'linux' && safeStorage.getSelectedStorageBackend() === 'basic_text')) return null
-      return safeStorage.encryptString(secret).toString('base64')
+      return encryptSecret(secret)
     } catch {
       return null
     }
@@ -1185,7 +1107,7 @@ app.whenReady().then(async () => {
     if (isDrawThingsGrpc(request.baseUrl) && encryptedSharedSecret !== undefined) {
       if (typeof encryptedSharedSecret !== 'string' || encryptedSharedSecret.length > 8192) return { kind: 'grpcSecret' }
       try {
-        sharedSecret = safeStorage.decryptString(Buffer.from(encryptedSharedSecret, 'base64'))
+        sharedSecret = decryptSecret(encryptedSharedSecret)
       } catch {
         return { kind: 'grpcSecret' }
       }

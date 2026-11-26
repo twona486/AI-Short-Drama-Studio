@@ -312,11 +312,11 @@ export async function generateSpeech(input: TTSInput): Promise<TTSOutput> {
     return { blob, mimeType: blob.type, durationMs, model }
   }
   if (cfg.openAi) {
-    if (!isOfficialOpenAiUrl(cfg.baseUrl)) throw new Error('설정에서 공식 OpenAI TTS API 주소를 사용해야 합니다.')
-    if (!input.text.trim()) throw new Error('내레이션 원고가 없어 더빙할 수 없습니다.')
-    if (!cfg.apiKey.trim()) throw new Error('설정에서 OpenAI 더빙 API 키를 입력하거나 OpenAI 언어 모델의 키를 연결해야 합니다.')
+    if (!isOfficialOpenAiUrl(cfg.baseUrl)) throw new Error(t('openAiTtsErrors.officialAddress'))
+    if (!input.text.trim()) throw new Error(t('openAiTtsErrors.emptySpeech'))
+    if (!cfg.apiKey.trim()) throw new Error(t('openAiTtsErrors.linkKey'))
     if (!isDesktop() || typeof desktop().openAiTts !== 'function') {
-      throw new Error('OpenAI 더빙을 사용하려면 데스크톱 앱이 필요합니다.')
+      throw new Error(t('openAiTtsErrors.desktopRequired'))
     }
     input.signal?.throwIfAborted()
     const requestId = crypto.randomUUID()
@@ -325,10 +325,14 @@ export async function generateSpeech(input: TTSInput): Promise<TTSOutput> {
     const cancel = () => desktop().cancelProviderFetch(requestId)
     input.signal?.addEventListener('abort', cancel, { once: true })
     try {
-      const { wav, durationMs } = await desktop().openAiTts({
+      const reply = await desktop().openAiTts({
         requestId, apiKey: cfg.apiKey, model, voice, text: input.text, instruction: input.instruction
       })
       input.signal?.throwIfAborted()
+      if (reply.kind === 'cancelled') throw new DOMException(t('providerRequestErrors.aborted'), 'AbortError')
+      if (reply.kind === 'timeout') throw new DOMException(t('openAiTtsErrors.timeout'), 'TimeoutError')
+      if (reply.kind !== 'audio') throw new Error(t(`openAiTtsErrors.${reply.kind}`))
+      const { wav, durationMs } = reply
       const blob = new Blob([new Uint8Array(wav)], { type: 'audio/wav' })
       return { blob, mimeType: blob.type, durationMs, model }
     } catch (error) {
@@ -341,13 +345,13 @@ export async function generateSpeech(input: TTSInput): Promise<TTSOutput> {
 
   const spoken = clipText(spokenTextOnly(input.text || ''))
   const text = /[가-힣]/.test(spoken) ? spoken : normalizeForSpeech(spoken)
-  if (!text) throw new Error('내레이션 원고가 없어 더빙할 수 없습니다.')
+  if (!text) throw new Error(t('openAiTtsErrors.emptySpeech'))
 
   const voice = compatibleVoice(model, input.voice || cfg.voice)
   const language = input.language || detectSpeechLanguage(text)
   log(`내레이션 텍스트 ${text.slice(0, 80)}${text.length > 80 ? '…' : ''}  lang=${language}`)
 
-  if (!cfg.apiKey) throw new Error('설정에서 더빙 API 키를 입력해야 합니다.')
+  if (!cfg.apiKey) throw new Error(t('openAiTtsErrors.speechKeyRequired'))
 
   const apiRoot = speechApiRoot(cfg.baseUrl)
   const errors: string[] = []
@@ -392,5 +396,5 @@ export async function generateSpeech(input: TTSInput): Promise<TTSOutput> {
     }
   }
 
-  throw new Error(errors.join('\n') || 'TTS에 실패했습니다.')
+  throw new Error(errors.join('\n') || t('openAiTtsErrors.speechFailed'))
 }

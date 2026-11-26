@@ -4,7 +4,9 @@ import type { AspectRatio } from '@/types'
 export const OPENAI_DEFAULT_IMAGE_MODEL = 'gpt-image-2.6-sunburst'
 export const OPENAI_IMAGE_MODELS = [OPENAI_DEFAULT_IMAGE_MODEL, 'gpt-image-2.6-flare']
 export const OPENAI_IMAGE_TIMEOUT_MS = 600_000
-export const OPENAI_IMAGE_MAX_REFERENCES = 16
+import { IMAGE_REFERENCE_LIMITS } from './capabilities/index'
+
+export const OPENAI_IMAGE_MAX_REFERENCES = IMAGE_REFERENCE_LIMITS.openAi
 
 // 파일당 API 제한보다 낮게 잡아 멀티파트와 Electron IPC의 전체 크기도 제한한다.
 const REFERENCE_BUDGET = 48_000_000

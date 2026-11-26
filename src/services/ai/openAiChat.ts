@@ -1,14 +1,10 @@
+import { isOfficialOpenAi } from './networkAddress'
+export { isOfficialOpenAi } from './networkAddress'
 export const OPENAI_BASE_URL = 'https://api.openai.com/v1'
 export const OPENAI_DEFAULT_CHAT_MODEL = 'gpt-5.4-mini'
 export const OPENAI_CHAT_MODELS = [OPENAI_DEFAULT_CHAT_MODEL, 'gpt-5.4']
 
-export function isOfficialOpenAi(baseUrl: string): boolean {
-  try {
-    return new URL(baseUrl).origin === 'https://api.openai.com'
-  } catch {
-    return false
-  }
-}
+
 
 /** Apply the official API's model-specific fields without changing gateway requests. */
 export function adaptOpenAiChatBody(baseUrl: string, body: Record<string, unknown>) {

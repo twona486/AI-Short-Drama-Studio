@@ -3,7 +3,7 @@ import ElevenLabsVoiceSelect from '@/components/settings/ElevenLabsVoiceSelect.v
 import { isElevenLabsTts } from '@/services/ai/elevenLabsTts'
 import { isOpenAiTts, OPENAI_TTS_VOICES, recommendOpenAiVoice } from '@/services/ai/openAiTts'
 import { ltxShotSpeechTooFast } from '@/services/ai/ltxShotPrompt'
-import { nearestVideoDuration, videoDurationCapability, shotDurationWarning } from '@/services/ai/videoDuration'
+import { nearestVideoDuration, videoDurationCapability, shotDurationWarning } from '@/services/ai/capabilities/video'
 import { isLtxTask, isLtxDesktop, LTX_DESKTOP_AUDIO_RESOLUTIONS, ltxDesktopAudioResolution } from '@/services/ai/ltxDesktopOptions'
 import { isLtxProfile, LTX_DEFAULT_MODEL } from '@/services/ai/ltxOptions'
 import { t as translate } from '@/i18n'

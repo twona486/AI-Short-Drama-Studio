@@ -2,7 +2,7 @@
 import ElevenLabsConnection from '@/components/settings/ElevenLabsConnection.vue'
 import ElevenLabsVoiceSelect from '@/components/settings/ElevenLabsVoiceSelect.vue'
 import { isElevenLabsTts } from '@/services/ai/elevenLabsTts'
-import { videoDurationCapability } from '@/services/ai/videoDuration'
+import { videoDurationCapability } from '@/services/ai/capabilities/video'
 import { t as translate } from '@/i18n'
 
 import { t } from '@/i18n'
@@ -10,7 +10,7 @@ import { computed, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { useProjectStore, useSettingsStore, uniqueProfileName } from '@/stores'
 import { desktop, isDesktop } from '@/services/desktop'
-import { isLtxDesktop, LTX_DESKTOP_URL_PLACEHOLDER, LTX_DESKTOP_MODELS, ltxDesktopError } from '@/services/ai/ltxDesktopOptions'
+import { isLtxDesktop, LTX_DESKTOP_MODELS, ltxDesktopError } from '@/services/ai/ltxDesktopOptions'
 import { DRAW_THINGS_PROVIDER, drawThingsModelLabel, isDrawThingsGrpc } from '@/services/ai/drawThingsOptions'
 import { refreshDrawThingsModels } from '@/services/ai/drawThings'
 import { LTX_MODELS, isLtxProfile } from '@/services/ai/ltxOptions'
@@ -23,7 +23,7 @@ import type { AdapterConfig } from '@/services/ai/adapters'
 import { type VideoStillMode } from '@/types/canvas'
 import { syncH3ShotStillModes } from '@/services/canvas/videoModel'
 import { zealmanImageProfileLabel, zealmanImageWorkflowLabel, zealmanVideoProfileLabel, zealmanVideoWorkflowLabel } from '@/services/ai/zealman'
-import { normalizeRouterBaseUrl } from '@/services/ai/openAiRouter'
+import { normalizeRouterBaseUrl, RouterAddressError } from '@/services/ai/openAiRouter'
 import {
   IMAGE_PROVIDERS,
   LLM_PROVIDERS,
@@ -47,8 +47,7 @@ const showVideoKey = ref(false)
 const ltxVideo = computed(() => isLtxProfile(settings.config.video))
 const videoVoiceHint = computed(() => {
   const status = videoDurationCapability({ profile: settings.config.video }).voice
-  return status === 'verifying' ? 'common.videoVoiceVerifying'
-    : status === 'supported' ? 'common.videoVoiceSupported' : 'common.videoVoiceUnsupported'
+  return status === 'supported' ? 'common.videoVoiceSupported' : 'common.videoVoiceUnsupported'
 })
 const ltxDesktop = computed(() => isLtxDesktop(settings.config.video))
 const pairingLink = ref('')
@@ -136,7 +135,9 @@ function addLlmRouter() {
     llmRouterStatus.value = t('studioUpdate.modelSelected', { model })
   } catch (error) {
     llmRouterFailed.value = true
-    llmRouterStatus.value = error instanceof Error ? error.message : t('studioUpdate.invalidRouter')
+    llmRouterStatus.value = error instanceof RouterAddressError
+      ? t(`networkAddresses.${error.kind}`)
+      : error instanceof Error ? error.message : t('studioUpdate.invalidRouter')
   }
 }
 const zealmanImage = computed(
@@ -633,7 +634,7 @@ function patchAdapter(
         <template v-if="ltxDesktop">
           <p class="hint">{{ $t('ltxDesktop.hint') }}</p>
           <label for="ltx-desktop-address">{{ $t('studioSettings.baseUrl') }}</label>
-          <input id="ltx-desktop-address" v-model.trim="desktopAddress" :placeholder="LTX_DESKTOP_URL_PLACEHOLDER" />
+          <input id="ltx-desktop-address" v-model.trim="desktopAddress" :placeholder="$t('networkAddresses.ltxExample')" />
           <details class="rule-details">
             <summary>{{ $t('ltxDesktop.advanced') }}</summary>
             <label for="ltx-desktop-host">{{ $t('ltxDesktop.hostOverride') }}</label>

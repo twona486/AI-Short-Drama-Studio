@@ -1,10 +1,11 @@
+import { IMAGE_REFERENCE_LIMITS } from './capabilities/index'
 import type { AspectRatio } from '../../types/project'
 
 export const DRAW_THINGS_PROVIDER = 'draw-things'
 export const DRAW_THINGS_PORT = '7860'
 export const DRAW_THINGS_URL = `http://127.0.0.1:${DRAW_THINGS_PORT}`
 export const DRAW_THINGS_GRPC_PORT = '7859'
-export const DRAW_THINGS_MAX_REFERENCES = 4
+export const DRAW_THINGS_MAX_REFERENCES = IMAGE_REFERENCE_LIMITS.drawThingsGrpc
 export const DRAW_THINGS_MAX_SECRET_BYTES = 4096
 export const isDrawThingsGrpc = (url: string) => /^grpc:\/\//i.test(url.trim())
 
@@ -44,7 +45,7 @@ export function drawThingsModelLabel(model: string, nonCommercialLabel: string) 
 export function drawThingsReferenceCapability(model: string, grpc = false): { min: number; max: number } | undefined {
   const references = drawThingsPreset(model)?.references
   if (!references) return undefined
-  return { min: references.min, max: Math.min(references.max, grpc ? DRAW_THINGS_MAX_REFERENCES : 1) }
+  return { min: references.min, max: Math.min(references.max, grpc ? DRAW_THINGS_MAX_REFERENCES : IMAGE_REFERENCE_LIMITS.drawThingsHttp) }
 }
 
 export function drawThingsInputError(model: string, count: number, grpc = false) {

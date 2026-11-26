@@ -81,3 +81,9 @@ export type ElevenLabsReply =
   | { kind: 'connection'; creditsRemaining?: number }
   | { kind: 'voices'; voices: ElevenLabsVoice[]; next?: string }
   | { kind: 'speech'; wav: Uint8Array; durationMs: number; credits?: number }
+  | { kind: 'http'; status: number }
+  | { kind: 'cancelled' | 'timeout' | 'network' | 'unauthorized' | 'credits' | 'unsupportedLanguage'
+      | 'invalidModel' | 'invalidVoice' | 'emptySpeech' | 'textLimit' | 'invalidRequest' | 'invalidResponse'
+      | 'missingKey' | 'storedKey' }
+
+export type ElevenLabsError = Exclude<ElevenLabsReply, { kind: ElevenLabsOperation['kind'] }>

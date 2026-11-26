@@ -1,4 +1,4 @@
-import { nearestVideoDuration, videoDurationCapability } from '@/services/ai/videoDuration'
+import { nearestVideoDuration, videoDurationCapability } from '@/services/ai/capabilities/video'
 import { isLtxTask } from '@/services/ai/ltxDesktopOptions'
 import { isLtxProfile } from '@/services/ai/ltxOptions'
 import { autodlVideoProfileId } from '@/services/ai/runtime'

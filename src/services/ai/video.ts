@@ -1,5 +1,5 @@
 import { prepareMediaPrompt } from './mediaPrompt'
-import { nearestVideoDuration, videoDurationCapability } from './videoDuration'
+import { nearestVideoDuration, videoDurationCapability } from './capabilities/video'
 import { isLtxDesktop, isLtxTask, ltxDesktopResolution, ltxDesktopAudioResolution, ltxDesktopModel, ltxDesktopError, LtxStopRequest, type LtxDesktopOperation, type LtxDesktopReply } from './ltxDesktopOptions'
 /**
  * AutoDL.art ComfyUI 워크플로를 이용한 AI 영상 생성
@@ -22,7 +22,6 @@ import { autodlVideoProfileId, getVideoConfig, getVideoPromptStyle, getTtsConfig
 import { generateMockVideo } from './mock'
 import { composeH3VideoPrompt, ensureFl2vaLead, isRef2VA, type H3ImageSlot } from './h3Prompt'
 import {
-  VIDEO_AUTODL_ROOT,
   VIDEO_DEFAULT_WORKFLOW_ID,
   VIDEO_DIGITAL_HUMAN_WORKFLOW_ID,
   VIDEO_FL2VA_WORKFLOW_ID,
@@ -607,7 +606,8 @@ async function realWorkflowVideo(
   onProgress?: (msg: string) => void
 ): Promise<VideoGenOutput> {
   const cfg = getVideoConfig(input.videoProfileId)
-  const baseUrl = migrateVideoBaseUrl(cfg.baseUrl || VIDEO_AUTODL_ROOT)
+  const baseUrl = migrateVideoBaseUrl(cfg.baseUrl)
+  if (!baseUrl) throw new Error(translate('providerRequestErrors.videoAddressRequired'))
   const apiKey = cfg.apiKey
   const isFl2va = input.h3GenMode === 'fl2va'
   const isAudioSync = input.audioSync === true
@@ -635,7 +635,7 @@ async function realWorkflowVideo(
     throw new Error('[video] 시작·끝 프레임 모드에는 시작 프레임과 끝 프레임이 각각 필요합니다.')
   }
   if (isAudioSync && !input.audioBlob) {
-    throw new Error('[video] 디지털 휴먼 내레이션에는 대사에 맞는 오디오를 업로드해야 합니다.')
+    throw new Error(translate('providerRequestErrors.digitalHumanAudio'))
   }
   if (allBlobs.length === 0) {
     throw new Error('[video] 사용 가능한 이미지가 없습니다.')
@@ -1505,7 +1505,7 @@ export async function generateVideo(
     }
     if (input.audioSync) {
       if (!input.imageBlob || !input.audioBlob) {
-        throw new Error('[video] 디지털 휴먼 내레이션에는 캐릭터 참조 이미지와 해당 오디오가 필요합니다.')
+        throw new Error(translate('providerRequestErrors.digitalHumanInputs'))
       }
     } else if (input.h3GenMode === 'fl2va') {
       const requireLast = getVideoConfig(input.videoProfileId).options?.lastFrameRequired === true

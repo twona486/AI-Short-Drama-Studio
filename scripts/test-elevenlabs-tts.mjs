@@ -68,5 +68,5 @@ test('공유 라이브러리에서 한국어와 검색어를 사용하고 요청
   }))
   const pending = requestElevenLabs('test-key', operation, controller.signal)
   controller.abort()
-  await assert.rejects(pending, /취소했습니다/)
+  assert.deepEqual(await pending, { kind: 'cancelled' })
 })

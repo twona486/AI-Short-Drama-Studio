@@ -1,11 +1,12 @@
-import { videoDurationOptions, type VideoGenModel } from '@/types/canvas'
-import { VIDEO_FL2VA_WORKFLOW_ID } from './env'
-import { autodlWorkflowById } from './autodl'
-import { zealmanWorkflowById } from './zealman'
-import { isLtxProfile, ltxDurationOptions, LTX_DEFAULT_MODEL, LTX_MODELS } from './ltxOptions'
-import { isLtxDesktop, LTX_DESKTOP_MODELS, LTX_DESKTOP_WORKFLOW } from './ltxDesktopOptions'
+import type { VideoGenModel } from '@/types/canvas'
+import { videoDurationOptions } from './index'
+import { VIDEO_FL2VA_WORKFLOW_ID } from '../env'
+import { autodlWorkflowById } from '../autodl'
+import { zealmanWorkflowById } from '../zealman'
+import { isLtxProfile, ltxDurationOptions, LTX_DEFAULT_MODEL, LTX_MODELS } from '../ltxOptions'
+import { isLtxDesktop, LTX_DESKTOP_MODELS, LTX_DESKTOP_WORKFLOW } from '../ltxDesktopOptions'
 
-export type VideoVoiceSupport = 'supported' | 'unsupported' | 'verifying'
+export type VideoVoiceSupport = 'supported' | 'unsupported'
 
 const LTX_VIDEO_VOICE: Record<'ltx' | 'ltx-desktop', VideoVoiceSupport> = {
   ltx: 'supported',
@@ -28,8 +29,8 @@ export function videoDurationCapability(input: {
 } = {}) {
   const { model = 'h3', profile, resolution, durationLimit } = input
   const workflowId = profile?.workflowId || ''
-  const autoDl = !profile || profile.provider === 'autodl' || /(?:^|\/)autodl\.art(?=[:/]|$)/i.test(profile.baseUrl || '') ||
-    Boolean(autodlWorkflowById(workflowId))
+  const autoDl = Boolean(profile && (profile.provider === 'autodl' || /(?:^|\/)autodl\.art(?=[:/]|$)/i.test(profile.baseUrl || '') ||
+    autodlWorkflowById(workflowId)))
   const id = autoDl && input.startEndFrames ? VIDEO_FL2VA_WORKFLOW_ID : workflowId
   let durations = videoDurationOptions(model)
   if (model === 'h3') {

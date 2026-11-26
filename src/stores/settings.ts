@@ -12,7 +12,7 @@ import { defineStore } from 'pinia'
 import { ref, watch } from 'vue'
 import { useToastStore } from './toast'
 import { AUTODL_BASE_URL, AUTODL_WORKFLOWS } from '@/services/ai/autodl'
-import { envDefaults, migrateVideoBaseUrl, migrateVideoWorkflowId } from '@/services/ai/env'
+import { envDefaults } from '@/services/ai/env'
 import { isManualImageChoice } from '@/services/ai/providers'
 import { DRAW_THINGS_MODELS, DRAW_THINGS_PROVIDER, drawThingsPreset } from '@/services/ai/drawThingsOptions'
 import { desktop, isDesktop } from '@/services/desktop'
@@ -159,8 +159,6 @@ export interface DirectorSkillDoc {
 
 export const TTS_PRESETS = OPENAI_TTS_MODELS
 
-export const MUSIC_PRESETS = ['music-3.0']
-
 function uniq(list: string[]): string[] {
   return [...new Set(list.map((s) => s.trim()).filter(Boolean))]
 }
@@ -260,7 +258,7 @@ function asTts(ep: TtsEndpoint): TtsEndpoint {
     reuseOpenAiLlmKey: ep.reuseOpenAiLlmKey,
     voice: isOpenAiTts(ep)
       ? OPENAI_TTS_VOICES.includes(ep.voice) ? ep.voice : OPENAI_TTS_DEFAULT_VOICE
-      : ep.voice || 'longanhuan_v3.6'
+      : ep.voice || ''
   }
 }
 
@@ -442,9 +440,9 @@ function hydrateVideo(
         const isActive = p.id === savedActiveId
         return videoFromEndpoint(
           normalizeStoredVideoEndpoint({
-            baseUrl: p.baseUrl || (isActive ? fallback.baseUrl : ''),
+            baseUrl: p.baseUrl ?? (isActive ? fallback.baseUrl : ''),
             apiKey: p.apiKey ?? (isActive ? fallback.apiKey : ''),
-            workflowId: p.workflowId || (isActive ? fallback.workflowId : ''),
+            workflowId: p.workflowId ?? (isActive ? fallback.workflowId : ''),
             promptStyle: p.promptStyle || fallback.promptStyle,
             provider: p.provider ?? (isActive ? fallback.provider : undefined),
             stillMode: p.stillMode,
@@ -497,7 +495,7 @@ function buildDefaults(): AppSettings {
     stillMode: 'identity'
   }
   const videoFirst = videoFromEndpoint(video, t('settings.defaults.video'))
-  const music = endpoint(env.music.baseUrl, env.music.apiKey, env.music.model, MUSIC_PRESETS)
+  const music = endpoint(env.music.baseUrl, env.music.apiKey, env.music.model, [])
   const musicFirst = profileFromEndpoint(music, t('settings.defaults.music'), newId('mus'))
   return {
     theme: 'dark',
@@ -765,11 +763,11 @@ function parseSettings(raw: string | null) {
         ...parsed.video,
         baseUrl: parsed.video?.adapter?.type === 'comfyui-prompt'
           ? (parsed.video.baseUrl || '').trim()
-          : migrateVideoBaseUrl(parsed.video?.baseUrl || defaults.video.baseUrl),
-        apiKey: parsed.video?.adapter?.type === 'comfyui-prompt' ? (parsed.video.apiKey || '') : (parsed.video?.apiKey || defaults.video.apiKey),
+          : (parsed.video?.baseUrl ?? defaults.video.baseUrl),
+        apiKey: parsed.video?.adapter?.type === 'comfyui-prompt' ? (parsed.video.apiKey || '') : (parsed.video?.apiKey ?? defaults.video.apiKey),
         workflowId: parsed.video?.adapter?.type === 'comfyui-prompt'
           ? (parsed.video.workflowId || 'comfyui-local')
-          : migrateVideoWorkflowId(parsed.video?.workflowId || defaults.video.workflowId),
+          : (parsed.video?.workflowId ?? defaults.video.workflowId),
         promptStyle:
           parsed.video?.promptStyle === 'formatted' ? 'formatted' : 'scene-narrative',
         stillMode: stillModeForVideoModel('h3', {
@@ -860,7 +858,10 @@ function readLocal() {
 
 function writeLocal(v: Partial<AppSettings>) {
   try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(v))
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(v, (key, value) => {
+      if (['apiKey', 'autodlToken', 'drawThingsSharedSecret', 'encryptedElevenLabsKey', 'headers'].includes(key)) return undefined
+      return value
+    }))
   } catch {
     /* quota / private mode */
   }
@@ -877,12 +878,7 @@ let queued: AppSettings | null = null
 async function persistToDisk(v: AppSettings) {
   if (!isDesktop()) return
   const api = desktop()
-  if (typeof api.kvSet === 'function') {
-    await api.kvSet(SETTINGS_KV_KEY, JSON.stringify(v))
-  } else {
-    const file = await settingsFilePath()
-    await api.writeText(file, JSON.stringify(v, null, 2))
-  }
+  await api.kvSet(SETTINGS_KV_KEY, JSON.stringify(v))
 }
 
 function writeDisk(v: AppSettings) {
@@ -914,23 +910,19 @@ export const useSettingsStore = defineStore('settings', () => {
   let skipSave = false
   let preserveDisk = false
   let hydratePromise: Promise<void> | null = null
-  let userEdited = false
   let pendingSave = false
 
-  function touch() {
-    userEdited = true
-  }
-
   function saveLocal() {
-    if (!local.damaged && !preserveDisk) writeLocal(config.value)
+    if (!preserveDisk && (isDesktop() || !local.damaged)) writeLocal(config.value)
   }
 
   async function reportDamaged(raw: string) {
     try {
-      const backup = isDesktop()
-        ? await desktop().backupSettings(raw)
-        : `${STORAGE_KEY}.broken-${Date.now()}`
-      if (!isDesktop()) localStorage.setItem(backup, raw)
+      if (!isDesktop()) {
+        toast.error(ko.settings.storageUnavailable, 0)
+        return
+      }
+      const backup = await desktop().backupSettings(raw)
       toast.warn(ko.settings.damagedBackup.replace('{path}', backup), 0)
     } catch {
       toast.error(ko.settings.damagedBackupFailed, 0)
@@ -946,8 +938,8 @@ export const useSettingsStore = defineStore('settings', () => {
         return
       }
       if (preserveDisk || (!isDesktop() && local.damaged)) return
-      saveLocal()
       void writeDisk(config.value).then(() => {
+        saveLocal()
         lastSavedAt.value = Date.now()
       }).catch(() => {})
     },
@@ -967,20 +959,13 @@ export const useSettingsStore = defineStore('settings', () => {
         }
         const api = desktop()
         persistPath.value = typeof api.dbPath === 'function' ? await api.dbPath() : await settingsFilePath()
-        let raw: string | null = null
-        if (typeof api.kvGet === 'function') raw = await api.kvGet(SETTINGS_KV_KEY)
-        if (raw === null) {
-          const file = await settingsFilePath()
-          if (await api.exists(file)) raw = await api.readText(file)
-        }
+        const raw = await api.kvGet(SETTINGS_KV_KEY)
         if (raw !== null) {
           const saved = parseSettings(raw)
           preserveDisk = saved.damaged
-          if (!userEdited) {
-            skipSave = true
-            config.value = saved.config
-            skipSave = false
-          }
+          skipSave = true
+          config.value = saved.config
+          skipSave = false
           if (saved.damaged) {
             if (raw !== localRaw || !local.damaged) await reportDamaged(raw)
             return
@@ -989,12 +974,12 @@ export const useSettingsStore = defineStore('settings', () => {
           preserveDisk = true
           return
         }
-        saveLocal()
         await writeDisk(config.value)
+        saveLocal()
         lastSavedAt.value = Date.now()
         if (pendingSave) {
-          saveLocal()
           await writeDisk(config.value)
+          saveLocal()
         }
       } catch (error) {
         preserveDisk = true
@@ -1014,48 +999,41 @@ export const useSettingsStore = defineStore('settings', () => {
   async function flush() {
     await ensureHydrated()
     if (preserveDisk || (!isDesktop() && local.damaged)) throw new Error(ko.settings.storageUnavailable)
-    saveLocal()
     await writeDisk(config.value)
+    saveLocal()
     lastSavedAt.value = Date.now()
   }
 
   function update(patch: Partial<AppSettings>) {
-    touch()
     config.value = { ...config.value, ...patch }
   }
 
   function syncLlm(next: LlmProfile, list?: LlmProfile[]) {
-    touch()
     const llms = (list ?? config.value.llms).map((p) => (p.id === next.id ? next : p))
     config.value = { ...config.value, llms, activeLlmId: next.id, llm: asEndpoint(next) }
   }
 
   function syncVision(next: NamedEndpoint, list?: NamedEndpoint[]) {
-    touch()
     const visions = (list ?? config.value.visions).map((p) => (p.id === next.id ? next : p))
     config.value = { ...config.value, visions, activeVisionId: next.id, vision: asEndpoint(next) }
   }
 
   function syncImage(next: NamedEndpoint, list?: NamedEndpoint[]) {
-    touch()
     const images = (list ?? config.value.images).map((p) => (p.id === next.id ? next : p))
     config.value = { ...config.value, images, activeImageId: next.id, image: asEndpoint(next) }
   }
 
   function syncTts(next: TtsProfile, list?: TtsProfile[]) {
-    touch()
     const ttsProfiles = (list ?? config.value.ttsProfiles).map((p) => (p.id === next.id ? next : p))
     config.value = { ...config.value, ttsProfiles, activeTtsId: next.id, tts: asTts(next) }
   }
 
   function syncVideo(next: VideoProfile, list?: VideoProfile[]) {
-    touch()
     const videos = (list ?? config.value.videos).map((p) => (p.id === next.id ? next : p))
     config.value = { ...config.value, videos, activeVideoId: next.id, video: asVideo(next) }
   }
 
   function syncMusic(next: NamedEndpoint, list?: NamedEndpoint[]) {
-    touch()
     const musics = (list ?? config.value.musics).map((p) => (p.id === next.id ? next : p))
     config.value = { ...config.value, musics, activeMusicId: next.id, music: asEndpoint(next) }
   }
@@ -1220,8 +1198,7 @@ export const useSettingsStore = defineStore('settings', () => {
     if (sameModels && profile.model === next.model) return
     if (current) syncImage(next)
     else {
-      touch()
-      config.value = { ...config.value, images: config.value.images.map((item) => item.id === profileId ? next : item) }
+        config.value = { ...config.value, images: config.value.images.map((item) => item.id === profileId ? next : item) }
     }
   }
 
@@ -1376,12 +1353,10 @@ export const useSettingsStore = defineStore('settings', () => {
   }
 
   function setZealmanBaseUrl(baseUrl: string) {
-    touch()
     config.value = { ...config.value, zealmanBaseUrl: baseUrl.trim().replace(/\/+$/, '') }
   }
 
   function setAutodlToken(token: string) {
-    touch()
     config.value = { ...config.value, autodlToken: token.trim() }
   }
 
@@ -1422,7 +1397,6 @@ export const useSettingsStore = defineStore('settings', () => {
   function selectStorySkill(id: string) {
     const next = normalizeStorySkillId(id, Boolean(config.value.directorSkill))
     const group = storySkillById(next)?.group
-    touch()
     if (group === 'genre') config.value = { ...config.value, activeStorySkillId: next, storyGenreId: next }
     else config.value = { ...config.value, activeStorySkillId: next, storyStyleId: next }
   }

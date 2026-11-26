@@ -95,17 +95,13 @@ test('한국어·숫자·영문이 섞인 원고와 말투를 보내고 오디�
 })
 
 for (const [output, expected] of [
-  ['error', /API 키 또는/],
-  ['incomplete', /요청이 실패했습니다/],
-  ['empty', /올바른 PCM/]
+  ['error', 'unauthorized'],
+  ['incomplete', 'failed'],
+  ['empty', 'invalidAudio']
 ]) {
   test(`Realtime ${output} 결과를 오류로 표시하고 서버 원문을 숨깁니다`, async (context) => {
     const { connect } = await mockRealtime(context, output)
-    await assert.rejects(requestOpenAiTts(request, new AbortController().signal, connect), (error) => {
-      assert.match(error.message, expected)
-      assert.doesNotMatch(error.message, /test-openai-tts-key/)
-      return true
-    })
+    assert.deepEqual(await requestOpenAiTts(request, new AbortController().signal, connect), { kind: expected })
   })
 }
 
@@ -117,7 +113,7 @@ test('취소 시 오디오 소켓을 닫습니다', async (context) => {
   const [socket] = await opened
   const closed = once(socket, 'close')
   controller.abort()
-  await assert.rejects(pending, /취소됐습니다/)
+  assert.deepEqual(await pending, { kind: 'cancelled' })
   await closed
 })
 
@@ -177,7 +173,7 @@ test('새 설치 설정, 공식 언어 모델 키 재사용, 기존 DashScope �
     async openAiTts(payload) {
       assert.equal(payload.text, request.text)
       assert.equal(payload.apiKey, request.apiKey)
-      return { wav, durationMs: 2000 }
+      return { kind: 'audio', wav, durationMs: 2000 }
     }
   } }
   try {

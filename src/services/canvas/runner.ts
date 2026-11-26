@@ -1,6 +1,6 @@
 import { ltxLipSyncFramePrompt, ltxLipSyncPrompt, ltxLipSyncSpeaker, ltxShotPrompt, ltxShotSpeechTooFast } from '@/services/ai/ltxShotPrompt'
-import { videoDurationCapability, nearestVideoDuration } from '@/services/ai/videoDuration'
-import { joinLipSyncWavs } from '@/services/ai/lipSyncWav'
+import { videoDurationCapability, nearestVideoDuration } from '@/services/ai/capabilities/video'
+import { joinLipSyncWavs, LipSyncWavError } from '@/services/ai/lipSyncWav'
 import { isLtxDesktop, isLtxTask, ltxDesktopAudioMax, ltxDesktopAudioResolution, LtxStopRequest } from '@/services/ai/ltxDesktopOptions'
 import { isLtxProfile } from '@/services/ai/ltxOptions'
 import { uiPunctuation } from '@/i18n'
@@ -1440,8 +1440,15 @@ export async function generateShotVideo(shot: Shot, onProgress?: (msg: string) =
         ? { ...elevenLabsShotSpeech(shot, p, tts.voice, subject), text: speech.text }
         : speech
       const result = await generateSpeech({ ...delivery, signal })
-      const joined = joinLipSyncWavs([await result.blob.arrayBuffer()])
-      const max = ltxDesktopAudioMax(ltxDesktopAudioResolution(videoResolution))
+      const wav = await result.blob.arrayBuffer()
+      let joined: ReturnType<typeof joinLipSyncWavs>
+      try {
+        joined = joinLipSyncWavs([wav])
+      } catch (error) {
+        if (error instanceof LipSyncWavError) throw new Error(translate(`providerRequestErrors.${error.kind}`))
+        throw error
+      }
+      const max = project.shotLipSyncLimit(shot) || ltxDesktopAudioMax(ltxDesktopAudioResolution(videoResolution))
       if (joined.duration > max) throw new Error(translate('lipSync.tooLong', { actual: joined.duration.toFixed(2), max }))
       if (joined.uploadDuration > max) throw new Error(translate('lipSync.paddingTooLong', { max }))
       lipSyncWav = joined.wav

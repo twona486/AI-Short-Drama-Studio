@@ -1,17 +1,16 @@
 import { open, rm } from 'node:fs/promises'
 import { boundedChunks, ProviderResponseTooLarge, streamProviderFile } from './provider-response'
-import { lanOrigin, pinAddress, tailscaleIPv4 } from './lan-origin'
+import { desktopHostHeader, lanOrigin, pinAddress } from './net-policy'
 import { isIPv4 } from 'node:net'
 import http from 'node:http'
 import https from 'node:https'
 import { validLtxImage } from './ltx'
 import { lipSyncDuration, lipSyncPcm } from '../src/services/ai/lipSyncWav'
-import { ltxDurationOptions } from '../src/services/ai/ltxOptions'
 import {
-  LTX_DESKTOP_RESOLUTIONS,
-  LTX_DESKTOP_AUDIO_RESOLUTIONS,
-  ltxDesktopAudioMax,
-  LTX_DESKTOP_MODELS,
+  LTX_DESKTOP_MIN_AUDIO_SECONDS, ltxDesktopAdvertisedAudioMax, ltxDesktopAudioMax, ltxDurationOptions,
+  LTX_DESKTOP_RESOLUTIONS, LTX_DESKTOP_MODELS
+} from '../src/services/ai/capabilities'
+import {
   type LtxDesktopReply,
   type LtxDesktopRequest
 } from '../src/services/ai/ltxDesktopOptions'
@@ -23,20 +22,7 @@ export function desktopOrigin(raw: string) {
   return lanOrigin(raw, '41955')
 }
 
-export function desktopHostHeader(origin: URL, address: string, override?: string) {
-  if (override !== undefined && typeof override !== 'string') throw new Error('Invalid Host header')
-  const value = override?.trim()
-  if (value) {
-    const match = /^([a-z0-9](?:[a-z0-9.-]*[a-z0-9])?)(?::(\d{1,5}))?$/i.exec(value)
-    if (!match || value.length > 253 || (match[2] && (Number(match[2]) < 1 || Number(match[2]) > 65535))) {
-      throw new Error('Invalid Host header')
-    }
-    return value
-  }
-  const port = origin.port || (origin.protocol === 'https:' ? '443' : '80')
-  const host = tailscaleIPv4(address) || origin.hostname.endsWith('.ts.net') ? 'localhost' : address
-  return `${host}:${port}`
-}
+export { desktopHostHeader } from './net-policy'
 
 function requestResponse<T>(origin: URL, address: string, hostHeader: string, path: string, read: (response: http.IncomingMessage, signal: AbortSignal) => Promise<T>, config: {
   method?: 'GET' | 'POST'
@@ -169,7 +155,7 @@ export async function requestLtxDesktop(request: LtxDesktopRequest, signal?: Abo
         } catch {
           return { kind: 'invalid' }
         }
-        if (audioDuration < 2 || audioDuration > ltxDesktopAudioMax(op.resolution) || !op.prompt.trim()) {
+        if (audioDuration < LTX_DESKTOP_MIN_AUDIO_SECONDS || audioDuration > ltxDesktopAudioMax(op.resolution) || !op.prompt.trim()) {
           return { kind: 'invalid' }
         }
       }
@@ -187,11 +173,11 @@ export async function requestLtxDesktop(request: LtxDesktopRequest, signal?: Abo
       } else {
         const grid = aspectSpec?.a2v_supported_resolutions_durations ?? spec?.a2v_supported_resolutions_durations
         const durations = grid?.[op.resolution]?.fps_to_durations?.['24']
-        if (!LTX_DESKTOP_AUDIO_RESOLUTIONS.includes(op.resolution) || spec?.capabilities?.a2v !== true ||
-          !Array.isArray(durations) || !durations.some((seconds: number) => seconds >= Math.max(2, audioDuration))) {
+        const maxAudioSeconds = ltxDesktopAdvertisedAudioMax(op.resolution, durations)
+        if (spec?.capabilities?.a2v !== true || maxAudioSeconds < Math.max(LTX_DESKTOP_MIN_AUDIO_SECONDS, audioDuration)) {
           return { kind: 'unsupported' }
         }
-        if (op.kind === 'checkAudio') return { kind: 'ready' }
+        if (op.kind === 'checkAudio') return { kind: 'ready', maxAudioSeconds }
       }
 
       const upload = async (bytes: BlobPart, mime: string, filename: string, expectedKind?: string) => {

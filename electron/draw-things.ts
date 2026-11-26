@@ -1,7 +1,7 @@
 import http from 'node:http'
 import https from 'node:https'
 import { isIPv4 } from 'node:net'
-import { lanOrigin, pinAddress } from './lan-origin'
+import { lanOrigin, pinAddress } from './net-policy'
 import {
   DRAW_THINGS_GRPC_PORT, DRAW_THINGS_MAX_SECRET_BYTES, DRAW_THINGS_PORT, drawThingsInputError, drawThingsPreset, isDrawThingsGrpc,
   type DrawThingsRequest, type DrawThingsReply, type DrawThingsProgress

@@ -13,7 +13,7 @@ const vite = await createServer({
 after(() => vite.close())
 
 const { videoDurationCapability: caps, shotDurationWarning, nearestVideoDuration } =
-  await vite.ssrLoadModule('/src/services/ai/videoDuration.ts')
+  await vite.ssrLoadModule('/src/services/ai/capabilities/video.ts')
 const { normalizeStoryboard } = await vite.ssrLoadModule('/src/services/ai/storyboard.ts')
 
 test('모델과 해상도에 따라 허용 길이와 상한을 선택합니다', () => {
@@ -72,6 +72,7 @@ test('미지원 연결의 샷은 TTS로 전환하고 노드별 지원 연결과 
   setActivePinia(createPinia())
   const settings = useSettingsStore()
   await settings.ensureHydrated()
+  settings.addVideo({ name: 'LTX', provider: 'ltx', baseUrl: 'https://api.ltx.io', workflowId: 'ltx-2-3-fast' })
   const supported = settings.config.activeVideoId
   const project = useProjectStore()
   project.current = {

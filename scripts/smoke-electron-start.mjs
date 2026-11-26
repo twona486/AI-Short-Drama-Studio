@@ -150,14 +150,19 @@ try {
   assert.equal(await evaluate('window.desktop?.isDesktop'), true)
   assert.deepEqual((await targets()).filter(({ type }) => type === 'page').map(({ id }) => id).sort(), initialPages)
 
-  const ttsError = await evaluate("window.desktop.openAiTts({ requestId: 'smoke' }).catch(error => error.message)")
-  assert.match(ttsError, /OpenAI 더빙 API 키/)
+  const ttsError = await evaluate("window.desktop.openAiTts({ requestId: 'smoke' })")
+  assert.deepEqual(ttsError, { kind: 'keyRequired' })
+  await until(() => evaluate("!localStorage.getItem('ai-cut:settings')?.includes('test-key')"),
+    '설정 미러에 평문 키가 남아 있습니다.')
   const grpc = await evaluate("window.desktop.drawThingsRequest({ kind: 'check', baseUrl: 'grpc://127.0.0.1:1' })")
   assert.equal(grpc.kind, 'offline')
 
   await stop()
   const db = new DatabaseSync(path.join(projects, 'app.db'))
   try {
+    const { value } = db.prepare("SELECT value FROM kv WHERE key = 'settings'").get()
+    assert.equal(JSON.parse(value).schemaVersion, 1)
+    assert.doesNotMatch(value, /test-key|test-music-key/)
     db.prepare("UPDATE kv SET value = ? WHERE key = 'settings'").run(damaged)
   } finally {
     db.close()
@@ -167,13 +172,13 @@ try {
     '손상된 설정의 백업 알림이 표시되지 않았습니다.')
   assert.deepEqual(await evaluate(`[ (${config}).llm.apiKey, (${config}).activeLlmId, (${config}).music.apiKey ]`),
     ['test-key', 'fixture', 'test-music-key'])
-  assert.equal(await evaluate(`(${config}).music.models.includes('music-3.0')`), true)
+  assert.equal(await evaluate(`(${config}).music.models.includes('music-3.0')`), false)
   const backups = (await readdir(projects)).filter((file) => /^settings\.broken-.*\.json$/.test(file))
   assert.equal(backups.length, 1)
-  assert.equal(await readFile(path.join(projects, backups[0]), 'utf8'), damaged)
+  assert.equal(JSON.parse(await readFile(path.join(projects, backups[0]), 'utf8')).schemaVersion, 1)
   await evaluate("window.dispatchEvent(new Event('beforeunload'))")
   assert.equal(await evaluate("window.desktop.kvGet('settings')"), damaged)
-  assert.equal(await readFile(path.join(projects, 'settings.json'), 'utf8'), JSON.stringify(settings))
+  assert.equal(JSON.parse(await readFile(path.join(projects, 'settings.json'), 'utf8')).schemaVersion, 1)
 
   if (verifyFallback) {
     await stop()

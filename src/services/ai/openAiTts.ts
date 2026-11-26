@@ -1,10 +1,10 @@
+import { isOfficialOpenAi as isOfficialOpenAiUrl } from './networkAddress'
+export { isOfficialOpenAiUrl }
 export const OPENAI_TTS_MODELS = ['gpt-realtime-2.1-mini', 'gpt-realtime-2.1']
 export const OPENAI_TTS_VOICES = ['marin', 'cedar', 'alloy', 'ash', 'ballad', 'coral', 'echo', 'sage', 'shimmer', 'verse']
 export const OPENAI_TTS_DEFAULT_VOICE = 'marin'
 
-export function isOfficialOpenAiUrl(url: string): boolean {
-  return /^https:\/\/api\.openai\.com(?:\/v1)?\/?$/i.test(url.trim())
-}
+
 
 export function isOpenAiTts(endpoint: { provider?: string; baseUrl: string }): boolean {
   return endpoint.provider === 'openai' || isOfficialOpenAiUrl(endpoint.baseUrl)
@@ -29,7 +29,12 @@ export interface OpenAiTtsRequest {
   instruction?: string
 }
 
-export interface OpenAiTtsReply {
+export interface OpenAiTtsAudio {
   wav: Uint8Array
   durationMs: number
 }
+
+export type OpenAiTtsErrorKind =
+  | 'unauthorized' | 'rateLimit' | 'failed' | 'timeout' | 'cancelled' | 'closed'
+  | 'invalidAudio' | 'invalidResponse' | 'keyRequired' | 'invalidVoiceOrModel' | 'invalidText'
+export type OpenAiTtsReply = ({ kind: 'audio' } & OpenAiTtsAudio) | { kind: OpenAiTtsErrorKind }

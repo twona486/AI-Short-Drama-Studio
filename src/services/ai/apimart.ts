@@ -1,4 +1,4 @@
-import { nearestVideoDuration, videoDurationCapability } from './videoDuration'
+import { nearestVideoDuration, videoDurationCapability } from './capabilities/video'
 /**
  * APIMart 내장 연동. 사용자는 API 주소와 키를 입력한다.
  * 기본 주소 https://api.aishuch.com

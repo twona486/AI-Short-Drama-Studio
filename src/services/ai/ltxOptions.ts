@@ -1,4 +1,6 @@
-import { isLtxDesktop, LTX_DESKTOP_DURATIONS, LTX_DESKTOP_MODELS, LTX_DESKTOP_LOW_RESOLUTIONS } from './ltxDesktopOptions'
+import { isLtxDesktop } from './ltxDesktopOptions'
+import { ltxDurationOptions } from './capabilities/index'
+export { ltxDurationOptions } from './capabilities/index'
 
 export const LTX_BASE_URL = 'https://api.ltx.io'
 export const LTX_DEFAULT_MODEL = 'ltx-2-3-fast'
@@ -6,16 +8,6 @@ export const LTX_MODELS = [LTX_DEFAULT_MODEL, 'ltx-2-3-pro', 'ltx-2-5-fast', 'lt
 
 export function isLtxProfile(profile?: { provider?: string; baseUrl?: string }) {
   return profile?.provider === 'ltx' || isLtxDesktop(profile)
-}
-
-export function ltxDurationOptions(model?: string, resolution?: string) {
-  if (LTX_DESKTOP_MODELS.includes(model || '')) {
-    // The storyboard caps HD shots at 10s. Desktop v1.3.3 also advertises
-    // 20s for the lower tiers, subject to the server's hardware preflight.
-    return resolution && LTX_DESKTOP_LOW_RESOLUTIONS.some((tier) => tier === resolution)
-      ? [...LTX_DESKTOP_DURATIONS] : LTX_DESKTOP_DURATIONS.filter((seconds) => seconds <= 10)
-  }
-  return model?.endsWith('-pro') ? [6, 8, 10] : [6, 8, 10, 12, 14, 16, 18, 20]
 }
 
 export function ltxDuration(raw: number, model?: string, resolution?: string) {
