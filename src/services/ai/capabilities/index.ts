@@ -21,6 +21,21 @@ export function videoDurationOptions(model: VideoGenModel): number[] {
   return Array.from({ length: max - min + 1 }, (_, i) => min + i)
 }
 
+const LTX_CLOUD_DIMENSIONS = {
+  '720p': [1280, 720],
+  '1080p': [1920, 1080]
+} as const
+export type LtxCloudResolution = keyof typeof LTX_CLOUD_DIMENSIONS
+export const LTX_CLOUD_RESOLUTIONS = Object.keys(LTX_CLOUD_DIMENSIONS) as LtxCloudResolution[]
+
+export function ltxCloudDimensions(resolution: LtxCloudResolution, portrait: boolean) {
+  const [width, height] = LTX_CLOUD_DIMENSIONS[resolution]
+  return portrait ? `${height}x${width}` : `${width}x${height}`
+}
+
+export const LTX_CLOUD_FRAME_SIZES = LTX_CLOUD_RESOLUTIONS.flatMap((resolution) =>
+  [ltxCloudDimensions(resolution, false), ltxCloudDimensions(resolution, true)])
+
 export const LTX_DESKTOP_WORKFLOW = 'ltx-2.3-fast'
 export const LTX_DESKTOP_MODELS = [LTX_DESKTOP_WORKFLOW, 'ltx-2.5-fast']
 const LTX_DESKTOP_LOW_RESOLUTIONS = ['270p', '360p', '540p'] as const

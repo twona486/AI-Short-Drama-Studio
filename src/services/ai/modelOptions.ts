@@ -1,6 +1,6 @@
 /** 도우미가 모델 문서에서 추출한 옵션만 노드에 표시한다. */
 
-import { LTX_DESKTOP_RESOLUTIONS } from './ltxDesktopOptions'
+import { LTX_CLOUD_RESOLUTIONS, LTX_DESKTOP_RESOLUTIONS } from './capabilities/index'
 import type { VideoResolution, VideoGenModel } from '@/types/canvas'
 
 export type DocImageResolution = '1k' | '2k' | '4k'
@@ -110,7 +110,7 @@ export function videoResolutionChoices(input: {
   profile?: { provider?: string; name?: string; model?: string; workflowId?: string; options?: ModelNodeOptions } | null
 }): DocVideoResolution[] {
   if (input.profile?.provider === 'ltx-desktop') return [...LTX_DESKTOP_RESOLUTIONS]
-  if (input.profile?.provider === 'ltx') return ['720p', '1080p']
+  if (input.profile?.provider === 'ltx') return [...LTX_CLOUD_RESOLUTIONS]
   if (/grok/i.test(`${input.profile?.name || ''} ${input.profile?.model || ''} ${input.profile?.workflowId || ''}`)) return ['480p', '720p', '1080p']
   const listed = input.profile?.options?.videoResolutions
   if (listed?.length) return [...listed]

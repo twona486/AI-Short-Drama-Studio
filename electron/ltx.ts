@@ -1,4 +1,5 @@
-import { LTX_BASE_URL, LTX_MODELS, ltxDurationOptions } from '../src/services/ai/ltxOptions'
+import { LTX_CLOUD_FRAME_SIZES, ltxDurationOptions } from '../src/services/ai/capabilities'
+import { LTX_BASE_URL, LTX_MODELS } from '../src/services/ai/ltxOptions'
 
 import type { LtxRequest, LtxReply } from '../src/services/ai/ltxOptions'
 
@@ -20,7 +21,7 @@ export async function requestLtx(fetcher: typeof fetch, request: LtxRequest, sig
       (input.last_frame_uri !== undefined && !validLtxImage(input.last_frame_uri)) ||
       typeof input.prompt !== 'string' || !input.prompt.trim() || [...input.prompt].length > 5000 ||
       !LTX_MODELS.includes(input.model) || !ltxDurationOptions(input.model).includes(input.duration) ||
-      !['1280x720', '720x1280', '1920x1080', '1080x1920'].includes(input.resolution) ||
+      !LTX_CLOUD_FRAME_SIZES.includes(input.resolution) ||
       input.fps !== 24 || typeof input.generate_audio !== 'boolean') return { kind: 'invalid' }
     const { image_uri, last_frame_uri, prompt, model, duration, resolution, fps, generate_audio } = input
     body = JSON.stringify({ image_uri, last_frame_uri, prompt, model, duration, resolution, fps, generate_audio })
