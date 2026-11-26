@@ -128,13 +128,14 @@ ${catalog(VISION_PROVIDERS)}
 Image
 ${catalog(IMAGE_PROVIDERS)}
 Dubbing
-${catalog(TTS_PROVIDERS)}
+${catalog(TTS_PROVIDERS.filter((preset) => preset.showModelSuggestions !== false))}
 Video
 ${catalog(VIDEO_PROVIDERS.filter((preset) => preset.showModelSuggestions !== false))}
 
 Requirements:
 - If the user supplied API documentation or a gateway URL, use provider custom and add the profile using the documented base URL and models. If the document covers chat, image understanding and image generation, add a profile for each covered kind, reusing the given key and address where applicable.
 - Use the base URL through /v1 without /chat/completions or /images/generations. Use presets when the user gives no documentation or when they specify a matching official provider with no third-party address. Never rewrite a custom address to a preset domain.
+- For dubbing without a specified provider, use OpenAI TTS. Use DashScope only when the user explicitly selects it.
 - For image generation without a specified provider, use OpenAI. Image presets with an empty default model require an explicit provider request and a model from the user or their API documentation. Do not choose them as recommendations or fallbacks.
 - Recommend LTX Desktop LAN for image-to-video when no provider is specified. It requires pairing in the settings screen. Use DashScope only when the user explicitly selects it.
 - For video, use the model as workflowId when no separate workflowId is given. For TTS, default to longanhuan_v3.6 unless the user requests a voice.

@@ -29,6 +29,7 @@
     "preview": "vite preview --host",
     "type-check": "vue-tsc --noEmit",
     "test:openai-analysis": "node --test scripts/test-openai-analysis.mjs",
+    "test:openai-tts": "node --test scripts/test-openai-tts.mjs",
     "test:openai-image": "node --test scripts/test-openai-image.mjs",
     "test:draw-things": "node --test scripts/test-draw-things.mjs",
     "test:agent": "node scripts/test-agent-redo.mjs",
@@ -101,10 +102,12 @@
     "vue": "^3.4.27",
     "vue-i18n": "^11.4.23",
     "vue-router": "^4.3.2",
+    "ws": "^8.23.0",
     "zod": "^4.6.7"
   },
   "devDependencies": {
     "@types/node": "^20.12.12",
+    "@types/ws": "^8.18.2",
     "@vitejs/plugin-vue": "^5.0.4",
     "electron": "^43.4.0",
     "electron-builder": "^26.15.3",

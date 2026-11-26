@@ -1,3 +1,4 @@
+import type { OpenAiTtsRequest, OpenAiTtsReply } from './ai/openAiTts'
 import type { DrawThingsDesktopRequest, DrawThingsReply, DrawThingsProgress } from './ai/drawThingsOptions'
 import type { LtxDesktopRequest, LtxDesktopReply } from './ai/ltxDesktopOptions'
 import type { LtxRequest, LtxReply } from './ai/ltxOptions'
@@ -33,6 +34,7 @@ export type DesktopAPI = {
   }) => Promise<string | null>
   pickDirectory: () => Promise<string | null>
   openPath: (filePath: string) => Promise<string>
+  openAiTts: (request: OpenAiTtsRequest) => Promise<OpenAiTtsReply>
   ltxDesktopRequest: (request: LtxDesktopRequest) => Promise<LtxDesktopReply>
   drawThingsRequest: (request: DrawThingsDesktopRequest) => Promise<DrawThingsReply>
   protectDrawThingsSecret: (secret: string) => Promise<string | null>

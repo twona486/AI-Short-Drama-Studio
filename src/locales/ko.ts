@@ -1,4 +1,15 @@
 export default {
+  "openAiTts": {
+    "hint": "OpenAI Realtime으로 AI 음성을 만들어요.",
+    "generatedVoiceHint": "OpenAI TTS는 AI 음성을 만들어요.",
+    "reuseKey": "현재 OpenAI 언어 모델의 API 키를 사용해요",
+    "reuseKeyMissing": "언어 모델 설정에서 공식 OpenAI 연결을 선택하고 API 키를 입력해 주세요.",
+    "connectionVoice": "연결의 기본 목소리",
+    "characterVoice": "OpenAI 더빙 목소리",
+    "automaticVoice": "자동 추천",
+    "shotInstruction": "더빙 말투",
+    "shotInstructionPlaceholder": "예: 차분하게, 문장 끝을 낮춰서 읽어 주세요."
+  },
   "mediaPrompt": {
     "setting": "이미지·영상 프롬프트를 영어로 보내요",
     "settingHint": "언어 모델이 시각 묘사를 영어로 옮겨요. 대사와 화면 속 글자는 원문을 유지해요.",

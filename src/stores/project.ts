@@ -74,7 +74,7 @@ function defaultSettings(): ProjectSettings {
     captionHighlight: false,
     captionHighlightColor: '#ffd84d',
     captionHighlightScale: 1.2,
-    ttsVoice: 'longanhuan_v3.6'
+    ttsVoice: ''
   }
 }
 

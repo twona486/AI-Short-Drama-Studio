@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { getTtsConfig } from '@/services/ai/runtime'
 import { confirmAction } from '@/utils/confirmAction'
 import { t as translate } from '@/i18n'
 import { locale, setLocale } from '@/i18n'
@@ -408,7 +409,7 @@ function navReady(id: SettingsSection) {
   if (id === 'llm') return endpointReady(c.llm)
   if (id === 'vision') return endpointReady(c.vision)
   if (id === 'image') return endpointReady(c.image)
-  if (id === 'tts') return endpointReady(c.tts)
+  if (id === 'tts') return endpointReady(getTtsConfig())
   if (id === 'video') return endpointReady(c.video)
   if (id === 'autodl') {
     return Boolean(c.autodlToken?.trim()) &&

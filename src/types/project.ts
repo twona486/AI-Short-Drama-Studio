@@ -89,6 +89,7 @@ export interface Shot {
    * 영상과 더빙 생성에 사용한다. 캐릭터 카드에서 수정한 음색은 생성 작업을 다시 실행하면 반영된다.
    */
   speakerVoice?: string
+  ttsInstruction?: string
   /** 샷 길이(초). */
   duration: number
   /** 카메라 움직임. 밀기, 당기기, 팬, 틸트, 고정, 회전. */
@@ -349,7 +350,7 @@ export interface ProjectSettings {
   captionHighlightColor?: string
   /** 강조 단어의 글자 크기 배율. */
   captionHighlightScale?: number
-  /** 내레이션 음색. Model Studio의 qwen-audio-3.0-tts-flash 또는 SpeechSynthesizer를 사용한다. */
+  /** 프로젝트의 기본 내레이션 목소리. */
   ttsVoice?: string
   /**
    * H3 영상 생성 모드. auto는 샷별 참조 이미지나 키프레임을 사용한다.
@@ -454,6 +455,7 @@ export interface Subject {
   sheetPrompt?: string
   /** TTS와 음성 묘사를 지원하는 모델에 전달할 캐릭터 음색 설명. */
   voicePrompt?: string
+  openAiTtsVoice?: string
   /** Model Studio Qwen3-TTS-VC 등 음성 복제를 지원하는 모델에서 쓸 참조 오디오 에셋. */
   voiceRefAssetId?: ID
   /** 참조 오디오를 처음 사용해 내레이션을 생성할 때 얻은 복제 음성 ID. */

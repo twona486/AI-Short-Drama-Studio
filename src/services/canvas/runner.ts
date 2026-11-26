@@ -49,9 +49,10 @@ import {
 import { blobToChatImageUrl, callLLM } from '@/services/ai/client'
 import { stripReasoningLeak } from '@/utils/jsonRepair'
 import { resolveImageAdapter } from '@/services/ai/adapters'
+import { openAiShotSpeech, shotSpeakerSubject } from '@/services/ai/shotSpeech'
 import { DRAW_THINGS_PROVIDER } from '@/services/ai/drawThingsOptions'
 import { observeMediaPrompts } from '@/services/ai/mediaPromptObserver'
-import { getImageConfig, imageModelForProject, getVideoPromptStyle } from '@/services/ai/runtime'
+import { getImageConfig, imageModelForProject, getVideoPromptStyle, getTtsConfig } from '@/services/ai/runtime'
 import { pickDocImageResolution } from '@/services/ai/modelOptions'
 import { importedDirectorPrefix } from '@/services/settings/directorSkill'
 import { collectShotRefIds, collectShotBoardRefIds, collectShotKeyframeRefIds, collectShotVideoEntries, packVideoRefEntries, boundSubjectIds, sceneAssetForShot, sceneForShot, subjectsForShot, sceneHasKeyProps } from '@/utils/consistency'
@@ -1947,22 +1948,9 @@ export async function optimizeShotVideoPrompt(shot: Shot, signal?: AbortSignal, 
  * 카드에 설명이 없으면 shot.speakerVoice를 사용해 영상 생성에 전달한다.
  */
 function resolveShotSpeakerVoice(shot: Shot, p: Project): string | undefined {
-  const fromCard = speakerSubject(shot, p)?.voicePrompt?.trim()
+  const fromCard = shotSpeakerSubject(shot, p)?.voicePrompt?.trim()
   if (fromCard) return fromCard
   return shot.speakerVoice?.trim() || undefined
-}
-
-/** 내레이션의 화자 이름을 음성 설정이 있는 캐릭터 카드와 연결한다. */
-function speakerSubject(shot: Shot, p: Project): Subject | undefined {
-  const speaker = (shot.voiceover || '').match(/^([^：:\n]{1,12})[：:]/)?.[1]?.trim()
-  if (!speaker) return undefined
-  const subjects = p.subjects ?? []
-  const exact = subjects.find((s) => s.name.trim() === speaker)
-  if (exact) return exact
-  return subjects.find((s) => {
-    const name = s.name.trim()
-    return name && (speaker.includes(name) || name.includes(speaker))
-  })
 }
 
 export async function generateShotAudio(shot: Shot, onProgress?: (msg: string) => void, signal?: AbortSignal) {
@@ -1971,12 +1959,20 @@ export async function generateShotAudio(shot: Shot, onProgress?: (msg: string) =
   const assets = useAssetsStore()
   if (!project.current) throw new Error('열려 있는 프로젝트가 없습니다.')
   if (!needsExternalTts(shot, project.current)) throw new Error('이 샷에 후반 작업용 TTS가 선택되지 않아 별도의 더빙이 필요 없습니다.')
-  const text = spokenTextOnly(shot.voiceover || '')
-  if (!text) throw new Error('이 샷에 내레이션 원고가 없습니다.')
   const p = project.current
-  const speaker = speakerSubject(shot, p)
+  const openAi = getTtsConfig().openAi
+  const speech = openAi ? openAiShotSpeech(shot, p) : undefined
+  const text = speech?.text ?? spokenTextOnly(shot.voiceover || '')
+  if (!text.trim()) throw new Error('이 샷에 내레이션 원고가 없습니다.')
+  const speaker = shotSpeakerSubject(shot, p)
   let blob: Blob
-  if (speaker?.voiceRefAssetId || speaker?.clonedVoiceId) {
+  let durationMs: number | undefined
+  if (speech) {
+    onProgress?.('내레이션을 합성하는 중…')
+    const result = await generateSpeech({ ...speech, signal })
+    blob = result.blob
+    durationMs = result.durationMs
+  } else if (speaker?.voiceRefAssetId || speaker?.clonedVoiceId) {
     // 참조 오디오가 있으면 Bailian Qwen3-TTS-VC로 처음 한 번 음성을 복제하고 음색 ID를 저장한다.
     let voiceId = speaker.clonedVoiceId
     let voiceModel = speaker.clonedVoiceModel || 'qwen3-tts-vc-2026-01-22'
@@ -2012,11 +2008,11 @@ export async function generateShotAudio(shot: Shot, onProgress?: (msg: string) =
     })
     blob = result.blob
   }
-  const quality = await reviewSpeechQuality(blob, text, shot.duration)
+  const quality = await reviewSpeechQuality(blob, text, shot.duration, durationMs)
   if (!quality.passed) throw new Error(`더빙 파일 또는 길이 검사에 실패했습니다. ${quality.issues.join(uiPunctuation.semicolon)}${uiPunctuation.sentenceSeparator}${quality.retryHint || ''}`)
   const asset = await assets.add(blob, 'audio', 'ai-generated', {
     filename: `voice_${shot.index + 1}_${Date.now().toString(36)}`,
-    prompt: text,
+    prompt: speech ? shot.voiceover : text,
     projectId: p.id,
     shotId: shot.id
   })
@@ -2036,10 +2032,12 @@ export async function generateFreeformAudio(
   const p = project.current
   const node = p?.canvas?.nodes.find((n) => n.id === nodeId)
   if (!p || !node || node.type !== 'audioGen') throw new Error('오디오 노드를 찾을 수 없어요.')
-  const text = spokenTextOnly(node.data.prompt || '').trim() || (node.data.prompt || '').trim()
-  if (!text) throw new Error('말할 내용을 먼저 적어 주세요.')
+  const openAi = getTtsConfig().openAi
+  const prompt = node.data.prompt || ''
+  const text = openAi ? prompt : spokenTextOnly(prompt) || prompt.trim()
+  if (!text.trim()) throw new Error('말할 내용을 먼저 입력해야 합니다.')
   const model = node.data.ttsModel?.trim() || useSettingsStore().config.tts.model
-  const wantsClone = modelAcceptsReferenceAudio(model)
+  const wantsClone = !openAi && modelAcceptsReferenceAudio(model)
   let blob: Blob
   if (wantsClone) {
     if (!node.data.referenceAudioAssetId && !node.data.clonedVoiceId) {
@@ -2068,7 +2066,7 @@ export async function generateFreeformAudio(
     const result = await generateSpeech({
       text,
       model,
-      language: 'Chinese',
+      language: openAi ? undefined : 'Chinese',
       signal
     })
     blob = result.blob
@@ -2308,6 +2306,7 @@ function mergeSubjectAssets(next: Subject[], prev: Subject[]): Subject[] {
         ? fresh.voicePrompt
         : old.voicePrompt || fresh.voicePrompt,
     id: old.id,
+    openAiTtsVoice: old.openAiTtsVoice,
     designSheetAssetId: old.designSheetAssetId,
     designSheetHistoryIds: old.designSheetHistoryIds,
     propSheetAssetId: old.propSheetAssetId,
@@ -2347,6 +2346,7 @@ function mergeShotAssets(next: Shot[], prev: Shot[]): Shot[] {
       audioHistoryIds: old.audioHistoryIds,
       referenceAssetIds: old.referenceAssetIds,
       captionOverride: old.captionOverride,
+      ttsInstruction: old.ttsInstruction,
       notes: old.notes,
       status: old.videoAssetId ? 'video-generated' : old.imageAssetId ? 'image-generated' : shot.status
     }

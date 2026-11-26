@@ -1,3 +1,4 @@
+import type { OpenAiTtsRequest, OpenAiTtsReply } from '../src/services/ai/openAiTts'
 import type { DrawThingsDesktopRequest, DrawThingsReply, DrawThingsProgress } from '../src/services/ai/drawThingsOptions'
 import type { LtxDesktopRequest, LtxDesktopReply } from '../src/services/ai/ltxDesktopOptions'
 import type { LtxRequest, LtxReply } from '../src/services/ai/ltxOptions'
@@ -34,6 +35,7 @@ export type DesktopAPI = {
   }) => Promise<string | null>
   pickDirectory: () => Promise<string | null>
   openPath: (filePath: string) => Promise<string>
+  openAiTts: (request: OpenAiTtsRequest) => Promise<OpenAiTtsReply>
   ltxDesktopRequest: (request: LtxDesktopRequest) => Promise<LtxDesktopReply>
   drawThingsRequest: (request: DrawThingsDesktopRequest) => Promise<DrawThingsReply>
   protectDrawThingsSecret: (secret: string) => Promise<string | null>
@@ -102,6 +104,7 @@ const api: DesktopAPI = {
   saveTextFile: (opts) => ipcRenderer.invoke('desktop:saveTextFile', opts),
   pickDirectory: () => ipcRenderer.invoke('desktop:pickDirectory'),
   openPath: (filePath) => ipcRenderer.invoke('desktop:openPath', filePath),
+  openAiTts: (request) => ipcRenderer.invoke('desktop:openAiTts', request),
   ltxDesktopRequest: (request) => ipcRenderer.invoke('desktop:ltxDesktopRequest', request),
   drawThingsRequest: (request) => ipcRenderer.invoke('desktop:drawThingsRequest', request),
   protectDrawThingsSecret: (secret) => ipcRenderer.invoke('desktop:protectDrawThingsSecret', secret),

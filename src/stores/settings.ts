@@ -1,3 +1,4 @@
+import { isOpenAiTts, OPENAI_TTS_DEFAULT_VOICE, OPENAI_TTS_MODELS, OPENAI_TTS_VOICES } from '@/services/ai/openAiTts'
 import { isLtxDesktop } from '@/services/ai/ltxDesktopOptions'
 import { t } from '@/i18n'
 /**
@@ -62,6 +63,7 @@ export interface LlmProfile extends NamedEndpoint {}
 
 export interface TtsEndpoint extends ServiceEndpoint {
   voice: string
+  reuseOpenAiLlmKey?: boolean
 }
 
 export interface TtsProfile extends TtsEndpoint {
@@ -152,7 +154,7 @@ export interface DirectorSkillDoc {
   importedAt: number
 }
 
-export const TTS_PRESETS = ['qwen-audio-3.0-tts-flash', 'qwen3-tts-flash']
+export const TTS_PRESETS = OPENAI_TTS_MODELS
 
 export const MUSIC_PRESETS = ['music-3.0']
 
@@ -238,7 +240,10 @@ function asEndpoint(ep: ServiceEndpoint): ServiceEndpoint {
 function asTts(ep: TtsEndpoint): TtsEndpoint {
   return {
     ...asEndpoint(ep),
-    voice: ep.voice || 'longanhuan_v3.6'
+    reuseOpenAiLlmKey: ep.reuseOpenAiLlmKey,
+    voice: isOpenAiTts(ep)
+      ? OPENAI_TTS_VOICES.includes(ep.voice) ? ep.voice : OPENAI_TTS_DEFAULT_VOICE
+      : ep.voice || 'longanhuan_v3.6'
   }
 }
 
@@ -463,7 +468,7 @@ function buildDefaults(): AppSettings {
   const image = endpoint(env.image.baseUrl, env.image.apiKey, env.image.model, [])
   const imageFirst = profileFromEndpoint(image, t('settings.defaults.image'), newId('img'))
   const tts: TtsEndpoint = {
-    ...endpoint(env.tts.baseUrl, env.tts.apiKey, env.tts.model, TTS_PRESETS),
+    ...endpoint(env.tts.baseUrl, env.tts.apiKey, env.tts.model, isOpenAiTts(env.tts) ? TTS_PRESETS : []),
     voice: env.tts.voice
   }
   const ttsFirst = ttsFromEndpoint(tts, t('settings.defaults.tts'))
@@ -629,7 +634,7 @@ function parseSettings(raw: string | null, saveMigrated?: (settings: Partial<App
       {
         ...defaults.tts,
         ...parsed.tts,
-        models: uniq([...(parsed.tts?.models ?? []), ...defaults.tts.models])
+        models: parsed.tts?.models ?? (parsed.tts?.model ? [parsed.tts.model] : defaults.tts.models)
       },
       parsed.activeTtsId
     )
@@ -1137,7 +1142,12 @@ export const useSettingsStore = defineStore('settings', () => {
     const id = config.value.activeTtsId
     const cur =
       config.value.ttsProfiles.find((p) => p.id === id) || ttsFromEndpoint(config.value.tts, t('settings.defaults.tts'), id)
-    syncTts({ ...cur, ...patch, models: uniq(patch.models ?? cur.models) })
+    const next = { ...cur, ...patch, models: uniq(patch.models ?? cur.models) }
+    if (isOpenAiTts(cur) !== isOpenAiTts(next)) {
+      next.apiKey = patch.apiKey ?? ''
+      next.reuseOpenAiLlmKey = false
+    }
+    syncTts(next)
   }
 
   function addTts(seed: {
@@ -1157,7 +1167,7 @@ export const useSettingsStore = defineStore('settings', () => {
         model: seed.model,
         models: seed.models,
         provider: seed.provider,
-        voice: seed.voice || config.value.tts.voice || 'longanhuan_v3.6',
+        voice: seed.voice || '',
         adapter: seed.adapter
       },
       seed.name

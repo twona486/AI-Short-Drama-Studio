@@ -1,5 +1,6 @@
 /** 개발 기본값은 Vite .env에서 읽으며 설치 빌드에는 포함하지 않는다. */
 
+import { isOfficialOpenAiUrl, OPENAI_TTS_DEFAULT_VOICE, OPENAI_TTS_MODELS } from './openAiTts'
 import { OPENAI_BASE_URL, OPENAI_DEFAULT_CHAT_MODEL } from './openAiChat'
 import { OPENAI_DEFAULT_IMAGE_MODEL } from './openAiImage'
 
@@ -55,6 +56,8 @@ export function envRealMode(): boolean {
 }
 
 export function envDefaults() {
+  const ttsBaseUrl = envStr('VITE_TTS_BASE_URL', OPENAI_BASE_URL)
+  const openAiTts = isOfficialOpenAiUrl(ttsBaseUrl)
   return {
     realMode: envRealMode(),
     llm: {
@@ -74,10 +77,10 @@ export function envDefaults() {
       model: envStr('VITE_IMAGE_MODEL', OPENAI_DEFAULT_IMAGE_MODEL)
     },
     tts: {
-      baseUrl: envStr('VITE_TTS_BASE_URL', 'https://dashscope.aliyuncs.com/api/v1'),
+      baseUrl: ttsBaseUrl,
       apiKey: envStr('VITE_TTS_API_KEY'),
-      model: envStr('VITE_TTS_MODEL', 'qwen-audio-3.0-tts-flash'),
-      voice: envStr('VITE_TTS_VOICE', 'longanhuan_v3.6')
+      model: envStr('VITE_TTS_MODEL', openAiTts ? OPENAI_TTS_MODELS[0] : 'qwen-audio-3.0-tts-flash'),
+      voice: envStr('VITE_TTS_VOICE', openAiTts ? OPENAI_TTS_DEFAULT_VOICE : 'longanhuan_v3.6')
     },
     video: {
       baseUrl: migrateVideoBaseUrl(envStr('VITE_VIDEO_BASE_URL', VIDEO_AUTODL_ROOT)),

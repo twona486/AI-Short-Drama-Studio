@@ -14,6 +14,8 @@ const props = defineProps<{
   model: string
   models: string[]
   provider?: string
+  fixedBaseUrl?: boolean
+  hideKey?: boolean
   serverModelsOnly?: boolean
 }>()
 
@@ -102,11 +104,12 @@ function onAdd() {
     <label>{{ $t('endpointForm.baseUrl') }}</label>
     <input
       v-model="baseUrlModel"
+      :readonly="fixedBaseUrl"
       :placeholder="addressPlaceholder"
     />
 
-    <label v-if="!currentPreset.noApiKey">API Key</label>
-    <div v-if="!currentPreset.noApiKey" class="secret">
+    <label v-if="!currentPreset.noApiKey && !hideKey">API Key</label>
+    <div v-if="!currentPreset.noApiKey && !hideKey" class="secret">
       <input
         :type="showKey ? 'text' : 'password'"
         autocomplete="off"

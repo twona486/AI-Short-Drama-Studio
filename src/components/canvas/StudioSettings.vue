@@ -11,6 +11,7 @@ import { isLtxDesktop, LTX_DESKTOP_URL_PLACEHOLDER, LTX_DESKTOP_MODELS, ltxDeskt
 import { DRAW_THINGS_PROVIDER, drawThingsModelLabel, isDrawThingsGrpc } from '@/services/ai/drawThingsOptions'
 import { refreshDrawThingsModels } from '@/services/ai/drawThings'
 import { LTX_MODELS, isLtxProfile } from '@/services/ai/ltxOptions'
+import { isOfficialOpenAiUrl, isOpenAiTts, OPENAI_TTS_VOICES } from '@/services/ai/openAiTts'
 import { TTS_VOICES } from '@/services/ai/tts'
 import EndpointForm from '@/components/settings/EndpointForm.vue'
 import AdapterFields from '@/components/settings/AdapterFields.vue'
@@ -178,6 +179,11 @@ const videoKey = computed({
   get: () => settings.config.video.apiKey,
   set: (v: string) => settings.patchVideo({ apiKey: v })
 })
+const openAiTts = computed(() => isOpenAiTts(settings.config.tts))
+const ttsVoices = computed(() => openAiTts.value
+  ? OPENAI_TTS_VOICES.map((id) => ({ id, label: id }))
+  : TTS_VOICES)
+const reusableKey = computed(() => isOfficialOpenAiUrl(settings.config.llm.baseUrl) && settings.config.llm.apiKey.trim())
 const ttsVoice = computed({
   get: () => settings.config.tts.voice,
   set: (v: string) => onVoice(v)
@@ -185,7 +191,7 @@ const ttsVoice = computed({
 
 function onVoice(v: string) {
   settings.patchTts({ voice: v })
-  if (project.current) project.setSettings({ ttsVoice: v })
+  if (!openAiTts.value && project.current) project.setSettings({ ttsVoice: v })
 }
 
 function subtitle(p: { models?: string[]; model?: string }) {
@@ -550,16 +556,30 @@ function patchAdapter(
         :model="settings.config.tts.model"
         :models="settings.config.tts.models"
         :provider="settings.config.tts.provider"
+        :fixed-base-url="openAiTts && settings.config.tts.provider !== 'custom'"
+        :hide-key="openAiTts && settings.config.tts.reuseOpenAiLlmKey"
         @patch="settings.patchTts($event)"
         @add-model="settings.addModel('tts', $event)"
         @remove-model="settings.removeModel('tts', $event)"
       >
+        <label v-if="openAiTts" class="extra-label">
+          <input
+            type="checkbox"
+            :checked="settings.config.tts.reuseOpenAiLlmKey"
+            @change="settings.patchTts({ reuseOpenAiLlmKey: ($event.target as HTMLInputElement).checked })"
+          />
+          {{ $t('openAiTts.reuseKey') }}
+        </label>
+        <p v-if="openAiTts && settings.config.tts.reuseOpenAiLlmKey && !reusableKey" class="hint">
+          {{ $t('openAiTts.reuseKeyMissing') }}
+        </p>
         <label class="extra-label">{{ $t('common.voice') }}</label>
         <select v-model="ttsVoice">
-          <option v-for="v in TTS_VOICES" :key="v.id" :value="v.id">{{ v.label }}</option>
+          <option v-for="v in ttsVoices" :key="v.id" :value="v.id">{{ v.label }}</option>
         </select>
       </EndpointForm>
       <AdapterFields
+        v-if="!openAiTts"
         kind="tts"
         :adapter="settings.config.tts.adapter"
         @patch="patchAdapter('tts', $event)"

@@ -1,3 +1,4 @@
+import { isOfficialOpenAiUrl, isOpenAiTts } from './openAiTts'
 import { isLtxDesktop } from './ltxDesktopOptions'
 /**
  * 런타임 AI 설정은 저장된 설정을 우선하고 없으면 .env를 사용한다.
@@ -53,11 +54,17 @@ export function getImageConfig() {
 export function getTtsConfig() {
   const d = envDefaults().tts
   const s = pick()?.tts
+  const endpoint = s ?? d
+  const openAi = isOpenAiTts(endpoint)
+  const llm = getLlmConfig()
+  const reuseLlm = openAi && s?.reuseOpenAiLlmKey
   return {
-    baseUrl: (s?.baseUrl || d.baseUrl).replace(/\/+$/, ''),
-    apiKey: s?.apiKey || d.apiKey,
-    model: s?.model || d.model,
-    voice: s?.voice || d.voice
+    ...endpoint,
+    baseUrl: endpoint.baseUrl.replace(/\/+$/, ''),
+    openAi,
+    apiKey: reuseLlm
+      ? isOfficialOpenAiUrl(llm.baseUrl) ? llm.apiKey : ''
+      : endpoint.apiKey
   }
 }
 

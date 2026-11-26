@@ -3,6 +3,7 @@
  * 언어 및 비전 모델은 OpenAI 호환 /chat/completions 경로를 사용한다.
  */
 
+import { OPENAI_TTS_MODELS } from './openAiTts'
 import { t } from '@/i18n'
 import { OPENAI_BASE_URL, OPENAI_CHAT_MODELS, OPENAI_DEFAULT_CHAT_MODEL } from './openAiChat'
 import { OPENAI_DEFAULT_IMAGE_MODEL, OPENAI_IMAGE_MODELS } from './openAiImage'
@@ -213,12 +214,21 @@ export const IMAGE_PROVIDERS: ProviderPreset[] = [
 
 export const TTS_PROVIDERS: ProviderPreset[] = [
   {
+    id: 'openai',
+    name: 'OpenAI TTS',
+    get hint() { return t('openAiTts.hint') },
+    baseUrl: OPENAI_BASE_URL,
+    models: OPENAI_TTS_MODELS,
+    defaultModel: OPENAI_TTS_MODELS[0]
+  },
+  {
     id: 'dashscope',
     get name() { return t('provider.name.dashscope') },
     get hint() { return t('provider.hint.dashScopeTts') },
     baseUrl: 'https://dashscope.aliyuncs.com/api/v1',
     models: ['qwen-audio-3.0-tts-flash', 'qwen3-tts-flash'],
-    defaultModel: 'qwen-audio-3.0-tts-flash'
+    defaultModel: 'qwen-audio-3.0-tts-flash',
+    showModelSuggestions: false
   },
   CUSTOM_PROVIDER
 ]

@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { isOpenAiTts, OPENAI_TTS_VOICES, recommendOpenAiVoice } from '@/services/ai/openAiTts'
 import { ltxShotSpeechTooFast } from '@/services/ai/ltxShotPrompt'
 import { nearestVideoDuration, videoDurationCapability, shotDurationWarning } from '@/services/ai/videoDuration'
 import { isLtxTask, isLtxDesktop } from '@/services/ai/ltxDesktopOptions'
@@ -1297,7 +1298,17 @@ const cropStyle = computed(() => ({
           :placeholder="$t('pipelineNode.voiceDescriptionPlaceholder')"
           @input="voicePromptText = ($event.target as HTMLTextAreaElement).value"
         />
-        <div class="voice-ref">
+        <label v-if="isOpenAiTts(settings.config.tts)">
+          {{ $t('openAiTts.characterVoice') }}
+          <select
+            :value="subject.openAiTtsVoice || ''"
+            @change="project.updateSubject(subject.id, { openAiTtsVoice: ($event.target as HTMLSelectElement).value })"
+          >
+            <option value="">{{ $t('openAiTts.automaticVoice') }} · {{ recommendOpenAiVoice(voicePromptText) || settings.config.tts.voice }}</option>
+            <option v-for="voice in OPENAI_TTS_VOICES" :key="voice" :value="voice">{{ voice }}</option>
+          </select>
+        </label>
+        <div v-else class="voice-ref">
           <template v-if="voiceRefUrl">
             <button
               type="button"
