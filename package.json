@@ -22,6 +22,7 @@
   ],
   "scripts": {
     "dev": "vite",
+    "test:electron-start": "node scripts/smoke-electron-start.mjs",
     "web": "vite --mode web",
     "security:check": "node scripts/assert-source-clean.mjs",
     "build": "node scripts/assert-source-clean.mjs && vue-tsc --noEmit && vite build && node scripts/assert-pack-clean.mjs",
