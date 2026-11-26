@@ -16,7 +16,7 @@ import TtsModelSelect from '@/components/settings/TtsModelSelect.vue'
 import type { CaptionStyle, Shot, ShotAudioMode } from '@/types'
 import { ensureTimelineFromShots } from '@/utils/timeline'
 import { buildTimelineCaptionCues, clipCaptionDuration } from '@/utils/timeline'
-import { effectiveShotAudioMode, isDigitalHumanSpeechProject, isLipSyncShot, shotLipSyncDuration, shotPlaybackDuration } from '@/utils/shot'
+import { effectiveShotAudioMode, isDigitalHumanSpeechProject, isLipSyncShot, needsExternalTts, shotLipSyncDuration, shotPlaybackDuration } from '@/utils/shot'
 
 const router = useRouter()
 const project = useProjectStore()
@@ -134,11 +134,11 @@ const voicedCount = computed(
   () => lines.value.filter((l) => {
     if (!l.shot || !l.text.trim()) return false
     const mode = effectiveShotAudioMode(l.shot)
-    return shotLipSyncDuration(l.shot) !== undefined || mode === 'h3-dialogue' || mode === 'h3-voiceover' || (mode === 'tts' && Boolean(l.audioAssetId))
+    return (isLipSyncShot(l.shot) && shotLipSyncDuration(l.shot) !== undefined) || mode === 'h3-dialogue' || mode === 'h3-voiceover' || (mode === 'tts' && Boolean(l.audioAssetId))
   }).length
 )
 const pendingVoice = computed(
-  () => lines.value.filter((l) => l.shot && !isLipSyncShot(l.shot) && effectiveShotAudioMode(l.shot) === 'tts' && l.text.trim() && !l.audioAssetId).length
+  () => lines.value.filter((l) => l.shot && needsExternalTts(l.shot, project.current) && !l.audioAssetId).length
 )
 
 const cues = computed(() => {
@@ -505,6 +505,9 @@ function next() {
                 </select>
               </label>
               <p v-if="line.shot && !project.shotSupportsVideoVoice(line.shot)">{{ $t('common.videoVoiceUnsupported') }}</p>
+              <p v-if="line.shot && effectiveShotAudioMode(line.shot) === 'tts' && shotLipSyncDuration(line.shot) !== undefined">
+                {{ $t('lipSync.postTtsReplacement') }}
+              </p>
               <audio v-if="audioUrls[line.shotId]" class="vo-player" :src="audioUrls[line.shotId]" controls />
               <div class="line-actions">
                 <GradientButton v-if="elevenLabs && generating.has(line.shotId)" size="sm" @click="voiceRequests.get(line.shotId)?.abort()">

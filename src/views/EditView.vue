@@ -10,8 +10,8 @@ import TimelineView from '@/components/timeline/TimelineView.vue'
 import EditIcon from '@/components/edit/EditIcon.vue'
 import ThemeToggle from '@/components/common/ThemeToggle.vue'
 import type { AudioTimelineClip, Shot, TextOverlay, TimelineClip, TransitionType } from '@/types'
-import { buildTimelineFromShots, timelineClipAssetId } from '@/utils/timeline'
-import { isDigitalHumanSpeechProject } from '@/utils/shot'
+import { buildTimelineFromShots, clipAudioSelection, clipLipSyncDuration, timelineClipAssetId } from '@/utils/timeline'
+import { isDigitalHumanSpeechProject, needsExternalTts } from '@/utils/shot'
 import { runCanvasNode } from '@/services/canvas/runner'
 import { generateFinalCut } from '@/services/canvas/exportFinal'
 import { pickLocalFiles } from '@/utils/pickLocalFiles'
@@ -46,6 +46,7 @@ const sourcePreviewUrl = ref('')
 const sourcePreviewTitle = ref('')
 const previewAspect = ref<'16:9' | '9:16'>('9:16')
 const sourcePlayer = ref<HTMLVideoElement | null>(null)
+const sourcePreviewMuted = ref(false)
 const pendingSourceTime = ref<number | null>(null)
 const playhead = ref(0)
 const playingTimeline = ref(false)
@@ -183,9 +184,15 @@ async function playClip(clip: TimelineClip, index: number, seconds = clip.startT
   setAspectFromAsset(assetId)
   let url = ''
   let voiceUrl = ''
+  const hasLipSync = clipLipSyncDuration(current, clip) !== undefined
+  const selection = hasLipSync ? clipAudioSelection(current, clip, true) : undefined
+  const shot = hasLipSync ? current.shots.find((item) => item.id === clip.shotId) : undefined
+  const voiceAssetId = selection
+    ? selection.voiceAssetId || (shot && needsExternalTts(shot, current) ? shot.audioAssetId : undefined)
+    : clip.voiceAssetId
   try {
     url = same ? sourcePreviewUrl.value : assetId ? (await assets.getUrl(assetId)) || '' : ''
-    voiceUrl = clip.voiceAssetId ? (await assets.getUrl(clip.voiceAssetId)) || '' : ''
+    voiceUrl = voiceAssetId ? (await assets.getUrl(voiceAssetId)) || '' : ''
   } catch {}
   if (request !== previewRequest || project.current?.id !== current.id) return
   if (!url) {
@@ -204,6 +211,7 @@ async function playClip(clip: TimelineClip, index: number, seconds = clip.startT
   pendingSourceTime.value = clip.sourceIn + offset * clip.speed
   if (!same) previewLoadKey.value++
   sourcePreviewUrl.value = url
+  sourcePreviewMuted.value = selection?.keepSource === false
   voicePreviewUrl.value = voiceUrl
   if (!voiceUrl) voicePlayer.value?.pause()
   await nextTick()
@@ -214,7 +222,7 @@ function syncVoicePlayback(play: boolean) {
   const audio = voicePlayer.value
   const player = sourcePlayer.value
   const clip = timeline.value.find((item) => item.id === previewClipId.value)
-  if (!audio || !player || !clip?.voiceAssetId || !voicePreviewUrl.value) {
+  if (!audio || !player || !clip || !voicePreviewUrl.value) {
     audio?.pause()
     return
   }
@@ -1032,6 +1040,7 @@ function goBack() {
                 ref="sourcePlayer"
                 :key="previewLoadKey"
                 :src="sourcePreviewUrl"
+                :muted="sourcePreviewMuted"
                 playsinline
                 preload="metadata"
                 @loadedmetadata="onPreviewMetadata"

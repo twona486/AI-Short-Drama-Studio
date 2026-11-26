@@ -201,6 +201,7 @@ function openDetail() {
           :placeholder="$t('audioNode.dialogue')"
           @input="setVoiceover(($event.target as HTMLTextAreaElement).value)"
         />
+        <p v-if="mode === 'tts' && shotLipSyncDuration(shot) !== undefined" class="hint">{{ $t('lipSync.postTtsReplacement') }}</p>
         <div class="panel-foot">
           <TtsModelSelect v-if="canTts" />
           <span v-else>{{ canTts ? $t('audioNode.dubSeparately') : $t('audioNode.h3VideoVoice') }}</span>
