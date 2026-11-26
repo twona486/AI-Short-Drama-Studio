@@ -53,15 +53,19 @@ jobs:
       - name: 설치 패키지 찾기
         id: installers
         shell: pwsh
+        env:
+          BUILD_REF_NAME: ${{ github.ref_name }}
         run: |
           $files = Get-ChildItem -Path release -Recurse -Filter *Setup*.exe
           if (-not $files) { throw 'Windows 설치 패키지가 생성되지 않았습니다.' }
           $files | ForEach-Object { Write-Host "설치 패키지 $($_.FullName)" }
+          $artifactRef = $env:BUILD_REF_NAME -replace '[\\/:"<>|?*]', '-'
+          "artifact-name=AI-Short-Drama-Studio-Windows-$artifactRef" >> $env:GITHUB_OUTPUT
 
       - name: Actions 빌드 산출물 저장
         uses: actions/upload-artifact@v4
         with:
-          name: AI-Short-Drama-Studio-Windows-${{ github.ref_name }}
+          name: ${{ steps.installers.outputs.artifact-name }}
           path: release/**/*Setup*.exe
           if-no-files-found: error
           retention-days: 30
