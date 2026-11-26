@@ -3,7 +3,7 @@ import { getTtsConfig } from '@/services/ai/runtime'
 import { confirmAction } from '@/utils/confirmAction'
 import { t as translate } from '@/i18n'
 import { locale, setLocale } from '@/i18n'
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter, RouterLink } from 'vue-router'
 import { useProjectStore, useSettingsStore, useAssetsStore, useToastStore, endpointReady } from '@/stores'
 import StudioSettings from '@/components/canvas/StudioSettings.vue'
@@ -34,6 +34,7 @@ const ffmpegLoading = ref(false)
 const grantingAccess = ref(false)
 const storageRoot = ref('')
 const changingStorageRoot = ref(false)
+const storageUnavailable = ref(false)
 const appVersion = ref('0.1.5')
 
 const diag = ref({
@@ -103,6 +104,7 @@ onMounted(async () => {
   await assets.refresh()
   if (isDesktop()) {
     try {
+      storageUnavailable.value = await desktop().getStorageRecovery() === 'unavailable'
       storageRoot.value = await desktop().getRoot()
       appVersion.value = await desktop().getVersion()
     } catch {
@@ -154,7 +156,7 @@ async function chooseStorageFolder() {
   if (!isDesktop() || changingStorageRoot.value) return
   try {
     const selected = await desktop().pickDirectory()
-    if (!selected || selected === storageRoot.value) return
+    if (!selected || (selected === storageRoot.value && !storageUnavailable.value)) return
     const ok = await confirmAction(
       translate('settings.storage.confirm', { p0: selected })
     )
@@ -170,6 +172,12 @@ async function chooseStorageFolder() {
     changingStorageRoot.value = false
   }
 }
+
+watch(() => route.query.chooseStorage, async (choose) => {
+  if (choose !== '1' || !isDesktop()) return
+  await router.replace('/settings/system')
+  await chooseStorageFolder()
+}, { immediate: true })
 
 async function grantFileAccess() {
   if (!isDesktop()) return

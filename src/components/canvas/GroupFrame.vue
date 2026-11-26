@@ -1,9 +1,10 @@
 <script setup lang="ts">
+import { confirmAction } from '@/utils/confirmAction'
 import { t as translate } from '@/i18n'
 import zh from '@/locales/zh'
 import { computed } from 'vue'
 import { useProjectStore, useToastStore } from '@/stores'
-import { groupGenerateJobId, runExtractGroup, runGenerateGroup } from '@/services/canvas/runner'
+import { groupGenerateJobId, pendingGroupGenerationIds, pendingShotFramesForVideo, runExtractGroup, runGenerateGroup } from '@/services/canvas/runner'
 import { isNodeRunning } from '@/services/canvas/jobs'
 import { isPlayReady } from '@/services/ai'
 import { friendlyAiError, shouldToastAiError } from '@/services/ai/abort'
@@ -118,7 +119,20 @@ async function generateAll(ev: Event) {
     return
   }
   try {
-    await runGenerateGroup(props.id)
+    const pending = pendingGroupGenerationIds(props.id)
+    if (!pending.length) {
+      toast.warn(translate('batch.empty'))
+      return
+    }
+    const projectId = project.current?.id
+    const frames = props.data.kind === 'video' ? pendingShotFramesForVideo().length : 0
+    const message = [
+      translate('batch.group', { name: label.value, count: pending.length }),
+      frames ? translate('batch.extraFrames', { count: frames }) : '',
+      translate('batch.providerUsage')
+    ].filter(Boolean).join('\n')
+    if (!await confirmAction(message) || project.current?.id !== projectId || busy.value) return
+    await runGenerateGroup(props.id, undefined, undefined, pending)
     toast.success(
       props.data.kind === 'subject'
         ? translate('groupFrame.charactersReady')

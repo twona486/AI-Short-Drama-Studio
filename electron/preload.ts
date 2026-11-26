@@ -10,6 +10,7 @@ export type DesktopAPI = {
   setLocale: (locale: 'ko' | 'zh') => Promise<void>
   confirmAction: (message: string, locale: 'ko' | 'zh') => Promise<boolean>
   platform: string
+  getStorageRecovery: () => Promise<'usingRecovery' | 'unavailable' | null>
   getRoot: () => Promise<string>
   setRoot: (root: string) => Promise<string>
   getVersion: () => Promise<string>
@@ -92,6 +93,7 @@ const api: DesktopAPI = {
   setLocale: (locale) => ipcRenderer.invoke('desktop:setLocale', locale),
   confirmAction: (message, locale) => ipcRenderer.invoke('desktop:confirmAction', message, locale),
   platform: process.platform,
+  getStorageRecovery: () => ipcRenderer.invoke('desktop:getStorageRecovery'),
   getRoot: () => ipcRenderer.invoke('desktop:getRoot'),
   setRoot: (root) => ipcRenderer.invoke('desktop:setRoot', root),
   getVersion: () => ipcRenderer.invoke('desktop:getVersion'),

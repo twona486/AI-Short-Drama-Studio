@@ -615,6 +615,24 @@ export default {
     "validateSave": "검증 후 저장",
     "workflowMissing": "워크플로 내용이 없어요."
   },
+  storageRecovery: {
+    usingRecovery: '저장 폴더를 열지 못했습니다. 현재 복구 폴더를 사용 중이며 기존 저장 폴더 설정은 보존했습니다.',
+    unavailable: '저장 폴더와 복구 폴더를 열지 못했습니다. 저장 폴더를 다시 선택할 수 있습니다.',
+    continue: '복구 폴더 사용',
+    choose: '저장 폴더 다시 선택'
+  },
+  batch: {
+    empty: '실행할 대상이 없습니다.',
+    group: '‘{name}’ 그룹의 노드 {count}개를 모두 생성할까요?',
+    cast: '누락된 캐릭터 이미지 {characters}개와 장면 이미지 {scenes}개를 생성할까요?',
+    images: '샷 이미지 {shots}개, 캐릭터 이미지 {characters}개, 장면 이미지 {scenes}개를 생성할까요?',
+    frames: '샷 {count}개의 시작·끝 프레임을 생성할까요?',
+    extraFrames: '이 작업에는 샷 {count}개의 누락된 시작·끝 프레임 생성이 포함돼요.',
+    videos: '샷 영상 {count}개를 생성할까요?',
+    voices: '샷 {count}개의 대사를 더빙할까요?',
+    optimize: '영상 프롬프트 {count}개를 최적화할까요?',
+    providerUsage: '비용과 소요 시간은 선택한 연결과 모델에 따라 달라요.'
+  },
   "common": {
     "about": "정보",
     "add": "추가",

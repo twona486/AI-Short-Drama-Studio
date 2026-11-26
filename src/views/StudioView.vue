@@ -635,6 +635,8 @@ async function optimizeAllVideoPrompts() {
     toast.warn(translate('studio.noOptimizableNodes'))
     return
   }
+  const message = translate('batch.optimize', { count: nodes.length })
+  if (!await confirmAction(`${message}\n${translate('batch.providerUsage')}`) || project.current?.id !== p.id || optimizingAllVideos.value) return
   optimizingAllVideos.value = true
   const failed: string[] = []
   let processed = 0

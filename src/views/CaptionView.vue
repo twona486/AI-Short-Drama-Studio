@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { confirmAction } from '@/utils/confirmAction'
 import { isElevenLabsTts } from '@/services/ai/elevenLabsTts'
 import { t as translate } from '@/i18n'
 
@@ -257,26 +258,29 @@ async function generateLine(shotId: string, batchSignal?: AbortSignal) {
 }
 
 async function generateAllVoices() {
+  if (generatingAll.value) return
   if (isDigitalHuman.value) {
     toast.info(translate('caption.digitalSpeechHint'))
     return
   }
-  const todo = lines.value.filter((l) => l.shot && !isLipSyncShot(l.shot) && l.text.trim())
+  const projectId = project.current?.id
+  const todo = [...new Set(lines.value
+    .filter((line) => line.shot && !isLipSyncShot(line.shot) && line.text.trim() && !generating.value.has(line.shotId))
+    .map((line) => line.shotId))]
   if (todo.length === 0) {
     toast.warn(translate('caption.noDialogueToVoice'))
     return
   }
+  const message = translate('batch.voices', { count: todo.length })
+  if (!await confirmAction(`${message}\n${translate('batch.providerUsage')}`) || project.current?.id !== projectId || generatingAll.value) return
   generatingAll.value = true
   const batch = elevenLabs.value ? new AbortController() : undefined
   batchVoiceRequest.value = batch
   let ok = 0
   try {
-    const seen = new Set<string>()
-    for (const line of todo) {
-      if (batch?.signal.aborted) break
-      if (seen.has(line.shotId)) continue
-      seen.add(line.shotId)
-      if (await generateLine(line.shotId, batch?.signal)) ok++
+    for (const shotId of todo) {
+      if (batch?.signal.aborted || project.current?.id !== projectId) break
+      if (await generateLine(shotId, batch?.signal)) ok++
     }
     if (!batch?.signal.aborted) toast.success(translate('caption.voicesGenerated', { p0: ok }))
   } finally {

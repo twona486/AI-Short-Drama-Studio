@@ -86,10 +86,19 @@ const shotsWithoutFrames = computed(() =>
 )
 const drawingFrames = ref(false)
 
-/** 이전 샷의 종료 프레임을 이어 받아 각 샷의 시작과 종료 프레임을 순서대로 만든다. */
-async function generateAllFrames() {
-  const targets = [...shotsWithoutFrames.value].sort((a, b) => a.index - b.index)
+async function confirmAllFrames() {
+  const targets = shotsWithoutFrames.value
+  const projectId = project.current?.id
   if (!targets.length || drawingFrames.value) return
+  const message = translate('batch.frames', { count: targets.length })
+  if (!await confirmAction(`${message}\n${translate('batch.providerUsage')}`) || project.current?.id !== projectId) return
+  await generateAllFrames(targets)
+}
+
+/** 이전 샷의 종료 프레임을 이어 받아 각 샷의 시작과 종료 프레임을 순서대로 만든다. */
+async function generateAllFrames(shots: Shot[]) {
+  if (!shots.length || drawingFrames.value) return
+  const targets = [...shots].sort((a, b) => a.index - b.index)
   drawingFrames.value = true
   toast.info(translate('videos.drawSequentially', { p0: targets.length }), 4000)
   let done = 0
@@ -282,16 +291,23 @@ async function generateOne(shot: Shot) {
 }
 
 async function generateAll() {
-  // 시작과 종료 프레임이 영상 입력이므로 샷 순서대로 누락된 프레임을 보완한다.
-  if (fl2vaChain.value && shotsWithoutFrames.value.length) {
-    await generateAllFrames()
-  }
-  // 현재 샷의 시작 프레임은 이전 영상의 끝 프레임이다. 프레임 연결을 유지하려면 영상을 차례로 생성한다.
-  const chain = isFl2vaChainActive(project.current)
+  const projectId = project.current?.id
+  if (drawingFrames.value) return
+  const frames = fl2vaChain.value ? shotsWithoutFrames.value : []
   const targets = shots.value
     .filter((shot) => !shot.videoAssetId && !generating.value.has(shot.id))
     .sort((a, b) => a.index - b.index)
   if (!targets.length) return
+  const message = [
+    translate('batch.videos', { count: targets.length }),
+    frames.length ? translate('batch.extraFrames', { count: frames.length }) : '',
+    translate('batch.providerUsage')
+  ].filter(Boolean).join('\n')
+  if (!await confirmAction(message) || project.current?.id !== projectId || drawingFrames.value) return
+  await generateAllFrames(frames)
+  if (project.current?.id !== projectId) return
+  // 현재 샷의 시작 프레임은 이전 영상의 끝 프레임이다.
+  const chain = isFl2vaChainActive(project.current)
   if (chain) {
     toast.info(translate('videos.firstLastChain', { p0: targets.length }), 5000)
     await mapPool(targets, 1, (shot) => generateOne(shot))
@@ -347,7 +363,7 @@ async function next() {
           icon="🖼"
           :loading="drawingFrames"
           :disabled="shotsWithoutFrames.length === 0"
-          @click="generateAllFrames"
+          @click="confirmAllFrames"
         >
           {{
             drawingFrames
