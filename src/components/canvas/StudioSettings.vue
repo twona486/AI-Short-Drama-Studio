@@ -451,10 +451,10 @@ function patchAdapter(
     </template>
 
     <template v-else-if="module === 'image'">
-      <label class="media-prompt-toggle">
+      <label class="checkbox-row">
         <input type="checkbox" :checked="settings.config.translateMediaPrompts"
           @change="settings.update({ translateMediaPrompts: ($event.target as HTMLInputElement).checked })" />
-        {{ $t('mediaPrompt.setting') }}
+        <span>{{ $t('mediaPrompt.setting') }}</span>
       </label>
       <p class="hint">{{ $t('mediaPrompt.settingHint') }}</p>
       <section v-if="zealmanImage" class="owned">
@@ -562,13 +562,13 @@ function patchAdapter(
         @add-model="settings.addModel('tts', $event)"
         @remove-model="settings.removeModel('tts', $event)"
       >
-        <label v-if="openAiTts" class="extra-label">
+        <label v-if="openAiTts" class="checkbox-row">
           <input
             type="checkbox"
             :checked="settings.config.tts.reuseOpenAiLlmKey"
             @change="settings.patchTts({ reuseOpenAiLlmKey: ($event.target as HTMLInputElement).checked })"
           />
-          {{ $t('openAiTts.reuseKey') }}
+          <span>{{ $t('openAiTts.reuseKey') }}</span>
         </label>
         <p v-if="openAiTts && settings.config.tts.reuseOpenAiLlmKey && !reusableKey" class="hint">
           {{ $t('openAiTts.reuseKeyMissing') }}
@@ -857,7 +857,7 @@ label,
   font-size: 11px;
   color: var(--color-text-4);
 }
-input,
+input:not([type='checkbox']),
 select {
   width: 100%;
   background: var(--color-bg-2);
@@ -870,8 +870,17 @@ select {
   -webkit-app-region: no-drag;
   app-region: no-drag;
 }
-.media-prompt-toggle { display: flex; align-items: center; gap: 8px; }
-.media-prompt-toggle input { width: auto; }
+.checkbox-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+}
+.checkbox-row input {
+  flex: none;
+  margin: 0;
+  cursor: pointer;
+}
 .secret {
   display: flex;
   gap: 6px;
