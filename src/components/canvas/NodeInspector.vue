@@ -2,7 +2,7 @@
 import { isOpenAiTts } from '@/services/ai/openAiTts'
 import { ltxShotSpeechTooFast } from '@/services/ai/ltxShotPrompt'
 import { nearestVideoDuration, videoDurationCapability, shotDurationWarning } from '@/services/ai/videoDuration'
-import { isLtxDesktop } from '@/services/ai/ltxDesktopOptions'
+import { isLtxDesktop, LTX_DESKTOP_AUDIO_RESOLUTIONS, ltxDesktopAudioResolution } from '@/services/ai/ltxDesktopOptions'
 import { isLtxProfile, LTX_DEFAULT_MODEL } from '@/services/ai/ltxOptions'
 import { confirmAction } from '@/utils/confirmAction'
 import { t as translate } from '@/i18n'
@@ -297,8 +297,10 @@ const videoModel = computed({
 function onSelectVideoProfile(profileId: string) {
   if (props.node) applyShotVideoProfile(props.node.id, profileId)
 }
-const resolutionChoices = computed(() =>
-  videoResolutionChoices({
+const usesLipSync = computed(() => shot.value?.audioMode === 'ltx-lip-sync')
+const resolutionChoices = computed(() => usesLipSync.value
+  ? [...LTX_DESKTOP_AUDIO_RESOLUTIONS]
+  : videoResolutionChoices({
     model: videoModel.value,
     profile: videoModel.value !== 'h3' && docVideoProfile.value?.provider === 'ltx' || videoModel.value === 'wan-prime' ? null : docVideoProfile.value
   })
@@ -306,6 +308,7 @@ const resolutionChoices = computed(() =>
 const videoResolution = computed({
   get: () => {
     const choices = resolutionChoices.value
+    if (usesLipSync.value) return ltxDesktopAudioResolution(props.node?.data.videoResolution ?? project.current?.settings.defaultVideoResolution)
     if (choices.length) return pickDocVideoResolution(props.node?.data.videoResolution ?? project.current?.settings.defaultVideoResolution, choices) || choices[0]
     return '768p' as VideoResolution
   },
@@ -1065,13 +1068,14 @@ async function optimizeVideoPrompt() {
           @input="project.setShotVideoPrompt(shot.id, ($event.target as HTMLTextAreaElement).value)"
         />
         <label>{{ $t('common.secondsDuration') }}</label>
-        <p v-if="shotDurationWarning(shot.duration, durationCapability.max)" class="hint">
+        <p v-if="usesLipSync" class="hint">{{ $t('lipSync.audioLengthHint') }}</p>
+        <p v-else-if="shotDurationWarning(shot.duration, durationCapability.max)" class="hint">
           {{ $t('storyboard.shotDurationWarning', { max: durationCapability.max, duration: shot.duration }) }}
         </p>
         <p v-if="ltxProfile && ltxShotSpeechTooFast(shot, inspectorDuration)" class="hint">
           {{ $t('ltx.speechTooFast', { seconds: inspectorDuration }) }}
         </p>
-        <select v-model.number="inspectorDuration">
+        <select v-if="!usesLipSync" v-model.number="inspectorDuration">
           <option v-for="seconds in inspectorDurations" :key="seconds" :value="seconds">{{ seconds }}</option>
         </select>
         <label>{{ $t('common.cameraMotion') }}</label>
@@ -1107,7 +1111,7 @@ async function optimizeVideoPrompt() {
         v-if="isH3Fl2va || (ltxProfile && !node.data.captureId)"
         v-model:first-id="firstFrameId"
         v-model:last-id="lastFrameId"
-        :first-only="Boolean(shot && effectiveShotAudioMode(shot) === 'ltx-lip-sync')"
+        :first-only="usesLipSync"
         :last-required="lastFrameRequired"
         :first-hint="node.type === 'shotVideo' && shot?.imageAssetId ? $t('common.useShotImage') : ''"
       />
@@ -1243,7 +1247,8 @@ async function optimizeVideoPrompt() {
           :durations="inspectorDurations"
           :ltx-model="ltxProfile ? ltxProfile.workflowId || LTX_DEFAULT_MODEL : undefined"
           :ltx-desktop="isLtxDesktop(ltxProfile)"
-          :show-audio="showVideoAudio && !(shot && effectiveShotAudioMode(shot) === 'ltx-lip-sync')"
+          :show-audio="showVideoAudio && !usesLipSync"
+          :lip-sync="usesLipSync"
           :audio="generateAudio"
           @update:resolution="videoResolution = $event"
           @update:aspect="nodeAspectRatio = $event"

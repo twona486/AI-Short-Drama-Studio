@@ -11,6 +11,7 @@ const props = defineProps<{
   plain?: boolean
   ltxModel?: string
   ltxDesktop?: boolean
+  lipSync?: boolean
   resolution: DocVideoResolution
   resolutions: DocVideoResolution[]
   aspect: AspectRatio
@@ -32,7 +33,8 @@ const root = ref<HTMLElement | null>(null)
 
 const summary = computed(() => {
   const resolution = props.resolutions.length ? docVideoResolutionLabel(props.resolution) : ''
-  return [resolution, props.aspect, t('continuousCapture.seconds', { count: props.duration })].filter(Boolean).join(' · ')
+  const duration = props.lipSync ? t('lipSync.audioLength') : t('continuousCapture.seconds', { count: props.duration })
+  return [resolution, props.aspect, duration].filter(Boolean).join(' · ')
 })
 
 function onDocPointer(event: PointerEvent) {
@@ -76,7 +78,7 @@ onBeforeUnmount(() => document.removeEventListener('pointerdown', onDocPointer, 
         <span>{{ $t('mediaNodes.aspect') }}</span>
         <AspectRatioSeg compact :choices="ltxModel ? ['16:9', '9:16'] : undefined" :model-value="aspect" @update:model-value="emit('update:aspect', $event)" />
       </div>
-      <div class="vset-block">
+      <div v-if="!lipSync" class="vset-block">
         <span>{{ $t('common.length') }}</span>
         <select class="vset-select" :value="duration" @change="emit('update:duration', Number(($event.target as HTMLSelectElement).value))">
           <option v-for="n in durations" :key="n" :value="n">{{ $t('continuousCapture.seconds', { count: n }) }}</option>

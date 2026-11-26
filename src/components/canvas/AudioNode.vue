@@ -65,6 +65,7 @@ watch(
   () => props.selected,
   (on) => {
     panelOpen.value = Boolean(on)
+    if (on && shot.value) void project.checkShotLipSync(shot.value)
   },
   { immediate: true }
 )

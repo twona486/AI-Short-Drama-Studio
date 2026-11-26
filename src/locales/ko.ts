@@ -9,7 +9,9 @@ export default {
     "durationMismatch": "립싱크 음성은 {actual}초예요. 스토리보드에는 {planned}초로 설정돼 있어요.",
     "embedded": "영상에 립싱크 음성이 들어 있어요.",
     "pending": "영상 노드에서 립싱크를 생성해 주세요.",
-    "promptHint": "장면, 표정, 카메라 움직임을 적어요. 대사는 샷의 원고에서 가져와 더빙해요."
+    "promptHint": "장면, 표정, 카메라 움직임을 적어요. 대사는 샷의 원고에서 가져와 더빙해요.",
+    "audioLength": "더빙 길이",
+    "audioLengthHint": "영상 길이는 더빙 길이에 맞춰요."
   },
   "openAiTts": {
     "hint": "OpenAI Realtime으로 AI 음성을 만들어요.",

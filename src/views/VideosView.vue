@@ -9,7 +9,7 @@ import { applyShotVideoModel } from '@/services/canvas/videoModel'
 import { generateShotVideo, generateShotFramePair, isFl2vaChainActive, rewriteShotPerformance, optimizeShotVideoPrompt } from '@/services/canvas/runner'
 import { mapPool, VIDEO_GEN_CONCURRENCY } from '@/services/canvas/jobs'
 import { getVideoPromptStyle } from '@/services/ai/runtime'
-import { effectiveShotAudioMode } from '@/utils/shot'
+import { effectiveShotAudioMode, shotLipSyncDuration } from '@/utils/shot'
 import GlassCard from '@/components/common/GlassCard.vue'
 import GradientButton from '@/components/common/GradientButton.vue'
 import EmptyState from '@/components/common/EmptyState.vue'
@@ -530,6 +530,7 @@ async function next() {
             <select
               class="cam-select"
               :value="effectiveShotAudioMode(shot)"
+              @focus="project.checkShotLipSync(shot)"
               @change="changeAudioMode(shot, ($event.target as HTMLSelectElement).value as NonNullable<Shot['audioMode']>)"
             >
               <option value="h3-dialogue" :disabled="!project.shotSupportsVideoVoice(shot)">{{ $t('common.h3Dialogue') }}</option>
@@ -543,6 +544,9 @@ async function next() {
             <span>{{ $t('videos.voice') }}</span>
             <strong>{{ $t('videos.withAudio') }}</strong>
           </div>
+          <p v-if="!isDigitalHuman && Math.abs((shotLipSyncDuration(shot) ?? shot.duration) - shot.duration) >= 0.01">
+            {{ $t('lipSync.durationMismatch', { planned: shot.duration, actual: shotLipSyncDuration(shot)?.toFixed(2) }) }}
+          </p>
           <p v-if="!isDigitalHuman && !project.shotSupportsVideoVoice(shot)">{{ $t('common.videoVoiceUnsupported') }}</p>
         </div>
 

@@ -469,6 +469,7 @@ function next() {
                 <select
                   class="input"
                   :value="line.shot ? effectiveShotAudioMode(line.shot) : 'none'"
+                  @focus="line.shot && project.checkShotLipSync(line.shot)"
                   @change="line.shot && changeAudioMode(line.shot, ($event.target as HTMLSelectElement).value as ShotAudioMode)"
                 >
                   <option value="h3-dialogue" :disabled="line.shot && !project.shotSupportsVideoVoice(line.shot)">{{ $t('common.h3Dialogue') }}</option>

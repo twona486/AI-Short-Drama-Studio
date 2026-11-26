@@ -2,7 +2,7 @@
 import { isOpenAiTts, OPENAI_TTS_VOICES, recommendOpenAiVoice } from '@/services/ai/openAiTts'
 import { ltxShotSpeechTooFast } from '@/services/ai/ltxShotPrompt'
 import { nearestVideoDuration, videoDurationCapability, shotDurationWarning } from '@/services/ai/videoDuration'
-import { isLtxTask, isLtxDesktop } from '@/services/ai/ltxDesktopOptions'
+import { isLtxTask, isLtxDesktop, LTX_DESKTOP_AUDIO_RESOLUTIONS, ltxDesktopAudioResolution } from '@/services/ai/ltxDesktopOptions'
 import { isLtxProfile, LTX_DEFAULT_MODEL } from '@/services/ai/ltxOptions'
 import { t as translate } from '@/i18n'
 import { computed, onBeforeUnmount, ref, shallowRef, watch } from 'vue'
@@ -319,8 +319,10 @@ const videoModel = computed({
   get: () => normalizeVideoGenModel(nodeMeta.value?.data.videoModel ?? settings.config.defaultVideoModel),
   set: (v: VideoGenModel) => applyShotVideoModel(props.id, v)
 })
-const resolutionChoices = computed(() =>
-  videoResolutionChoices({
+const usesLipSync = computed(() => shot.value?.audioMode === 'ltx-lip-sync')
+const resolutionChoices = computed(() => usesLipSync.value
+  ? [...LTX_DESKTOP_AUDIO_RESOLUTIONS]
+  : videoResolutionChoices({
     model: videoModel.value,
     profile: videoModel.value !== 'h3' && docVideoProfile.value?.provider === 'ltx' || videoModel.value === 'wan-prime' ? null : docVideoProfile.value
   })
@@ -328,6 +330,7 @@ const resolutionChoices = computed(() =>
 const videoResolution = computed({
   get: () => {
     const choices = resolutionChoices.value
+    if (usesLipSync.value) return ltxDesktopAudioResolution(nodeMeta.value?.data.videoResolution ?? project.current?.settings.defaultVideoResolution)
     if (choices.length) return pickDocVideoResolution(nodeMeta.value?.data.videoResolution ?? project.current?.settings.defaultVideoResolution, choices) || choices[0]
     return '768p' as VideoResolution
   },
@@ -1393,7 +1396,7 @@ const cropStyle = computed(() => ({
         v-if="isH3Fl2va || ltxProfile"
         v-model:first-id="firstFrameId"
         v-model:last-id="lastFrameId"
-        :first-only="Boolean(shot && effectiveShotAudioMode(shot) === 'ltx-lip-sync')"
+        :first-only="usesLipSync"
         :last-required="lastFrameRequired"
         :first-hint="shot?.imageAssetId ? $t('common.useShotImage') : $t('common.chooseFirstFrame')"
       />
@@ -1435,7 +1438,8 @@ const cropStyle = computed(() => ({
           :durations="durationOptions"
           :ltx-model="ltxProfile ? ltxProfile.workflowId || LTX_DEFAULT_MODEL : undefined"
           :ltx-desktop="isLtxDesktop(ltxProfile)"
-          :show-audio="showVideoAudio && !(shot && effectiveShotAudioMode(shot) === 'ltx-lip-sync')"
+          :show-audio="showVideoAudio && !usesLipSync"
+          :lip-sync="usesLipSync"
           :audio="generateAudio"
           @update:resolution="videoResolution = $event"
           @update:aspect="nodeAspectRatio = $event"
