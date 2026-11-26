@@ -1,4 +1,4 @@
-import { decryptSecret, encodeSettings, encryptSecret, readSettings, writeSettings } from './settings-storage'
+import { decryptSecret, encodeSettings, encryptSecret, readSettings, waitForSettingsKey, writeSettings } from './settings-storage'
 import { registerProviderRequests } from './provider-requests'
 import { ProviderResponseTooLarge, readAutoDlResponse } from './provider-response'
 import type { OpenAiTtsRequest } from '../src/services/ai/openAiTts'
@@ -613,6 +613,7 @@ app.whenReady().then(async () => {
   ipcMain.handle('desktop:backupSettings', async (_e, raw: string) => {
     const hash = createHash('sha256').update(raw).digest('hex')
     const backup = path.join(currentRoot(), `settings.broken-${hash}.json`)
+    await waitForSettingsKey()
     const encrypted = encodeSettings(raw)
     try {
       await fs.writeFile(backup, encrypted, { flag: 'wx', mode: 0o600 })
@@ -627,7 +628,7 @@ app.whenReady().then(async () => {
   ipcMain.handle('desktop:kvSet', (_e, key: string, value: string) => {
     const name = String(key || '')
     const raw = String(value ?? '')
-    if (name === 'settings') writeSettings(currentRoot(), raw)
+    if (name === 'settings') return writeSettings(currentRoot(), raw)
     else kvSet(name, raw)
   })
 
