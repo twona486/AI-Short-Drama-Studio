@@ -1,4 +1,5 @@
-import { isLtxDesktop, isLtxTask } from '@/services/ai/ltxDesktopOptions'
+import { DrawThingsStopRequest } from '@/services/ai/drawThingsOptions'
+import { isLtxDesktop, isLtxTask, LtxStopRequest } from '@/services/ai/ltxDesktopOptions'
 import { isLtxProfile, ltxDurationOptions } from '@/services/ai/ltxOptions'
 import { t } from '@/i18n'
 /** Continuous-shooting controller. Intent and its own task card come first; generation stays behind the scene-by-scene confirmation gate. */
@@ -1007,9 +1008,10 @@ export async function runCaptureNode(nodeId: string, onLog?: (text: string) => v
       if (error instanceof Error && error.name === 'MediaPromptPreparationError' && !n.data.videoTaskId) {
         n.data.captureSubmissionPending = false
       }
-      const drawThingsStopped = signal?.aborted && signal.reason?.message === t('drawThings.cancelled')
+      const reason = signal?.reason
+      const drawThingsStopped = reason instanceof DrawThingsStopRequest
       const stopped = signal?.aborted && error instanceof DOMException && error.name === 'AbortError' &&
-        (drawThingsStopped || isLtxTask(n.data.videoTaskId) || signal.reason?.message === t('ltx.stopped'))
+        (drawThingsStopped || isLtxTask(n.data.videoTaskId) || reason instanceof LtxStopRequest)
       const profile = useSettingsStore().config.videos.find((v) => v.id === (n.data.videoProfileId || s.profileId))
       n.status = stopped ? 'idle' : 'failed'
       n.error = stopped ? t(drawThingsStopped ? 'drawThings.cancelled' : isLtxDesktop(profile) ? 'ltxDesktop.cancelRequested' : 'ltx.stopped')

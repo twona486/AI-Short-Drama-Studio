@@ -51,7 +51,7 @@ import { blobToChatImageUrl, callLLM } from '@/services/ai/client'
 import { stripReasoningLeak } from '@/utils/jsonRepair'
 import { resolveImageAdapter } from '@/services/ai/adapters'
 import { openAiLipSyncLines, openAiShotSpeech, shotSpeakerSubject } from '@/services/ai/shotSpeech'
-import { DRAW_THINGS_PROVIDER } from '@/services/ai/drawThingsOptions'
+import { DRAW_THINGS_PROVIDER, DrawThingsStopRequest } from '@/services/ai/drawThingsOptions'
 import { observeMediaPrompts } from '@/services/ai/mediaPromptObserver'
 import { getImageConfig, imageModelForProject, getVideoPromptStyle, getTtsConfig } from '@/services/ai/runtime'
 import { pickDocImageResolution } from '@/services/ai/modelOptions'
@@ -3130,7 +3130,7 @@ export function canStopDrawThingsNodeWait(nodeId: string) {
 }
 
 export function stopDrawThingsNodeWait(nodeId: string) {
-  drawThingsNodeWaits.get(nodeId)?.abort(new DOMException(translate('drawThings.cancelled'), 'AbortError'))
+  drawThingsNodeWaits.get(nodeId)?.abort(new DrawThingsStopRequest(translate('drawThings.cancelled')))
 }
 
 export function stopLtxNodeWait(nodeId: string) {
