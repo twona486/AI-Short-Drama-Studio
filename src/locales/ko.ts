@@ -1855,6 +1855,9 @@ export default {
       "title": "백업 및 정리"
     },
     "community": "공식 커뮤니티",
+    "damagedBackup": "설정 일부를 불러오지 못했습니다. 원본을 보존하고 백업을 만들었습니다. 백업 위치 {path}",
+    "damagedBackupFailed": "설정을 불러오지 못했고 백업도 만들지 못했습니다. 원본을 보존했습니다.",
+    "storageUnavailable": "설정을 저장할 수 없습니다. 기존 설정을 보존했습니다.",
     "configSaved": "설정을 이 기기에 저장했어요.",
     "crumb": "설정 /",
     "defaults": {

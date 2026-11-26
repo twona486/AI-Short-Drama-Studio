@@ -21,6 +21,7 @@
     "image-to-video"
   ],
   "scripts": {
+    "test": "node --test \"scripts/test-*.mjs\"",
     "dev": "vite",
     "test:electron-start": "node scripts/smoke-electron-start.mjs",
     "web": "vite --mode web",
@@ -112,6 +113,7 @@
     "@vitejs/plugin-vue": "^5.0.4",
     "electron": "^43.4.0",
     "electron-builder": "^26.15.3",
+    "esbuild": "^0.21.5",
     "typescript": "^5.4.5",
     "vite": "^5.2.11",
     "vite-plugin-electron": "^1.1.1",

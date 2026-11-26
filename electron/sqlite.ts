@@ -19,6 +19,10 @@ type SqliteDb = {
 let db: SqliteDb | null = null
 let filePath = ''
 
+export function isAppDbOpen() {
+  return db !== null
+}
+
 export function getDbPath() {
   return filePath
 }
@@ -41,15 +45,11 @@ export async function openAppDb(root: string) {
 }
 
 function migrateLegacySettingsJson(root: string) {
-  if (kvGet('settings')) return
+  if (kvGet('settings') !== null) return
   const jsonPath = path.join(root, 'settings.json')
   if (!existsSync(jsonPath)) return
-  try {
-    const text = readFileSync(jsonPath, 'utf8').trim()
-    if (text) kvSet('settings', text)
-  } catch {
-    /* ignore broken json */
-  }
+  const text = readFileSync(jsonPath, 'utf8')
+  kvSet('settings', text)
 }
 
 export function kvGet(key: string): string | null {
@@ -73,4 +73,5 @@ export function closeAppDb() {
     /* ignore */
   }
   db = null
+  filePath = ''
 }

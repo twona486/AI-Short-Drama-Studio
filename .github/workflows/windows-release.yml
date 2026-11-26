@@ -42,6 +42,14 @@ jobs:
       - name: Windows 설치 패키지 빌드
         run: npm run electron:build
 
+      - name: 패키지 앱 시작 검사
+        shell: pwsh
+        run: |
+          $app = Get-ChildItem -Path release -Recurse -Filter 'Drama Flow Studio.exe' |
+            Where-Object { $_.Directory.Name -like 'win*-unpacked' } | Select-Object -First 1
+          if (-not $app) { throw '패키지 실행 파일을 찾지 못했습니다.' }
+          npm run test:electron-start -- "$($app.FullName)"
+
       - name: 설치 패키지 찾기
         id: installers
         shell: pwsh

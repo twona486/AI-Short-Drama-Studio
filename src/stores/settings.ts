@@ -9,6 +9,7 @@ import { t } from '@/i18n'
 
 import { defineStore } from 'pinia'
 import { ref, watch } from 'vue'
+import { useToastStore } from './toast'
 import { AUTODL_BASE_URL, AUTODL_WORKFLOWS } from '@/services/ai/autodl'
 import { envDefaults, migrateVideoBaseUrl, migrateVideoWorkflowId } from '@/services/ai/env'
 import { isManualImageChoice } from '@/services/ai/providers'
@@ -528,7 +529,7 @@ function resolveStoryPreference(value: unknown, legacy: unknown, group: 'style' 
 function savedChatEndpoint(saved: ServiceEndpoint | undefined, defaults: ServiceEndpoint): ServiceEndpoint {
   if (!saved) return defaults
   const model = saved.model ?? ''
-  return { ...saved, apiKey: saved.apiKey ?? '', model, models: uniq([model, ...(saved.models ?? [])]) }
+  return { ...saved, baseUrl: saved.baseUrl ?? '', apiKey: saved.apiKey ?? '', model, models: uniq([model, ...(saved.models ?? [])]) }
 }
 
 function fallbackImageProfile(profiles: NamedEndpoint[], defaults: NamedEndpoint) {
@@ -593,12 +594,115 @@ function migrateDefaultNames(settings: Partial<AppSettings>): boolean {
   return changed
 }
 
-function parseSettings(raw: string | null, saveMigrated?: (settings: Partial<AppSettings>) => void): AppSettings {
+function settingsObject(value: unknown): value is Record<string, unknown> {
+  return Boolean(value && typeof value === 'object' && !Array.isArray(value))
+}
+
+function parseSettings(raw: string | null) {
   const defaults = buildDefaults()
-  if (!raw) return defaults
+  if (raw === null) return { config: defaults, damaged: false }
+  let damaged = false
+  function fields(value: Record<string, unknown>, keys: readonly string[], type: string) {
+    for (const key of keys) {
+      if (Object.hasOwn(value, key) && typeof value[key] !== type) {
+        delete value[key]
+        damaged = true
+      }
+    }
+  }
+  function stringList(value: Record<string, unknown>, key: string) {
+    if (!Object.hasOwn(value, key)) return
+    const list = value[key]
+    if (!Array.isArray(list)) {
+      delete value[key]
+      damaged = true
+      return
+    }
+    const strings = list.filter((item) => typeof item === 'string')
+    if (strings.length !== list.length) damaged = true
+    value[key] = strings
+  }
+  function endpoint(value: Record<string, unknown>, profileName?: string) {
+    fields(value, [
+      'baseUrl', 'apiKey', 'model', 'provider', 'voice', 'workflowId', 'promptStyle',
+      'stillMode', 'ltxHostOverride', 'drawThingsSharedSecret'
+    ], 'string')
+    fields(value, ['reuseOpenAiLlmKey'], 'boolean')
+    if (profileName) {
+      fields(value, ['id', 'name'], 'string')
+      if (!value.id || !value.name) {
+        damaged = true
+        value.id ||= newId()
+        value.name ||= profileName
+      }
+    }
+    for (const key of ['models', 'drawThingsServerModels']) stringList(value, key)
+    for (const key of ['adapter', 'options']) {
+      if (Object.hasOwn(value, key) && !settingsObject(value[key])) {
+        delete value[key]
+        damaged = true
+      }
+    }
+    if (settingsObject(value.options)) {
+      fields(value.options, ['videoAudio', 'lastFrameRequired'], 'boolean')
+      fields(value.options, ['audioField'], 'string')
+      stringList(value.options, 'imageResolutions')
+      stringList(value.options, 'videoResolutions')
+    }
+    if (settingsObject(value.adapter)) {
+      const adapter = value.adapter
+      fields(adapter, [
+        'type', 'path', 'pollPath', 'pollUrl', 'taskIdJsonPath', 'pollJsonPath',
+        'resultJsonPath', 'authHeader', 'authPrefix', 'workflowTemplate'
+      ], 'string')
+      if (settingsObject(adapter.headers)) fields(adapter.headers, Object.keys(adapter.headers), 'string')
+      else if (Object.hasOwn(adapter, 'headers')) {
+        delete adapter.headers
+        damaged = true
+      }
+    }
+  }
   try {
-    const parsed = JSON.parse(raw) as Partial<AppSettings>
-    if (migrateDefaultNames(parsed)) saveMigrated?.(parsed)
+    const decoded: unknown = JSON.parse(raw)
+    if (!settingsObject(decoded)) return { config: defaults, damaged: true }
+    fields(decoded, [
+      'activeLlmId', 'activeVisionId', 'activeImageId', 'activeTtsId', 'activeVideoId', 'activeMusicId',
+      'defaultAspectRatio', 'defaultVideoModel', 'autodlToken', 'zealmanBaseUrl', 'activeStorySkillId',
+      'storyStyleId', 'storyGenreId', 'scriptReferenceType', 'theme', 'aiMode'
+    ], 'string')
+    fields(decoded, ['autoSaveInterval'], 'number')
+    fields(decoded, ['debug', 'visionEnabled', 'translateMediaPrompts'], 'boolean')
+    for (const [key, listKey] of [
+      ['llm', 'llms'], ['vision', 'visions'], ['image', 'images'], ['tts', 'ttsProfiles'],
+      ['video', 'videos'], ['music', 'musics']
+    ] as const) {
+      const snapshot = decoded[key]
+      if (settingsObject(snapshot)) endpoint(snapshot)
+      else if (Object.hasOwn(decoded, key)) {
+        delete decoded[key]
+        damaged = true
+      }
+      if (!Object.hasOwn(decoded, listKey)) continue
+      const entries = decoded[listKey]
+      if (!Array.isArray(entries)) {
+        delete decoded[listKey]
+        damaged = true
+        continue
+      }
+      const profiles = entries.filter(settingsObject)
+      if (profiles.length !== entries.length) damaged = true
+      for (const profile of profiles) endpoint(profile, t(`settings.defaults.${key}`))
+      decoded[listKey] = profiles
+    }
+    if (settingsObject(decoded.directorSkill)) {
+      fields(decoded.directorSkill, ['name', 'filename', 'body'], 'string')
+      fields(decoded.directorSkill, ['importedAt'], 'number')
+    } else if (decoded.directorSkill != null) {
+      delete decoded.directorSkill
+      damaged = true
+    }
+    const parsed = decoded as Partial<AppSettings>
+    const migrated = migrateDefaultNames(parsed)
     const llmSnap = savedChatEndpoint(parsed.llm, defaults.llm)
     const visionSnap = savedChatEndpoint(parsed.vision, defaults.vision)
     const llm = hydrateNamed(savedChatProfiles(parsed.llms), llmSnap, t('settings.defaults.llm'), parsed.activeLlmId, 'llm')
@@ -682,7 +786,7 @@ function parseSettings(raw: string | null, saveMigrated?: (settings: Partial<App
       'mus'
     )
 
-    return {
+    const config: AppSettings = {
       ...defaults,
       ...parsed,
       theme: 'dark',
@@ -724,16 +828,17 @@ function parseSettings(raw: string | null, saveMigrated?: (settings: Partial<App
         Boolean(normalizeDirectorSkill(parsed.directorSkill))
       )
     }
+    return { config, damaged, migrated: migrated ? parsed : undefined }
   } catch {
-    return defaults
+    return { config: defaults, damaged: true }
   }
 }
 
-function loadFromLocal(): AppSettings {
+function readLocal() {
   try {
-    return parseSettings(localStorage.getItem(STORAGE_KEY), writeLocal)
+    return localStorage.getItem(STORAGE_KEY)
   } catch {
-    return buildDefaults()
+    return null
   }
 }
 
@@ -783,72 +888,104 @@ function writeDisk(v: AppSettings) {
 }
 
 export const useSettingsStore = defineStore('settings', () => {
-  const config = ref<AppSettings>(loadFromLocal())
+  const localRaw = readLocal()
+  const local = parseSettings(localRaw)
+  const config = ref<AppSettings>(local.config)
   const persistPath = ref('')
   const diskReady = ref(false)
   const lastSavedAt = ref(0)
-  let skipDisk = false
+  const toast = useToastStore()
+  let skipSave = false
+  let preserveDisk = false
   let hydratePromise: Promise<void> | null = null
-  let pendingDisk: AppSettings | null = null
   let userEdited = false
+  let pendingSave = false
 
   function touch() {
     userEdited = true
   }
 
+  function saveLocal() {
+    if (!local.damaged && !preserveDisk) writeLocal(config.value)
+  }
+
+  async function reportDamaged(raw: string) {
+    try {
+      const backup = isDesktop()
+        ? await desktop().backupSettings(raw)
+        : `${STORAGE_KEY}.broken-${Date.now()}`
+      if (!isDesktop()) localStorage.setItem(backup, raw)
+      toast.warn(ko.settings.damagedBackup.replace('{path}', backup), 0)
+    } catch {
+      toast.error(ko.settings.damagedBackupFailed, 0)
+    }
+  }
+
   watch(
     config,
-    (v) => {
-      writeLocal(v)
-      if (skipDisk) return
+    () => {
+      if (skipSave) return
       if (!diskReady.value) {
-        pendingDisk = v
+        pendingSave = true
         return
       }
-      void writeDisk(v).then(() => {
+      if (preserveDisk || (!isDesktop() && local.damaged)) return
+      saveLocal()
+      void writeDisk(config.value).then(() => {
         lastSavedAt.value = Date.now()
       }).catch(() => {})
     },
-    { deep: true }
+    { deep: true, flush: 'sync' }
   )
 
   async function ensureHydrated() {
     if (diskReady.value) return
     if (hydratePromise) return hydratePromise
     hydratePromise = (async () => {
-      if (!isDesktop()) {
-        diskReady.value = true
-        return
-      }
       try {
+        if (local.damaged && localRaw !== null) await reportDamaged(localRaw)
+        if (!isDesktop()) {
+          if (pendingSave) saveLocal()
+          else if (local.migrated && !local.damaged) writeLocal(local.migrated)
+          return
+        }
         const api = desktop()
         persistPath.value = typeof api.dbPath === 'function' ? await api.dbPath() : await settingsFilePath()
         let raw: string | null = null
         if (typeof api.kvGet === 'function') raw = await api.kvGet(SETTINGS_KV_KEY)
-        if (!raw) {
+        if (raw === null) {
           const file = await settingsFilePath()
           if (await api.exists(file)) raw = await api.readText(file)
         }
-        if (raw) {
-          skipDisk = true
+        if (raw !== null) {
+          const saved = parseSettings(raw)
+          preserveDisk = saved.damaged
           if (!userEdited) {
-            config.value = parseSettings(raw)
-            writeLocal(config.value)
+            skipSave = true
+            config.value = saved.config
+            skipSave = false
           }
-          skipDisk = false
-          await writeDisk(config.value)
-          lastSavedAt.value = Date.now()
-        } else {
-          await writeDisk(config.value)
-          lastSavedAt.value = Date.now()
+          if (saved.damaged) {
+            if (raw !== localRaw || !local.damaged) await reportDamaged(raw)
+            return
+          }
+        } else if (local.damaged) {
+          preserveDisk = true
+          return
         }
-      } catch (e) {
-        console.warn('[settings] Could not read local database', e)
+        saveLocal()
+        await writeDisk(config.value)
+        lastSavedAt.value = Date.now()
+        if (pendingSave) {
+          saveLocal()
+          await writeDisk(config.value)
+        }
+      } catch (error) {
+        preserveDisk = true
+        console.warn('[settings] Could not load or save settings', error)
+        toast.error(ko.settings.storageUnavailable, 0)
       } finally {
         diskReady.value = true
-        const extra = pendingDisk
-        pendingDisk = null
-        if (extra) await writeDisk(extra)
       }
     })().finally(() => {
       hydratePromise = null
@@ -858,19 +995,10 @@ export const useSettingsStore = defineStore('settings', () => {
 
   void ensureHydrated()
 
-  if (typeof window !== 'undefined') {
-    const flushOnLeave = () => {
-      writeLocal(config.value)
-      if (diskReady.value) void writeDisk(config.value)
-    }
-    window.addEventListener('beforeunload', flushOnLeave)
-    document.addEventListener('visibilitychange', () => {
-      if (document.visibilityState === 'hidden') flushOnLeave()
-    })
-  }
-
   async function flush() {
-    writeLocal(config.value)
+    await ensureHydrated()
+    if (preserveDisk || (!isDesktop() && local.damaged)) throw new Error(ko.settings.storageUnavailable)
+    saveLocal()
     await writeDisk(config.value)
     lastSavedAt.value = Date.now()
   }

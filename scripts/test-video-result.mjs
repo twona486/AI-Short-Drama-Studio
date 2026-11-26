@@ -1,9 +1,10 @@
 /**
  * AutoDL 결과 파싱과 Node에서의 COS 영상 다운로드를 검증한다.
  * 실행 방법은 node scripts/test-video-result.mjs이다.
- * 선택 사항으로 AUTODL_TOKEN=xxx TASK_ID=xxx를 지정한다.
+ * 라이브 검사는 TEST_LIVE_VIDEO_RESULT=1로 켜고 AUTODL_TOKEN과 TASK_ID를 직접 지정한다.
  */
-import { writeFileSync, mkdirSync, existsSync, readFileSync, readdirSync } from 'node:fs'
+import assert from 'node:assert/strict'
+import { writeFileSync, mkdirSync } from 'node:fs'
 import { join } from 'node:path'
 
 const SAMPLE_RESULTS = [
@@ -97,32 +98,6 @@ function mask(token) {
   return `${s.slice(0, 4)}…${s.slice(-4)} (${s.length} chars)`
 }
 
-function findTokenFromLocalStorage() {
-  const dir = join(process.env.APPDATA || '', 'ai-cut', 'Local Storage', 'leveldb')
-  if (!existsSync(dir)) return ''
-  for (const name of readdirSync(dir)) {
-    if (!/\.(ldb|log)$/i.test(name)) continue
-    const buf = readFileSync(join(dir, name))
-    const text = buf.toString('utf8')
-    const idx = text.indexOf('ai-cut:settings')
-    if (idx < 0) continue
-    const slice = text.slice(idx, idx + 20000)
-    const jsonStart = slice.indexOf('{')
-    if (jsonStart < 0) continue
-    for (let end = jsonStart + 1; end < slice.length; end++) {
-      if (slice[end] !== '}') continue
-      try {
-        const parsed = JSON.parse(slice.slice(jsonStart, end + 1))
-        const key = parsed?.video?.apiKey || parsed?.config?.video?.apiKey
-        if (key) return String(key)
-      } catch {
-        /* keep scanning */
-      }
-    }
-  }
-  return ''
-}
-
 async function downloadHead(url) {
   const started = Date.now()
   const res = await fetch(url, { redirect: 'follow' })
@@ -141,12 +116,9 @@ async function downloadHead(url) {
 }
 
 async function main() {
-  const outDir = join(process.cwd(), 'tmp')
-  mkdirSync(outDir, { recursive: true })
-
   console.log('\n=== 1) Parse the sample results array ===')
   const pickedRaw = pickWorkflowVideoResult(SAMPLE_RESULTS)
-  console.log('pick raw array:', pickedRaw)
+  assert.equal(pickedRaw?.url, SAMPLE_RESULTS[0].url)
 
   const envelopes = [
     { code: 'Success', data: { status: 'SUCCESS', results: SAMPLE_RESULTS } },
@@ -157,9 +129,12 @@ async function main() {
   for (const [i, env] of envelopes.entries()) {
     const results = collectWorkflowResults(env)
     const picked = pickWorkflowVideoResult(results)
-    console.log(`envelope #${i + 1} status=${unwrapTaskPayload(env)?.status || '-'} picked=${picked?.url ? 'YES' : 'NO'} score=${picked?.score ?? '-'}`)
+    assert.equal(picked?.url, SAMPLE_RESULTS[0].url, `envelope ${i + 1}`)
   }
 
+  if (process.env.TEST_LIVE_VIDEO_RESULT !== '1') return
+  const outDir = join(process.cwd(), 'tmp')
+  mkdirSync(outDir, { recursive: true })
   const videoUrl = SAMPLE_RESULTS[0].url
   console.log('\n=== 2) Download COS MP4 from Node ===')
   console.log('url:', videoUrl)
@@ -174,7 +149,7 @@ async function main() {
     console.log('Download error:', e?.message || e)
   }
 
-  const token = process.env.AUTODL_TOKEN || findTokenFromLocalStorage()
+  const token = process.env.AUTODL_TOKEN || ''
   const taskId = process.env.TASK_ID || ''
   console.log('\n=== 3) Poll AutoDL ===')
   console.log('token:', mask(token))
