@@ -53,9 +53,9 @@ function protectMediaLiterals(prompt: string) {
 }
 
 /** Return only a safe, validated translation. Never fall back to mixed-language instructions. */
-export async function translateMediaPrompt(prompt: string, signal?: AbortSignal) {
+export async function translateMediaPrompt(prompt: string, signal?: AbortSignal, forceEnglish = false) {
   throwIfAborted(signal)
-  if (!translationEnabled() || !nonEnglishScript.test(prompt)) return prompt
+  if ((!forceEnglish && !translationEnabled()) || !nonEnglishScript.test(prompt)) return prompt
   const cached = cache.get(prompt)
   if (cached !== undefined) return cached
   try {
@@ -94,9 +94,9 @@ export async function translateMediaPrompt(prompt: string, signal?: AbortSignal)
   }
 }
 
-export async function prepareMediaPrompt(kind: MediaKind, prompt: string, signal?: AbortSignal, limit?: number) {
-  const translated = await translateMediaPrompt(prompt, signal)
-  if (limit && translated.length > limit && translationEnabled() &&
+export async function prepareMediaPrompt(kind: MediaKind, prompt: string, signal?: AbortSignal, limit?: number, forceEnglish = false) {
+  const translated = await translateMediaPrompt(prompt, signal, forceEnglish)
+  if (limit && translated.length > limit && (forceEnglish || translationEnabled()) &&
       [...translated.matchAll(quoted)].some(match =>
         match.index + match[0].length > limit && nonEnglishScript.test(match[1]))) {
     throw preparationError('mediaPrompt.literalTooLong')

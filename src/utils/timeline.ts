@@ -1,9 +1,51 @@
 import type { Project, TimelineClip } from '@/types'
+import { effectiveShotAudioMode, shotLipSyncDuration, shotPlaybackDuration } from './shot'
+import { buildCuesFromClips } from '@/services/ffmpeg/subtitle'
 
 export function timelineClipAssetId(project: Project, clip: TimelineClip): string | undefined {
   if (clip.assetId) return clip.assetId
   const shot = project.shots.find((item) => item.id === clip.shotId)
   return shot?.videoAssetId || shot?.imageAssetId
+}
+
+export function clipLipSyncDuration(project: Project, clip: TimelineClip): number | undefined {
+  return shotLipSyncDuration(project.shots.find((shot) => shot.id === clip.shotId), timelineClipAssetId(project, clip))
+}
+
+export function clipCaptionDuration(project: Project, clip: TimelineClip): number {
+  const duration = clipLipSyncDuration(project, clip)
+  if (duration === undefined) return clip.duration
+  return Math.min(clip.duration, Math.max(0, duration - (clip.sourceIn || 0)) / (clip.speed || 1))
+}
+
+export function buildTimelineCaptionCues(project: Project, clips = project.timeline) {
+  if (clips.length) {
+    return buildCuesFromClips(clips.map((clip) => ({
+      startTime: clip.startTime,
+      duration: clipCaptionDuration(project, clip),
+      text: project.shots.find((shot) => shot.id === clip.shotId)?.voiceover ?? ''
+    })))
+  }
+  let startTime = 0
+  return buildCuesFromClips(project.shots.map((shot) => {
+    const duration = shotPlaybackDuration(shot)
+    const cue = { startTime, duration, text: shot.voiceover }
+    startTime += duration
+    return cue
+  }))
+}
+
+/** 립싱크가 들어 있는 클립은 원본 음성을 사용하고 별도의 대사 트랙을 합성하지 않는다. */
+export function clipAudioSelection(project: Project, clip: TimelineClip, keepAmbient: boolean) {
+  const shot = project.shots.find((item) => item.id === clip.shotId)
+  const embeddedLipSync = clipLipSyncDuration(project, clip) !== undefined
+  const mode = shot && effectiveShotAudioMode(shot)
+  return {
+    keepSource: embeddedLipSync || project.pipelineMode === 'smart-speech' ||
+      mode === 'h3-dialogue' || mode === 'h3-voiceover' || keepAmbient,
+    embeddedLipSync,
+    voiceAssetId: embeddedLipSync ? undefined : clip.voiceAssetId
+  }
 }
 
 /** 기존 영상과 이미지로 샷 순서에 따라 타임라인을 만든다. */
@@ -15,7 +57,7 @@ export function buildTimelineFromShots(project: Project): TimelineClip[] {
       id: 'tc_' + s.id,
       shotId: s.id,
       startTime: 0,
-      duration: s.duration,
+      duration: shotPlaybackDuration(s),
       sourceIn: 0,
       transitionIn: 'none',
       transitionDuration: 0,

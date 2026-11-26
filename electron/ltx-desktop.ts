@@ -3,9 +3,12 @@ import { isIPv4 } from 'node:net'
 import http from 'node:http'
 import https from 'node:https'
 import { validLtxImage } from './ltx'
+import { lipSyncDuration, lipSyncPcm } from '../src/services/ai/lipSyncWav'
 import { ltxDurationOptions } from '../src/services/ai/ltxOptions'
 import {
   LTX_DESKTOP_RESOLUTIONS,
+  LTX_DESKTOP_AUDIO_RESOLUTIONS,
+  ltxDesktopAudioMax,
   LTX_DESKTOP_MODELS,
   type LtxDesktopReply,
   type LtxDesktopRequest
@@ -134,40 +137,73 @@ export async function requestLtxDesktop(request: LtxDesktopRequest): Promise<Ltx
       await json('/api/session')
       return { kind: 'ready' }
     }
-    if (op.kind === 'submit') {
-      if (!validLtxImage(op.first) || (op.last !== undefined && !validLtxImage(op.last)) ||
-        !LTX_DESKTOP_MODELS.includes(op.model) || typeof op.prompt !== 'string' || op.prompt.length > 5000 ||
-        !LTX_DESKTOP_RESOLUTIONS.includes(op.resolution) || !ltxDurationOptions(op.model, op.resolution).includes(op.duration) ||
+    if (op.kind === 'submit' || op.kind === 'submitAudio' || op.kind === 'checkAudio') {
+      if (!LTX_DESKTOP_MODELS.includes(op.model) || !LTX_DESKTOP_RESOLUTIONS.includes(op.resolution) ||
         !['16:9', '9:16'].includes(op.aspect)) return { kind: 'invalid' }
+      if (op.kind !== 'checkAudio' && (typeof op.prompt !== 'string' || op.prompt.length > 5000)) return { kind: 'invalid' }
+      if (op.kind === 'submit' && (!validLtxImage(op.first) || (op.last !== undefined && !validLtxImage(op.last)) ||
+        !ltxDurationOptions(op.model, op.resolution).includes(op.duration))) return { kind: 'invalid' }
+      let audioDuration = 0
+      if (op.kind === 'submitAudio') {
+        if (!(op.audio instanceof ArrayBuffer) || op.audio.byteLength > 960_044 ||
+          (op.first !== undefined && !validLtxImage(op.first))) return { kind: 'invalid' }
+        try {
+          audioDuration = lipSyncDuration(lipSyncPcm(op.audio))
+        } catch {
+          return { kind: 'invalid' }
+        }
+        if (audioDuration < 2 || audioDuration > ltxDesktopAudioMax(op.resolution) || !op.prompt.trim()) {
+          return { kind: 'invalid' }
+        }
+      }
+
       const specs = await json('/api/generate/models-specs')
       const local = Array.isArray(specs.downloaded_local_models) ? specs.downloaded_local_models : []
       const offering = local.find((entry: any) => entry?.model === op.model)
-      const grid = offering?.spec?.aspect_specs?.[op.aspect]?.supported_resolutions_durations ||
-        offering?.spec?.supported_resolutions_durations
-      if (!offering || offering.spec?.capabilities?.i2v === false ||
-        !grid?.[op.resolution]?.fps_to_durations?.['24']?.includes(op.duration)) return { kind: 'unsupported' }
+      const spec = offering?.spec
+      const aspectSpec = spec?.aspect_specs?.[op.aspect]
+      if (op.kind === 'submit') {
+        const grid = aspectSpec?.supported_resolutions_durations ?? spec?.supported_resolutions_durations
+        if (!offering || spec?.capabilities?.i2v === false ||
+          !grid?.[op.resolution]?.fps_to_durations?.['24']?.includes(op.duration)) return { kind: 'unsupported' }
+      } else {
+        const grid = aspectSpec?.a2v_supported_resolutions_durations ?? spec?.a2v_supported_resolutions_durations
+        const durations = grid?.[op.resolution]?.fps_to_durations?.['24']
+        if (!LTX_DESKTOP_AUDIO_RESOLUTIONS.includes(op.resolution) || spec?.capabilities?.a2v !== true ||
+          !Array.isArray(durations) || !durations.some((seconds: number) => seconds >= Math.max(2, audioDuration))) {
+          return { kind: 'unsupported' }
+        }
+        if (op.kind === 'checkAudio') return { kind: 'ready' }
+      }
 
-      const upload = async (image: string) => {
-        const [meta, bytes] = image.split(',')
-        const mime = meta.slice(5, -7)
-        const ext = mime === 'image/jpeg' ? 'jpg' : mime.slice(6)
+      const upload = async (bytes: ArrayBuffer, mime: string, filename: string, expectedKind?: string) => {
         const form = new FormData()
-        form.set('file', new Blob([Uint8Array.from(Buffer.from(bytes, 'base64'))], { type: mime }), `frame.${ext}`)
+        form.set('file', new Blob([bytes], { type: mime }), filename)
         const multipart = new Request(origin, { method: 'POST', body: form })
         const asset = JSON.parse((await raw('/api/assets/upload', {
           method: 'POST', token, body: new Uint8Array(await multipart.arrayBuffer()),
           contentType: multipart.headers.get('content-type') || undefined
         })).toString('utf8'))
-        if (typeof asset?.id !== 'string' || !ID.test(asset.id)) throw new Error('Invalid asset ID')
+        if (typeof asset?.id !== 'string' || !ID.test(asset.id) || (expectedKind && asset.media_kind !== expectedKind)) throw new Error('Invalid asset ID')
         return { assetId: asset.id }
       }
-      const startFrame = await upload(op.first)
-      const endFrame = op.last ? await upload(op.last) : undefined
-      const job = await json('/api/generations/image-to-video', {
-        contract_version: 1,
-        params: { model: offering.model, prompt: op.prompt, aspectRatio: op.aspect, duration: op.duration, resolution: op.resolution, fps: 24 },
-        inputs: { startFrame, endFrame }
-      })
+      const uploadFrame = (image: string) => {
+        const [meta, bytes] = image.split(',')
+        const mime = meta.slice(5, -7)
+        const ext = mime === 'image/jpeg' ? 'jpg' : mime.slice(6)
+        return upload(Uint8Array.from(Buffer.from(bytes, 'base64')).buffer, mime, `frame.${ext}`)
+      }
+      const audio = op.kind === 'submitAudio' ? await upload(op.audio, 'audio/wav', 'dialogue.wav', 'audio') : undefined
+      const startFrame = op.first ? await uploadFrame(op.first) : undefined
+      const params = { model: op.model, prompt: op.prompt, aspectRatio: op.aspect, resolution: op.resolution, fps: 24 }
+      const job = op.kind === 'submitAudio'
+        ? await json('/api/generations/audio-to-video', {
+          contract_version: 1, params, inputs: { audio, startFrame }
+        })
+        : await json('/api/generations/image-to-video', {
+          contract_version: 1, params: { ...params, duration: op.duration },
+          inputs: { startFrame, endFrame: op.last ? await uploadFrame(op.last) : undefined }
+        })
       return typeof job?.id === 'string' && ID.test(job.id)
         ? { kind: 'submitted', id: job.id } : { kind: 'invalid' }
     }

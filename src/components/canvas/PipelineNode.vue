@@ -2,7 +2,7 @@
 import { isOpenAiTts, OPENAI_TTS_VOICES, recommendOpenAiVoice } from '@/services/ai/openAiTts'
 import { ltxShotSpeechTooFast } from '@/services/ai/ltxShotPrompt'
 import { nearestVideoDuration, videoDurationCapability, shotDurationWarning } from '@/services/ai/videoDuration'
-import { isLtxTask, isLtxDesktop } from '@/services/ai/ltxDesktopOptions'
+import { isLtxTask, isLtxDesktop, LTX_DESKTOP_AUDIO_RESOLUTIONS, ltxDesktopAudioResolution } from '@/services/ai/ltxDesktopOptions'
 import { isLtxProfile, LTX_DEFAULT_MODEL } from '@/services/ai/ltxOptions'
 import { t as translate } from '@/i18n'
 import { computed, onBeforeUnmount, ref, shallowRef, watch } from 'vue'
@@ -34,7 +34,7 @@ import { pickDocImageResolution, pickDocVideoResolution, videoResolutionChoices,
 import CanvasToolbarIcon from '@/components/canvas/CanvasToolbarIcon.vue'
 import NodeLinkPlus from '@/components/canvas/NodeLinkPlus.vue'
 import { canBuildExport } from '@/utils/timeline'
-import { effectiveShotAudioMode, needsExternalTts } from '@/utils/shot'
+import { effectiveShotAudioMode, needsExternalTts, shotLipSyncDuration } from '@/utils/shot'
 import { defaultPropSheetPrompt, fillEmptyGeneratePrompt, shotFrameSendPrompt } from '@/utils/nodePrompt'
 import { friendlyAiError, shouldToastAiError } from '@/services/ai/abort'
 import { clampRect, cropContainedImage, trimVideoBlob, type NormRect } from '@/utils/mediaEdit'
@@ -228,7 +228,7 @@ const durationLabel = computed(() => {
   const actual =
     playbackDuration.value ||
     (meta && 'duration' in meta && Number(meta.duration) > 0 ? Number(meta.duration) : 0)
-  const d = actual > 0 ? actual : shot.value?.duration
+  const d = shotLipSyncDuration(shot.value, assetId.value || undefined) ?? (actual > 0 ? actual : shot.value?.duration)
   if (!d || d <= 0) return ''
   return Number.isInteger(d) ? `${d}s` : `${Number(d).toFixed(1)}s`
 })
@@ -319,8 +319,10 @@ const videoModel = computed({
   get: () => normalizeVideoGenModel(nodeMeta.value?.data.videoModel ?? settings.config.defaultVideoModel),
   set: (v: VideoGenModel) => applyShotVideoModel(props.id, v)
 })
-const resolutionChoices = computed(() =>
-  videoResolutionChoices({
+const usesLipSync = computed(() => shot.value?.audioMode === 'ltx-lip-sync')
+const resolutionChoices = computed(() => usesLipSync.value
+  ? [...LTX_DESKTOP_AUDIO_RESOLUTIONS]
+  : videoResolutionChoices({
     model: videoModel.value,
     profile: videoModel.value !== 'h3' && docVideoProfile.value?.provider === 'ltx' || videoModel.value === 'wan-prime' ? null : docVideoProfile.value
   })
@@ -328,6 +330,7 @@ const resolutionChoices = computed(() =>
 const videoResolution = computed({
   get: () => {
     const choices = resolutionChoices.value
+    if (usesLipSync.value) return ltxDesktopAudioResolution(nodeMeta.value?.data.videoResolution ?? project.current?.settings.defaultVideoResolution)
     if (choices.length) return pickDocVideoResolution(nodeMeta.value?.data.videoResolution ?? project.current?.settings.defaultVideoResolution, choices) || choices[0]
     return '768p' as VideoResolution
   },
@@ -472,6 +475,9 @@ const promptHint = computed(() => {
   return translate('pipelineNode.sendAsIs')
 })
 
+const lipSyncLength = computed(() => shotLipSyncDuration(shot.value) ??
+  (shot.value?.lipSyncTask?.id === shot.value?.videoTaskId ? shot.value?.lipSyncTask?.duration : undefined))
+
 const metaLine = computed(() => {
   const ar = nodeAspectRatio.value
   const w = project.current?.settings.width ?? 1280
@@ -479,6 +485,7 @@ const metaLine = computed(() => {
   if (type.value === 'shotVideo') return `MiniMax H3 · ${ar}`
   if (type.value === 'audio') {
     if (!shot.value) return translate('pipelineNode.narration')
+    if (effectiveShotAudioMode(shot.value) === 'ltx-lip-sync') return translate('lipSync.mode')
     return effectiveShotAudioMode(shot.value) === 'tts' ? translate('pipelineNode.postTts') : translate('pipelineNode.h3Voice')
   }
   const model = settings.config.image.model || translate('pipelineNode.imageGeneration')
@@ -1267,7 +1274,10 @@ const cropStyle = computed(() => ({
       <span v-if="isVideoNode && durationLabel" class="len">{{ durationLabel }}</span>
     </div>
 
-    <p v-if="type === 'shotVideo' && exceedsShotDuration" class="shot-duration-warning">
+    <p v-if="type === 'shotVideo' && shot && lipSyncLength !== undefined && Math.abs(lipSyncLength - shot.duration) >= 0.01" class="shot-duration-warning">
+      {{ $t('lipSync.durationMismatch', { planned: shot.duration, actual: lipSyncLength.toFixed(2) }) }}
+    </p>
+    <p v-if="type === 'shotVideo' && shot && effectiveShotAudioMode(shot) !== 'ltx-lip-sync' && exceedsShotDuration" class="shot-duration-warning">
       {{ $t('storyboard.shotDurationWarning', { max: durationCapability.max, duration: shot?.duration }) }}
     </p>
     <p v-if="type === 'shotVideo' && ltxProfile && ltxShotSpeechTooFast(shot, shotDurationValue)" class="shot-duration-warning">
@@ -1386,6 +1396,7 @@ const cropStyle = computed(() => ({
         v-if="isH3Fl2va || ltxProfile"
         v-model:first-id="firstFrameId"
         v-model:last-id="lastFrameId"
+        :first-only="usesLipSync"
         :last-required="lastFrameRequired"
         :first-hint="shot?.imageAssetId ? $t('common.useShotImage') : $t('common.chooseFirstFrame')"
       />
@@ -1427,7 +1438,8 @@ const cropStyle = computed(() => ({
           :durations="durationOptions"
           :ltx-model="ltxProfile ? ltxProfile.workflowId || LTX_DEFAULT_MODEL : undefined"
           :ltx-desktop="isLtxDesktop(ltxProfile)"
-          :show-audio="showVideoAudio"
+          :show-audio="showVideoAudio && !usesLipSync"
+          :lip-sync="usesLipSync"
           :audio="generateAudio"
           @update:resolution="videoResolution = $event"
           @update:aspect="nodeAspectRatio = $event"

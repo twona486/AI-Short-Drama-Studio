@@ -11,6 +11,19 @@ export function ltxDesktopResolution(value?: string): LtxDesktopResolution {
 }
 
 export const LTX_DESKTOP_DURATIONS = [2, 3, 4, 5, 6, 8, 10, 20]
+export const LTX_DESKTOP_AUDIO_RESOLUTIONS: readonly LtxDesktopResolution[] = ['540p', '720p', '1080p']
+
+export function ltxDesktopAudioResolution(value?: string): LtxDesktopResolution {
+  return LTX_DESKTOP_AUDIO_RESOLUTIONS.find((resolution) => resolution === value) ?? '540p'
+}
+
+export function ltxDesktopModel(workflowId?: string) {
+  return workflowId && LTX_DESKTOP_MODELS.includes(workflowId) ? workflowId : LTX_DESKTOP_WORKFLOW
+}
+
+export function ltxDesktopAudioMax(resolution?: string) {
+  return resolution === '1080p' ? 10 : 20
+}
 
 export function isLtxDesktop(profile?: { provider?: string }) {
   return profile?.provider === LTX_DESKTOP_PROVIDER
@@ -20,10 +33,20 @@ export function isLtxTask(taskId?: string) {
   return taskId?.startsWith('ltx:') || taskId?.startsWith('ltx-desktop:')
 }
 
+type LtxDesktopVideoSettings = {
+  model: string
+  resolution: LtxDesktopResolution
+  aspect: '16:9' | '9:16'
+}
+
 export type LtxDesktopOperation =
   | { kind: 'pair'; code: string }
   | { kind: 'check' }
-  | { kind: 'submit'; first: string; last?: string; model: string; prompt: string; duration: number; resolution: LtxDesktopResolution; aspect: '16:9' | '9:16' }
+  | (LtxDesktopVideoSettings & (
+      | { kind: 'submit'; first: string; last?: string; duration: number; prompt: string }
+      | { kind: 'submitAudio'; first?: string; audio: ArrayBuffer; prompt: string }
+      | { kind: 'checkAudio' }
+    ))
   | { kind: 'status' | 'cancel'; id: string }
   | { kind: 'download'; path: string }
 

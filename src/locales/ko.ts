@@ -1,4 +1,18 @@
 export default {
+  "lipSync": {
+    "mode": "정확한 대사(TTS 립싱크)",
+    "unavailable": "현재 영상 연결에서 Audio to Video를 사용할 수 없습니다. LTX Desktop 연결, 다운로드한 모델, 해상도와 화면 비율을 확인해 주세요.",
+    "openAiRequired": "립싱크를 생성하려면 설정에서 OpenAI 더빙을 연결해야 합니다.",
+    "noDialogue": "립싱크로 합성할 대사가 없습니다.",
+    "synthesizing": "립싱크 대사를 합성하고 있어요. ({current}/{total})",
+    "tooLong": "립싱크 음성이 {actual}초로 최대 {max}초를 초과합니다. 대사를 여러 샷으로 나눠 주세요.",
+    "durationMismatch": "립싱크 음성은 {actual}초예요. 스토리보드에는 {planned}초로 설정돼 있어요.",
+    "embedded": "영상에 립싱크 음성이 들어 있어요.",
+    "pending": "영상 노드에서 립싱크를 생성해 주세요.",
+    "promptHint": "장면, 표정, 카메라 움직임을 적어요. 대사는 샷의 원고에서 가져와 더빙해요.",
+    "audioLength": "더빙 길이",
+    "audioLengthHint": "영상 길이는 더빙 길이에 맞춰요."
+  },
   "openAiTts": {
     "hint": "OpenAI Realtime으로 AI 음성을 만들어요.",
     "generatedVoiceHint": "OpenAI TTS는 AI 음성을 만들어요.",

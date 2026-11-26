@@ -10,7 +10,7 @@ import { inspectCanvasNode } from '@/services/canvas/canvasBridge'
 import NodeBusyOverlay from '@/components/canvas/NodeBusyOverlay.vue'
 import NodeLinkPlus from '@/components/canvas/NodeLinkPlus.vue'
 import TtsModelSelect from '@/components/settings/TtsModelSelect.vue'
-import { isVideoVoiceMode, effectiveShotAudioMode, needsExternalTts } from '@/utils/shot'
+import { isVideoVoiceMode, effectiveShotAudioMode, needsExternalTts, shotLipSyncDuration } from '@/utils/shot'
 import type { ShotAudioMode } from '@/types'
 
 const props = defineProps<{
@@ -25,6 +25,7 @@ const props = defineProps<{
 const AUDIO_MODES: { id: ShotAudioMode; label: string }[] = [
   { id: 'h3-dialogue', get label() { return translate('audioNode.h3Dialogue') } },
   { id: 'h3-voiceover', get label() { return translate('audioNode.h3Offscreen') } },
+  { id: 'ltx-lip-sync', get label() { return translate('lipSync.mode') } },
   { id: 'tts', get label() { return translate('common.postTts') } },
   { id: 'none', get label() { return translate('common.noNarration') } }
 ]
@@ -64,6 +65,7 @@ watch(
   () => props.selected,
   (on) => {
     panelOpen.value = Boolean(on)
+    if (on && shot.value) void project.checkShotLipSync(shot.value)
   },
   { immediate: true }
 )
@@ -163,6 +165,7 @@ function openDetail() {
       >
         {{ playing ? '❚❚' : '▶' }}
       </button>
+      <span v-else-if="mode === 'ltx-lip-sync'" class="hint">{{ $t(shotLipSyncDuration(shot) !== undefined ? 'lipSync.embedded' : 'lipSync.pending') }}</span>
       <span v-else class="hint">{{ canTts ? $t('audioNode.pendingTts') : mode === 'none' ? $t('common.noNarration') : $t('audioNode.embedded') }}</span>
     </div>
     <NodeBusyOverlay v-if="generating" :label="$t('audioNode.composing')" />
@@ -175,7 +178,7 @@ function openDetail() {
             :key="m.id"
             type="button"
             :class="{ on: mode === m.id }"
-            :disabled="!supportsVideoVoice && isVideoVoiceMode(m.id)"
+            :disabled="(!supportsVideoVoice && isVideoVoiceMode(m.id)) || (m.id === 'ltx-lip-sync' && (!shot || !project.shotSupportsLipSync(shot)))"
             @click="setMode(m.id)"
           >
             {{ m.label }}

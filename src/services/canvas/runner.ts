@@ -1,6 +1,7 @@
-import { ltxShotPrompt, ltxShotSpeechTooFast } from '@/services/ai/ltxShotPrompt'
+import { ltxLipSyncPrompt, ltxShotPrompt, ltxShotSpeechTooFast } from '@/services/ai/ltxShotPrompt'
 import { videoDurationCapability, nearestVideoDuration } from '@/services/ai/videoDuration'
-import { isLtxDesktop, isLtxTask } from '@/services/ai/ltxDesktopOptions'
+import { joinLipSyncWavs } from '@/services/ai/lipSyncWav'
+import { isLtxDesktop, isLtxTask, ltxDesktopAudioMax, ltxDesktopAudioResolution } from '@/services/ai/ltxDesktopOptions'
 import { isLtxProfile } from '@/services/ai/ltxOptions'
 import { uiPunctuation } from '@/i18n'
 import { t as translate } from "@/i18n"
@@ -49,7 +50,7 @@ import {
 import { blobToChatImageUrl, callLLM } from '@/services/ai/client'
 import { stripReasoningLeak } from '@/utils/jsonRepair'
 import { resolveImageAdapter } from '@/services/ai/adapters'
-import { openAiShotSpeech, shotSpeakerSubject } from '@/services/ai/shotSpeech'
+import { openAiLipSyncLines, openAiShotSpeech, shotSpeakerSubject } from '@/services/ai/shotSpeech'
 import { DRAW_THINGS_PROVIDER } from '@/services/ai/drawThingsOptions'
 import { observeMediaPrompts } from '@/services/ai/mediaPromptObserver'
 import { getImageConfig, imageModelForProject, getVideoPromptStyle, getTtsConfig } from '@/services/ai/runtime'
@@ -1383,22 +1384,49 @@ export async function generateShotVideo(shot: Shot, onProgress?: (msg: string) =
   const videoNode = canvasVideoNodeForShot(shot)
   const profileId = videoNode?.data.videoProfileId || shot.videoProfileId
   const profile = videoProfileById(profileId)
-  if (isLtxTask(shot.videoTaskId) ||
-    (canvasVideoModelForShot(shot) === 'h3' && isLtxProfile(profile))) {
+  const wantsLipSync = shot.audioMode === 'ltx-lip-sync'
+  const resuming = isLtxTask(shot.videoTaskId)
+  if (wantsLipSync && !resuming && !videoDurationCapability({ model: canvasVideoModelForShot(shot), profile }).audioToVideo) {
+    throw new Error(translate('lipSync.unavailable'))
+  }
+  if (resuming || (canvasVideoModelForShot(shot) === 'h3' && isLtxProfile(profile))) {
     const p = project.current
     const resumeTaskId = shot.videoTaskId
-    const resuming = isLtxTask(resumeTaskId)
     const aspectRatio = shotNodeAspect(p, shot.id, 'shotVideo')
+    const videoResolution = canvasVideoResolutionForShot(shot, 'h3')
+    let lipSyncWav: ArrayBuffer | undefined
+    let lipSyncDuration = resuming && shot.lipSyncTask?.id === resumeTaskId ? shot.lipSyncTask?.duration : undefined
+    if (!resuming && wantsLipSync) {
+      if (!await project.checkShotLipSync(shot)) throw new Error(translate('lipSync.unavailable'))
+      ensureNotCancelled(signal)
+      if (project.current?.id !== p.id) throw new DOMException(translate('ltx.projectChanged'), 'AbortError')
+      if (!getTtsConfig().openAi) throw new Error(translate('lipSync.openAiRequired'))
+      const lines = openAiLipSyncLines(shot, p)
+      if (!lines.length) throw new Error(translate('lipSync.noDialogue'))
+      const max = ltxDesktopAudioMax(ltxDesktopAudioResolution(videoResolution))
+      const wavs: ArrayBuffer[] = []
+      for (const [index, speech] of lines.entries()) {
+        onProgress?.(translate('lipSync.synthesizing', { current: index + 1, total: lines.length }))
+        const result = await generateSpeech({ ...speech, signal })
+        wavs.push(await result.blob.arrayBuffer())
+        const joined = joinLipSyncWavs(wavs)
+        if (joined.duration > max) throw new Error(translate('lipSync.tooLong', { actual: joined.duration.toFixed(2), max }))
+        lipSyncDuration = joined.duration
+        lipSyncWav = joined.wav
+        ensureNotCancelled(signal)
+        if (project.current?.id !== p.id) throw new DOMException(translate('ltx.projectChanged'), 'AbortError')
+      }
+    }
     const first = resuming ? undefined : await prepareLtxShotStart(shot, p, videoNode, aspectRatio, onProgress, signal)
     ensureNotCancelled(signal)
     if (project.current?.id !== p.id) throw new DOMException(translate('ltx.projectChanged'), 'AbortError')
-    const videoResolution = canvasVideoResolutionForShot(shot, 'h3')
     const duration = nearestVideoDuration(shot.duration, videoDurationCapability({ profile, resolution: videoResolution }).durations)
-    if (!resuming && ltxShotSpeechTooFast(shot, duration)) onProgress?.(translate('ltx.speechTooFast', { seconds: duration }))
+    if (!resuming && !lipSyncWav && ltxShotSpeechTooFast(shot, duration)) onProgress?.(translate('ltx.speechTooFast', { seconds: duration }))
     const result = await generateVideo({
-      prompt: ltxShotPrompt(shot, resolveShotSpeakerVoice(shot, p)),
+      prompt: lipSyncDuration ? ltxLipSyncPrompt(shot) : ltxShotPrompt(shot, resolveShotSpeakerVoice(shot, p)),
+      lipSyncWav,
       imageBlob: first,
-      lastFrameBlob: resuming ? undefined : await tryLoadRefImageBlob(shot.lastFrameAssetId),
+      lastFrameBlob: resuming || lipSyncWav ? undefined : await tryLoadRefImageBlob(shot.lastFrameAssetId),
       duration: shot.duration,
       ...aspectToSize(aspectRatio),
       aspectRatio,
@@ -1409,13 +1437,16 @@ export async function generateShotVideo(shot: Shot, onProgress?: (msg: string) =
       resumeTaskId,
       onTaskSubmitted: async (videoTaskId) => {
         if (project.current?.id !== p.id) return
-        project.updateShot(shot.id, { videoTaskId, videoProfileId: profile?.id })
+        project.updateShot(shot.id, {
+          videoTaskId, videoProfileId: profile?.id,
+          lipSyncTask: lipSyncDuration ? { id: videoTaskId, duration: lipSyncDuration } : undefined
+        })
         if (videoNode) project.patchCanvasNode(videoNode.id, { videoTaskId, videoProfileId: profile?.id })
         await project.save()
       },
       onTaskTerminalFailure: async () => {
         if (project.current?.id !== p.id) return
-        project.updateShot(shot.id, { videoTaskId: undefined })
+        project.updateShot(shot.id, { videoTaskId: undefined, lipSyncTask: undefined })
         if (videoNode) project.patchCanvasNode(videoNode.id, { videoTaskId: undefined })
         await project.save()
       }
@@ -1430,8 +1461,8 @@ export async function generateShotVideo(shot: Shot, onProgress?: (msg: string) =
       shotId: shot.id
     })
     if (project.current?.id === p.id) {
-      project.assignShotVideo(shot.id, asset.id)
-      project.updateShot(shot.id, { videoTaskId: undefined })
+      project.assignShotVideo(shot.id, asset.id, lipSyncDuration)
+      project.updateShot(shot.id, { videoTaskId: undefined, lipSyncTask: undefined })
       if (videoNode) project.patchCanvasNode(videoNode.id, { videoTaskId: undefined })
       await project.save()
     }

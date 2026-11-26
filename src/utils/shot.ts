@@ -59,12 +59,24 @@ export function resolveH3VoiceMode(shot: Shot, onScreenNames: string[] = []): 'd
   return onScreen ? 'dialogue' : 'voiceover'
 }
 
+export function shotLipSyncDuration(shot?: Shot, assetId = shot?.videoAssetId): number | undefined {
+  return assetId ? shot?.lipSyncVideos?.[assetId] : undefined
+}
+
+export function shotPlaybackDuration(shot: Shot): number {
+  return shotLipSyncDuration(shot) ?? shot.duration
+}
+
+export function isLipSyncShot(shot: Shot): boolean {
+  return effectiveShotAudioMode(shot) === 'ltx-lip-sync' || shotLipSyncDuration(shot) !== undefined
+}
+
 export function needsExternalTts(
   shot: Shot,
   project?: { pipelineMode?: string; speechWorkflow?: { mode?: string } | null } | null
 ): boolean {
   if (isDigitalHumanSpeechProject(project)) return false
-  return effectiveShotAudioMode(shot) === 'tts' && Boolean(shot.voiceover.trim())
+  return !isLipSyncShot(shot) && effectiveShotAudioMode(shot) === 'tts' && Boolean(shot.voiceover.trim())
 }
 
 /** 새 에셋을 현재 결과로 지정하고 기존 에셋은 이력에 보관한다. 중복을 제거하고 최대 12개를 유지한다. */

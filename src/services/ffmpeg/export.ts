@@ -96,7 +96,7 @@ export async function exportVideo(input: ExportInput): Promise<Blob> {
 
     for (let i = 0; i < enabled.length; i++) {
       const clip = enabled[i]
-      const media = input.mediaMap.get(clip.shotId)
+      const media = input.mediaMap.get(clip.id) ?? input.mediaMap.get(clip.shotId)
       if (!media) {
         console.warn(`[export] clip ${clip.id} has no media; skipping`)
         continue
@@ -114,7 +114,7 @@ export async function exportVideo(input: ExportInput): Promise<Blob> {
       const sourceIn = Math.max(0, clip.sourceIn || 0)
       const speed = clip.speed && clip.speed > 0 ? clip.speed : 1
       const keepAmbient =
-        (input.sourceAudioMap?.get(clip.shotId) ?? input.keepAmbientAudio !== false) &&
+        (input.sourceAudioMap?.get(clip.id) ?? input.sourceAudioMap?.get(clip.shotId) ?? input.keepAmbientAudio !== false) &&
         media.kind === 'video'
       const ambientVol = keepAmbient
         ? Math.max(0, Math.min(2, clip.volume ?? input.originalVolume ?? 0.55))

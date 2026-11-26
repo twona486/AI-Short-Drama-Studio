@@ -11,6 +11,7 @@ const props = withDefaults(
     lastId?: ID
     firstHint?: string
     lastRequired?: boolean
+    firstOnly?: boolean
   }>(),
   { lastRequired: false }
 )
@@ -25,7 +26,7 @@ const library = useLibraryStore()
 const urls = ref<Record<string, string>>({})
 const picking = ref<'first' | 'last' | ''>('')
 
-const ids = computed(() => [props.firstId, props.lastId].filter((id): id is ID => Boolean(id)))
+const ids = computed(() => [props.firstId, props.firstOnly ? undefined : props.lastId].filter((id): id is ID => Boolean(id)))
 
 watch(
   ids,
@@ -57,7 +58,7 @@ function clear(which: 'first' | 'last') {
 </script>
 
 <template>
-  <div class="frames nodrag nowheel">
+  <div class="frames nodrag nowheel" :class="{ single: firstOnly }">
     <div class="slot">
       <span>{{ $t('framePairSlots.start') }}</span>
       <button v-if="firstId && urls[firstId]" type="button" class="thumb" @click="openLightbox(urls[firstId], 'image')">
@@ -70,7 +71,7 @@ function clear(which: 'first' | 'last') {
       </div>
       <small v-if="firstHint">{{ firstHint }}</small>
     </div>
-    <div class="slot">
+    <div v-if="!firstOnly" class="slot">
       <span>{{ lastRequired ? $t('framePairSlots.end') : $t('framePairSlots.optionalEnd') }}</span>
       <button v-if="lastId && urls[lastId]" type="button" class="thumb" @click="openLightbox(urls[lastId], 'image')">
         <img :src="urls[lastId]" alt="" />
@@ -95,6 +96,7 @@ function clear(which: 'first' | 'last') {
 </template>
 
 <style scoped>
+.frames.single { grid-template-columns: 1fr; }
 .frames {
   display: grid;
   grid-template-columns: 1fr 1fr;

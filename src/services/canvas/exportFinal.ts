@@ -2,10 +2,10 @@
  * 캔버스에서 최종 영상을 합성한다.
  */
 
-import { exportVideo, parseSRT, buildCuesFromClips, probeMedia, trimTimelineBySpeech } from '@/services/ffmpeg'
+import { exportVideo, parseSRT, probeMedia, trimTimelineBySpeech } from '@/services/ffmpeg'
 import { useAssetsStore, useProjectStore } from '@/stores'
-import { canBuildExport, ensureTimelineFromShots, timelineClipAssetId } from '@/utils/timeline'
-import { effectiveShotAudioMode, isDigitalHumanSpeechProject, needsExternalTts } from '@/utils/shot'
+import { canBuildExport, buildTimelineCaptionCues, clipAudioSelection, ensureTimelineFromShots, timelineClipAssetId } from '@/utils/timeline'
+import { isDigitalHumanSpeechProject, needsExternalTts } from '@/utils/shot'
 
 export async function generateFinalCut(onProgress?: (msg: string) => void) {
   const project = useProjectStore()
@@ -29,13 +29,12 @@ export async function generateFinalCut(onProgress?: (msg: string) => void) {
   const digitalHuman = isDigitalHumanSpeechProject(p)
   const mediaMap = new Map<string, { blob: Blob; kind: 'video' | 'image' }>()
   for (const clip of timeline) {
-    if (mediaMap.has(clip.shotId)) continue
     const shot = p.shots.find((s) => s.id === clip.shotId)
     const assetId = timelineClipAssetId(p, clip)
     if (!assetId) continue
     const blob = await assets.getBlob(assetId)
     if (!blob) continue
-    mediaMap.set(clip.shotId, {
+    mediaMap.set(clip.id, {
       blob,
       kind: (assets.getMeta(assetId)?.kind || (shot?.videoAssetId ? 'video' : 'image')) as 'video' | 'image'
     })
@@ -45,7 +44,7 @@ export async function generateFinalCut(onProgress?: (msg: string) => void) {
   let working = timeline
   if (digitalHuman && p.speechWorkflow?.options.removePauses !== false) {
     onProgress?.('문장 앞뒤의 숨소리를 잘라내고 있어요…')
-    working = await trimTimelineBySpeech(working, async (shotId) => mediaMap.get(shotId)?.blob)
+    working = await trimTimelineBySpeech(working, async (shotId) => mediaMap.get(timeline.find((clip) => clip.shotId === shotId)?.id || '')?.blob)
     project.setTimeline(working)
   }
 
@@ -55,32 +54,10 @@ export async function generateFinalCut(onProgress?: (msg: string) => void) {
     voiceoverMap.set(clip.shotId, shot?.voiceover ?? '')
   }
 
-  const baseCaptionCues = (() => {
-    if (digitalHuman) {
-      return buildCuesFromClips(
-        working.map((c) => {
-          const shot = p.shots.find((s) => s.id === c.shotId)
-          return {
-            startTime: c.startTime,
-            duration: c.duration,
-            text: shot?.voiceover ?? ''
-          }
-        })
-      ).filter((c) => c.text.trim())
-    }
-    const srt = p.captionSrt?.trim()
-    if (srt) return parseSRT(srt).filter((c) => c.text.trim())
-    return buildCuesFromClips(
-      working.map((c) => {
-        const shot = p.shots.find((s) => s.id === c.shotId)
-        return {
-          startTime: c.startTime,
-          duration: c.duration,
-          text: shot?.voiceover ?? ''
-        }
-      })
-    ).filter((c) => c.text.trim())
-  })()
+  const srt = p.captionSrt?.trim()
+  const baseCaptionCues = (!digitalHuman && srt
+    ? parseSRT(srt)
+    : buildTimelineCaptionCues(p, working)).filter((cue) => cue.text.trim() && cue.end > cue.start)
   const captionCues = [
     ...baseCaptionCues,
     ...(p.textOverlays || []).map((item, index) => ({
@@ -109,24 +86,18 @@ export async function generateFinalCut(onProgress?: (msg: string) => void) {
   const voiceoverAudioMap = new Map<string, Blob>()
   const sourceAudioMap = new Map<string, boolean>()
   for (const clip of working) {
-    if (voiceoverAudioMap.has(clip.shotId)) continue
     const shot = p.shots.find((s) => s.id === clip.shotId)
     if (!shot) continue
-    const audioMode = effectiveShotAudioMode(shot)
-    sourceAudioMap.set(
-      clip.shotId,
-      isSpeech ||
-        audioMode === 'h3-dialogue' ||
-        audioMode === 'h3-voiceover' ||
-        p.settings.keepAmbientAudio !== false
-    )
-    if (digitalHuman || !needsExternalTts(shot, p) || !shot.audioAssetId) continue
+    const { embeddedLipSync, keepSource } = clipAudioSelection(p, clip, p.settings.keepAmbientAudio !== false)
+    sourceAudioMap.set(clip.id, keepSource)
+    if (embeddedLipSync || digitalHuman || !needsExternalTts(shot, p) || !shot.audioAssetId) continue
     const blob = await assets.getBlob(shot.audioAssetId)
-    if (blob) voiceoverAudioMap.set(clip.shotId, blob)
+    if (blob) voiceoverAudioMap.set(clip.id, blob)
   }
   for (const clip of working) {
-    if (!clip.voiceAssetId) continue
-    const blob = await assets.getBlob(clip.voiceAssetId)
+    const { voiceAssetId } = clipAudioSelection(p, clip, p.settings.keepAmbientAudio !== false)
+    if (!voiceAssetId) continue
+    const blob = await assets.getBlob(voiceAssetId)
     if (blob) voiceoverAudioMap.set(clip.id, blob)
   }
 

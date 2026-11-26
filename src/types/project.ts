@@ -82,6 +82,9 @@ export interface Shot {
   voiceover: string
   /** H3 자체 대사나 화면 밖 음성, 후반 TTS 또는 음성 없음. */
   audioMode?: ShotAudioMode
+  /** 생성 작업과 영상 에셋에 각각 연결된 립싱크 WAV 길이(초). */
+  lipSyncTask?: { id: string; duration: number }
+  lipSyncVideos?: Record<ID, number>
   /** H3 화자의 음색과 말하는 방식. 예를 들어 자연스럽고 차분한 젊은 여성 목소리. */
   speakerHint?: string
   /**
@@ -173,7 +176,7 @@ export interface Shot {
   notes?: string
 }
 
-export type ShotAudioMode = 'h3-dialogue' | 'h3-voiceover' | 'tts' | 'none'
+export type ShotAudioMode = 'h3-dialogue' | 'h3-voiceover' | 'tts' | 'ltx-lip-sync' | 'none'
 
 /** 스마트 내레이션의 세 가지 제작 모드. */
 export type SpeechWorkflowMode = 'digital-human' | 'human-edit' | 'human-aigc'
