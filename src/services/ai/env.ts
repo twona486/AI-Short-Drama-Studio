@@ -1,3 +1,4 @@
+import { ELEVENLABS_BASE_URL, ELEVENLABS_DEFAULT_VOICE, ELEVENLABS_MODELS, isElevenLabsTts } from './elevenLabsTts'
 /** 개발 기본값은 Vite .env에서 읽으며 설치 빌드에는 포함하지 않는다. */
 
 import { isOfficialOpenAiUrl, OPENAI_TTS_DEFAULT_VOICE, OPENAI_TTS_MODELS } from './openAiTts'
@@ -56,7 +57,8 @@ export function envRealMode(): boolean {
 }
 
 export function envDefaults() {
-  const ttsBaseUrl = envStr('VITE_TTS_BASE_URL', OPENAI_BASE_URL)
+  const ttsBaseUrl = envStr('VITE_TTS_BASE_URL', ELEVENLABS_BASE_URL)
+  const elevenLabs = isElevenLabsTts({ baseUrl: ttsBaseUrl })
   const openAiTts = isOfficialOpenAiUrl(ttsBaseUrl)
   return {
     realMode: envRealMode(),
@@ -78,9 +80,9 @@ export function envDefaults() {
     },
     tts: {
       baseUrl: ttsBaseUrl,
-      apiKey: envStr('VITE_TTS_API_KEY'),
-      model: envStr('VITE_TTS_MODEL', openAiTts ? OPENAI_TTS_MODELS[0] : 'qwen-audio-3.0-tts-flash'),
-      voice: envStr('VITE_TTS_VOICE', openAiTts ? OPENAI_TTS_DEFAULT_VOICE : 'longanhuan_v3.6')
+      apiKey: elevenLabs ? '' : envStr('VITE_TTS_API_KEY'),
+      model: envStr('VITE_TTS_MODEL', elevenLabs ? ELEVENLABS_MODELS[0] : openAiTts ? OPENAI_TTS_MODELS[0] : 'qwen-audio-3.0-tts-flash'),
+      voice: envStr('VITE_TTS_VOICE', elevenLabs ? ELEVENLABS_DEFAULT_VOICE : openAiTts ? OPENAI_TTS_DEFAULT_VOICE : 'longanhuan_v3.6')
     },
     video: {
       baseUrl: migrateVideoBaseUrl(envStr('VITE_VIDEO_BASE_URL', VIDEO_AUTODL_ROOT)),

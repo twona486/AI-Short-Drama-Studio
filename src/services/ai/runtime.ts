@@ -1,3 +1,4 @@
+import { isElevenLabsTts } from './elevenLabsTts'
 import { isOfficialOpenAiUrl, isOpenAiTts } from './openAiTts'
 import { isLtxDesktop } from './ltxDesktopOptions'
 /**
@@ -62,6 +63,8 @@ export function getTtsConfig() {
     ...endpoint,
     baseUrl: endpoint.baseUrl.replace(/\/+$/, ''),
     openAi,
+    elevenLabs: isElevenLabsTts(endpoint),
+    encryptedElevenLabsKey: s?.encryptedElevenLabsKey,
     apiKey: reuseLlm
       ? isOfficialOpenAiUrl(llm.baseUrl) ? llm.apiKey : ''
       : endpoint.apiKey

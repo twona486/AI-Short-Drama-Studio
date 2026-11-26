@@ -1,11 +1,12 @@
 <script setup lang="ts">
+import { isElevenLabsTts } from '@/services/ai/elevenLabsTts'
 import { t as translate } from '@/i18n'
 
-import { ref, computed, onMounted, watch, nextTick } from 'vue'
+import { ref, computed, onMounted, onBeforeUnmount, watch, nextTick } from 'vue'
 import { useRouter } from 'vue-router'
 import { useProjectStore, useToastStore, useAssetsStore, useSettingsStore } from '@/stores'
 import { parseSRT, renderCaptionPng, toSRT } from '@/services/ffmpeg'
-import { openAiShotSpeech } from '@/services/ai/shotSpeech'
+import { elevenLabsShotSpeech, openAiShotSpeech } from '@/services/ai/shotSpeech'
 import { isOpenAiTts, OPENAI_TTS_VOICES } from '@/services/ai/openAiTts'
 import { generateSpeech, TTS_VOICES } from '@/services/ai'
 import GlassCard from '@/components/common/GlassCard.vue'
@@ -22,6 +23,7 @@ const project = useProjectStore()
 const toast = useToastStore()
 const assets = useAssetsStore()
 const settings = useSettingsStore()
+const elevenLabs = computed(() => isElevenLabsTts(settings.config.tts))
 const openAi = computed(() => isOpenAiTts(settings.config.tts))
 const voices = computed(() => openAi.value
   ? OPENAI_TTS_VOICES.map((id) => ({ id, label: id }))
@@ -31,6 +33,16 @@ const srtText = ref('')
 const audioUrls = ref<Record<string, string>>({})
 const generating = ref<Set<string>>(new Set())
 const generatingAll = ref(false)
+const voiceRequests = new Map<string, AbortController>()
+const batchVoiceRequest = ref<AbortController>()
+
+function cancelVoiceRequests() {
+  batchVoiceRequest.value?.abort()
+  for (const request of voiceRequests.values()) request.abort()
+}
+
+watch(() => project.current?.id, cancelVoiceRequests)
+onBeforeUnmount(cancelVoiceRequests)
 const showSrt = ref(false)
 
 const isDigitalHuman = computed(() => isDigitalHumanSpeechProject(project.current))
@@ -202,7 +214,8 @@ async function saveVoiceover(shot: Shot, blob: Blob, mimeType: string, text: str
   if (url) audioUrls.value[shot.id] = url
 }
 
-async function generateLine(shotId: string) {
+async function generateLine(shotId: string, batchSignal?: AbortSignal) {
+  if (generating.value.has(shotId) || batchSignal?.aborted) return false
   if (isDigitalHuman.value) {
     toast.info(translate('caption.digitalSpeechHint'))
     return
@@ -219,15 +232,23 @@ async function generateLine(shotId: string) {
     project.setShotAudioMode(shot.id, 'tts')
     if (hadVideo) toast.info(translate('caption.ttsChanged', { p0: shot.index + 1 }), 6000)
   }
+  const controller = elevenLabs.value ? new AbortController() : undefined
+  if (controller) voiceRequests.set(shotId, controller)
+  const signal = controller && batchSignal ? AbortSignal.any([controller.signal, batchSignal]) : controller?.signal ?? batchSignal
   generating.value.add(shotId)
   try {
-    const speech = openAi.value && project.current ? openAiShotSpeech(shot, project.current) : { text, voice: ttsVoice.value }
-    const result = await generateSpeech(speech)
+    const speech = elevenLabs.value && project.current
+      ? elevenLabsShotSpeech(shot, project.current, settings.config.tts.voice)
+      : openAi.value && project.current ? openAiShotSpeech(shot, project.current) : { text, voice: ttsVoice.value }
+    const result = await generateSpeech({ ...speech, signal })
+    signal?.throwIfAborted()
     await saveVoiceover(shot, result.blob, result.mimeType, text)
     toast.success(translate('caption.clipVoiceReady', { p0: shot.index + 1 }))
+    return true
   } catch (e: any) {
-    toast.error(translate('caption.clipVoiceFailed', { p0: shot.index + 1, p1: e.message }), 8000)
+    if (!signal?.aborted) toast.error(translate('caption.clipVoiceFailed', { p0: shot.index + 1, p1: e.message }), 8000)
   } finally {
+    voiceRequests.delete(shotId)
     generating.value.delete(shotId)
   }
 }
@@ -243,17 +264,20 @@ async function generateAllVoices() {
     return
   }
   generatingAll.value = true
+  const batch = elevenLabs.value ? new AbortController() : undefined
+  batchVoiceRequest.value = batch
   let ok = 0
   try {
     const seen = new Set<string>()
     for (const line of todo) {
+      if (batch?.signal.aborted) break
       if (seen.has(line.shotId)) continue
       seen.add(line.shotId)
-      await generateLine(line.shotId)
-      if (shots.value.find((s) => s.id === line.shotId)?.audioAssetId) ok++
+      if (await generateLine(line.shotId, batch?.signal)) ok++
     }
-    toast.success(translate('caption.voicesGenerated', { p0: ok }))
+    if (!batch?.signal.aborted) toast.success(translate('caption.voicesGenerated', { p0: ok }))
   } finally {
+    batchVoiceRequest.value = undefined
     generatingAll.value = false
   }
 }
@@ -377,7 +401,7 @@ function next() {
           <label class="voice-pick">
             <TtsModelSelect />
           </label>
-          <label class="voice-pick">
+          <label v-if="!elevenLabs" class="voice-pick">
             <span>{{ $t('common.voice') }}</span>
             <select v-model="ttsVoice" class="input" style="width: auto; min-width: 160px;">
               <option v-if="openAi" value="">{{ $t('openAiTts.connectionVoice') }}</option>
@@ -395,6 +419,7 @@ function next() {
         >
           {{ generatingAll ? $t('caption.generating') : $t('caption.generateAllTts') }}
         </GradientButton>
+        <GradientButton v-if="batchVoiceRequest" type="ghost" @click="batchVoiceRequest.abort()">{{ $t('common.cancel') }}</GradientButton>
         <GradientButton icon="→" @click="next">{{ $t('caption.next') }}</GradientButton>
       </div>
     </header>
@@ -482,6 +507,9 @@ function next() {
               <p v-if="line.shot && !project.shotSupportsVideoVoice(line.shot)">{{ $t('common.videoVoiceUnsupported') }}</p>
               <audio v-if="audioUrls[line.shotId]" class="vo-player" :src="audioUrls[line.shotId]" controls />
               <div class="line-actions">
+                <GradientButton v-if="elevenLabs && generating.has(line.shotId)" size="sm" @click="voiceRequests.get(line.shotId)?.abort()">
+                  {{ $t('common.cancel') }}
+                </GradientButton>
                 <GradientButton
                   size="sm"
                   :loading="generating.has(line.shotId)"

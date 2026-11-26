@@ -50,7 +50,7 @@ async function downloadAudio(url: string, signal?: AbortSignal): Promise<Blob> {
 
 async function request(path: string, body: unknown, signal?: AbortSignal): Promise<any> {
   const config = getTtsConfig()
-  if (config.openAi) throw new Error('음색을 복제하려면 더빙 설정에서 참조 오디오를 지원하는 기존 연결을 선택해야 합니다.')
+  if (config.openAi || config.elevenLabs) throw new Error('음색을 복제하려면 더빙 설정에서 참조 오디오를 지원하는 기존 연결을 선택해야 합니다.')
   if (!config.apiKey.trim()) throw new Error(translate('providerErrors.voiceCloneDashscopeKey'))
   const response = await fetch(`${apiRoot(config.baseUrl)}${path}`, {
     method: 'POST',

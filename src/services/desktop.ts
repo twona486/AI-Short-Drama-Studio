@@ -1,3 +1,4 @@
+import type { ElevenLabsRequest, ElevenLabsReply } from "./ai/elevenLabsTts"
 import type { OpenAiTtsRequest, OpenAiTtsReply } from './ai/openAiTts'
 import type { DrawThingsDesktopRequest, DrawThingsReply, DrawThingsProgress } from './ai/drawThingsOptions'
 import type { LtxDesktopRequest, LtxDesktopReply } from './ai/ltxDesktopOptions'
@@ -34,6 +35,8 @@ export type DesktopAPI = {
   }) => Promise<string | null>
   pickDirectory: () => Promise<string | null>
   openPath: (filePath: string) => Promise<string>
+  protectElevenLabsKey: (key: string) => Promise<string | null>
+  elevenLabs: (request: ElevenLabsRequest) => Promise<ElevenLabsReply>
   openAiTts: (request: OpenAiTtsRequest) => Promise<OpenAiTtsReply>
   ltxDesktopRequest: (request: LtxDesktopRequest) => Promise<LtxDesktopReply>
   drawThingsRequest: (request: DrawThingsDesktopRequest) => Promise<DrawThingsReply>

@@ -1,3 +1,4 @@
+import type { ElevenLabsRequest, ElevenLabsReply } from "../src/services/ai/elevenLabsTts"
 import type { OpenAiTtsRequest, OpenAiTtsReply } from '../src/services/ai/openAiTts'
 import type { DrawThingsDesktopRequest, DrawThingsReply, DrawThingsProgress } from '../src/services/ai/drawThingsOptions'
 import type { LtxDesktopRequest, LtxDesktopReply } from '../src/services/ai/ltxDesktopOptions'
@@ -35,6 +36,8 @@ export type DesktopAPI = {
   }) => Promise<string | null>
   pickDirectory: () => Promise<string | null>
   openPath: (filePath: string) => Promise<string>
+  protectElevenLabsKey: (key: string) => Promise<string | null>
+  elevenLabs: (request: ElevenLabsRequest) => Promise<ElevenLabsReply>
   openAiTts: (request: OpenAiTtsRequest) => Promise<OpenAiTtsReply>
   ltxDesktopRequest: (request: LtxDesktopRequest) => Promise<LtxDesktopReply>
   drawThingsRequest: (request: DrawThingsDesktopRequest) => Promise<DrawThingsReply>
@@ -108,6 +111,8 @@ const api: DesktopAPI = {
   saveTextFile: (opts) => ipcRenderer.invoke('desktop:saveTextFile', opts),
   pickDirectory: () => ipcRenderer.invoke('desktop:pickDirectory'),
   openPath: (filePath) => ipcRenderer.invoke('desktop:openPath', filePath),
+  protectElevenLabsKey: (key) => ipcRenderer.invoke("desktop:protectElevenLabsKey", key),
+  elevenLabs: (request) => ipcRenderer.invoke("desktop:elevenLabs", request),
   openAiTts: (request) => ipcRenderer.invoke('desktop:openAiTts', request),
   ltxDesktopRequest: (request) => ipcRenderer.invoke('desktop:ltxDesktopRequest', request),
   drawThingsRequest: (request) => ipcRenderer.invoke('desktop:drawThingsRequest', request),

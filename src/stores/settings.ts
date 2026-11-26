@@ -1,3 +1,4 @@
+import { ELEVENLABS_DEFAULT_VOICE, ELEVENLABS_MODELS, elevenLabsModel, isElevenLabsTts } from '@/services/ai/elevenLabsTts'
 import { isOpenAiTts, OPENAI_TTS_DEFAULT_VOICE, OPENAI_TTS_MODELS, OPENAI_TTS_VOICES } from '@/services/ai/openAiTts'
 import { isLtxDesktop } from '@/services/ai/ltxDesktopOptions'
 import { t } from '@/i18n'
@@ -65,6 +66,7 @@ export interface LlmProfile extends NamedEndpoint {}
 export interface TtsEndpoint extends ServiceEndpoint {
   voice: string
   reuseOpenAiLlmKey?: boolean
+  encryptedElevenLabsKey?: string
 }
 
 export interface TtsProfile extends TtsEndpoint {
@@ -178,6 +180,7 @@ export function endpointReady(ep?: {
   workflowId?: string
   adapter?: AdapterConfig
   provider?: string
+  encryptedElevenLabsKey?: string
 }) {
   if (!ep) return false
   const adapterType = ep.adapter?.type
@@ -185,7 +188,9 @@ export function endpointReady(ep?: {
     adapterType === 'comfyui-prompt' ||
     adapterType === 'zealman-workflow' ||
     (/localhost|127\.0\.0\.1/i.test(ep.baseUrl || '') && ep.provider === 'custom')
-  const hasEndpoint = Boolean(ep.baseUrl?.trim() && (ep.apiKey?.trim() || localComfy || ep.provider === DRAW_THINGS_PROVIDER))
+  const elevenLabsKey = ep.encryptedElevenLabsKey && isElevenLabsTts({ ...ep, baseUrl: ep.baseUrl || '' })
+  const hasEndpoint = Boolean(ep.baseUrl?.trim() &&
+    (ep.apiKey?.trim() || elevenLabsKey || localComfy || ep.provider === DRAW_THINGS_PROVIDER))
   const hasModel = Boolean(ep.model?.trim() || ep.workflowId?.trim() || adapterType === 'comfyui-prompt')
   return hasEndpoint && hasModel
 }
@@ -239,8 +244,19 @@ function asEndpoint(ep: ServiceEndpoint): ServiceEndpoint {
 }
 
 function asTts(ep: TtsEndpoint): TtsEndpoint {
+  const normalized = asEndpoint(ep)
+  if (isElevenLabsTts(ep)) {
+    return {
+      ...normalized,
+      apiKey: '',
+      encryptedElevenLabsKey: ep.encryptedElevenLabsKey,
+      model: elevenLabsModel(ep.model),
+      models: [...ELEVENLABS_MODELS],
+      voice: /^[a-zA-Z0-9_-]{1,100}$/.test(ep.voice) ? ep.voice : ELEVENLABS_DEFAULT_VOICE
+    }
+  }
   return {
-    ...asEndpoint(ep),
+    ...normalized,
     reuseOpenAiLlmKey: ep.reuseOpenAiLlmKey,
     voice: isOpenAiTts(ep)
       ? OPENAI_TTS_VOICES.includes(ep.voice) ? ep.voice : OPENAI_TTS_DEFAULT_VOICE
@@ -625,7 +641,7 @@ function parseSettings(raw: string | null) {
   function endpoint(value: Record<string, unknown>, profileName?: string) {
     fields(value, [
       'baseUrl', 'apiKey', 'model', 'provider', 'voice', 'workflowId', 'promptStyle',
-      'stillMode', 'ltxHostOverride', 'drawThingsSharedSecret'
+      'stillMode', 'ltxHostOverride', 'drawThingsSharedSecret', 'encryptedElevenLabsKey'
     ], 'string')
     fields(value, ['reuseOpenAiLlmKey'], 'boolean')
     if (profileName) {
@@ -1271,11 +1287,16 @@ export const useSettingsStore = defineStore('settings', () => {
     const cur =
       config.value.ttsProfiles.find((p) => p.id === id) || ttsFromEndpoint(config.value.tts, t('settings.defaults.tts'), id)
     const next = { ...cur, ...patch, models: uniq(patch.models ?? cur.models) }
-    if (isOpenAiTts(cur) !== isOpenAiTts(next)) {
+    const elevenLabsChanged = isElevenLabsTts(cur) !== isElevenLabsTts(next)
+    if (elevenLabsChanged) {
+      next.encryptedElevenLabsKey = undefined
+      next.voice = ''
+    }
+    if (elevenLabsChanged || isOpenAiTts(cur) !== isOpenAiTts(next)) {
       next.apiKey = patch.apiKey ?? ''
       next.reuseOpenAiLlmKey = false
     }
-    syncTts(next)
+    syncTts({ ...next, ...asTts(next) })
   }
 
   function addTts(seed: {

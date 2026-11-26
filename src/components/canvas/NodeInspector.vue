@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { isElevenLabsTts } from '@/services/ai/elevenLabsTts'
 import { isOpenAiTts } from '@/services/ai/openAiTts'
 import { ltxShotSpeechTooFast } from '@/services/ai/ltxShotPrompt'
 import { nearestVideoDuration, videoDurationCapability, shotDurationWarning } from '@/services/ai/videoDuration'
@@ -1184,8 +1185,8 @@ async function optimizeVideoPrompt() {
           @input="project.updateShot(shot.id, { voiceover: ($event.target as HTMLTextAreaElement).value })"
         />
         <TtsModelSelect v-if="effectiveShotAudioMode(shot) === 'tts'" />
-        <template v-if="['tts', 'ltx-lip-sync'].includes(effectiveShotAudioMode(shot)) && isOpenAiTts(settings.config.tts)">
-          <p class="hint">{{ $t('openAiTts.generatedVoiceHint') }}</p>
+        <template v-if="['tts', 'ltx-lip-sync'].includes(effectiveShotAudioMode(shot)) && (isOpenAiTts(settings.config.tts) || isElevenLabsTts(settings.config.tts))">
+          <p class="hint">{{ $t(isElevenLabsTts(settings.config.tts) ? 'elevenLabs.shotHint' : 'openAiTts.generatedVoiceHint') }}</p>
           <label>{{ $t('openAiTts.shotInstruction') }}</label>
           <textarea
             rows="2"

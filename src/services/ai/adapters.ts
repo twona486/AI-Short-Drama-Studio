@@ -1,3 +1,5 @@
+import { elevenLabsRequest } from './elevenLabsDesktop'
+import { isElevenLabsTts } from './elevenLabsTts'
 /**
  * OpenAI 호환 API, 사용자 지정 HTTP, AutoDL 및 기본 ComfyUI를 연결하는 어댑터
  * 설정의 adapter.type에 따라 연결 방식을 선택한다.
@@ -72,6 +74,7 @@ export interface AdapterConfig {
 }
 
 export type EndpointLike = {
+  encryptedElevenLabsKey?: string
   drawThingsSharedSecret?: string
   baseUrl?: string
   ltxHostOverride?: string
@@ -1106,6 +1109,16 @@ export async function testEndpointConnection(
   if (!base) return { ok: false, detail: 'API 주소가 없습니다.' }
 
   try {
+    if (kind === 'tts' && isElevenLabsTts({ ...ep, baseUrl: base })) {
+      const { creditsRemaining } = await elevenLabsRequest(ep.encryptedElevenLabsKey, {
+        kind: 'connection', model: ep.model || ''
+      })
+      return {
+        ok: true,
+        detail: creditsRemaining === undefined ? translate('elevenLabs.connected')
+          : translate('elevenLabs.connectedCredits', { count: creditsRemaining.toLocaleString() })
+      }
+    }
     if (kind === 'video' && isLtxDesktop(ep)) {
       if (!isDesktop() || !desktop().ltxDesktopRequest) {
         return { ok: false, detail: translate('ltx.desktopOnly') }

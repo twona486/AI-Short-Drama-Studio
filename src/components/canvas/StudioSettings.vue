@@ -1,4 +1,7 @@
 <script setup lang="ts">
+import ElevenLabsConnection from '@/components/settings/ElevenLabsConnection.vue'
+import ElevenLabsVoiceSelect from '@/components/settings/ElevenLabsVoiceSelect.vue'
+import { isElevenLabsTts } from '@/services/ai/elevenLabsTts'
 import { videoDurationCapability } from '@/services/ai/videoDuration'
 import { t as translate } from '@/i18n'
 
@@ -179,6 +182,7 @@ const videoKey = computed({
   get: () => settings.config.video.apiKey,
   set: (v: string) => settings.patchVideo({ apiKey: v })
 })
+const elevenLabsTts = computed(() => isElevenLabsTts(settings.config.tts))
 const openAiTts = computed(() => isOpenAiTts(settings.config.tts))
 const ttsVoices = computed(() => openAiTts.value
   ? OPENAI_TTS_VOICES.map((id) => ({ id, label: id }))
@@ -191,7 +195,7 @@ const ttsVoice = computed({
 
 function onVoice(v: string) {
   settings.patchTts({ voice: v })
-  if (!openAiTts.value && project.current) project.setSettings({ ttsVoice: v })
+  if (!openAiTts.value && !elevenLabsTts.value && project.current) project.setSettings({ ttsVoice: v })
 }
 
 function subtitle(p: { models?: string[]; model?: string }) {
@@ -556,12 +560,23 @@ function patchAdapter(
         :model="settings.config.tts.model"
         :models="settings.config.tts.models"
         :provider="settings.config.tts.provider"
-        :fixed-base-url="openAiTts && settings.config.tts.provider !== 'custom'"
-        :hide-key="openAiTts && settings.config.tts.reuseOpenAiLlmKey"
+        :fixed-base-url="(openAiTts || elevenLabsTts) && settings.config.tts.provider !== 'custom'"
+        :server-models-only="elevenLabsTts"
+        :hide-key="elevenLabsTts || (openAiTts && settings.config.tts.reuseOpenAiLlmKey)"
         @patch="settings.patchTts($event)"
         @add-model="settings.addModel('tts', $event)"
         @remove-model="settings.removeModel('tts', $event)"
       >
+        <template v-if="elevenLabsTts">
+          <ElevenLabsConnection
+            :key="settings.config.activeTtsId"
+            :profile-id="settings.config.activeTtsId"
+            :model="settings.config.tts.model"
+            :encrypted-key="settings.config.tts.encryptedElevenLabsKey"
+            @update:encrypted-key="settings.patchTts({ encryptedElevenLabsKey: $event })"
+          />
+          <ElevenLabsVoiceSelect v-model="ttsVoice" />
+        </template>
         <label v-if="openAiTts" class="checkbox-row">
           <input
             type="checkbox"
@@ -573,13 +588,13 @@ function patchAdapter(
         <p v-if="openAiTts && settings.config.tts.reuseOpenAiLlmKey && !reusableKey" class="hint">
           {{ $t('openAiTts.reuseKeyMissing') }}
         </p>
-        <label class="extra-label">{{ $t('common.voice') }}</label>
-        <select v-model="ttsVoice">
+        <label v-if="!elevenLabsTts" class="extra-label">{{ $t('common.voice') }}</label>
+        <select v-if="!elevenLabsTts" v-model="ttsVoice">
           <option v-for="v in ttsVoices" :key="v.id" :value="v.id">{{ v.label }}</option>
         </select>
       </EndpointForm>
       <AdapterFields
-        v-if="!openAiTts"
+        v-if="!openAiTts && !elevenLabsTts"
         kind="tts"
         :adapter="settings.config.tts.adapter"
         @patch="patchAdapter('tts', $event)"

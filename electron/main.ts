@@ -32,6 +32,7 @@ import { isIP } from 'node:net'
 import http from 'node:http'
 import https from 'node:https'
 import { requestLtx } from './ltx'
+import { registerElevenLabsIpc } from './elevenlabs-ipc'
 import type { LtxRequest } from '../src/services/ai/ltxOptions'
 import ko from '../src/locales/ko'
 import zh from '../src/locales/zh'
@@ -550,6 +551,7 @@ if (app.isPackaged && !app.commandLine.hasSwitch('user-data-dir')) {
 
 app.whenReady().then(async () => {
   installApplicationMenu()
+  registerElevenLabsIpc()
   const savedRoot = readStorageRootPreference(rootPreferencePath())
   const root = savedRoot ?? defaultRoot()
   const fallback = path.join(app.getPath('userData'), 'Recovery')

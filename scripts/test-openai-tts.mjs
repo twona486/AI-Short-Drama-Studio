@@ -137,9 +137,14 @@ test('새 설치 설정, 공식 언어 모델 키 재사용, 기존 DashScope �
   })
   setActivePinia(createPinia())
   const settings = useSettingsStore()
-  assert.equal(getTtsConfig().model, request.model)
+  assert.equal(getTtsConfig().model, 'eleven_v4')
+  assert.deepEqual(settings.config.tts.models, ['eleven_v4', 'eleven_v4_turbo', 'eleven_v3'])
+  await assert.rejects(generateSpeech({ text: request.text }), /ElevenLabs API 키/)
+  settings.addTts({
+    name: 'OpenAI TTS', baseUrl: 'https://api.openai.com/v1',
+    model: request.model, models: [request.model], provider: 'openai'
+  })
   assert.equal(getTtsConfig().voice, 'marin')
-  await assert.rejects(generateSpeech({ text: request.text }), /API 키/)
   settings.patchLlm({ baseUrl: 'https://api.openai.com/v1', apiKey: 'test-llm-key' })
   settings.patchTts({ reuseOpenAiLlmKey: true })
   assert.equal(getTtsConfig().apiKey, 'test-llm-key')
