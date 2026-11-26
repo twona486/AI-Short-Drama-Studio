@@ -26,17 +26,96 @@ after(() => vite.close())
 const { createDrawThingsQueue } = await vite.ssrLoadModule('/electron/draw-things.ts')
 const { lanOrigin, pinAddress } = await vite.ssrLoadModule('/electron/lan-origin.ts')
 const {
-  DRAW_THINGS_MODELS, DRAW_THINGS_PROVIDER, DRAW_THINGS_URL, drawThingsInputError, drawThingsSize
+  DRAW_THINGS_MODELS, DRAW_THINGS_PROVIDER, DRAW_THINGS_URL, drawThingsInputError, drawThingsPreset, drawThingsSize
 } = await vite.ssrLoadModule('/src/services/ai/drawThingsOptions.ts')
 const { applyProviderPreset, IMAGE_PROVIDERS } = await vite.ssrLoadModule('/src/services/ai/providers.ts')
 const { endpointReady, useSettingsStore } = await vite.ssrLoadModule('/src/stores/settings.ts')
 const { generateImage } = await vite.ssrLoadModule('/src/services/ai/image.ts')
+const { generateVideo } = await vite.ssrLoadModule('/src/services/ai/video.ts')
 const { checkDrawThings } = await vite.ssrLoadModule('/src/services/ai/drawThings.ts')
+const { observeMediaPrompts } = await vite.ssrLoadModule('/src/services/ai/mediaPromptObserver.ts')
 const [qwen, edit, flux] = DRAW_THINGS_MODELS
 const png = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jgSEAAAAASUVORK5CYII=', 'base64')
 const job = (baseUrl, model, id = 'test', prompt = 'A rainy street.') => (
   { kind: 'generate', baseUrl, id, model, prompt, width: 1344, height: 768 }
 )
+
+test('한국어 장면 묘사는 영어로 보내고 대사와 간판 원문은 보존합니다', async (context) => {
+  setActivePinia(createPinia())
+  const settings = useSettingsStore()
+  settings.addLlm({
+    name: 'Fixture', baseUrl: 'https://example.invalid/v1', apiKey: 'mock-key',
+    model: 'fixture-model', models: ['fixture-model']
+  })
+  settings.addImage({
+    name: 'Draw Things', provider: DRAW_THINGS_PROVIDER, baseUrl: DRAW_THINGS_URL, model: flux, models: [flux]
+  })
+  const sent = []
+  let sentVideo
+  const observed = []
+  let translations = 0
+  context.mock.method(globalThis, 'fetch', async (_url, options) => {
+    translations++
+    const { messages } = JSON.parse(options.body)
+    const original = messages.at(-1).content
+    const markers = original.match(/DFS_MEDIA_LITERAL_\d+_END/g) || []
+    const content = markers.length
+      ? `An empty rural railway platform at dawn. A sign reads ${markers[0]}.${markers[1] ? ` A narrator says in Korean: ${markers[1]}.` : ''}`
+      : translations === 1 ? 'An empty rural railway platform at dawn.' : '영어로 옮기지 않은 설명'
+    return Response.json({ choices: [{ message: { content }, finish_reason: 'stop' }] })
+  })
+  globalThis.window.desktop = {
+    isDesktop: true,
+    async kvSet() {},
+    onDrawThingsProgress: () => () => {},
+    async ltxDesktopRequest({ operation }) {
+      sentVideo = operation
+      return { kind: 'http', status: 422 }
+    },
+    async drawThingsRequest(request) {
+      sent.push(request)
+      return { kind: 'image', data: Uint8Array.from(png).buffer, mimeType: 'image/png' }
+    }
+  }
+  context.after(() => { delete globalThis.window.desktop })
+  const signal = observeMediaPrompts(undefined, (kind, prompt) => observed.push({ kind, prompt }))
+  const source = '텅 빈 새벽 지방역 승강장과 선로. 간판: 「새벽역」'
+  const input = { prompt: source, width: 1280, height: 720, aspectRatio: '16:9', style: 'cinematic', signal }
+  const first = await generateImage(input)
+  await generateImage(input)
+  assert.equal(first.prompt, source)
+  assert.equal(input.prompt, source)
+  assert.equal(translations, 1)
+  assert.equal(sent[0].prompt, 'An empty rural railway platform at dawn. A sign reads "새벽역".')
+  assert.equal(sent[0].prompt, sent[1].prompt)
+  assert.deepEqual([sent[0].width, sent[0].height], [1344, 768])
+  assert.deepEqual(observed[0], { kind: 'image', prompt: sent[0].prompt })
+
+  const videoProfileId = settings.addVideo({
+    name: 'Fixture LTX Desktop', provider: 'ltx-desktop', apiKey: 'mock-token',
+    baseUrl: 'http://127.0.0.1:41955', workflowId: 'ltx-2.3-fast'
+  })
+  globalThis.FileReader = class {
+    readAsDataURL() {
+      this.result = `data:image/png;base64,${png.toString('base64')}`
+      this.onload()
+    }
+  }
+  context.after(() => { delete globalThis.FileReader })
+  await assert.rejects(generateVideo({
+    ...input, videoProfileId, duration: 5, imageBlob: new Blob([png], { type: 'image/png' }),
+    prompt: `${source}\nA narrator says in Korean: "기차가 곧 도착합니다."`
+  }))
+  assert.equal(sentVideo.kind, 'submit')
+  assert.match(sentVideo.prompt, /"기차가 곧 도착합니다\."/)
+  assert.equal(observed.at(-1).kind, 'video')
+  await assert.rejects(generateImage({ ...input, prompt: '번역 오류' }), /영어로 옮기지 못했습니다/)
+  assert.equal(sent.length, 2)
+  settings.update({ translateMediaPrompts: false })
+  await generateImage(input)
+  assert.equal(sent[2].prompt, source)
+  assert.equal(translations, 3)
+})
 
 async function httpFixture(context, handler) {
   const server = http.createServer(handler)
@@ -71,6 +150,8 @@ test('설치 기본값, 로컬 프리셋, 비율과 모델별 참조 제한', ()
   assert.deepEqual(local, { provider: DRAW_THINGS_PROVIDER, baseUrl: DRAW_THINGS_URL, apiKey: '', model: qwen, models: DRAW_THINGS_MODELS })
   assert.equal(endpointReady({ ...local, baseUrl: 'http://192.168.1.90:7860' }), true)
   assert.deepEqual(drawThingsSize('16:9', 1920, 1080), [1344, 768])
+  const klein = drawThingsPreset('flux_2_klein_4b_q8p.ckpt')
+  assert.deepEqual([klein.steps, klein.cfg_scale, klein.sampler_name], [4, 1, 'DDIM Trailing'])
   assert.deepEqual(drawThingsSize('9:16', 1080, 1920), [768, 1344])
   assert.deepEqual(drawThingsSize('1:1', 1000, 1000), [1024, 1024])
   assert.equal(drawThingsInputError(qwen, 1), 'drawThings.textOnly')
@@ -350,6 +431,12 @@ test('gRPC 인증, 모델 목록, 참조 크기, 진행 단계, 대기열, 제�
   const fluxResult = await queue.request(1, { ...request, model: flux })
   assert.deepEqual([...new Uint8Array(fluxResult.data)], [255, 0, 128, 255])
   assert.equal(scan(requests[1].get(4)[0]).get(2).length, 2)
+  const fluxConfig = new ByteBuffer(requests[1].get(7)[0])
+  const fluxRoot = fluxConfig.readInt32(0)
+  const fluxField = (id) => fluxRoot + fluxConfig.__offset(fluxRoot, 4 + 2 * id)
+  assert.equal(fluxConfig.readUint32(fluxField(4)), 4)
+  assert.equal(fluxConfig.readFloat32(fluxField(5)), 1)
+  assert.equal(fluxConfig.readInt8(fluxField(8)), 16)
   const alphaResult = await queue.request(1, {
     ...request, model: qwen, prompt: 'transparent', referencePixels: []
   })

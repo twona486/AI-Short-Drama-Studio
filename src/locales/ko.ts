@@ -1,4 +1,12 @@
 export default {
+  "mediaPrompt": {
+    "setting": "이미지·영상 프롬프트를 영어로 보내요",
+    "settingHint": "언어 모델이 시각 묘사를 영어로 옮겨요. 대사와 화면 속 글자는 원문을 유지해요.",
+    "translationFailed": "생성 프롬프트를 영어로 옮기지 못했습니다. 언어 모델 연결을 확인하거나 이미지 설정에서 자동 번역을 끈 뒤 다시 시도해 주세요.",
+    "literalTooLong": "모델의 프롬프트 길이 제한 안에 대사와 화면 속 글자를 모두 담을 수 없습니다. 시각 묘사를 줄여 주세요.",
+    "originalHint": "편집한 원문은 노드에 보관해요. 생성할 때 시각 묘사를 영어로 옮겨 보내요.",
+    "viewSent": "보낸 프롬프트 보기"
+  },
   "drawThings": {
     "name": "Draw Things (로컬)",
     "setup": "Draw Things의 고급(Advanced) 탭에서 API 서버를 켜요. HTTP의 기본 포트는 7860이에요. 같은 컴퓨터에서는 localhost를 사용해요.",

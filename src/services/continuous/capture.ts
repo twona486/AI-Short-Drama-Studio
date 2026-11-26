@@ -19,6 +19,7 @@ import type { Scene, Subject } from '@/types'
 import { aspectToSize } from '@/utils/aspect'
 import { emptyCanvas, normalizeVideoGenModel, videoMaxSeconds, type CanvasNode } from '@/types'
 import { withNodeJob } from '@/services/canvas/jobs'
+import { observeMediaPrompts } from '@/services/ai/mediaPromptObserver'
 import { resolveH3PromptProfile } from '@/services/canvas/videoPromptProfile'
 import { buildH3ImageSlots, compileH3OfficialPrompt, isOfficialH3Prompt, type H3ImageSlot } from '@/services/ai/h3Prompt'
 import type { AgentProgress, AgentRunOptions, AgentTurnResult } from '@/services/canvas/agent'
@@ -800,6 +801,11 @@ export async function runCaptureNode(nodeId: string, onLog?: (text: string) => v
   if (n.data.outputAssetId && !manual) { await imageBlob(n.data.outputAssetId); return }
   return withNodeJob(nodeId, async () => {
     signal?.throwIfAborted()
+    const mediaKind = n.type === 'videoGen' ? 'video' : 'image'
+    let sentPrompt: string | undefined
+    signal = observeMediaPrompts(signal, (kind, prompt) => {
+      if (kind === mediaKind) sentPrompt = prompt
+    })
     n.status = 'running'
     try {
       const asset = s.plan.assets.find(a => s.assetNodes[a.id] === nodeId)
@@ -994,9 +1000,13 @@ export async function runCaptureNode(nodeId: string, onLog?: (text: string) => v
         const result = await generateVideo({ prompt: n.data.prompt!, promptAsIs: true, imageBlob: frame, referenceImages: references, duration, durationLimit: s.maxSeconds, ...size, aspectRatio: ratio, videoModel: n.data.videoModel || s.model, videoProfileId: n.data.videoProfileId || s.profileId, videoResolution: n.data.videoResolution ?? p.settings.defaultVideoResolution, mode: 'I2VA', generateAudio: n.data.generateAudio ?? true, signal, resumeTaskId: manual ? undefined : n.data.videoTaskId, onTaskTerminalFailure: ltx ? clearFailedLtx : undefined, onTaskSubmitted: async id => { current(projectId); n.data.videoTaskId = id; await save(projectId) } }, onLog)
         await finishVideo(result.blob)
       }
+      if (sentPrompt) n.data.sentMediaPrompts = [sentPrompt]
       n.status = 'success'; n.error = undefined
       await save(projectId)
     } catch (error) {
+      if (error instanceof Error && error.name === 'MediaPromptPreparationError' && !n.data.videoTaskId) {
+        n.data.captureSubmissionPending = false
+      }
       const drawThingsStopped = signal?.aborted && signal.reason?.message === t('drawThings.cancelled')
       const stopped = signal?.aborted && error instanceof DOMException && error.name === 'AbortError' &&
         (drawThingsStopped || isLtxTask(n.data.videoTaskId) || signal.reason?.message === t('ltx.stopped'))

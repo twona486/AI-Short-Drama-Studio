@@ -435,6 +435,12 @@ function patchAdapter(
     </template>
 
     <template v-else-if="module === 'image'">
+      <label class="media-prompt-toggle">
+        <input type="checkbox" :checked="settings.config.translateMediaPrompts"
+          @change="settings.update({ translateMediaPrompts: ($event.target as HTMLInputElement).checked })" />
+        {{ $t('mediaPrompt.setting') }}
+      </label>
+      <p class="hint">{{ $t('mediaPrompt.settingHint') }}</p>
       <section v-if="zealmanImage" class="owned">
         <h3>{{ $t('studioSettings.zealmanImage') }}</h3>
         <p class="hint">{{ $t('studioSettings.zealmanImageHint') }}</p>
@@ -831,6 +837,8 @@ select {
   -webkit-app-region: no-drag;
   app-region: no-drag;
 }
+.media-prompt-toggle { display: flex; align-items: center; gap: 8px; }
+.media-prompt-toggle input { width: auto; }
 .secret {
   display: flex;
   gap: 6px;

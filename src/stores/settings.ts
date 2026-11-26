@@ -108,6 +108,7 @@ export interface AppSettings {
   activeVisionId: string
   /** 끄면 주소와 키가 있어도 이미지 이해 모델에 이미지를 보내지 않는다. */
   visionEnabled: boolean
+  translateMediaPrompts: boolean
   image: ServiceEndpoint
   images: NamedEndpoint[]
   activeImageId: string
@@ -483,6 +484,7 @@ function buildDefaults(): AppSettings {
     visions: [visionFirst],
     activeVisionId: visionFirst.id,
     visionEnabled: false,
+    translateMediaPrompts: true,
     image: asEndpoint(imageFirst),
     images: [imageFirst],
     activeImageId: imageFirst.id,
@@ -681,6 +683,7 @@ function parseSettings(raw: string | null, saveMigrated?: (settings: Partial<App
       visions: vision.list,
       activeVisionId: vision.activeId,
       visionEnabled: parsed.visionEnabled === true,
+      translateMediaPrompts: parsed.translateMediaPrompts !== false,
       image: image.active,
       images: image.list,
       activeImageId: image.activeId,

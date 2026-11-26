@@ -17,6 +17,7 @@ import { cssAspectRatio } from '@/services/canvas/layout'
 import { openLightbox } from '@/composables/useLightbox'
 import NodeBusyOverlay from '@/components/canvas/NodeBusyOverlay.vue'
 import AssetPicker from '@/components/common/AssetPicker.vue'
+import SentMediaPrompts from './SentMediaPrompts.vue'
 import ImageModelSelect from '@/components/settings/ImageModelSelect.vue'
 import VideoModelSelect from '@/components/settings/VideoModelSelect.vue'
 import H3GenModeSelect from '@/components/settings/H3GenModeSelect.vue'
@@ -725,6 +726,7 @@ async function removeSelf() {
               : $t('freeformGenNode.imagePlaceholder')
           "
         />
+        <SentMediaPrompts :prompts="node?.data.sentMediaPrompts" />
         <div class="prompt-foot">
           <ImageModelSelect v-if="!isVideo" />
           <VideoModelSelect

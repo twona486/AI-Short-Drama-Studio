@@ -2,6 +2,7 @@ import ko from './ko'
 
 export default {
   drawThings: ko.drawThings,
+  mediaPrompt: ko.mediaPrompt,
   "adapterFields": {
     "advanced": "高级接口兼容",
     "advancedHint": "仅当接口文档明确要求自定义请求路径、鉴权头或 ComfyUI 工作流 JSON 时才修改这里。",

@@ -9,7 +9,7 @@ import { useRouter } from 'vue-router'
 import { Handle, Position, useVueFlow } from '@vue-flow/core'
 import { useAssetsStore, useLibraryStore, useProjectStore, useSettingsStore, useToastStore } from '@/stores'
 import { runCanvasNode, stopLtxNodeWait, optimizeShotVideoPrompt, regenerateShotFrame, grabVideoLastFrameNode, canStopDrawThingsNodeWait, stopDrawThingsNodeWait } from '@/services/canvas/runner'
-import { DRAW_THINGS_PROVIDER } from '@/services/ai/drawThingsOptions'
+import { DRAW_THINGS_PROVIDER, drawThingsSize } from '@/services/ai/drawThingsOptions'
 import { isNodeRunning } from '@/services/canvas/jobs'
 import { needsPlayReview } from '@/services/canvas/playGate'
 import { cssAspectRatio } from '@/services/canvas/layout'
@@ -21,6 +21,7 @@ import { openLightbox } from '@/composables/useLightbox'
 import ShotRefStrip from '@/components/canvas/ShotRefStrip.vue'
 import NodeBusyOverlay from '@/components/canvas/NodeBusyOverlay.vue'
 import AssetPicker from '@/components/common/AssetPicker.vue'
+import SentMediaPrompts from './SentMediaPrompts.vue'
 import ImageModelSelect from '@/components/settings/ImageModelSelect.vue'
 import VideoModelSelect from '@/components/settings/VideoModelSelect.vue'
 import H3GenModeSelect from '@/components/settings/H3GenModeSelect.vue'
@@ -466,6 +467,7 @@ const promptValue = computed({
 const promptHint = computed(() => {
   if (type.value === 'audio') return translate('pipelineNode.redubHint')
   if (type.value === 'shotVideo') return translate('pipelineNode.editVideoPrompt')
+  if (settings.config.translateMediaPrompts) return translate('mediaPrompt.originalHint')
   return translate('pipelineNode.sendAsIs')
 })
 
@@ -479,7 +481,11 @@ const metaLine = computed(() => {
     return effectiveShotAudioMode(shot.value) === 'tts' ? translate('pipelineNode.postTts') : translate('pipelineNode.h3Voice')
   }
   const model = settings.config.image.model || translate('pipelineNode.imageGeneration')
-  return `${model} · ${ar} · ${w}×${h}`
+  const sheet = ['subject', 'prop', 'sceneProps', 'scene'].includes(type.value)
+  const imageRatio = drawThings.value && sheet ? '16:9' : ar
+  const [width, height] = drawThings.value
+    ? drawThingsSize(imageRatio, w, h) : [w, h]
+  return `${model} · ${imageRatio} · ${width}×${height}`
 })
 
 const genLabel = computed(() => {
@@ -1268,6 +1274,7 @@ const cropStyle = computed(() => ({
     </p>
     <transition name="float-down">
       <div v-if="selected && panelOpen && showPrompt && !cropOn && !trimOn" class="prompt nodrag nowheel" @pointerdown.stop @mousedown.stop @click.stop>
+      <SentMediaPrompts :prompts="nodeMeta?.data.sentMediaPrompts" />
       <div v-if="type === 'shotVideo'" class="prompt-tools">
         <button
           type="button"

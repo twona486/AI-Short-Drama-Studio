@@ -50,6 +50,7 @@ import { blobToChatImageUrl, callLLM } from '@/services/ai/client'
 import { stripReasoningLeak } from '@/utils/jsonRepair'
 import { resolveImageAdapter } from '@/services/ai/adapters'
 import { DRAW_THINGS_PROVIDER } from '@/services/ai/drawThingsOptions'
+import { observeMediaPrompts } from '@/services/ai/mediaPromptObserver'
 import { getImageConfig, imageModelForProject, getVideoPromptStyle } from '@/services/ai/runtime'
 import { pickDocImageResolution } from '@/services/ai/modelOptions'
 import { importedDirectorPrefix } from '@/services/settings/directorSkill'
@@ -886,6 +887,14 @@ export async function regenerateShotFrame(
   const project = useProjectStore()
   const assets = useAssetsStore()
   if (!project.current) throw new Error('열려 있는 프로젝트가 없습니다.')
+  const projectId = project.current.id
+  const nodeId = findCanvasNode((node) => node.type === 'shotFrames' && node.data.shotId === shot.id)?.id
+  let sentPrompt: string | undefined
+  if (nodeId) {
+    signal = observeMediaPrompts(signal, (kind, prompt) => {
+      if (kind === 'image') sentPrompt = prompt
+    })
+  }
   shot = refreshShot(shot.id)
   const { blobs, labels } = await collectFrameRefBlobs(shot, project.current, onProgress)
   if (which === 'end') {
@@ -906,6 +915,9 @@ export async function regenerateShotFrame(
     }
   }
   const asset = await renderShotFrame(shot, which, blobs, labels, onProgress, signal)
+  if (nodeId && sentPrompt && project.current?.id === projectId) {
+    project.patchCanvasNode(nodeId, { sentMediaPrompts: [sentPrompt] })
+  }
   const old = which === 'start' ? shot.firstFrameAssetId : shot.lastFrameAssetId
   if (old && old !== asset.id) await assets.remove(old).catch(() => undefined)
   project.updateShot(
@@ -3132,6 +3144,14 @@ export async function runCanvasNode(
       waits.set(nodeId, local)
       signal = signal ? AbortSignal.any([signal, local.signal]) : local.signal
     }
+    const mediaKind = canvasNodeProducesImage(node) ? 'image'
+      : node.type === 'shotVideo' || node.type === 'videoGen' ? 'video' : undefined
+    const prompts: string[] = []
+    if (mediaKind) {
+      signal = observeMediaPrompts(signal, (kind, prompt) => {
+        if (kind === mediaKind && !prompts.includes(prompt)) prompts.push(prompt)
+      })
+    }
     patchNode(project, nodeId, 'running')
     if (node.type === 'export' || node.type === 'final') {
       patchNode(project, node.type === 'export' ? 'final' : 'export', 'running')
@@ -3186,6 +3206,7 @@ export async function runCanvasNode(
       } else {
         throw new Error(`알 수 없는 노드 유형 ${node.type}`)
       }
+      if (prompts.length && project.current?.id === p.id) project.patchCanvasNode(nodeId, { sentMediaPrompts: prompts })
       patchNode(project, nodeId, 'success')
       if (node.type === 'export') patchNode(project, 'final', 'success')
       if (node.type === 'final') patchNode(project, 'export', 'success')

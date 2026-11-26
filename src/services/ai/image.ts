@@ -1,3 +1,4 @@
+import { prepareMediaPrompt } from './mediaPrompt'
 import { t, uiPunctuation } from '@/i18n'
 /**
  * OpenAI 호환 Images API를 이용한 AI 이미지 생성
@@ -72,7 +73,7 @@ function imageConfig(modelOverride?: string) {
 async function realCustomOrComfy(input: ImageGenInput): Promise<ImageGenOutput> {
   const cfg = imageConfig(input.model)
   const adapterType = resolveImageAdapter(cfg)
-  const prompt = withGptImageQuality(buildPrompt(input, Boolean(input.referenceImages?.length)), cfg.model)
+  const prompt = await prepareMediaPrompt('image', buildPrompt(input, Boolean(input.referenceImages?.length)), input.signal)
   if (adapterType === 'http-custom') {
     log(`→ 사용자 지정 HTTP 이미지 생성 · ${cfg.model}`)
     const imageUrls: string[] = []
@@ -325,7 +326,7 @@ async function realSeedream(input: ImageGenInput): Promise<ImageGenOutput> {
 
   const refs = (input.referenceImages ?? []).slice(0, 10)
   const withRefs = refs.length > 0
-  const fullPrompt = buildPrompt(input, withRefs)
+  const fullPrompt = await prepareMediaPrompt('image', buildPrompt(input, withRefs), input.signal)
   const size = pickSeedreamSize(input.aspectRatio, input.width, input.height)
 
   const body: Record<string, unknown> = {
@@ -375,7 +376,7 @@ async function realOpenAiImage(input: ImageGenInput): Promise<ImageGenOutput> {
   const request = await openAiImageRequest({
     ...input,
     model,
-    prompt: buildPrompt(input, Boolean(input.referenceImages?.length))
+    prompt: await prepareMediaPrompt('image', buildPrompt(input, Boolean(input.referenceImages?.length)), input.signal)
   })
   throwIfAborted(input.signal)
   const control = controlledSignal(input.signal, OPENAI_IMAGE_TIMEOUT_MS)
@@ -411,7 +412,7 @@ async function realLegacyGenerate(input: ImageGenInput): Promise<ImageGenOutput>
     throw new Error('[image] VITE_IMAGE_BASE_URL 또는 VITE_IMAGE_API_KEY가 설정되지 않았습니다.')
   }
 
-  const fullPrompt = buildPrompt(input, false)
+  const fullPrompt = await prepareMediaPrompt('image', buildPrompt(input, false), input.signal)
   const resp = await fetch(`${baseUrl}/images/generations`, {
     method: 'POST',
     headers: {
@@ -447,7 +448,7 @@ async function realLegacyEdit(input: ImageGenInput): Promise<ImageGenOutput> {
     throw new Error('이미지 편집 모드에는 referenceImages가 필요합니다.')
   }
 
-  const fullPrompt = buildPrompt(input, true)
+  const fullPrompt = await prepareMediaPrompt('image', buildPrompt(input, true), input.signal)
   const form = new FormData()
   form.append('model', model)
   form.append('prompt', fullPrompt)
@@ -490,7 +491,7 @@ async function realZealmanImage(
   const root = normalizeZealmanBaseUrl(String(cfg.baseUrl || '').trim())
   if (!root) throw new Error('[image] Zealman에서 이미지를 생성하려면 설정 → Zealman 미러에서 Base URL을 입력하세요.')
   const workflow = zealmanImageWorkflowById(cfg.model) || ZEALMAN_IMAGE_WORKFLOWS[0]
-  const prompt = buildPrompt(input, Boolean(input.referenceImages?.length)).slice(0, 10000)
+  const prompt = await prepareMediaPrompt('image', buildPrompt(input, Boolean(input.referenceImages?.length)), input.signal, 10000)
   const width = Math.max(256, Math.round(input.width) || workflow.defaultWidth)
   const height = Math.max(256, Math.round(input.height) || workflow.defaultHeight)
   const inputValues: Record<string, string | number> = {
@@ -580,7 +581,9 @@ export async function generateImage(
   if (getAIMode() === 'real') {
     const cfg = imageConfig(input.model)
     if (cfg.provider === DRAW_THINGS_PROVIDER) {
-      return await generateDrawThings(cfg, input, onProgress)
+      const prompt = await prepareMediaPrompt('image', input.prompt, input.signal)
+      const result = await generateDrawThings(cfg, { ...input, prompt }, onProgress)
+      return { ...result, prompt: input.prompt }
     }
     const adapterType = resolveImageAdapter(cfg)
     if (adapterType === 'openai-images' && isOfficialOpenAi(cfg.baseUrl) && isOpenAiImageModel(model)) {
@@ -599,7 +602,7 @@ export async function generateImage(
       adapterType !== 'comfyui-workflow' &&
       (isRelayImageEndpoint(cfg.baseUrl, cfg.provider) || adapterType === 'http-custom')
     ) {
-      const prompt = withGptImageQuality(buildPrompt(input, Boolean(input.referenceImages?.length)), cfg.model)
+      const prompt = await prepareMediaPrompt('image', buildPrompt(input, Boolean(input.referenceImages?.length)), input.signal)
       onProgress?.(input.referenceImages?.length ? '중계 API에서 이미지→이미지를 생성하는 중…' : '중계 API에서 텍스트→이미지를 생성하는 중…')
       const { blob, mimeType } = await apimartGenerateImage({
         baseUrl: cfg.baseUrl,
