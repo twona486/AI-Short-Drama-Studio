@@ -4,6 +4,7 @@ import { once } from 'node:events'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { createPinia, setActivePinia } from 'pinia'
+import { nextTick } from 'vue'
 import { createServer } from 'vite'
 import WebSocket, { WebSocketServer } from 'ws'
 
@@ -21,6 +22,8 @@ const { getTtsConfig } = await vite.ssrLoadModule('/src/services/ai/runtime.ts')
 const { generateSpeech } = await vite.ssrLoadModule('/src/services/ai/tts.ts')
 const { saveAsset, setActiveProjectDir } = await vite.ssrLoadModule('/src/services/storage/fs.ts')
 const { openAiShotSpeech } = await vite.ssrLoadModule('/src/services/ai/shotSpeech.ts')
+const { useProjectStore } = await vite.ssrLoadModule('/src/stores/project.ts')
+const { needsExternalTts } = await vite.ssrLoadModule('/src/utils/shot.ts')
 
 const request = {
   apiKey: 'test-openai-tts-key',
@@ -144,6 +147,19 @@ test('새 설치 설정, 공식 언어 모델 키 재사용, 기존 DashScope �
   assert.equal(getTtsConfig().apiKey, '')
 
   settings.patchTts({ reuseOpenAiLlmKey: false, apiKey: request.apiKey })
+  const project = useProjectStore()
+  project.current = {
+    id: 'tts-fallback-fixture',
+    settings: {},
+    shots: [{ id: 'shot', audioMode: 'h3-dialogue', voiceover: request.text, duration: 5 }],
+    canvas: { nodes: [] }
+  }
+  await nextTick()
+  settings.addVideo({ name: 'Silent', provider: 'custom', baseUrl: 'http://localhost:8199', workflowId: 'silent' })
+  await nextTick()
+  const [shot] = project.current.shots
+  assert.equal(shot.audioMode, 'tts')
+  assert.ok(needsExternalTts(shot, project.current))
   const wav = pcmToWav(Buffer.alloc(96000)).wav
   const files = new Map()
   globalThis.window = { desktop: {
@@ -160,7 +176,7 @@ test('새 설치 설정, 공식 언어 모델 키 재사용, 기존 DashScope �
     }
   } }
   try {
-    const result = await generateSpeech({ text: request.text })
+    const result = await generateSpeech(openAiShotSpeech(shot, project.current))
     assert.equal(result.mimeType, 'audio/wav')
     assert.equal(result.durationMs, 2000)
     assert.deepEqual(Buffer.from(await result.blob.arrayBuffer()), wav)

@@ -50,6 +50,8 @@ import { blobToChatImageUrl, callLLM } from '@/services/ai/client'
 import { stripReasoningLeak } from '@/utils/jsonRepair'
 import { resolveImageAdapter } from '@/services/ai/adapters'
 import { openAiShotSpeech, shotSpeakerSubject } from '@/services/ai/shotSpeech'
+import { DRAW_THINGS_PROVIDER } from '@/services/ai/drawThingsOptions'
+import { observeMediaPrompts } from '@/services/ai/mediaPromptObserver'
 import { getImageConfig, imageModelForProject, getVideoPromptStyle, getTtsConfig } from '@/services/ai/runtime'
 import { pickDocImageResolution } from '@/services/ai/modelOptions'
 import { importedDirectorPrefix } from '@/services/settings/directorSkill'
@@ -100,7 +102,7 @@ import {
   normalizeVideoResolution,
   videoMaxRefImages,
 } from '@/types'
-import { canvasReferenceSlotEntries, resolvedCanvasReferenceAssetIds } from '@/services/canvas/references'
+import { canvasNodeProducesImage, canvasReferenceSlotEntries, resolvedCanvasReferenceAssetIds } from '@/services/canvas/references'
 import { resolveH3PromptProfile } from './videoPromptProfile'
 import { withVideoReferenceBlock } from '@/utils/videoReferenceBlock'
 import { optimizeH3FullReference } from '@/services/ai/h3FullReference'
@@ -886,6 +888,14 @@ export async function regenerateShotFrame(
   const project = useProjectStore()
   const assets = useAssetsStore()
   if (!project.current) throw new Error('열려 있는 프로젝트가 없습니다.')
+  const projectId = project.current.id
+  const nodeId = findCanvasNode((node) => node.type === 'shotFrames' && node.data.shotId === shot.id)?.id
+  let sentPrompt: string | undefined
+  if (nodeId) {
+    signal = observeMediaPrompts(signal, (kind, prompt) => {
+      if (kind === 'image') sentPrompt = prompt
+    })
+  }
   shot = refreshShot(shot.id)
   const { blobs, labels } = await collectFrameRefBlobs(shot, project.current, onProgress)
   if (which === 'end') {
@@ -906,6 +916,9 @@ export async function regenerateShotFrame(
     }
   }
   const asset = await renderShotFrame(shot, which, blobs, labels, onProgress, signal)
+  if (nodeId && sentPrompt && project.current?.id === projectId) {
+    project.patchCanvasNode(nodeId, { sentMediaPrompts: [sentPrompt] })
+  }
   const old = which === 'start' ? shot.firstFrameAssetId : shot.lastFrameAssetId
   if (old && old !== asset.id) await assets.remove(old).catch(() => undefined)
   project.updateShot(
@@ -1331,11 +1344,12 @@ async function prepareLtxShotStart(
   if (existing) return existing
 
   const cfg = getImageConfig()
+  const drawThings = cfg.provider === DRAW_THINGS_PROVIDER
   const adapter = resolveImageAdapter(cfg)
   const workflow = adapter === 'comfyui-prompt' || adapter === 'comfyui-workflow' || adapter === 'zealman-workflow'
-  if (!cfg.baseUrl?.trim() || (!workflow && !cfg.model?.trim()) ||
-    (adapter === 'openai-images' && !cfg.apiKey?.trim()) ||
-    (adapter === 'comfyui-prompt' && !cfg.adapter?.workflowTemplate?.trim())) {
+  if (!cfg.baseUrl?.trim() || ((drawThings || !workflow) && !cfg.model?.trim()) ||
+    (!drawThings && adapter === 'openai-images' && !cfg.apiKey?.trim()) ||
+    (!drawThings && adapter === 'comfyui-prompt' && !cfg.adapter?.workflowTemplate?.trim())) {
     throw new Error(translate('ltx.startImageSettings'))
   }
 
@@ -2854,7 +2868,7 @@ export async function generateFreeformImage(
     referenceImages: blobs.length ? blobs : undefined,
     model: imageModelForProject(p.pipelineMode),
     signal
-  })
+  }, onProgress)
   const asset = await assets.add(result.blob, 'image', 'ai-generated', {
     filename: `${node.data.label || translate('canvasRunner.image')}.png`,
     prompt,
@@ -3048,6 +3062,15 @@ export async function optimizeFreeformVideoPrompt(nodeId: string, signal?: Abort
 }
 
 const ltxNodeWaits = new Map<string, AbortController>()
+const drawThingsNodeWaits = new Map<string, AbortController>()
+
+export function canStopDrawThingsNodeWait(nodeId: string) {
+  return isNodeRunning(nodeId) && drawThingsNodeWaits.has(nodeId)
+}
+
+export function stopDrawThingsNodeWait(nodeId: string) {
+  drawThingsNodeWaits.get(nodeId)?.abort(new DOMException(translate('drawThings.cancelled'), 'AbortError'))
+}
 
 export function stopLtxNodeWait(nodeId: string) {
   ltxNodeWaits.get(nodeId)?.abort(new DOMException(translate('ltx.stopped'), 'AbortError'))
@@ -3060,6 +3083,7 @@ export async function runCanvasNode(
   opts?: NodeRunOpts
 ) {
   const current = useProjectStore().current
+  const drawThings = useSettingsStore().config.image.provider === DRAW_THINGS_PROVIDER
   const captureNode = current?.canvas?.nodes.find((node) => node.id === nodeId && node.data.captureId)
   if (captureNode) {
     const { runCaptureNode } = await import('@/services/continuous/capture')
@@ -3067,16 +3091,18 @@ export async function runCanvasNode(
       (isLtxTask(captureNode.data.videoTaskId) ||
         (normalizeVideoGenModel(captureNode.data.videoModel) === 'h3' &&
           isLtxProfile(videoProfileById(captureNode.data.videoProfileId || current?.continuousCapture?.profileId))))
-    if (!ltx || isNodeRunning(nodeId)) {
+    const drawThingsImage = drawThings && captureNode.type === 'imageGen'
+    if ((!ltx && !drawThingsImage) || isNodeRunning(nodeId)) {
       return runCaptureNode(nodeId, msg => onProgress?.(nodeId, msg), signal, { manual: true })
     }
     const controller = new AbortController()
-    ltxNodeWaits.set(nodeId, controller)
+    const waits = drawThingsImage ? drawThingsNodeWaits : ltxNodeWaits
+    waits.set(nodeId, controller)
     try {
       return await runCaptureNode(nodeId, msg => onProgress?.(nodeId, msg),
         signal ? AbortSignal.any([signal, controller.signal]) : controller.signal, { manual: true })
     } finally {
-      ltxNodeWaits.delete(nodeId)
+      waits.delete(nodeId)
     }
   }
   return withNodeJob(nodeId, async () => {
@@ -3111,10 +3137,20 @@ export async function runCanvasNode(
     const ltx = (node.type === 'videoGen' || node.type === 'shotVideo') &&
       ([node.data.videoTaskId, shot?.videoTaskId].some(isLtxTask) ||
         (normalizeVideoGenModel(node.data.videoModel) === 'h3' && isLtxProfile(profile)))
-    const local = ltx ? new AbortController() : undefined
+    const drawThingsImage = drawThings && canvasNodeProducesImage(node)
+    const local = ltx || drawThingsImage ? new AbortController() : undefined
+    const waits = drawThingsImage ? drawThingsNodeWaits : ltxNodeWaits
     if (local) {
-      ltxNodeWaits.set(nodeId, local)
+      waits.set(nodeId, local)
       signal = signal ? AbortSignal.any([signal, local.signal]) : local.signal
+    }
+    const mediaKind = canvasNodeProducesImage(node) ? 'image'
+      : node.type === 'shotVideo' || node.type === 'videoGen' ? 'video' : undefined
+    const prompts: string[] = []
+    if (mediaKind) {
+      signal = observeMediaPrompts(signal, (kind, prompt) => {
+        if (kind === mediaKind && !prompts.includes(prompt)) prompts.push(prompt)
+      })
     }
     patchNode(project, nodeId, 'running')
     if (node.type === 'export' || node.type === 'final') {
@@ -3170,13 +3206,14 @@ export async function runCanvasNode(
       } else {
         throw new Error(`알 수 없는 노드 유형 ${node.type}`)
       }
+      if (prompts.length && project.current?.id === p.id) project.patchCanvasNode(nodeId, { sentMediaPrompts: prompts })
       patchNode(project, nodeId, 'success')
       if (node.type === 'export') patchNode(project, 'final', 'success')
       if (node.type === 'final') patchNode(project, 'export', 'success')
       activity.done(translate('canvasRunner.completed', { label: label }))
     } catch (e: any) {
-      if (local?.signal.aborted && e?.name === 'AbortError') {
-        const message = translate(isLtxDesktop(profile) ? 'ltxDesktop.cancelRequested' : 'ltx.stopped')
+      if (local?.signal.aborted && (drawThingsImage || e?.name === 'AbortError')) {
+        const message = translate(drawThingsImage ? 'drawThings.cancelled' : isLtxDesktop(profile) ? 'ltxDesktop.cancelRequested' : 'ltx.stopped')
         patchNode(project, nodeId, 'idle', message)
         await project.save()
         onProgress?.(nodeId, message)
@@ -3188,7 +3225,7 @@ export async function runCanvasNode(
       activity.fail(e)
       throw e
     } finally {
-      if (local) ltxNodeWaits.delete(nodeId)
+      if (local) waits.delete(nodeId)
       pendingRun = {}
     }
   })

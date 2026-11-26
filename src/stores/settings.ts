@@ -12,6 +12,7 @@ import { ref, watch } from 'vue'
 import { AUTODL_BASE_URL, AUTODL_WORKFLOWS } from '@/services/ai/autodl'
 import { envDefaults, migrateVideoBaseUrl, migrateVideoWorkflowId } from '@/services/ai/env'
 import { isManualImageChoice } from '@/services/ai/providers'
+import { DRAW_THINGS_MODELS, DRAW_THINGS_PROVIDER, drawThingsPreset } from '@/services/ai/drawThingsOptions'
 import { desktop, isDesktop } from '@/services/desktop'
 import { stillModeForVideoModel, type VideoGenModel, type VideoStillMode } from '@/types/canvas'
 import type { VideoPromptStyle } from '@/utils/shotPrompt'
@@ -37,6 +38,10 @@ export type SetupKind = 'llm' | 'vision' | 'image' | 'tts' | 'video' | 'music'
 export interface ServiceEndpoint {
   baseUrl: string
   apiKey: string
+  /** Electron safeStorage로 암호화한 Draw Things 공유 키. */
+  drawThingsSharedSecret?: string
+  /** Echo에서 확인한 모델 목록. 빈 배열은 서버에 지원 모델이 없다는 뜻이다. */
+  drawThingsServerModels?: string[]
   model: string
   /** 연결을 구성하면 모델 목록에서 선택할 수 있다. */
   models: string[]
@@ -107,6 +112,7 @@ export interface AppSettings {
   activeVisionId: string
   /** 끄면 주소와 키가 있어도 이미지 이해 모델에 이미지를 보내지 않는다. */
   visionEnabled: boolean
+  translateMediaPrompts: boolean
   image: ServiceEndpoint
   images: NamedEndpoint[]
   activeImageId: string
@@ -178,7 +184,7 @@ export function endpointReady(ep?: {
     adapterType === 'comfyui-prompt' ||
     adapterType === 'zealman-workflow' ||
     (/localhost|127\.0\.0\.1/i.test(ep.baseUrl || '') && ep.provider === 'custom')
-  const hasEndpoint = Boolean(ep.baseUrl?.trim() && (ep.apiKey?.trim() || localComfy))
+  const hasEndpoint = Boolean(ep.baseUrl?.trim() && (ep.apiKey?.trim() || localComfy || ep.provider === DRAW_THINGS_PROVIDER))
   const hasModel = Boolean(ep.model?.trim() || ep.workflowId?.trim() || adapterType === 'comfyui-prompt')
   return hasEndpoint && hasModel
 }
@@ -192,7 +198,7 @@ export function namedModelGroups(list: NamedEndpoint[] | TtsProfile[]) {
   return (list ?? []).map((p) => ({
     id: p.id,
     name: p.name,
-    models: uniq([p.model, ...(p.models ?? [])])
+    models: p.drawThingsServerModels ?? uniq([p.model, ...(p.models ?? [])])
   }))
 }
 
@@ -215,11 +221,16 @@ function newId(prefix = 'cfg') {
 }
 
 function asEndpoint(ep: ServiceEndpoint): ServiceEndpoint {
+  const catalog = ep.provider === DRAW_THINGS_PROVIDER && Array.isArray(ep.drawThingsServerModels)
+    ? uniq(ep.drawThingsServerModels.filter((file) => typeof file === 'string' && drawThingsPreset(file))) : undefined
   return {
     baseUrl: ep.baseUrl,
     apiKey: ep.apiKey,
-    model: ep.model,
-    models: uniq(ep.models ?? []),
+    ...(ep.provider === DRAW_THINGS_PROVIDER && ep.drawThingsSharedSecret
+      ? { drawThingsSharedSecret: ep.drawThingsSharedSecret } : {}),
+    ...(catalog ? { drawThingsServerModels: catalog } : {}),
+    model: catalog && !catalog.includes(ep.model) ? '' : ep.model,
+    models: catalog ?? uniq(ep.models ?? []),
     provider: ep.provider,
     adapter: ep.adapter,
     options: normalizeModelNodeOptions(ep.options)
@@ -304,6 +315,8 @@ function hydrateNamed(
           {
             ...fallback,
             ...p,
+            drawThingsSharedSecret: p.drawThingsSharedSecret,
+            drawThingsServerModels: p.drawThingsServerModels,
             models: uniq([...(p.models ?? []), ...(p.model ? [p.model] : [])])
           },
           p.name,
@@ -482,6 +495,7 @@ function buildDefaults(): AppSettings {
     visions: [visionFirst],
     activeVisionId: visionFirst.id,
     visionEnabled: false,
+    translateMediaPrompts: true,
     image: asEndpoint(imageFirst),
     images: [imageFirst],
     activeImageId: imageFirst.id,
@@ -680,6 +694,7 @@ function parseSettings(raw: string | null, saveMigrated?: (settings: Partial<App
       visions: vision.list,
       activeVisionId: vision.activeId,
       visionEnabled: parsed.visionEnabled === true,
+      translateMediaPrompts: parsed.translateMediaPrompts !== false,
       image: image.active,
       images: image.list,
       activeImageId: image.activeId,
@@ -1027,7 +1042,43 @@ export const useSettingsStore = defineStore('settings', () => {
     const cur =
       config.value.images.find((p) => p.id === id) ||
       profileFromEndpoint(config.value.image, t('settings.defaults.image'), id)
-    syncImage({ ...cur, ...patch, models: uniq(patch.models ?? cur.models) })
+    const next = { ...cur, ...patch, models: uniq(patch.models ?? cur.models) }
+    if (next.provider !== DRAW_THINGS_PROVIDER || (next.baseUrl !== cur.baseUrl && patch.drawThingsSharedSecret === undefined)) {
+      delete next.drawThingsSharedSecret
+    }
+    if (next.provider !== DRAW_THINGS_PROVIDER || next.baseUrl !== cur.baseUrl ||
+      next.drawThingsSharedSecret !== cur.drawThingsSharedSecret) {
+      delete next.drawThingsServerModels
+      if (cur.drawThingsServerModels && next.provider === DRAW_THINGS_PROVIDER) {
+        next.models = [...DRAW_THINGS_MODELS]
+        next.model = drawThingsPreset(next.model)?.file ?? DRAW_THINGS_MODELS[0]
+      }
+    }
+    syncImage(next)
+  }
+
+  function setDrawThingsServerModels(profileId: string, baseUrl: string, secret: string | undefined, models: string[] | undefined) {
+    const profile = config.value.images.find((item) => item.id === profileId)
+    if (!profile || profile.provider !== DRAW_THINGS_PROVIDER ||
+      profile.baseUrl.trim().replace(/\/+$/, '') !== baseUrl.trim().replace(/\/+$/, '') ||
+      profile.drawThingsSharedSecret !== secret) return
+    if (models === undefined && profile.drawThingsServerModels === undefined) return
+    const current = config.value.activeImageId === profileId
+    const next = {
+      ...profile,
+      drawThingsServerModels: models,
+      models: models ?? [...DRAW_THINGS_MODELS],
+      model: models
+        ? models.includes(profile.model) ? profile.model : ''
+        : drawThingsPreset(profile.model)?.file ?? DRAW_THINGS_MODELS[0]
+    }
+    const sameModels = profile.drawThingsServerModels?.join('|') === models?.join('|')
+    if (sameModels && profile.model === next.model) return
+    if (current) syncImage(next)
+    else {
+      touch()
+      config.value = { ...config.value, images: config.value.images.map((item) => item.id === profileId ? next : item) }
+    }
   }
 
   function addImage(seed: {
@@ -1065,6 +1116,7 @@ export const useSettingsStore = defineStore('settings', () => {
     const profile = config.value.images.find((p) => p.id === profileId)
     const name = model.trim()
     if (!profile || !name) return
+    if (profile.drawThingsServerModels && !profile.drawThingsServerModels.includes(name)) return
     syncImage({
       ...profile,
       model: name,
@@ -1388,6 +1440,7 @@ export const useSettingsStore = defineStore('settings', () => {
     removeVision,
     renameVision,
     patchImage,
+    setDrawThingsServerModels,
     addImage,
     selectImage,
     selectImageModel,

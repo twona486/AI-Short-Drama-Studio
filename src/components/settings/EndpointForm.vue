@@ -3,6 +3,7 @@ import { runEnterShortcut } from '@/utils/enterShortcut'
 import { computed, ref, watch } from 'vue'
 import type { ProviderPreset } from '@/services/ai/providers'
 import { applyProviderPreset, findProvider, matchProviderId, suggestedPresetModels } from '@/services/ai/providers'
+import { DRAW_THINGS_GRPC_PORT, DRAW_THINGS_PROVIDER, drawThingsModelLabel } from '@/services/ai/drawThingsOptions'
 
 const props = defineProps<{
   title: string
@@ -15,6 +16,7 @@ const props = defineProps<{
   provider?: string
   fixedBaseUrl?: boolean
   hideKey?: boolean
+  serverModelsOnly?: boolean
 }>()
 
 const emit = defineEmits<{
@@ -58,6 +60,10 @@ const apiKeyModel = computed({
 })
 
 const currentPreset = computed(() => findProvider(providerId.value, props.presets))
+const drawThings = computed(() => currentPreset.value.id === DRAW_THINGS_PROVIDER)
+const addressPlaceholder = computed(() => drawThings.value
+  ? `grpc://<호스트>:${DRAW_THINGS_GRPC_PORT}`
+  : currentPreset.value.baseUrl || 'https://…/v1')
 
 watch(
   () => props.baseUrl,
@@ -70,7 +76,7 @@ watch(
 )
 
 const suggested = computed(() =>
-  suggestedPresetModels(currentPreset.value, props.models)
+  props.serverModelsOnly ? [] : suggestedPresetModels(currentPreset.value, props.models)
 )
 
 function onAdd() {
@@ -99,11 +105,11 @@ function onAdd() {
     <input
       v-model="baseUrlModel"
       :readonly="fixedBaseUrl"
-      :placeholder="currentPreset.baseUrl || 'https://…/v1'"
+      :placeholder="addressPlaceholder"
     />
 
-    <label v-if="!hideKey">API Key</label>
-    <div v-if="!hideKey" class="secret">
+    <label v-if="!currentPreset.noApiKey && !hideKey">API Key</label>
+    <div v-if="!currentPreset.noApiKey && !hideKey" class="secret">
       <input
         :type="showKey ? 'text' : 'password'"
         autocomplete="off"
@@ -117,7 +123,7 @@ function onAdd() {
 
     <label>{{ $t('endpointForm.modelName') }}</label>
     <p class="hint">
-      {{ $t('endpointForm.modelHint') }}
+      {{ $t(drawThings ? 'drawThings.modelHint' : 'endpointForm.modelHint') }}
     </p>
     <div class="chips">
       <button
@@ -126,11 +132,12 @@ function onAdd() {
         type="button"
         class="chip"
         :class="{ on: m === model }"
+        :title="drawThings ? m : undefined"
         @click="emit('patch', { model: m })"
       >
-        {{ m }}
+        {{ drawThings ? drawThingsModelLabel(m, $t('drawThings.nonCommercialLicense')) : m }}
         <span
-          v-if="models.length > 1"
+          v-if="!serverModelsOnly && models.length > 1"
           class="x"
           :title="$t('endpointForm.removeModel')"
           @click.stop="emit('removeModel', m)"
@@ -147,12 +154,12 @@ function onAdd() {
         class="chip ghost"
         @click="emit('addModel', m)"
       >
-        + {{ m }}
+        + {{ drawThings ? drawThingsModelLabel(m, $t('drawThings.nonCommercialLicense')) : m }}
       </button>
     </div>
 
-    <label>{{ $t('endpointForm.addModel') }}</label>
-    <div class="add-row">
+    <label v-if="!serverModelsOnly">{{ $t('endpointForm.addModel') }}</label>
+    <div v-if="!serverModelsOnly" class="add-row">
       <input
         v-model="draft"
         :placeholder="currentPreset.id === 'custom' || !currentPreset.models.length

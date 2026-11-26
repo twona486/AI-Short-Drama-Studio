@@ -1,0 +1,147 @@
+[
+  {
+    "name": "Qwen Image 2.1",
+    "version": "qwen_image_2.1",
+    "autoencoder": "qwen_image_2.1_vae_f16.ckpt",
+    "prefix": "",
+    "modifier": "kontext",
+    "default_scale": 24,
+    "hires_fix_scale": 40,
+    "file": "qwen_image_2.1_q8p.ckpt",
+    "upcast_attention": false,
+    "text_encoder": "qwen_3_vl_8b_instruct_i8x.ckpt",
+    "high_precision_autoencoder": true,
+    "objective": {
+      "u": {
+        "condition_scale": 1000
+      }
+    },
+    "noise_discretization": {
+      "rf": {
+        "_0": {
+          "sigma_min": 0,
+          "sigma_max": 1,
+          "condition_scale": 1000,
+          "shift_terminal": 0.02
+        }
+      }
+    },
+    "hugging_face_link": "Qwen/Qwen-Image-2.1"
+  },
+  {
+    "name": "Qwen Image 2.1 (6-bit)",
+    "version": "qwen_image_2.1",
+    "autoencoder": "qwen_image_2.1_vae_f16.ckpt",
+    "prefix": "",
+    "modifier": "kontext",
+    "default_scale": 24,
+    "hires_fix_scale": 40,
+    "file": "qwen_image_2.1_q6p.ckpt",
+    "upcast_attention": false,
+    "text_encoder": "qwen_3_vl_8b_instruct_i8x.ckpt",
+    "high_precision_autoencoder": true,
+    "objective": {
+      "u": {
+        "condition_scale": 1000
+      }
+    },
+    "noise_discretization": {
+      "rf": {
+        "_0": {
+          "sigma_min": 0,
+          "sigma_max": 1,
+          "condition_scale": 1000,
+          "shift_terminal": 0.02
+        }
+      }
+    },
+    "hugging_face_link": "Qwen/Qwen-Image-2.1"
+  },
+  {
+    "name": "Qwen Image 2.1 (8-bit S)",
+    "version": "qwen_image_2.1",
+    "autoencoder": "qwen_image_2.1_vae_f16.ckpt",
+    "prefix": "",
+    "modifier": "kontext",
+    "default_scale": 24,
+    "hires_fix_scale": 40,
+    "file": "qwen_image_2.1_i8x.ckpt",
+    "upcast_attention": false,
+    "text_encoder": "qwen_3_vl_8b_instruct_i8x.ckpt",
+    "high_precision_autoencoder": true,
+    "objective": {
+      "u": {
+        "condition_scale": 1000
+      }
+    },
+    "noise_discretization": {
+      "rf": {
+        "_0": {
+          "sigma_min": 0,
+          "sigma_max": 1,
+          "condition_scale": 1000,
+          "shift_terminal": 0.02
+        }
+      }
+    },
+    "hugging_face_link": "Qwen/Qwen-Image-2.1"
+  },
+  {
+    "name": "Qwen Image 2.1 (4-bit S)",
+    "version": "qwen_image_2.1",
+    "autoencoder": "qwen_image_2.1_vae_f16.ckpt",
+    "prefix": "",
+    "modifier": "kontext",
+    "default_scale": 24,
+    "hires_fix_scale": 40,
+    "file": "qwen_image_2.1_i4x.ckpt",
+    "upcast_attention": false,
+    "text_encoder": "qwen_3_vl_8b_instruct_i8x.ckpt",
+    "high_precision_autoencoder": true,
+    "objective": {
+      "u": {
+        "condition_scale": 1000
+      }
+    },
+    "noise_discretization": {
+      "rf": {
+        "_0": {
+          "sigma_min": 0,
+          "sigma_max": 1,
+          "condition_scale": 1000,
+          "shift_terminal": 0.02
+        }
+      }
+    },
+    "hugging_face_link": "Qwen/Qwen-Image-2.1"
+  },
+  {
+    "name": "Qwen Image 2.1 (Exact)",
+    "version": "qwen_image_2.1",
+    "autoencoder": "qwen_image_2.1_vae_f16.ckpt",
+    "prefix": "",
+    "modifier": "kontext",
+    "default_scale": 16,
+    "hires_fix_scale": 40,
+    "file": "qwen_image_2.1_f16.ckpt",
+    "upcast_attention": false,
+    "text_encoder": "qwen_3_vl_8b_instruct_f16.ckpt",
+    "high_precision_autoencoder": true,
+    "objective": {
+      "u": {
+        "condition_scale": 1000
+      }
+    },
+    "noise_discretization": {
+      "rf": {
+        "_0": {
+          "sigma_min": 0,
+          "sigma_max": 1,
+          "condition_scale": 1000,
+          "shift_terminal": 0.02
+        }
+      }
+    },
+    "hugging_face_link": "Qwen/Qwen-Image-2.1"
+  }
+]

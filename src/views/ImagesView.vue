@@ -1,11 +1,12 @@
 <script setup lang="ts">
 import { confirmAction } from '@/utils/confirmAction'
 import { t as translate } from '@/i18n'
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, shallowReactive } from 'vue'
 import { useRouter } from 'vue-router'
-import { useProjectStore, useAssetsStore, useToastStore, useLibraryStore } from '@/stores'
+import { useProjectStore, useAssetsStore, useToastStore, useLibraryStore, useSettingsStore } from '@/stores'
 import { generateImage, characterSheetPrompt, ensureCharacterSheetWhiteBackground, scenePlatePrompt } from '@/services/ai'
 import { imageModelForProject } from '@/services/ai/runtime'
+import { DRAW_THINGS_PROVIDER } from '@/services/ai/drawThingsOptions'
 import { effectiveImagePrompt } from '@/utils/shot'
 import {
   collectShotRefIds,
@@ -30,8 +31,26 @@ const project = useProjectStore()
 const assets = useAssetsStore()
 const library = useLibraryStore()
 const toast = useToastStore()
+const settings = useSettingsStore()
 
 const generating = ref<Set<string>>(new Set())
+const drawThingsJobs = shallowReactive(new Map<string, AbortController>())
+function drawThingsSignal(id: string) {
+  if (settings.config.image.provider !== DRAW_THINGS_PROVIDER) return undefined
+  const controller = new AbortController()
+  drawThingsJobs.set(id, controller)
+  return controller.signal
+}
+
+function cancelDrawThings(id: string) {
+  drawThingsJobs.get(id)?.abort()
+}
+
+function reportCancelled(signal?: AbortSignal) {
+  if (!signal?.aborted) return false
+  toast.info(translate('drawThings.cancelled'))
+  return true
+}
 const progress = ref<Record<string, string>>({})
 const imageUrls = ref<Record<string, string>>({})
 const refUrls = ref<Record<string, string[]>>({})
@@ -180,6 +199,7 @@ function resetImagePrompt(shot: Shot) {
 async function generateSubjectSheet(sub: Subject) {
   if (!project.current) return
   generating.value.add(sub.id)
+  const signal = drawThingsSignal(sub.id)
   try {
     progress.value[sub.id] = translate('images.progressCharacter')
     const refs = await productRefBlobs()
@@ -202,7 +222,8 @@ async function generateSubjectSheet(sub: Subject) {
         referenceLabels: useRefs
           ? refs.map(() => `photo of character "${sub.name}", copy identity exactly`)
           : undefined,
-        model: imageModelForProject(project.current.pipelineMode)
+        model: imageModelForProject(project.current.pipelineMode),
+        signal
       },
       (msg) => {
         progress.value[sub.id] = msg
@@ -223,8 +244,9 @@ async function generateSubjectSheet(sub: Subject) {
     if (url) sheetUrls.value = { ...sheetUrls.value, [sub.id]: url }
     toast.success(translate('images.characterReady', { p0: sub.name }))
   } catch (e: any) {
-    toast.error(translate('images.characterFailed', { p0: sub.name, p1: e.message }))
+    if (!reportCancelled(signal)) toast.error(translate('images.characterFailed', { p0: sub.name, p1: e.message }))
   } finally {
+    drawThingsJobs.delete(sub.id)
     generating.value.delete(sub.id)
     delete progress.value[sub.id]
   }
@@ -233,6 +255,7 @@ async function generateSubjectSheet(sub: Subject) {
 async function generateScenePlate(scn: Scene) {
   if (!project.current) return
   generating.value.add(scn.id)
+  const signal = drawThingsSignal(scn.id)
   try {
     progress.value[scn.id] = translate('images.progressScene')
     const look = lookFromScript(project.current.script)
@@ -244,7 +267,8 @@ async function generateScenePlate(scn: Scene) {
         width: width.value,
         height: height.value,
         aspectRatio: aspectRatio.value,
-        model: imageModelForProject(project.current.pipelineMode)
+        model: imageModelForProject(project.current.pipelineMode),
+        signal
       },
       (msg) => {
         progress.value[scn.id] = msg
@@ -265,8 +289,9 @@ async function generateScenePlate(scn: Scene) {
     if (url) plateUrls.value = { ...plateUrls.value, [scn.id]: url }
     toast.success(translate('images.sceneReady', { p0: scn.name }))
   } catch (e: any) {
-    toast.error(translate('images.sceneFailed', { p0: scn.name, p1: e.message }))
+    if (!reportCancelled(signal)) toast.error(translate('images.sceneFailed', { p0: scn.name, p1: e.message }))
   } finally {
+    drawThingsJobs.delete(scn.id)
     generating.value.delete(scn.id)
     delete progress.value[scn.id]
   }
@@ -284,6 +309,7 @@ async function generateMissingCast() {
 async function generateOne(shot: Shot) {
   if (!project.current) return
   generating.value.add(shot.id)
+  const signal = drawThingsSignal(shot.id)
   try {
     if (missing.value.subjects.length || missing.value.scenes.length) {
       progress.value[shot.id] = translate('images.progressPrepareRefs')
@@ -311,7 +337,8 @@ async function generateOne(shot: Shot) {
         aspectRatio: aspectRatio.value,
         referenceImages: refBlobs.length > 0 ? refBlobs : undefined,
         referenceLabels: labels.length > 0 ? labels : undefined,
-        model: imageModelForProject(project.current.pipelineMode)
+        model: imageModelForProject(project.current.pipelineMode),
+        signal
       },
       (msg) => {
         progress.value[shot.id] = msg
@@ -337,8 +364,9 @@ async function generateOne(shot: Shot) {
       translate('images.shotImageReady', { p0: shot.index + 1, p1: refBlobs.length > 0 ? translate('images.lockedCount', { p0: refBlobs.length }) : '' })
     )
   } catch (e: any) {
-    toast.error(translate('images.shotImageFailed', { p0: shot.index + 1, p1: e.message }))
+    if (!reportCancelled(signal)) toast.error(translate('images.shotImageFailed', { p0: shot.index + 1, p1: e.message }))
   } finally {
+    drawThingsJobs.delete(shot.id)
     generating.value.delete(shot.id)
     delete progress.value[shot.id]
   }
@@ -539,7 +567,7 @@ function next() {
         <div v-for="sub in subjects" :key="sub.id" class="cast-card">
           <div class="cast-thumb">
             <img
-              v-if="sheetUrls[sub.id]"
+              v-if="sheetUrls[sub.id] && !drawThingsJobs.has(sub.id)"
               class="zoomable"
               :src="sheetUrls[sub.id]"
               :alt="sub.name"
@@ -549,6 +577,7 @@ function next() {
             <div v-else-if="generating.has(sub.id)" class="placeholder generating-placeholder">
               <ProgressRing :progress="0.5" :size="40" :stroke-width="3" />
               <div class="progress-msg">{{ progress[sub.id] }}</div>
+              <button v-if="drawThingsJobs.has(sub.id)" type="button" @click="cancelDrawThings(sub.id)">{{ $t('drawThings.stopWaiting') }}</button>
             </div>
             <div v-else class="placeholder">
               <div class="placeholder-icon">👤</div>
@@ -590,7 +619,7 @@ function next() {
         <div v-for="scn in scenes" :key="scn.id" class="cast-card">
           <div class="cast-thumb">
             <img
-              v-if="plateUrls[scn.id]"
+              v-if="plateUrls[scn.id] && !drawThingsJobs.has(scn.id)"
               class="zoomable"
               :src="plateUrls[scn.id]"
               :alt="scn.name"
@@ -600,6 +629,7 @@ function next() {
             <div v-else-if="generating.has(scn.id)" class="placeholder generating-placeholder">
               <ProgressRing :progress="0.5" :size="40" :stroke-width="3" />
               <div class="progress-msg">{{ progress[scn.id] }}</div>
+              <button v-if="drawThingsJobs.has(scn.id)" type="button" @click="cancelDrawThings(scn.id)">{{ $t('drawThings.stopWaiting') }}</button>
             </div>
             <div v-else class="placeholder">
               <div class="placeholder-icon">🏞</div>
@@ -682,7 +712,7 @@ function next() {
 
         <div class="shot-image">
           <img
-            v-if="imageUrls[shot.id]"
+            v-if="imageUrls[shot.id] && !drawThingsJobs.has(shot.id)"
             class="zoomable"
             :src="imageUrls[shot.id]"
             :alt="shot.title"
@@ -692,6 +722,7 @@ function next() {
           <div v-else-if="generating.has(shot.id)" class="placeholder generating-placeholder">
             <ProgressRing :progress="0.5" :size="60" :stroke-width="3" />
             <div class="progress-msg">{{ progress[shot.id] || $t('common.preparing') }}</div>
+            <button v-if="drawThingsJobs.has(shot.id)" type="button" @click="cancelDrawThings(shot.id)">{{ $t('drawThings.stopWaiting') }}</button>
           </div>
           <div v-else class="placeholder">
             <div class="placeholder-icon">🖼</div>

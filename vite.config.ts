@@ -35,7 +35,7 @@ export default defineConfig(({ command }) => ({
         vite: {
           build: {
             rollupOptions: {
-              external: ['node:sqlite']
+              external: ['node:sqlite', '@grpc/grpc-js', 'flatbuffers', 'protobufjs']
             }
           }
         }
