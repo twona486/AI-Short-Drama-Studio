@@ -209,6 +209,11 @@ try {
     await launch()
     await until(() => evaluate(`Boolean((${config}) && document.querySelector('.app-root'))`),
       '저장 폴더 없이 첫 화면을 열지 못했습니다.')
+    await until(() => evaluate("document.querySelector('.storage-recovery')?.textContent.includes('기존 저장 폴더 설정은 보존했습니다')"),
+      '복구 안내를 찾지 못했습니다.')
+    assert.equal(await evaluate("document.querySelector('.storage-recovery button:last-child')?.textContent.trim()"), '저장 폴더 다시 선택')
+    await evaluate("document.querySelector('.storage-recovery button').click()")
+    assert.equal(await evaluate("document.querySelector('.storage-recovery')"), null)
     assert.equal(await realpath(await evaluate('window.desktop.getRoot()')), await realpath(path.join(profile, 'Recovery')))
     assert.equal(await readFile(preference, 'utf8'), unavailable)
     assert.match(output, /저장 폴더를 열지 못했습니다/)

@@ -8,6 +8,7 @@ import { isLtxTask, isLtxDesktop, LTX_DESKTOP_AUDIO_RESOLUTIONS, ltxDesktopAudio
 import { isLtxProfile, LTX_DEFAULT_MODEL } from '@/services/ai/ltxOptions'
 import { t as translate } from '@/i18n'
 import { computed, onBeforeUnmount, ref, shallowRef, watch } from 'vue'
+import { useCanvasToolbarMenu } from '@/composables/useCanvasToolbarMenu'
 import { useRouter } from 'vue-router'
 import { Handle, Position, useVueFlow } from '@vue-flow/core'
 import { useAssetsStore, useLibraryStore, useProjectStore, useSettingsStore, useToastStore } from '@/stores'
@@ -82,7 +83,7 @@ const audioEl = ref<HTMLAudioElement | null>(null)
 const mediaBox = ref<HTMLElement | null>(null)
 const playing = ref(false)
 const playbackDuration = ref(0)
-const moreOpen = ref(false)
+const { toolbar, moreOpen } = useCanvasToolbarMenu()
 const panelOpen = ref(false)
 const pickerOpen = ref(false)
 const toolBusy = ref('')
@@ -1072,7 +1073,7 @@ const cropStyle = computed(() => ({
 
     <transition name="float-up">
       <div v-if="selected && panelOpen" class="toolbar-wrap nodrag nowheel" @mousedown.stop @click.stop>
-        <div class="toolbar">
+        <div ref="toolbar" class="toolbar">
           <button v-if="isImageNode && hasAsset" type="button" :disabled="!!toolBusy" @click="startCrop">
             <span>✂</span>{{ $t('common.crop') }}
           </button>

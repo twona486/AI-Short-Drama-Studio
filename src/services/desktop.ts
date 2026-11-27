@@ -9,6 +9,7 @@ export type DesktopAPI = {
   setLocale: (locale: 'ko' | 'zh') => Promise<void>
   confirmAction: (message: string, locale: 'ko' | 'zh') => Promise<boolean>
   platform: string
+  getStorageRecovery: () => Promise<'usingRecovery' | 'unavailable' | null>
   getRoot: () => Promise<string>
   setRoot: (root: string) => Promise<string>
   getVersion: () => Promise<string>

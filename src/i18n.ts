@@ -19,7 +19,7 @@ export const i18n = createI18n({
   legacy: false,
   locale: loadLocale(),
   fallbackLocale: 'zh',
-  messages: { ko, zh: { ...zh, elevenLabs: ko.elevenLabs, elevenLabsErrors: ko.elevenLabsErrors, networkAddresses: ko.networkAddresses, providerRequestErrors: ko.providerRequestErrors, openAiTtsErrors: ko.openAiTtsErrors } }
+  messages: { ko, zh: { ...zh, batch: ko.batch, storageRecovery: ko.storageRecovery, elevenLabs: ko.elevenLabs, elevenLabsErrors: ko.elevenLabsErrors, networkAddresses: ko.networkAddresses, providerRequestErrors: ko.providerRequestErrors, openAiTtsErrors: ko.openAiTtsErrors } }
 })
 
 export const { locale, t } = i18n.global

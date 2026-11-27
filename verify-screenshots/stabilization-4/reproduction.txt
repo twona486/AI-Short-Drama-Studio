@@ -1,0 +1,37 @@
+기준 Electron 시작 검사
+unable to open database file
+Electron 첫 화면을 찾지 못했습니다.
+
+기준 앱
+ComfyUI locale zh ComfyUI 연결 / ComfyUI 연결
+ComfyUI locale ko ComfyUI 接入 / ComfyUI 接入
+script switch: cancel switched away
+images reached the blocked generation call without confirmation
+cast reached the blocked generation call without confirmation
+frames reached the blocked generation call without confirmation
+videos reached the blocked generation call without confirmation
+caption reached the blocked generation call without confirmation
+optimize reached the blocked generation call without confirmation
+group reached the blocked generation call without confirmation
+isolated Electron/Vite process group stopped
+
+수정 앱
+ComfyUI locale zh ComfyUI 接入 / ComfyUI 接入
+ComfyUI locale ko ComfyUI 연결 / ComfyUI 연결
+script switch: cancel preserved draft
+images 샷 이미지 2개, 캐릭터 이미지 1개, 장면 이미지 1개를 생성할까요? 비용과 소요 시간은 선택한 연결과 모델에 따라 달라요.
+cast 누락된 캐릭터 이미지 1개와 장면 이미지 1개를 생성할까요? 비용과 소요 시간은 선택한 연결과 모델에 따라 달라요.
+frames 샷 2개의 시작·끝 프레임을 생성할까요? 비용과 소요 시간은 선택한 연결과 모델에 따라 달라요.
+videos 샷 영상 2개를 생성할까요? 이 작업에는 샷 2개의 누락된 시작·끝 프레임 생성이 포함돼요. 비용과 소요 시간은 선택한 연결과 모델에 따라 달라요.
+caption 샷 2개의 대사를 더빙할까요? 비용과 소요 시간은 선택한 연결과 모델에 따라 달라요.
+optimize 영상 프롬프트 2개를 최적화할까요? 비용과 소요 시간은 선택한 연결과 모델에 따라 달라요.
+group ‘캐릭터’ 그룹의 노드 1개를 모두 생성할까요? 비용과 소요 시간은 선택한 연결과 모델에 따라 달라요.
+isolated Electron/Vite process group stopped
+
+저장 폴더 다시 선택
+recovery notice dismissed without preference change, then the settings picker saved the isolated replacement
+isolated Electron/Vite process group stopped
+
+수정 Electron 시작 검사
+저장 폴더가 없어도 첫 화면을 열고 기존 저장 폴더 설정을 보존했습니다.
+개발 모드 Electron 앱에서 첫 화면, 저장된 연결, 팝업 차단, 설정 복구를 확인했습니다.

@@ -180,7 +180,7 @@ function openEpisode(index: number) {
 
 async function openScript(id: string) {
   if (id !== activeId.value) {
-    if (dirty.value && !confirmDiscard()) return
+    if (dirty.value && !(await confirmDiscard())) return
     flushDraft()
     activeId.value = id
     await loadContent(id)

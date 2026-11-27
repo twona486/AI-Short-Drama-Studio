@@ -297,21 +297,37 @@ async function generateScenePlate(scn: Scene) {
   }
 }
 
-async function generateMissingCast() {
-  for (const sub of missing.value.subjects) {
+function pendingCast() {
+  return {
+    subjects: missing.value.subjects.filter((sub) => !generating.value.has(sub.id)),
+    scenes: missing.value.scenes.filter((scene) => !generating.value.has(scene.id))
+  }
+}
+
+async function confirmMissingCast() {
+  const cast = pendingCast()
+  const projectId = project.current?.id
+  if (!cast.subjects.length && !cast.scenes.length) return
+  const message = translate('batch.cast', { characters: cast.subjects.length, scenes: cast.scenes.length })
+  if (!await confirmAction(`${message}\n${translate('batch.providerUsage')}`) || project.current?.id !== projectId) return
+  await generateMissingCast(cast)
+}
+
+async function generateMissingCast(cast = pendingCast()) {
+  for (const sub of cast.subjects) {
     if (!generating.value.has(sub.id)) await generateSubjectSheet(sub)
   }
-  for (const scn of missing.value.scenes) {
+  for (const scn of cast.scenes) {
     if (!generating.value.has(scn.id)) await generateScenePlate(scn)
   }
 }
 
-async function generateOne(shot: Shot) {
+async function generateOne(shot: Shot, prepareCast = true) {
   if (!project.current) return
   generating.value.add(shot.id)
   const signal = drawThingsSignal(shot.id)
   try {
-    if (missing.value.subjects.length || missing.value.scenes.length) {
+    if (prepareCast && (missing.value.subjects.length || missing.value.scenes.length)) {
       progress.value[shot.id] = translate('images.progressPrepareRefs')
       await generateMissingCast()
     }
@@ -373,11 +389,19 @@ async function generateOne(shot: Shot) {
 }
 
 async function generateAll() {
-  await generateMissingCast()
-  for (const shot of shots.value) {
-    if (!shot.imageAssetId && !generating.value.has(shot.id)) {
-      await generateOne(shot)
-    }
+  const projectId = project.current?.id
+  const cast = pendingCast()
+  const targets = shots.value.filter((shot) => !shot.imageAssetId && !generating.value.has(shot.id))
+  if (!targets.length && !cast.subjects.length && !cast.scenes.length) {
+    toast.warn(translate('batch.empty'))
+    return
+  }
+  const message = translate('batch.images', { shots: targets.length, characters: cast.subjects.length, scenes: cast.scenes.length })
+  if (!await confirmAction(`${message}\n${translate('batch.providerUsage')}`) || project.current?.id !== projectId) return
+  await generateMissingCast(cast)
+  for (const shot of targets) {
+    if (project.current?.id !== projectId) break
+    if (!shot.imageAssetId && !generating.value.has(shot.id)) await generateOne(shot, false)
   }
 }
 
@@ -555,7 +579,7 @@ function next() {
           size="sm"
           :loading="subjects.some((s) => generating.has(s.id)) || scenes.some((s) => generating.has(s.id))"
           :disabled="!missing.subjects.length && !missing.scenes.length"
-          @click="generateMissingCast"
+          @click="confirmMissingCast"
         >
           {{ missing.subjects.length || missing.scenes.length ? $t('images.generateMissing') : $t('images.allReady') }}
         </GradientButton>

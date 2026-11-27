@@ -635,6 +635,8 @@ async function optimizeAllVideoPrompts() {
     toast.warn(translate('studio.noOptimizableNodes'))
     return
   }
+  const message = translate('batch.optimize', { count: nodes.length })
+  if (!await confirmAction(`${message}\n${translate('batch.providerUsage')}`) || project.current?.id !== p.id || optimizingAllVideos.value) return
   optimizingAllVideos.value = true
   const failed: string[] = []
   let processed = 0
@@ -1929,6 +1931,9 @@ function goClassic() {
   outline: 1px solid var(--nb-accent);
   outline-offset: 3px;
   border-radius: 10px;
+}
+.flow-wrap :deep(.vue-flow__node.selected:has(.toolbar > .more)) {
+  z-index: 13 !important;
 }
 .flow-wrap :deep(.vue-flow__node-groupFrame) {
   overflow: visible !important;

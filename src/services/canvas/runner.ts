@@ -2639,11 +2639,16 @@ function groupChildNodeIds(groupId: string): string[] {
   return nodes.filter((n) => n.parentGroupId === groupId && GROUP_GEN_TYPES.has(n.type)).map((n) => n.id)
 }
 
+export function pendingGroupGenerationIds(groupId: string): string[] {
+  return groupChildNodeIds(groupId).filter((id) => !isNodeRunning(id))
+}
+
 /** 그룹의 한 번에 생성 작업으로 해당 그룹의 모든 생성 노드를 실행한다. */
 export async function runGenerateGroup(
   groupId: string,
   onProgress?: RunProgress,
-  signal?: AbortSignal
+  signal?: AbortSignal,
+  confirmedIds?: readonly string[]
 ) {
   if (
     groupId !== 'group-subjects' &&
@@ -2665,7 +2670,7 @@ export async function runGenerateGroup(
   ) {
     throw new Error(playGateMessage())
   }
-  const ids = groupChildNodeIds(groupId)
+  const ids = groupChildNodeIds(groupId).filter((id) => !confirmedIds || confirmedIds.includes(id))
   if (!ids.length) throw new Error('이 그룹에 생성할 수 있는 노드가 없습니다.')
   const pending = ids.filter((id) => !isNodeRunning(id))
   if (!pending.length) throw new Error('이 그룹을 이미 생성하고 있습니다.')
@@ -3362,6 +3367,19 @@ export async function generateMissingImages(onProgress?: (msg: string) => void, 
   await mapPool(ids, 3, (id) => runCanvasNode(id, (_nid, msg) => onProgress?.(msg), signal))
 }
 
+/** 시작·끝 프레임 입력을 보완해야 하는 샷을 번호순으로 정리한다. */
+export function pendingShotFramesForVideo() {
+  const p = useProjectStore().current
+  if (!p || !needsShotFrames(p)) return []
+  // 혼합 모드에서는 시작·끝 프레임 입력이 필요한 샷만 보완한다.
+  return (p.shots ?? [])
+    .filter((s) => !isLtxTask(s.videoTaskId) &&
+      !(canvasVideoModelForShot(s) === 'h3' &&
+        isLtxProfile(videoProfileById(canvasVideoNodeForShot(s)?.data.videoProfileId || s.videoProfileId))) &&
+      shotUsesFrames(s, p) && (!s.firstFrameAssetId || !s.lastFrameAssetId))
+    .sort((a, b) => a.index - b.index)
+}
+
 /**
  * 시작·끝 프레임 모드에서는 영상 생성 전에 누락된 프레임을 샷 순서대로 만든다.
  * 일부 프레임을 생성하지 못하면 실패를 기록하고 영상 생성을 계속한다.
@@ -3370,15 +3388,7 @@ export async function ensureShotFrames(
   onProgress?: (msg: string) => void,
   signal?: AbortSignal
 ): Promise<number> {
-  const p = useProjectStore().current
-  if (!p || !needsShotFrames(p)) return 0
-  // 혼합 모드에서는 시작·끝 프레임 입력이 필요한 샷만 보완한다.
-  const missing = [...(p.shots ?? [])]
-    .filter((s) => !isLtxTask(s.videoTaskId) &&
-      !(canvasVideoModelForShot(s) === 'h3' &&
-        isLtxProfile(videoProfileById(canvasVideoNodeForShot(s)?.data.videoProfileId || s.videoProfileId))) &&
-      shotUsesFrames(s, p) && (!s.firstFrameAssetId || !s.lastFrameAssetId))
-    .sort((a, b) => a.index - b.index)
+  const missing = pendingShotFramesForVideo()
   if (!missing.length) return 0
   onProgress?.(`시작·끝 프레임 모드입니다. 샷 ${missing.length}개의 시작·끝 프레임을 샷 번호 순서대로 생성하는 중…`)
   let done = 0

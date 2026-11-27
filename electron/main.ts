@@ -495,6 +495,7 @@ app.whenReady().then(async () => {
   const savedRoot = readStorageRootPreference(rootPreferencePath())
   const root = savedRoot ?? defaultRoot()
   const fallback = path.join(app.getPath('userData'), 'Recovery')
+  let storageRecovery: 'usingRecovery' | 'unavailable' | null = null
   try {
     if (!savedRoot) await ensureDir(root)
     await openAppDb(root)
@@ -512,11 +513,7 @@ app.whenReady().then(async () => {
         closeAppDb()
       }
     }
-    const message = isAppDbOpen()
-      ? '저장 폴더를 열지 못해 복구 폴더를 사용합니다. 기존 저장 폴더 설정을 보존했습니다.'
-      : '저장 폴더를 열지 못했습니다. 기본 화면에서 저장 폴더를 다시 선택할 수 있습니다.'
-    void dialog.showMessageBox({ type: 'error', title: ko.common.appName, message })
-      .catch(() => dialog.showErrorBox(ko.common.appName, message))
+    storageRecovery = isAppDbOpen() ? 'usingRecovery' : 'unavailable'
   }
 
   protocol.handle('aicut-app', appAssetResponse)
@@ -563,6 +560,8 @@ app.whenReady().then(async () => {
     }
   })
 
+  ipcMain.handle('desktop:getStorageRecovery', () => storageRecovery)
+
   ipcMain.handle('desktop:getRoot', async () => {
     const root = currentRoot()
     await ensureDir(root)
@@ -587,13 +586,15 @@ app.whenReady().then(async () => {
     if (path.resolve(previousRoot) === nextRoot && isAppDbOpen()) return nextRoot
 
     await ensureDir(nextRoot)
+    const canCopy = isAppDbOpen()
     closeAppDb()
     try {
       // 대상에 기존 데이터가 있으면 덮어쓰지 않는다. 비어 있으면 현재 데이터베이스, 프로젝트, 에셋을 옮긴다.
-      await copyMissingRootContents(previousRoot, nextRoot)
+      if (canCopy) await copyMissingRootContents(previousRoot, nextRoot)
       await openAppDb(nextRoot)
       activeRoot = nextRoot
       await saveStorageRoot(nextRoot)
+      storageRecovery = null
       return nextRoot
     } catch (error) {
       activeRoot = previousRoot
